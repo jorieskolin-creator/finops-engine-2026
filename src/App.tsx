@@ -51,7 +51,7 @@ interface UploadedFile {
   size: number;
   text: string;
   images?: ImageInput[];
-  kind?: 'pdf' | 'html' | 'image';
+  kind?: 'pdf' | 'html' | 'image' | 'csv' | 'json';
   status: 'parsed' | 'error';
   scan?: ScanResult;
 }
@@ -125,6 +125,7 @@ const App: React.FC = () => {
   const MIN_FILES = 2;
   const MAX_FILES = 12;
   const MAX_FILE_SIZE_MB = 25;
+  const MAX_IMAGE_FILES = 5;
 
   useEffect(() => {
     const combined = files
@@ -211,32 +212,52 @@ const App: React.FC = () => {
       return;
     }
 
+    // Cap on JPEG/PNG screenshot files (independent of PDF-derived images,
+    // which scale with the source document). Counted across existing +
+    // incoming images so a second upload can't sneak past the limit.
+    const existingImageCount = files.filter(f => f.kind === 'image').length;
+    const incomingImageCount = newFiles.filter(f => f.type.startsWith('image/')).length;
+    if (existingImageCount + incomingImageCount > MAX_IMAGE_FILES) {
+      setError(`Maximum ${MAX_IMAGE_FILES} image files (PNG/JPG) per assessment. You have ${existingImageCount}; trying to add ${incomingImageCount}.`);
+      return;
+    }
+
     setParsing(true);
     setError(null);
     const processedFiles: UploadedFile[] = [];
     try {
       for (const file of newFiles) {
+        if (file.size > MAX_FILE_SIZE_MB * 1024 * 1024) throw new Error(`File ${file.name} exceeds the ${MAX_FILE_SIZE_MB} MB limit.`);
+
         let text = "";
         let images: ImageInput[] | undefined;
         let kind: UploadedFile['kind'] = undefined;
-        if (file.type === 'application/pdf') {
-          if (file.size > MAX_FILE_SIZE_MB * 1024 * 1024) throw new Error(`File ${file.name} is too large.`);
+        const lowerName = file.name.toLowerCase();
+
+        if (file.type === 'application/pdf' || lowerName.endsWith('.pdf')) {
           const { text: pdfText, images: pdfImages } = await extractPagesFromPdf(file);
           text = pdfText;
           images = pdfImages;
           kind = 'pdf';
-        } else if (file.type === 'text/html') {
+        } else if (file.type === 'text/html' || lowerName.endsWith('.html')) {
           const rawHtml = await file.text();
           text = extractTextFromHtml(rawHtml);
           kind = 'html';
+        } else if (file.type === 'text/csv' || lowerName.endsWith('.csv')) {
+          const raw = await file.text();
+          text = `Format: CSV (comma-separated values)\n\n${raw}`;
+          kind = 'csv';
+        } else if (file.type === 'application/json' || lowerName.endsWith('.json')) {
+          const raw = await file.text();
+          text = `Format: JSON\n\n${raw}`;
+          kind = 'json';
         } else if (file.type.startsWith('image/')) {
-          if (file.size > MAX_FILE_SIZE_MB * 1024 * 1024) throw new Error(`Image ${file.name} is too large.`);
           const img = await imageFileToInput(file);
           images = [img];
           text = `[Image input: ${file.name}]`;
           kind = 'image';
         } else {
-          throw new Error(`File ${file.name} is not a PDF, HTML, or image file.`);
+          throw new Error(`File ${file.name} is not a supported format (PDF, HTML, CSV, JSON, PNG, JPG).`);
         }
 
         processedFiles.push({
@@ -567,8 +588,17 @@ const App: React.FC = () => {
                         </div>
                         <h3 className="text-xl font-display font-bold text-slate-200 mb-2 z-10 group-hover/drop:text-white transition-colors">Drop FinOps Artifacts</h3>
                         <p className="text-sm font-medium text-slate-400 z-10 group-hover/drop:text-emerald-200/70 transition-colors text-center max-w-md">
-                          Upload Cloud Cost Reports, FinOps Policies, Optimization Plans, Governance Docs, Architecture Reviews.<br />
-                          <span className="text-xs opacity-70 mt-1 block">25MB max., 2-12 artifacts. Supports PDF (Analysis) or HTML/JSON (Session Restore)</span>
+                          Upload Cloud Cost Reports, FinOps Policies, Optimization Plans, Governance Docs, Architecture Reviews.
+                        </p>
+                        <div className="z-10 mt-4 flex flex-wrap justify-center gap-1.5 max-w-md">
+                          {['PDF', 'HTML', 'CSV', 'JSON', 'PNG', 'JPG'].map(fmt => (
+                            <span key={fmt} className="text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded-md bg-slate-800/80 border border-slate-700/60 text-slate-300">
+                              {fmt}
+                            </span>
+                          ))}
+                        </div>
+                        <p className="z-10 text-xs text-slate-500 mt-3 text-center max-w-md">
+                          {MAX_FILE_SIZE_MB} MB max. per file · {MIN_FILES}–{MAX_FILES} artifacts · up to {MAX_IMAGE_FILES} PNG/JPG screenshots
                         </p>
                       </div>
                     )}
@@ -578,7 +608,7 @@ const App: React.FC = () => {
                     <div className="flex items-center gap-4">
                       <button onClick={() => fileInputRef.current?.click()} disabled={files.length >= MAX_FILES} className="text-sm font-bold text-slate-400 hover:text-white transition-colors flex items-center gap-2 hover:bg-white/5 px-4 py-2 rounded-lg">
                         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 6v6m0 0v6m0-6h6m-6 0H6" /></svg>
-                        Add PDF or HTML
+                        Add Files (PDF, HTML, CSV, JSON, PNG, JPG)
                       </button>
                       <label
                         title="Forces synthesis to use Opus 4.7 (slower, more expensive, deeper roadmap reasoning). Auto-enabled for crawl-stage orgs with high anti-pattern burden."
@@ -593,7 +623,7 @@ const App: React.FC = () => {
                         <span className="font-bold">Deep analysis (Opus 4.7)</span>
                       </label>
                     </div>
-                    <input type="file" ref={fileInputRef} onChange={handleFileSelect} className="hidden" accept=".pdf,.html,.json,.png,.jpg,.jpeg,.webp,image/png,image/jpeg,image/webp" multiple />
+                    <input type="file" ref={fileInputRef} onChange={handleFileSelect} className="hidden" accept=".pdf,.html,.csv,.json,.png,.jpg,.jpeg,image/png,image/jpeg" multiple />
                     <button onClick={handleAnalyze} disabled={!scanResult.canRun || files.length < MIN_FILES || files.length > MAX_FILES} className={`px-8 py-4 rounded-xl font-bold shadow-2xl transition-all transform active:scale-[0.98] flex items-center gap-3 border ${!scanResult.canRun || files.length < MIN_FILES || files.length > MAX_FILES ? 'bg-slate-800 text-slate-500 border-slate-700 cursor-not-allowed shadow-none' : 'text-slate-900 bg-white border-white hover:bg-emerald-400 hover:border-emerald-400 hover:shadow-[0_0_30px_rgba(16,185,129,0.4)]'}`}>
                       {!scanResult.canRun || files.length < MIN_FILES || files.length > MAX_FILES ? (
                         <span>{files.length < MIN_FILES ? `Add ${MIN_FILES - files.length} more files` : files.length > MAX_FILES ? "Limit Exceeded" : "Checks Failed"}</span>
