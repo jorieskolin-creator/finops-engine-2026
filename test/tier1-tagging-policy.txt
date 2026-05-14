@@ -1,0 +1,63 @@
+CLOUD RESOURCE TAGGING & COST ALLOCATION STANDARD
+
+Document Type: Technical Standard
+Document Owner: FinOps Function
+Approval: Cloud Spend Review Board
+Effective Date: Calendar Year 2024
+
+1. PURPOSE
+
+This standard defines the mandatory tag schema applied to every cloud resource and the cost allocation methodology by which tagged spend is attributed to the consuming business unit, application, and cost center.
+
+2. MANDATORY TAGS
+
+The following tags are mandatory at the point of provisioning. Resources missing any mandatory tag are non-compliant and subject to remediation.
+
+  BusinessUnit       — One of the codes in the BusinessUnit reference list maintained by Finance.
+  CostCenter         — Four-digit cost center code aligned with the General Ledger.
+  Application        — Free-form application identifier registered in the Application Catalog.
+  Environment        — One of: Production, Staging, Development, Sandbox, DR.
+  DataClassification — One of: Public, Internal, Confidential, Restricted.
+  Owner              — Email of the Technical Owner. Required for incident routing.
+
+3. OPTIONAL TAGS
+
+The following tags are optional but recommended:
+
+  ProjectCode    — Project identifier for chargeback of one-time initiatives.
+  Lifecycle      — Lifecycle stage: Pilot, GA, Sunset.
+  AutoShutdown   — Boolean. Indicates eligibility for automated non-prod shutdown.
+
+4. TAG SYNTAX RULES
+
+Tag keys are PascalCase. Tag values may not contain commas, leading or trailing whitespace, or characters outside the printable ASCII range. Maximum tag value length is 128 characters.
+
+5. APPLIED MECHANISM
+
+Tagging is the responsibility of the resource creator at provisioning time. The tagging requirement applies to all supported cloud providers and to all resource types that support tagging on the respective provider. For provider resources that do not natively support tagging, alternative allocation through grouping constructs is documented in Appendix A of this standard.
+
+6. COST ALLOCATION METHODOLOGY
+
+Cloud spend is allocated to consuming business units monthly based on tag values present in the provider's billing export. The allocation rules are:
+
+  - Allocate directly when BusinessUnit and CostCenter tags are present.
+  - Allocate to a "Shared Platform" cost center when the resource is part of the Shared Platform Application Catalog list.
+  - Allocate to an "Unallocated" bucket when mandatory tags are missing. Unallocated spend is reported monthly to the Cloud Spend Review Board.
+
+7. SHARED RESOURCE TREATMENT
+
+Shared infrastructure (network egress, central logging, shared databases) is allocated using usage-proportional drivers documented in Appendix B. Drivers are reviewed annually.
+
+8. NON-COMPLIANCE AND REMEDIATION
+
+Non-compliant resources are flagged in the weekly Tagging Compliance Report distributed to Technical Owners. Resources remaining non-compliant beyond the remediation window defined in the Cloud Governance Policy are escalated to the Business Owner.
+
+9. CHANGE CONTROL
+
+Changes to the mandatory tag schema, allocation methodology, or driver definitions require approval from the Cloud Spend Review Board and notification to all Business Owners.
+
+APPENDIX A — Provider-Specific Resource Coverage (intentionally omitted from this excerpt).
+
+APPENDIX B — Shared Resource Allocation Drivers (intentionally omitted from this excerpt).
+
+END OF STANDARD

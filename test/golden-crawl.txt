@@ -1,0 +1,41 @@
+ACME Corp — Cloud Infrastructure Review
+Q4 Quarterly Summary
+Prepared by: IT Operations Team
+
+1. EXECUTIVE SUMMARY
+
+ACME Corp operates approximately 340 cloud instances across AWS and a small Azure footprint. Our IT team manages provisioning and maintains the infrastructure. Cloud spend is reviewed monthly by the finance department when invoices arrive.
+
+2. CURRENT CLOUD ENVIRONMENT
+
+We currently run most workloads on AWS EC2 with some Azure VMs for the European region. All instances are provisioned as on-demand because we value flexibility and want to avoid long-term commitments that might lock us into specific instance types. Our team provisions instances based on vendor recommended sizing to ensure adequate performance headroom.
+
+Development and staging environments run 24/7 to ensure availability for our distributed teams. We have not implemented scheduling because developers occasionally need access outside business hours.
+
+3. COST MANAGEMENT APPROACH
+
+Cloud invoices are processed by the finance department monthly. The finance team reviews total spend and flags any month-over-month increases above 15% to the IT director. We do not currently have a breakdown of costs by team or application — the invoices are managed at the account level.
+
+We tried implementing tags last year but found it difficult to enforce across teams. Some resources have tags, many do not. There is no formal tagging policy. The team that originally led the effort has since moved to other priorities.
+
+We do not currently use any cloud cost management tools beyond the native AWS billing console, which the finance analyst checks once per month. Engineering teams do not have access to cost data — this is considered a finance function.
+
+4. RESOURCE MANAGEMENT
+
+Our standard practice is to provision instances one size larger than estimated needs to prevent performance issues. We have not conducted a right-sizing analysis. Several instances from a project completed 8 months ago are still running because no one has confirmed they can be safely terminated. There are approximately 40 unattached EBS volumes that were created during various migrations.
+
+We do not track resource utilization metrics for cost purposes. Performance monitoring focuses on application health, not infrastructure efficiency.
+
+5. GOVERNANCE
+
+Cloud access is managed through shared credentials for each team. There is no formal approval process for provisioning new resources — engineers can launch instances as needed. Budgets are set annually at the department level but are not enforced at the cloud account or project level.
+
+There is no dedicated cloud cost role or FinOps function. The IT director reviews costs as part of their broader infrastructure responsibilities. We have not evaluated our spend against industry benchmarks.
+
+6. ARCHITECTURE
+
+Our cloud architecture follows a lift-and-shift approach from our previous data center. Applications run on individual EC2 instances. We have not explored serverless, containerization, or managed services for cost optimization purposes. Data transfer between regions is not monitored for cost impact.
+
+7. NEXT STEPS
+
+We plan to investigate cloud cost optimization tools in Q2 next year. The IT director has expressed interest in better understanding our cloud spend patterns.

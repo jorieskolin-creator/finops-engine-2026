@@ -1,0 +1,81 @@
+{
+  "version": "1.0.0",
+  "description": "Three-category keyword model for Phase 0 pre-flight document relevance scanning",
+  "categories": {
+    "core_finops_vocabulary": {
+      "weight": 3,
+      "description": "Core FinOps terms that strongly signal document relevance",
+      "keywords": [
+        "finops", "cloud cost", "cloud spend", "cloud billing", "cloud financial",
+        "cost optimization", "cost allocation", "cost management",
+        "showback", "chargeback", "unit economics",
+        "reserved instance", "savings plan", "committed use",
+        "right-sizing", "rightsizing", "right sizing",
+        "tagging", "tag policy", "cost center",
+        "cloud waste", "idle resource", "orphaned resource",
+        "spot instance", "preemptible", "on-demand",
+        "cost anomaly", "budget alert", "spend alert",
+        "cloud governance", "cloud policy",
+        "cost per transaction", "cost per customer",
+        "storage tiering", "lifecycle policy",
+        "commitment coverage", "utilization rate",
+        "cloud economics", "cloud investment",
+        "cost visibility", "cost transparency",
+        "waste elimination", "resource optimization"
+      ]
+    },
+    "standards_frameworks": {
+      "weight": 2,
+      "description": "Industry standards, frameworks, and specifications related to FinOps",
+      "keywords": [
+        "finops foundation", "finops framework", "finops maturity",
+        "crawl walk run", "crawl-walk-run",
+        "focus specification", "focus spec",
+        "cloud financial management", "cfm",
+        "well-architected", "well architected",
+        "cost pillar", "cost optimization pillar",
+        "cloud center of excellence", "ccoe",
+        "technology business management", "tbm",
+        "it financial management", "itfm",
+        "apptio", "cloudability", "cloudhealth",
+        "kubecost", "infracost", "vantage",
+        "aws cost explorer", "azure cost management", "gcp billing",
+        "service control policy", "scp",
+        "organization policy", "azure policy",
+        "open policy agent", "opa",
+        "enterprise discount program", "edp",
+        "private pricing agreement",
+        "nist cloud", "iso 27017"
+      ]
+    },
+    "emerging_scope": {
+      "weight": 1,
+      "description": "Emerging and adjacent terms that may indicate FinOps relevance",
+      "keywords": [
+        "cloud migration", "cloud strategy", "cloud native",
+        "multi-cloud", "hybrid cloud", "cloud adoption",
+        "infrastructure as code", "terraform", "pulumi", "cloudformation",
+        "kubernetes cost", "container cost", "serverless cost",
+        "saas management", "saas spend", "license optimization",
+        "data transfer cost", "egress cost", "network cost",
+        "ai inference cost", "gpu cost", "ml training cost",
+        "sustainability", "carbon footprint", "green cloud",
+        "procurement", "vendor management", "vendor lock-in",
+        "capacity planning", "demand forecasting",
+        "devops", "platform engineering", "sre",
+        "cloud budget", "cloud forecast",
+        "billing account", "billing export",
+        "resource utilization", "cpu utilization", "memory utilization",
+        "autoscaling", "auto scaling", "scale to zero"
+      ]
+    }
+  },
+  "structural_headers": [
+    "executive summary", "introduction", "background", "scope",
+    "current state", "recommendations", "next steps", "appendix",
+    "cost analysis", "spend analysis", "optimization plan",
+    "maturity assessment", "governance framework", "operating model",
+    "architecture review", "migration plan", "cloud strategy",
+    "budget review", "forecast", "financial summary"
+  ]
+}
