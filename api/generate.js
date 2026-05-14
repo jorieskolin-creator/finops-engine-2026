@@ -1,11 +1,22 @@
 import { GoogleGenAI } from "@google/genai";
 import { requireSession } from "../lib/auth.js";
 
+// Streaming Gemini proxy. Same NDJSON wire format as anthropic-generate.js:
+//   {"type":"text","delta":"..."}
+//   {"type":"keepalive"}
+//   {"type":"done","text":"..."}
+//   {"type":"error","message":"..."}
+//
+// The @google/genai SDK's generateContentStream() returns an AsyncIterable of
+// chunks; each chunk has a .text accessor with the new text. We forward those
+// as 'text' frames and accumulate for the terminal 'done' frame. On client
+// disconnect we break the read loop — the SDK doesn't expose an upstream
+// AbortSignal we can plumb in, but at least we stop holding the connection.
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
-
   if (!requireSession(req)) {
     return res.status(401).json({ error: 'Authentication required' });
   }
@@ -14,42 +25,84 @@ export default async function handler(req, res) {
   const { model, contents, systemInstruction, thinkingConfig, stage, runId } = req.body || {};
   const tag = `[run=${runId || '?'}] provider=gemini stage=${stage || '?'} model=${model || '?'}`;
 
+  if (!model || !contents) {
+    console.warn(`${tag} status=bad_request msg="missing model or contents"`);
+    return res.status(400).json({ error: 'Missing required fields: model, contents' });
+  }
+  const apiKey = process.env.GEMINI_API_KEY || process.env.API_KEY;
+  if (!apiKey) {
+    console.error(`${tag} status=misconfigured msg="GEMINI_API_KEY not set"`);
+    return res.status(500).json({ error: 'GEMINI_API_KEY not configured on server' });
+  }
+
+  res.setHeader('Content-Type', 'application/x-ndjson; charset=utf-8');
+  res.setHeader('Cache-Control', 'no-cache, no-transform');
+  res.setHeader('X-Accel-Buffering', 'no');
+  res.flushHeaders?.();
+
+  let clientGone = false;
+  const onClientGone = () => {
+    if (clientGone) return;
+    if (res.writableFinished) return;
+    clientGone = true;
+    console.warn(`${tag} status=client_disconnected duration_ms=${Date.now() - started}`);
+  };
+  req.on('close', onClientGone);
+  res.on('close', onClientGone);
+
+  const writeFrame = (obj) => {
+    if (res.writableEnded || clientGone) return false;
+    try {
+      res.write(JSON.stringify(obj) + '\n');
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
+  const keepalive = setInterval(() => writeFrame({ type: 'keepalive' }), 15000);
+
   try {
-    if (!model || !contents) {
-      console.warn(`${tag} status=bad_request msg="missing model or contents"`);
-      return res.status(400).json({ error: 'Missing required fields: model, contents' });
-    }
-
-    const apiKey = process.env.GEMINI_API_KEY || process.env.API_KEY;
-    if (!apiKey) {
-      console.error(`${tag} status=misconfigured msg="GEMINI_API_KEY not set"`);
-      return res.status(500).json({ error: 'GEMINI_API_KEY not configured on server' });
-    }
-
-    console.log(`${tag} status=start`);
+    console.log(`${tag} status=start streaming=true`);
 
     const ai = new GoogleGenAI({ apiKey });
-
     const config = {
-      systemInstruction: systemInstruction,
+      systemInstruction,
       responseMimeType: "application/json",
-      ...(thinkingConfig ? { thinkingConfig } : {})
+      ...(thinkingConfig ? { thinkingConfig } : {}),
     };
 
-    const response = await ai.models.generateContent({
-      model: model,
-      contents: contents,
-      config
-    });
+    const stream = await ai.models.generateContentStream({ model, contents, config });
+
+    let accumulatedText = '';
+    for await (const chunk of stream) {
+      if (clientGone) break;
+      const delta = chunk?.text || '';
+      if (delta) {
+        accumulatedText += delta;
+        if (!writeFrame({ type: 'text', delta })) break;
+      }
+    }
 
     const duration = Date.now() - started;
-    const textLen = response.text?.length || 0;
-    console.log(`${tag} status=ok duration_ms=${duration} response_chars=${textLen}`);
-
-    return res.status(200).json({ text: response.text });
+    if (clientGone) {
+      console.warn(`${tag} status=aborted_mid_stream duration_ms=${duration} chars_read=${accumulatedText.length}`);
+    } else {
+      console.log(`${tag} status=ok duration_ms=${duration} response_chars=${accumulatedText.length}`);
+      writeFrame({ type: 'done', text: accumulatedText });
+    }
+    clearInterval(keepalive);
+    if (!res.writableEnded) res.end();
   } catch (error) {
+    clearInterval(keepalive);
     const duration = Date.now() - started;
-    console.error(`${tag} status=error duration_ms=${duration} msg="${(error.message || '').replace(/"/g, "'")}"`);
-    return res.status(500).json({ error: error.message || 'Internal server error' });
+    if (clientGone) {
+      console.warn(`${tag} status=aborted duration_ms=${duration}`);
+    } else {
+      const msg = (error?.message || '').replace(/"/g, "'");
+      console.error(`${tag} status=error duration_ms=${duration} msg="${msg}"`);
+      writeFrame({ type: 'error', message: error?.message || 'Internal server error' });
+    }
+    if (!res.writableEnded) res.end();
   }
 }
