@@ -60,8 +60,8 @@ export const PROFILES = {
     thinkingConfig: { thinkingLevel: 'medium' },
   } satisfies ModelProfile,
 
-  GEMINI_3_PRO: {
-    id: 'gemini-3-pro-preview',
+  GEMINI_31_PRO: {
+    id: 'gemini-3.1-pro-preview',
     provider: 'gemini',
     thinkingConfig: { thinkingLevel: 'high' },
   } satisfies ModelProfile,
@@ -107,8 +107,8 @@ export const STAGE_MODELS: Record<StageId, ModelProfile> = {
   forensic_audit:       PROFILES.SONNET_46,
   synthesis:            PROFILES.SONNET_46,
   synthesis_escalation: PROFILES.OPUS_47,
-  fact_check:           PROFILES.GEMINI_3_PRO,
-  quality_gate:         PROFILES.GEMINI_3_PRO,
+  fact_check:           PROFILES.GEMINI_31_PRO,
+  quality_gate:         PROFILES.GEMINI_31_PRO,
 };
 
 // ============================================================================
