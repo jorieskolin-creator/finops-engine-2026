@@ -18,31 +18,65 @@ const QualityGateBlock: React.FC<{ gate: QualityGateResult }> = ({ gate }) => {
     );
   }
   const isBlock = gate.decision === 'BLOCK';
+  const llm = gate.llm_explanation;
+  const findExplanation = (reason: string, items?: { reason: string; explanation: string; quote?: string; source_location?: string }[]) =>
+    items?.find((it) => it.reason === reason);
   return (
     <div className={`mb-8 p-6 rounded-xl border-l-4 ${isBlock ? 'border-l-rose-600 bg-rose-50' : 'border-l-amber-600 bg-amber-50'}`}>
       <h2 className={`text-xl font-bold mb-2 ${isBlock ? 'text-rose-800' : 'text-amber-800'}`}>
         Quality Gate: {gate.decision}
       </h2>
       <p className="text-sm text-slate-700 mb-4">{gate.notes[0]}</p>
+      {llm?.summary && (
+        <div className="mb-4 p-3 bg-white/60 rounded border border-slate-200">
+          <p className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">Reviewer Summary{llm.model_used ? ` · ${llm.model_used}` : ''}</p>
+          <p className="text-sm text-slate-700">{llm.summary}</p>
+        </div>
+      )}
       {gate.blocking_reasons.length > 0 && (
         <div className="mb-4">
           <p className="text-xs font-bold uppercase tracking-wider text-rose-700 mb-2">Blocking</p>
-          <ul className="space-y-1.5 text-sm text-slate-700">
-            {gate.blocking_reasons.map((r, i) => (
-              <li key={i} className="pl-3 border-l-2 border-rose-400">{r}</li>
-            ))}
+          <ul className="space-y-2.5 text-sm text-slate-700">
+            {gate.blocking_reasons.map((r, i) => {
+              const ex = findExplanation(r, llm?.blocking_details);
+              return (
+                <li key={i} className="pl-3 border-l-2 border-rose-400">
+                  <p>{r}</p>
+                  {ex?.explanation && <p className="text-xs text-slate-600 mt-1">{ex.explanation}</p>}
+                  {ex?.quote && (
+                    <p className="text-xs text-slate-600 italic mt-1">
+                      &ldquo;{ex.quote}&rdquo;{ex.source_location ? ` — ${ex.source_location}` : ''}
+                    </p>
+                  )}
+                </li>
+              );
+            })}
           </ul>
         </div>
       )}
       {gate.warnings.length > 0 && (
         <div>
           <p className="text-xs font-bold uppercase tracking-wider text-amber-700 mb-2">Warnings</p>
-          <ul className="space-y-1.5 text-sm text-slate-700">
-            {gate.warnings.map((w, i) => (
-              <li key={i} className="pl-3 border-l-2 border-amber-400">{w}</li>
-            ))}
+          <ul className="space-y-2.5 text-sm text-slate-700">
+            {gate.warnings.map((w, i) => {
+              const ex = findExplanation(w, llm?.warning_details);
+              return (
+                <li key={i} className="pl-3 border-l-2 border-amber-400">
+                  <p>{w}</p>
+                  {ex?.explanation && <p className="text-xs text-slate-600 mt-1">{ex.explanation}</p>}
+                  {ex?.quote && (
+                    <p className="text-xs text-slate-600 italic mt-1">
+                      &ldquo;{ex.quote}&rdquo;{ex.source_location ? ` — ${ex.source_location}` : ''}
+                    </p>
+                  )}
+                </li>
+              );
+            })}
           </ul>
         </div>
+      )}
+      {llm?.failed && (
+        <p className="text-xs text-slate-500 italic mt-3">Reviewer narrative unavailable: {llm.failure_reason}</p>
       )}
       {gate.fact_check && !gate.fact_check.failed && gate.fact_check.unsupported_claims.length > 0 && (
         <div className="mt-4 pt-4 border-t border-slate-300">

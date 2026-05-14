@@ -154,6 +154,22 @@ export interface FactCheckResult {
   failure_reason?: string;
 }
 
+export interface QualityGateExplanationItem {
+  reason: string;
+  explanation: string;
+  quote?: string;
+  source_location?: string;
+}
+
+export interface QualityGateLlmExplanation {
+  summary: string;
+  blocking_details: QualityGateExplanationItem[];
+  warning_details: QualityGateExplanationItem[];
+  model_used?: string;
+  failed?: boolean;
+  failure_reason?: string;
+}
+
 export interface QualityGateResult {
   decision: QualityGateDecision;
   blocking_reasons: string[];
@@ -166,6 +182,7 @@ export interface QualityGateResult {
     unsupported_claims_block: number;
   };
   fact_check?: FactCheckResult;
+  llm_explanation?: QualityGateLlmExplanation;
 }
 
 export interface DiagnosticResult {
