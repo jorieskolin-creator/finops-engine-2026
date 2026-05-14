@@ -9,17 +9,23 @@ export default async function handler(req, res) {
     return res.status(401).json({ error: 'Authentication required' });
   }
 
-  try {
-    const { model, messages, systemPrompt, maxTokens, thinking } = req.body;
+  const started = Date.now();
+  const { model, messages, systemPrompt, maxTokens, thinking, stage, runId } = req.body || {};
+  const tag = `[run=${runId || '?'}] provider=anthropic stage=${stage || '?'} model=${model || '?'}`;
 
+  try {
     if (!model || !messages) {
+      console.warn(`${tag} status=bad_request msg="missing model or messages"`);
       return res.status(400).json({ error: 'Missing required fields: model, messages' });
     }
 
     const apiKey = process.env.ANTHROPIC_API_KEY;
     if (!apiKey) {
+      console.error(`${tag} status=misconfigured msg="ANTHROPIC_API_KEY not set"`);
       return res.status(500).json({ error: 'ANTHROPIC_API_KEY not configured on server' });
     }
+
+    console.log(`${tag} status=start`);
 
     const payload = {
       model,
@@ -43,16 +49,23 @@ export default async function handler(req, res) {
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error('[FinOps API Proxy] Anthropic Error:', errorText);
+      const duration = Date.now() - started;
+      console.error(`${tag} status=upstream_error http=${response.status} duration_ms=${duration} msg="${errorText.replace(/"/g, "'").substring(0, 500)}"`);
       return res.status(response.status).json({ error: `Anthropic API Error: ${errorText}` });
     }
 
     const data = await response.json();
     const textContent = data.content?.find(c => c.type === 'text');
+    const text = textContent?.text || '';
 
-    return res.status(200).json({ text: textContent?.text || '' });
+    const duration = Date.now() - started;
+    const usage = data.usage || {};
+    console.log(`${tag} status=ok duration_ms=${duration} response_chars=${text.length} input_tokens=${usage.input_tokens || 0} output_tokens=${usage.output_tokens || 0}`);
+
+    return res.status(200).json({ text });
   } catch (error) {
-    console.error('[FinOps API Proxy] Error:', error.message);
+    const duration = Date.now() - started;
+    console.error(`${tag} status=error duration_ms=${duration} msg="${(error.message || '').replace(/"/g, "'")}"`);
     return res.status(500).json({ error: error.message || 'Internal server error' });
   }
 }

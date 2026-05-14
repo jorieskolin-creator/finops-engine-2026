@@ -9,7 +9,7 @@ import { buildEvidenceDensityBlock, runQualityGate, EVIDENCE_DENSITY_BLOCK } fro
 import { buildFactCheckPrompt, buildRegenerateAppendix, parseFactCheckResponse } from "./factCheckService";
 import { FactCheckClaim, FactCheckResult } from "../types";
 import { STAGE_MODELS } from "../models";
-import { runStage } from "./modelRouter";
+import { runStage, serverLog, newRunId } from "./modelRouter";
 
 const FACT_CHECK_MAX_RETRIES = 2;
 
@@ -225,19 +225,46 @@ export const analyzeDocument = async (
   images: ImageInput[],
   onProgress: (stage: 'audit' | 'calc' | 'strategy', progress?: number) => void
 ): Promise<DiagnosticResult> => {
+  const runId = newRunId();
+  const pipelineStarted = Date.now();
+  const actuals: Record<string, string> = {
+    preflight: STAGE_MODELS.preflight.id,
+    forensic_audit: STAGE_MODELS.forensic_audit.id,
+    synthesis: STAGE_MODELS.synthesis.id,
+    fact_check: STAGE_MODELS.fact_check.id,
+  };
+
+  console.log(`[FinOps] === Pipeline start === run=${runId}`);
+  serverLog(runId, 'info', 'pipeline_start', {
+    text_chars: text.length,
+    image_count: images.length,
+    image_kb: Math.round(images.reduce((s, i) => s + i.data.length, 0) / 1024),
+    preflight: STAGE_MODELS.preflight.id,
+    forensic_audit: STAGE_MODELS.forensic_audit.id,
+    synthesis: STAGE_MODELS.synthesis.id,
+    fact_check: STAGE_MODELS.fact_check.id,
+  });
+
   try {
     const imagePayloadBytes = images.reduce((sum, img) => sum + img.data.length, 0);
     if (images.length > 0) {
       console.log(`[FinOps] Multimodal: ${images.length} image(s), ~${Math.round(imagePayloadBytes / 1024)} KB base64 payload.`);
     }
 
-    console.log("[FinOps] Running Security Pre-Flight (DLP)...");
+    console.log(`[FinOps] [${runId}] Running Security Pre-Flight (DLP)...`);
     onProgress('audit', 1);
     const dlpPrompt = generateSafetyAuditPrompt(text, images);
 
+    const dlpStarted = Date.now();
     const dlpResponse = await runStage('preflight', {
       userText: dlpPrompt,
       images,
+    }, { runId });
+    actuals.preflight = dlpResponse.modelUsed.id;
+    serverLog(runId, 'info', 'stage_complete', {
+      stage: 'preflight',
+      model: dlpResponse.modelUsed.id,
+      duration_ms: Date.now() - dlpStarted,
     });
     const dlpResult = parseAiResponse(dlpResponse.text);
 
@@ -250,9 +277,19 @@ export const analyzeDocument = async (
     const tacticsPromise = knowledgeBaseService.fetchStrategicPlaybook();
 
     onProgress('audit', 5);
-    console.log("[FinOps] Running Phase 1 Parallel Audit (5 batches)...");
+    console.log(`[FinOps] [${runId}] Running Phase 1 Parallel Audit (5 batches)...`);
+    const phase1Started = Date.now();
     const aggregatedRawData = await runPhase1Audit(text, images, (completed, total) => {
       onProgress('audit', Math.round((completed / total) * 100));
+    }, { runId });
+    if (aggregatedRawData.models_used.length > 0) {
+      actuals.forensic_audit = aggregatedRawData.models_used.join(',');
+    }
+    serverLog(runId, 'info', 'stage_complete', {
+      stage: 'forensic_audit',
+      model: aggregatedRawData.models_used.join(',') || STAGE_MODELS.forensic_audit.id,
+      duration_ms: Date.now() - phase1Started,
+      failed_batches: aggregatedRawData.failed_batches.join(',') || 'none',
     });
 
     if (aggregatedRawData.failed_batches.length > 0) {
@@ -285,16 +322,23 @@ export const analyzeDocument = async (
 
     if (validationData.metrics.evidence_density < EVIDENCE_DENSITY_BLOCK) {
       onProgress('strategy', 100);
+      console.log(`[FinOps] [${runId}] Pipeline complete (early exit: low evidence density) duration_ms=${Date.now() - pipelineStarted}`);
+      serverLog(runId, 'info', 'pipeline_complete', {
+        outcome: 'early_exit_low_evidence_density',
+        evidence_density: validationData.metrics.evidence_density,
+        duration_ms: Date.now() - pipelineStarted,
+        models: actuals,
+      });
       return {
         meta: {
           document_analyzed: "Uploaded Text",
           timestamp: new Date().toISOString(),
           engine_version: "finops-1.0.0",
           model_config: {
-            preflight: STAGE_MODELS.preflight.id,
-            forensic_audit: STAGE_MODELS.forensic_audit.id,
-            synthesis: STAGE_MODELS.synthesis.id,
-            fact_check: STAGE_MODELS.fact_check.id,
+            preflight: actuals.preflight,
+            forensic_audit: actuals.forensic_audit,
+            synthesis: 'skipped',
+            fact_check: 'skipped',
             validators: "deterministic"
           }
         },
@@ -348,9 +392,17 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => `  ${cat}
         `\n\n### ORIGINAL SOURCE CONTEXT\n<SOURCE_DOCUMENT_TO_AUDIT>\n${text.substring(0, 50000)}\n</SOURCE_DOCUMENT_TO_AUDIT>`,
       ];
       if (correctionAppendix) textParts.push(correctionAppendix);
+      const synthStarted = Date.now();
       const resp = await runStage('synthesis', {
         userText: textParts.join(''),
         systemInstruction: STRATEGY_SYSTEM_INSTRUCTION,
+      }, { runId });
+      actuals.synthesis = resp.modelUsed.id;
+      serverLog(runId, 'info', 'stage_complete', {
+        stage: 'synthesis',
+        model: resp.modelUsed.id,
+        duration_ms: Date.now() - synthStarted,
+        regen: correctionAppendix ? 'yes' : 'no',
       });
       return parseAiResponse(resp.text);
     };
@@ -378,9 +430,17 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => `  ${cat}
           phase2: validationData,
           imageCount: images.length
         });
+        const fcStarted = Date.now();
         const fcResp = await runStage('fact_check', {
           userText: fcPrompt,
           images,
+        }, { runId });
+        actuals.fact_check = fcResp.modelUsed.id;
+        serverLog(runId, 'info', 'stage_complete', {
+          stage: 'fact_check',
+          model: fcResp.modelUsed.id,
+          duration_ms: Date.now() - fcStarted,
+          attempt: attemptNumber,
         });
         return parseFactCheckResponse(fcResp.text, attemptNumber);
       } catch (e: any) {
@@ -442,9 +502,20 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => `  ${cat}
     }
 
     const qualityGate = runQualityGate(auditLogs, validationData, phase1Validation, groundingValidation, factCheck);
-    console.log(`[FinOps] Quality Gate decision: ${qualityGate.decision}`);
+    console.log(`[FinOps] [${runId}] Quality Gate decision: ${qualityGate.decision}`);
 
     onProgress('strategy', 100);
+
+    const totalDuration = Date.now() - pipelineStarted;
+    console.log(`[FinOps] [${runId}] === Pipeline complete === duration_ms=${totalDuration} quality_gate=${qualityGate.decision}`);
+    serverLog(runId, 'info', 'pipeline_complete', {
+      outcome: 'ok',
+      duration_ms: totalDuration,
+      quality_gate: qualityGate.decision,
+      fact_check_supported: factCheck.supported_count,
+      fact_check_total: factCheck.total_claims,
+      models: actuals,
+    });
 
     return {
       meta: {
@@ -452,10 +523,10 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => `  ${cat}
         timestamp: new Date().toISOString(),
         engine_version: "finops-1.0.0",
         model_config: {
-          preflight: STAGE_MODELS.preflight.id,
-          forensic_audit: STAGE_MODELS.forensic_audit.id,
-          synthesis: STAGE_MODELS.synthesis.id,
-          fact_check: STAGE_MODELS.fact_check.id,
+          preflight: actuals.preflight,
+          forensic_audit: actuals.forensic_audit,
+          synthesis: actuals.synthesis,
+          fact_check: actuals.fact_check,
           validators: "deterministic"
         }
       },
@@ -475,8 +546,14 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => `  ${cat}
       quality_gate: qualityGate
     };
 
-  } catch (error) {
-    console.error("[FinOps Pipeline] Error:", error);
+  } catch (error: any) {
+    const duration = Date.now() - pipelineStarted;
+    console.error(`[FinOps] [${runId}] === Pipeline FAILED === duration_ms=${duration} error="${error?.message || error}"`);
+    serverLog(runId, 'error', 'pipeline_failed', {
+      duration_ms: duration,
+      error: error?.message || String(error),
+      models: actuals,
+    });
     throw error;
   }
 };

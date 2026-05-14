@@ -1,7 +1,7 @@
 
 import { generateBatchSystemInstruction, generateBatchUserPrompt } from './prompts';
 import { BATCH_DEFINITIONS } from './knowledge_base';
-import { runStage } from './services/modelRouter';
+import { runStage, serverLog, RunContext } from './services/modelRouter';
 import { ImageInput } from './types';
 
 const parseAiResponse = (text: string): any => {
@@ -28,9 +28,10 @@ export interface Phase1Result {
     antipattern: Record<string, any>;
   };
   failed_batches: string[];
+  models_used: string[];
 }
 
-const runSingleBatch = async (batchId: string, text: string, images: ImageInput[]): Promise<{ maturity?: any; antipattern?: any }> => {
+const runSingleBatch = async (batchId: string, text: string, images: ImageInput[], ctx: RunContext): Promise<{ maturity?: any; antipattern?: any; model_used?: string }> => {
   const definitions = BATCH_DEFINITIONS[batchId];
   const systemInstruction = generateBatchSystemInstruction(batchId, definitions.title);
   const userPrompt = generateBatchUserPrompt(batchId, definitions);
@@ -41,50 +42,70 @@ const runSingleBatch = async (batchId: string, text: string, images: ImageInput[
     userText,
     systemInstruction,
     images,
-  });
+  }, ctx);
 
-  return parseAiResponse(response.text);
+  const parsed = parseAiResponse(response.text);
+  return { ...parsed, model_used: response.modelUsed.id };
 };
 
-export const runPhase1Audit = async (text: string, images: ImageInput[], onProgress: (completed: number, total: number) => void): Promise<Phase1Result> => {
+export const runPhase1Audit = async (
+  text: string,
+  images: ImageInput[],
+  onProgress: (completed: number, total: number) => void,
+  ctx: RunContext
+): Promise<Phase1Result> => {
   const batches = ['A', 'B', 'C', 'D', 'E'];
   const totalBatches = batches.length;
 
-  const aggregated = {
-    phase_1_audit_logs: {
-      maturity: {} as Record<string, any>,
-      antipattern: {} as Record<string, any>
-    },
-    failed_batches: [] as string[]
+  const aggregated: Phase1Result = {
+    phase_1_audit_logs: { maturity: {}, antipattern: {} },
+    failed_batches: [],
+    models_used: [],
   };
 
   let completedCount = 0;
+  const modelsSeen = new Set<string>();
 
   const auditPromises = batches.map(async (batchId) => {
+    const batchStarted = Date.now();
     let lastError: unknown = null;
     for (let attempt = 1; attempt <= 2; attempt++) {
       try {
-        const batchResult = await runSingleBatch(batchId, text, images);
+        const batchResult = await runSingleBatch(batchId, text, images, ctx);
         if (batchResult.maturity) Object.assign(aggregated.phase_1_audit_logs.maturity, batchResult.maturity);
         if (batchResult.antipattern) Object.assign(aggregated.phase_1_audit_logs.antipattern, batchResult.antipattern);
         if (!batchResult.maturity && !batchResult.antipattern) {
           throw new Error('Batch returned empty result (no maturity or antipattern keys).');
         }
+        if (batchResult.model_used) modelsSeen.add(batchResult.model_used);
+        serverLog(ctx.runId, 'info', 'batch_complete', {
+          batch: batchId,
+          attempt,
+          model: batchResult.model_used,
+          duration_ms: Date.now() - batchStarted,
+        });
         lastError = null;
         break;
-      } catch (error) {
+      } catch (error: any) {
         lastError = error;
-        console.warn(`[FinOps] Batch ${batchId} attempt ${attempt} failed:`, error);
+        console.warn(`[FinOps] [${ctx.runId}] Batch ${batchId} attempt ${attempt} failed:`, error);
+        serverLog(ctx.runId, 'warn', 'batch_attempt_failed', {
+          batch: batchId,
+          attempt,
+          error: error?.message || String(error),
+        });
       }
     }
     if (lastError) {
-      console.error(`[FinOps] Batch ${batchId} failed after retry. Marking as failed.`);
+      console.error(`[FinOps] [${ctx.runId}] Batch ${batchId} failed after retry. Marking as failed.`);
       aggregated.failed_batches.push(batchId);
+      serverLog(ctx.runId, 'error', 'batch_failed', { batch: batchId });
     }
     completedCount++;
     onProgress(completedCount, totalBatches);
   });
 
   await Promise.all(auditPromises);
+  aggregated.models_used = Array.from(modelsSeen);
   return aggregated;
 };
