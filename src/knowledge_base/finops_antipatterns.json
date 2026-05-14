@@ -1,0 +1,308 @@
+{
+  "version": "1.0.0",
+  "domain": "FinOps Maturity Assessment",
+  "stream": "antipattern",
+  "description": "25 FinOps anti-patterns organized into 5 domains. High scores indicate presence of harmful patterns.",
+  "criteria": [
+    {
+      "id": "A1",
+      "batch": "A",
+      "domain": "Visibility Anti-Patterns",
+      "title": "Tag Sprawl & Missing Tags",
+      "description": "Cloud resources lack consistent tagging or have inconsistent, redundant tag taxonomies. Cost allocation is impossible or unreliable. Untagged spend is treated as acceptable overhead rather than a governance failure.",
+      "sub_criteria": [
+        "Is a significant percentage (>20%) of cloud spend untagged or unallocable to a specific team or application?",
+        "Is there no enforced tagging standard, with teams creating ad-hoc tags that differ across accounts and providers?",
+        "Is untagged spend treated as acceptable 'shared infrastructure' rather than a governance failure requiring remediation?"
+      ]
+    },
+    {
+      "id": "A2",
+      "batch": "A",
+      "domain": "Visibility Anti-Patterns",
+      "title": "Black Box Cloud Spend",
+      "description": "Cloud costs are visible only to a small group (typically finance or a single cloud admin). Engineering teams cannot see the cost of the resources they provision. Cost is discovered only during monthly invoice shock.",
+      "sub_criteria": [
+        "Is cloud cost data restricted to finance or a single admin, invisible to the engineering teams who generate the spend?",
+        "Do teams discover cost overruns only through monthly invoice reviews rather than real-time visibility?",
+        "Is there no self-service cost dashboard available to engineering teams for their own services?"
+      ]
+    },
+    {
+      "id": "A3",
+      "batch": "A",
+      "domain": "Visibility Anti-Patterns",
+      "title": "Delayed Cost Reporting",
+      "description": "Cost data is stale — reports arrive days or weeks after the spend occurs. By the time anomalies are discovered, the damage is done. No near-real-time cost signal exists.",
+      "sub_criteria": [
+        "Is cost reporting delayed by more than 48 hours, preventing timely response to anomalies?",
+        "Are cost reports generated manually (spreadsheets, monthly exports) rather than through automated pipelines?",
+        "Is there no automated alerting for cost anomalies, relying instead on human discovery during periodic reviews?"
+      ]
+    },
+    {
+      "id": "A4",
+      "batch": "A",
+      "domain": "Visibility Anti-Patterns",
+      "title": "Siloed Cost Views",
+      "description": "Each cloud provider, account, or team has its own cost view with no unified perspective. Total cloud economics is unknown. Finance sees invoices; engineering sees resource metrics; nobody sees both together.",
+      "sub_criteria": [
+        "Does each cloud provider, account, or team have its own isolated cost view with no cross-cutting unified dashboard?",
+        "Is it impossible to answer 'What is our total cost per customer?' because data is fragmented across systems?",
+        "Do finance and engineering use different tools and numbers to discuss the same cloud spend?"
+      ]
+    },
+    {
+      "id": "A5",
+      "batch": "A",
+      "domain": "Visibility Anti-Patterns",
+      "title": "Vanity Cost Metrics",
+      "description": "The organization tracks meaningless or misleading cost metrics — total spend without context, percentage discounts without baseline, or savings numbers that cannot be verified. Metrics look good on slides but drive no real optimization.",
+      "sub_criteria": [
+        "Does the organization report cost metrics that lack business context (e.g., 'we saved 20%' without baseline or verification)?",
+        "Are FinOps dashboards designed for executive presentation rather than operational decision-making?",
+        "Is there no connection between reported cost metrics and actual engineering behavior change?"
+      ]
+    },
+    {
+      "id": "B1",
+      "batch": "B",
+      "domain": "Optimization Anti-Patterns",
+      "title": "Commitment Avoidance",
+      "description": "The organization runs predominantly on on-demand pricing despite stable, predictable workloads. Fear of commitment (vendor lock-in anxiety, forecasting uncertainty) results in paying 40-70% premiums unnecessarily.",
+      "sub_criteria": [
+        "Does the organization run >50% of stable workloads on on-demand pricing despite predictable usage patterns?",
+        "Is commitment avoidance driven by fear of lock-in or forecasting uncertainty rather than rational analysis?",
+        "Has the organization never calculated the on-demand premium it pays compared to commitment-based alternatives?"
+      ]
+    },
+    {
+      "id": "B2",
+      "batch": "B",
+      "domain": "Optimization Anti-Patterns",
+      "title": "Chronic Over-Provisioning",
+      "description": "Resources are systematically oversized 'just in case.' Instances run at 5-15% CPU utilization. Databases are provisioned for peak capacity that never arrives. Nobody right-sizes because nobody owns the waste.",
+      "sub_criteria": [
+        "Are compute resources systematically oversized with average utilization below 20%?",
+        "Is over-provisioning justified by 'peak capacity' requirements that are never validated against actual usage data?",
+        "Are right-sizing recommendations ignored or backlogged because no team owns the responsibility to act on them?"
+      ]
+    },
+    {
+      "id": "B3",
+      "batch": "B",
+      "domain": "Optimization Anti-Patterns",
+      "title": "Resource Hoarding & Zombie Resources",
+      "description": "Teams accumulate cloud resources they no longer use — stopped instances with attached storage, orphaned snapshots, unused IP addresses, dev environments left running permanently. Cleanup is nobody's job.",
+      "sub_criteria": [
+        "Are there significant numbers of stopped instances, orphaned volumes, unused snapshots, or idle load balancers accruing charges?",
+        "Do development and test environments run 24/7 despite being used only during business hours?",
+        "Is there no automated lifecycle management or scheduled cleanup of non-production resources?"
+      ]
+    },
+    {
+      "id": "B4",
+      "batch": "B",
+      "domain": "Optimization Anti-Patterns",
+      "title": "Manual-Only Optimization",
+      "description": "Cost optimization is a manual, periodic exercise — someone reviews a spreadsheet quarterly and makes recommendations. There is no automation, no continuous optimization, no integration with engineering workflows.",
+      "sub_criteria": [
+        "Is cost optimization performed manually through periodic reviews rather than continuous automated processes?",
+        "Are optimization recommendations delivered as reports or tickets that sit in backlogs rather than automated actions?",
+        "Is there no integration between cost optimization tooling and engineering CI/CD or deployment workflows?"
+      ]
+    },
+    {
+      "id": "B5",
+      "batch": "B",
+      "domain": "Optimization Anti-Patterns",
+      "title": "Discount Stacking Ignorance",
+      "description": "The organization does not understand how discounts interact across providers. Savings Plans applied to already-discounted workloads, conflicting commitment types, or unused negotiated rates indicate a lack of rate optimization sophistication.",
+      "sub_criteria": [
+        "Does the organization lack understanding of how discount mechanisms interact (RIs vs Savings Plans vs EDPs)?",
+        "Are commitments purchased without analysis of overlap, leaving some workloads double-covered and others uncovered?",
+        "Is there no systematic tracking of discount utilization rates across commitment types?"
+      ]
+    },
+    {
+      "id": "C1",
+      "batch": "C",
+      "domain": "Governance Anti-Patterns",
+      "title": "Shadow IT & Unmanaged Cloud Accounts",
+      "description": "Teams or individuals create cloud accounts outside the governed organizational structure. Spend occurs on personal credit cards, department accounts, or unlinked accounts. Total cloud exposure is unknown.",
+      "sub_criteria": [
+        "Do teams or individuals provision cloud resources outside the governed organizational account structure?",
+        "Is there spend on personal credit cards, departmental accounts, or unlinked cloud accounts that escapes central visibility?",
+        "Is the total number of cloud accounts and total organizational cloud exposure unknown?"
+      ]
+    },
+    {
+      "id": "C2",
+      "batch": "C",
+      "domain": "Governance Anti-Patterns",
+      "title": "Budget Blowout Tolerance",
+      "description": "Cloud budgets are set but not enforced. Overruns are discovered after the fact with no consequences. Forecasts are fiction. The budget process is a compliance exercise disconnected from operational reality.",
+      "sub_criteria": [
+        "Are cloud budget overruns routinely tolerated with no consequences or corrective action required?",
+        "Are forecasts consistently inaccurate (>20% variance) without investigation into root causes?",
+        "Is the cloud budgeting process a compliance exercise disconnected from operational decision-making?"
+      ]
+    },
+    {
+      "id": "C3",
+      "batch": "C",
+      "domain": "Governance Anti-Patterns",
+      "title": "FinOps Theater (Process Without Teeth)",
+      "description": "The organization has FinOps titles, meetings, and dashboards but no actual optimization outcomes. FinOps is a checkbox for management reporting, not an operational discipline. Meetings happen but nothing changes.",
+      "sub_criteria": [
+        "Does the organization have FinOps roles, meetings, or dashboards that produce no measurable optimization outcomes?",
+        "Are FinOps activities focused on reporting to management rather than driving engineering behavior change?",
+        "Is FinOps maturity self-assessed as 'Walk' or 'Run' without evidence of actual optimization savings?"
+      ]
+    },
+    {
+      "id": "C4",
+      "batch": "C",
+      "domain": "Governance Anti-Patterns",
+      "title": "Vendor Lock-In Blindness",
+      "description": "The organization makes major cloud commitments (multi-year EDPs, proprietary service adoption) without evaluating exit costs, portability, or competitive alternatives. Lock-in is accepted by default rather than managed deliberately.",
+      "sub_criteria": [
+        "Are major cloud commitments (EDPs, proprietary services) made without exit cost or portability analysis?",
+        "Is vendor lock-in accepted by default rather than managed as a deliberate, risk-assessed strategy?",
+        "Does the organization lack competitive cost benchmarking against alternative providers or architectures?"
+      ]
+    },
+    {
+      "id": "C5",
+      "batch": "C",
+      "domain": "Governance Anti-Patterns",
+      "title": "Compliance as Cost Afterthought",
+      "description": "Regulatory and compliance requirements create cost surprises because they are not integrated into architecture planning. Data residency, encryption mandates, and audit requirements add unplanned spend.",
+      "sub_criteria": [
+        "Do compliance requirements (data residency, encryption, logging) create unplanned cost surprises?",
+        "Is regulatory cost impact not considered during architecture design reviews?",
+        "Are compliance-driven infrastructure choices (dedicated tenancy, specific regions) made without cost impact analysis?"
+      ]
+    },
+    {
+      "id": "D1",
+      "batch": "D",
+      "domain": "Architecture Anti-Patterns",
+      "title": "Lift-and-Shift Without Optimization",
+      "description": "Workloads are migrated to the cloud with their on-premises sizing intact. Virtual machines mirror physical server specs. No cloud-native optimization occurs post-migration. The cloud becomes an expensive colocation facility.",
+      "sub_criteria": [
+        "Were workloads migrated to the cloud with on-premises sizing intact, without cloud-native optimization?",
+        "Are virtual machines still sized to match physical server specifications from the data center era?",
+        "Is the cloud treated as an expensive colocation facility rather than a platform for architectural optimization?"
+      ]
+    },
+    {
+      "id": "D2",
+      "batch": "D",
+      "domain": "Architecture Anti-Patterns",
+      "title": "Cost-Blind Architecture",
+      "description": "Architecture decisions are made purely on technical merit without cost modeling. Teams choose services, instance types, and configurations based on features or familiarity, not cost-performance tradeoffs.",
+      "sub_criteria": [
+        "Are architecture decisions made without cost modeling or cost-performance tradeoff analysis?",
+        "Do teams choose cloud services based on feature set or familiarity rather than cost efficiency?",
+        "Is there no cost estimation step in architecture review or deployment pipelines?"
+      ]
+    },
+    {
+      "id": "D3",
+      "batch": "D",
+      "domain": "Architecture Anti-Patterns",
+      "title": "Scaling Without Limits",
+      "description": "Autoscaling is configured without cost ceilings. A traffic spike or runaway process can scale resources to unlimited cost. There are no circuit breakers between demand signals and infrastructure provisioning.",
+      "sub_criteria": [
+        "Is autoscaling configured without maximum instance limits or cost ceiling guardrails?",
+        "Has the organization experienced unexpected cost spikes from runaway scaling events?",
+        "Are there no circuit breakers between demand signals and infrastructure provisioning to prevent cost explosions?"
+      ]
+    },
+    {
+      "id": "D4",
+      "batch": "D",
+      "domain": "Architecture Anti-Patterns",
+      "title": "Single-Cloud Tunnel Vision",
+      "description": "The organization is locked into a single cloud provider without evaluating whether specific workloads would be more cost-effective elsewhere. Provider loyalty overrides economic rationality. Competitive pricing pressure is absent.",
+      "sub_criteria": [
+        "Is the organization committed to a single cloud provider without periodic cost-competitiveness evaluation?",
+        "Are workload placement decisions driven by provider loyalty or organizational inertia rather than economic analysis?",
+        "Is competitive pricing pressure absent because the organization does not benchmark across providers?"
+      ]
+    },
+    {
+      "id": "D5",
+      "batch": "D",
+      "domain": "Architecture Anti-Patterns",
+      "title": "Monolith Tax",
+      "description": "Large monolithic applications prevent granular cost allocation and optimization. The entire monolith must be scaled together even if only one component is under load. Decomposition is deferred indefinitely.",
+      "sub_criteria": [
+        "Do monolithic applications prevent granular cost allocation to individual features or business capabilities?",
+        "Must entire monolithic applications be scaled together even when only one component is under load?",
+        "Is decomposition into cost-optimizable components deferred indefinitely due to perceived complexity or risk?"
+      ]
+    },
+    {
+      "id": "E1",
+      "batch": "E",
+      "domain": "Cultural Anti-Patterns",
+      "title": "Cost is IT's Problem",
+      "description": "Cloud cost management is viewed as solely an IT or infrastructure responsibility. Business stakeholders who drive demand feel no accountability for cost. Engineers who provision resources never see the bill.",
+      "sub_criteria": [
+        "Is cloud cost management viewed as solely an IT or infrastructure team responsibility?",
+        "Do business stakeholders who drive cloud demand feel no accountability for the resulting costs?",
+        "Do engineering teams who provision resources have no visibility into or accountability for the costs they generate?"
+      ]
+    },
+    {
+      "id": "E2",
+      "batch": "E",
+      "domain": "Cultural Anti-Patterns",
+      "title": "Blame-Based Cost Management",
+      "description": "Cost overruns trigger blame and punishment rather than systemic analysis. Teams hide cost problems instead of surfacing them. Cost discussions are adversarial between finance and engineering rather than collaborative.",
+      "sub_criteria": [
+        "Do cost overruns trigger blame and punishment of individuals or teams rather than systemic analysis?",
+        "Do teams hide or defer reporting cost problems because surfacing issues leads to negative consequences?",
+        "Are cost discussions adversarial between finance and engineering rather than collaborative problem-solving?"
+      ]
+    },
+    {
+      "id": "E3",
+      "batch": "E",
+      "domain": "Cultural Anti-Patterns",
+      "title": "FinOps Lip Service",
+      "description": "Leadership talks about FinOps but does not invest in it. No dedicated team, no tooling budget, no training. FinOps is an additional duty for someone who already has a full-time job. Optimization is expected to happen organically.",
+      "sub_criteria": [
+        "Does leadership endorse FinOps verbally but fail to invest in dedicated team, tooling, or training?",
+        "Is FinOps an additional duty for someone with a full-time role rather than a dedicated function?",
+        "Is cost optimization expected to happen organically without structured programs, targets, or incentives?"
+      ]
+    },
+    {
+      "id": "E4",
+      "batch": "E",
+      "domain": "Cultural Anti-Patterns",
+      "title": "Finance-Engineering Wall",
+      "description": "Finance and engineering operate as separate fiefdoms with different tools, languages, and objectives around cloud spend. Finance sees cost centers; engineering sees resource metrics. Translation between them is manual and lossy.",
+      "sub_criteria": [
+        "Do finance and engineering use different tools and terminology to discuss cloud costs, creating translation overhead?",
+        "Is there no regular cross-functional forum where finance and engineering jointly review cloud economics?",
+        "Do finance team members lack technical understanding of cloud services, and engineers lack financial context?"
+      ]
+    },
+    {
+      "id": "E5",
+      "batch": "E",
+      "domain": "Cultural Anti-Patterns",
+      "title": "Static Maturity Assumption",
+      "description": "The organization treats FinOps maturity as a destination rather than a continuous journey. After initial optimization efforts, the discipline atrophies. No regular maturity assessment, no improvement targets, no benchmarking.",
+      "sub_criteria": [
+        "Does the organization treat FinOps as a completed project rather than a continuous improvement discipline?",
+        "Has initial optimization momentum stalled with no ongoing maturity assessment or improvement targets?",
+        "Is there no external benchmarking or peer comparison to drive continued advancement?"
+      ]
+    }
+  ]
+}

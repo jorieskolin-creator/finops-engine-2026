@@ -1,0 +1,85 @@
+{
+  "version": "1.0.0",
+  "description": "Evidence classification taxonomy for FinOps audit. Defines what constitutes valid evidence for each score level.",
+  "score_definitions": {
+    "0": {
+      "label": "Absent",
+      "description": "No evidence found in the document. Document is silent on this topic.",
+      "maturity_interpretation": "Missing capability. Gap identified.",
+      "antipattern_interpretation": "Anti-pattern not detected. Clean area.",
+      "evidence_requirements": "None required. Silence is valid data."
+    },
+    "1": {
+      "label": "Aspirational",
+      "description": "Vague intent, buzzwords, or planned initiatives only. No evidence of operational practice.",
+      "maturity_interpretation": "Intent without implementation. Plans = Score 1 max.",
+      "antipattern_interpretation": "Minor indicators or emerging risk signals.",
+      "evidence_examples": [
+        "We plan to implement cost tagging",
+        "Cloud cost optimization is on our roadmap",
+        "We are considering a FinOps team",
+        "Cost awareness is important to us"
+      ]
+    },
+    "2": {
+      "label": "Operational",
+      "description": "Behavior or process is described and functioning. Evidence of actual practice, not just policy.",
+      "maturity_interpretation": "Capability exists and is practiced. Not yet mature.",
+      "antipattern_interpretation": "Pattern is present and causing friction.",
+      "evidence_examples": [
+        "We review cloud costs monthly with engineering leads",
+        "Tags are applied to most production resources",
+        "Budget alerts are configured for major accounts",
+        "Teams receive weekly cost reports"
+      ]
+    },
+    "3": {
+      "label": "Embedded",
+      "description": "Explicit mechanisms, enforcement, automation, or cultural norms. Evidence of mature, systematic practice.",
+      "maturity_interpretation": "Mature capability with enforcement and measurement.",
+      "antipattern_interpretation": "Pattern is deeply embedded and structural.",
+      "evidence_examples": [
+        "Automated policy blocks untagged resource deployment",
+        "Cost-per-transaction is tracked in real-time dashboards",
+        "FinOps CoE runs quarterly optimization campaigns with tracked savings",
+        "Architecture reviews require cost modeling before approval"
+      ]
+    }
+  },
+  "evidence_quality_rules": [
+    "Direct quotes from the document are the strongest evidence",
+    "Paraphrased summaries of described behaviors are acceptable",
+    "References to tools, processes, or metrics are evidence of practice",
+    "Job titles or team names that imply FinOps function are evidence",
+    "Future tense ('we will', 'we plan to') caps score at 1",
+    "Past tense ('we implemented', 'we migrated') indicates operational evidence",
+    "Specific numbers, percentages, or metrics strengthen evidence quality",
+    "Generic industry jargon without context is weak evidence (Score 1)"
+  ],
+  "evidence_categories": {
+    "description": "Orthogonal to score. Every evidence_quote captured in Phase 1 must be tagged with exactly one of these seven categories.",
+    "categories": {
+      "Policy": "Written rules, standards, or formal documents that DECLARE intent. Examples: tagging policy, budget approval policy, cost governance charter.",
+      "Process": "Recurring human practices or workflows that are described as actually happening. Examples: monthly cost review meetings, quarterly architecture reviews, weekly tag audits.",
+      "Operational": "Day-to-day tactical activities and roles. Examples: a FinOps analyst rightsizes EC2 weekly, a team triages anomaly alerts daily.",
+      "Automation": "Code, scripts, or platform features that ENFORCE without human intervention. Examples: CI/CD blocks untagged resources, Lambda kills idle instances, IaC policy-as-code.",
+      "Accountability": "Mechanisms that assign ownership and consequences. Examples: cost-center showback, team-level chargeback, cost is a KPI on engineering scorecards.",
+      "Financial-Integration": "Cost data is wired into financial systems or business decisions. Examples: cloud spend reconciled with GL, unit-cost-per-transaction reported to product, ROI gates investment.",
+      "Cultural": "Beliefs, norms, and incentives that shape behavior. Examples: engineers cite cost in design docs, cost is mentioned in standups, savings are celebrated."
+    },
+    "tagging_rules": [
+      "Every evidence_quote MUST carry exactly one category from the seven above.",
+      "If a quote could plausibly fit multiple categories, pick the dominant one (the one the quote most directly evidences).",
+      "Automation supersedes Policy when the quote describes enforcement, not just declaration.",
+      "Cultural supersedes Process when the quote describes a norm or belief, not a scheduled activity."
+    ]
+  },
+  "false_positive_guards": [
+    "Mentioning a tool name does not mean the tool is actively used",
+    "Having a dashboard does not mean anyone looks at it",
+    "Budget existence does not mean budget enforcement",
+    "A FinOps job title does not mean FinOps practice",
+    "Savings reported does not mean savings verified",
+    "Policy documented does not mean policy enforced"
+  ]
+}

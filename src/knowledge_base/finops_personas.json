@@ -1,0 +1,81 @@
+{
+  "version": "1.0.0",
+  "description": "Persona definitions for Phase 3 strategy synthesis. Each persona gets a tailored lens on the same diagnostic data.",
+  "personas": {
+    "finops_lead": {
+      "id": "finops_lead",
+      "title": "FinOps Lead / Practitioner",
+      "priority": 1,
+      "description": "The operational owner of FinOps practice. Needs actionable optimization opportunities, maturity roadmap, and cross-team collaboration tactics.",
+      "focus_areas": ["optimization_opportunities", "maturity_gaps", "tooling_recommendations", "team_enablement"],
+      "language_style": "Operational and specific. Use FinOps terminology. Reference specific cloud services and tools.",
+      "key_questions": [
+        "Where are the largest optimization opportunities in dollar terms?",
+        "Which maturity gaps should be addressed first for maximum impact?",
+        "What tooling or automation should be implemented next?",
+        "How do we build engineering engagement in cost optimization?"
+      ]
+    },
+    "cfo": {
+      "id": "cfo",
+      "title": "CFO / Finance Director",
+      "priority": 2,
+      "description": "The financial decision-maker. Needs ROI projections, budget variance analysis, risk exposure, and investment justification for FinOps tooling.",
+      "focus_areas": ["financial_impact", "budget_variance", "roi_projections", "risk_exposure", "investment_justification"],
+      "language_style": "Financial and strategic. Use business terms. Focus on ROI, risk, and investment. Avoid deep technical jargon.",
+      "key_questions": [
+        "What is the estimated annual savings opportunity?",
+        "What investment in tooling and headcount is required?",
+        "What is the risk exposure from current cost governance gaps?",
+        "How does our cloud unit economics compare to targets?"
+      ]
+    },
+    "engineering_lead": {
+      "id": "engineering_lead",
+      "title": "VP Engineering / CTO",
+      "priority": 3,
+      "description": "The technical decision-maker. Needs architecture recommendations, engineering workflow integration, and performance-cost tradeoff guidance.",
+      "focus_areas": ["architecture_optimization", "engineering_workflow_integration", "performance_cost_tradeoffs", "technical_debt"],
+      "language_style": "Technical and pragmatic. Reference specific architectural patterns, services, and engineering practices.",
+      "key_questions": [
+        "Which architecture changes deliver the biggest cost-performance improvement?",
+        "How do we embed cost awareness into engineering workflows without slowing delivery?",
+        "What are the highest-risk technical decisions from a cost perspective?",
+        "Where should we invest in automation vs. process improvement?"
+      ]
+    }
+  },
+  "poc_personas": ["finops_lead", "cfo", "engineering_lead"],
+  "future_personas": {
+    "cloud_architect": {
+      "id": "cloud_architect",
+      "title": "Cloud Architect",
+      "description": "Deep technical focus on cost-optimal architecture patterns and service selection."
+    },
+    "procurement_lead": {
+      "id": "procurement_lead",
+      "title": "Procurement / Vendor Manager",
+      "description": "Focus on vendor negotiations, commitment strategies, and market benchmarking."
+    },
+    "business_unit_leader": {
+      "id": "business_unit_leader",
+      "title": "Business Unit Leader",
+      "description": "Focus on unit economics, product profitability, and demand-driven cost accountability."
+    },
+    "platform_engineer": {
+      "id": "platform_engineer",
+      "title": "Platform Engineer",
+      "description": "Focus on Kubernetes optimization, IaC cost guardrails, and developer self-service."
+    },
+    "security_compliance": {
+      "id": "security_compliance",
+      "title": "Security & Compliance Officer",
+      "description": "Focus on compliance cost overhead, audit readiness, and governance automation."
+    },
+    "sustainability_lead": {
+      "id": "sustainability_lead",
+      "title": "Sustainability / ESG Lead",
+      "description": "Focus on carbon footprint, green cloud practices, and sustainability reporting."
+    }
+  }
+}

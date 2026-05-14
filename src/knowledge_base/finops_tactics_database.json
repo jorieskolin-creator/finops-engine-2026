@@ -1,0 +1,226 @@
+{
+  "version": "1.0.0",
+  "description": "Verified tactics database for Phase 3 strategy synthesis. Each tactic maps a detected problem to a proven solution mechanism.",
+  "tactics": [
+    {
+      "id": "TAC-VIS-001",
+      "category": "Visibility",
+      "problem_pattern": "Missing or inconsistent cost allocation tags",
+      "solution_mechanism": "Implement Tag Governance Framework with automated enforcement via Service Control Policies (AWS), Azure Policy, or GCP Organization Policies. Deploy tag compliance scanning in CI/CD pipeline.",
+      "case_study": "SPOTIFY: Implemented mandatory tagging with automated remediation. Achieved 98% tag compliance within 3 months, enabling accurate showback to 200+ squads.",
+      "prerequisites": ["Cloud account organizational structure", "CI/CD pipeline access"],
+      "owner_persona": "finops_lead",
+      "expected_outcome": "95%+ tag compliance within 90 days. Full cost allocation visibility.",
+      "risk_notes": "Initial enforcement may break existing deployments. Implement in audit mode first."
+    },
+    {
+      "id": "TAC-VIS-002",
+      "category": "Visibility",
+      "problem_pattern": "Black box cloud spend with no engineering visibility",
+      "solution_mechanism": "Deploy team-level cost dashboards accessible to all engineers. Integrate cost data into existing engineering tools (Slack alerts, Grafana panels, JIRA labels). Make cost a first-class metric alongside latency and availability.",
+      "case_study": "AIRBNB: Built internal cost attribution platform showing real-time cost per service. Engineers reduced unnecessary spending by 15% within first quarter of visibility.",
+      "prerequisites": ["Cost data pipeline from billing APIs", "Dashboard infrastructure"],
+      "owner_persona": "engineering_lead",
+      "expected_outcome": "100% of engineering teams with self-service cost visibility within 60 days.",
+      "risk_notes": "Dashboards without context create noise. Include unit economics, not just raw spend."
+    },
+    {
+      "id": "TAC-VIS-003",
+      "category": "Visibility",
+      "problem_pattern": "Siloed cost views across providers and accounts",
+      "solution_mechanism": "Implement unified multi-cloud cost management platform (Apptio Cloudability, CloudHealth, Vantage, or open-source FOCUS-compatible pipeline) that normalizes billing data across all providers.",
+      "case_study": "SHOPIFY: Unified AWS, GCP, and Azure cost data into single platform using FOCUS specification. Reduced monthly reporting effort from 40 hours to 4 hours.",
+      "prerequisites": ["Billing export from all cloud providers", "Data warehouse or pipeline"],
+      "owner_persona": "finops_lead",
+      "expected_outcome": "Single-pane-of-glass cost visibility across all providers within 90 days.",
+      "risk_notes": "Multi-cloud normalization is complex. Start with top 2 providers, add incrementally."
+    },
+    {
+      "id": "TAC-VIS-004",
+      "category": "Visibility",
+      "problem_pattern": "No cost anomaly detection or alerting",
+      "solution_mechanism": "Configure cloud-native anomaly detection (AWS Cost Anomaly Detection, Azure Cost Alerts) and supplement with custom thresholds per team and service. Route alerts to service owners, not just finance.",
+      "case_study": "NETFLIX: Automated cost anomaly detection catches 95% of billing issues within hours. Service teams receive contextual alerts with root cause analysis.",
+      "prerequisites": ["Cost data pipeline", "Alert routing infrastructure"],
+      "owner_persona": "finops_lead",
+      "expected_outcome": "Anomaly detection live within 30 days. Mean time to detect cost issues reduced to <24 hours.",
+      "risk_notes": "Too many alerts create fatigue. Start with high-magnitude thresholds, refine over time."
+    },
+    {
+      "id": "TAC-OPT-001",
+      "category": "Optimization",
+      "problem_pattern": "Low commitment coverage with high on-demand spend",
+      "solution_mechanism": "Implement systematic commitment strategy: analyze 90-day usage patterns, calculate breakeven points, purchase Savings Plans (AWS) or CUDs (GCP) for stable baseline. Reserve RIs for predictable workloads. Target 70-80% coverage.",
+      "case_study": "PINTEREST: Moved from 20% to 75% commitment coverage. Achieved 35% rate reduction on compute spend, saving $12M annually.",
+      "prerequisites": ["90+ days of usage data", "Forecasting capability", "Finance approval for commitments"],
+      "owner_persona": "finops_lead",
+      "expected_outcome": "20-40% rate reduction on committed workloads within 90 days.",
+      "risk_notes": "Over-committing creates stranded capacity. Start conservative, expand based on utilization data."
+    },
+    {
+      "id": "TAC-OPT-002",
+      "category": "Optimization",
+      "problem_pattern": "Chronic over-provisioning with low utilization",
+      "solution_mechanism": "Deploy right-sizing analysis (AWS Compute Optimizer, GCP Recommender, Azure Advisor) with weekly recommendation reviews. Automate non-production right-sizing. Require engineering approval for production changes.",
+      "case_study": "STRIPE: Automated right-sizing recommendations reduced compute waste by 30%. Engineering teams review and approve changes through existing deployment pipeline.",
+      "prerequisites": ["Utilization monitoring (CPU, memory, network)", "Recommendation tooling"],
+      "owner_persona": "engineering_lead",
+      "expected_outcome": "15-30% compute cost reduction from right-sizing within 6 months.",
+      "risk_notes": "Right-sizing production workloads requires performance validation. Never auto-apply without testing."
+    },
+    {
+      "id": "TAC-OPT-003",
+      "category": "Optimization",
+      "problem_pattern": "Zombie resources and orphaned infrastructure",
+      "solution_mechanism": "Implement automated resource lifecycle management: tag resources with expiry dates, scan for orphaned volumes/IPs/snapshots weekly, auto-terminate dev/test environments outside business hours.",
+      "case_study": "LYFT: Automated cleanup of orphaned resources and dev environment scheduling. Eliminated $3M in annual waste from zombie resources alone.",
+      "prerequisites": ["Resource inventory capability", "Automation platform (Lambda, Cloud Functions)"],
+      "owner_persona": "finops_lead",
+      "expected_outcome": "5-15% total spend reduction from waste elimination within 90 days.",
+      "risk_notes": "Aggressive cleanup can terminate needed resources. Implement 'soft delete' with 7-day recovery window."
+    },
+    {
+      "id": "TAC-OPT-004",
+      "category": "Optimization",
+      "problem_pattern": "No spot/preemptible instance usage for fault-tolerant workloads",
+      "solution_mechanism": "Identify fault-tolerant workloads (batch, CI/CD, data processing, testing) and migrate to spot/preemptible instances. Implement interruption handling with graceful shutdown and automatic retry.",
+      "case_study": "TWITTER/X: Moved batch processing to 100% spot instances with interruption-aware job scheduling. Achieved 70% cost reduction for batch workloads.",
+      "prerequisites": ["Fault-tolerant workload identification", "Interruption handling architecture"],
+      "owner_persona": "engineering_lead",
+      "expected_outcome": "60-80% cost reduction for eligible workloads.",
+      "risk_notes": "Not suitable for latency-sensitive or stateful workloads. Start with CI/CD and testing."
+    },
+    {
+      "id": "TAC-GOV-001",
+      "category": "Governance",
+      "problem_pattern": "No cloud financial policy framework",
+      "solution_mechanism": "Develop and enforce Cloud Financial Policy Framework covering: resource provisioning standards, spend approval thresholds, tagging requirements, budget management, and exception handling. Automate enforcement via policy-as-code.",
+      "case_study": "CAPITAL ONE: Implemented comprehensive cloud governance framework with automated policy enforcement. Reduced unauthorized resource provisioning by 90%.",
+      "prerequisites": ["Executive sponsorship", "Policy-as-code tooling (OPA, Sentinel)"],
+      "owner_persona": "finops_lead",
+      "expected_outcome": "Policy framework live within 60 days. Automated enforcement within 120 days.",
+      "risk_notes": "Overly restrictive policies slow engineering. Start with guardrails, not gatekeepers."
+    },
+    {
+      "id": "TAC-GOV-002",
+      "category": "Governance",
+      "problem_pattern": "Shadow IT and unmanaged cloud accounts",
+      "solution_mechanism": "Implement Cloud Account Vending Machine with automated provisioning, mandatory guardrails, and billing consolidation. Audit for shadow accounts using domain-wide discovery tools.",
+      "case_study": "AMAZON (INTERNAL): AWS Organizations with automated account vending reduced shadow IT to near-zero. All accounts inherit baseline security and cost controls.",
+      "prerequisites": ["Cloud organization structure", "Account provisioning automation"],
+      "owner_persona": "finops_lead",
+      "expected_outcome": "100% account visibility and governance within 90 days.",
+      "risk_notes": "Existing shadow accounts may contain production workloads. Migration, not termination."
+    },
+    {
+      "id": "TAC-GOV-003",
+      "category": "Governance",
+      "problem_pattern": "Budget blowout tolerance with no consequence management",
+      "solution_mechanism": "Implement automated budget enforcement with tiered response: alerts at 75% burn, approval gates at 90%, hard stops or throttling at 100%. Tie budget adherence to team OKRs and leadership reviews.",
+      "case_study": "GOOGLE CLOUD (CUSTOMER): Implemented automated budget controls with escalation. Budget variance reduced from 40% to 8% within two quarters.",
+      "prerequisites": ["Budget infrastructure", "Automated alerting and enforcement"],
+      "owner_persona": "cfo",
+      "expected_outcome": "Budget variance <10% within 6 months.",
+      "risk_notes": "Hard budget stops can impact production. Implement for non-production first, use alerts for production."
+    },
+    {
+      "id": "TAC-ARCH-001",
+      "category": "Architecture",
+      "problem_pattern": "Lift-and-shift without cloud-native optimization",
+      "solution_mechanism": "Implement post-migration optimization program: right-size migrated VMs, evaluate managed service replacements (RDS vs self-managed DB, EKS vs EC2), and identify candidates for serverless or containerization.",
+      "case_study": "CAPITAL ONE: Post-migration optimization program right-sized 80% of migrated instances and moved 40% of workloads to managed services. Achieved 45% cost reduction vs initial cloud spend.",
+      "prerequisites": ["Workload inventory", "Architecture review capability"],
+      "owner_persona": "engineering_lead",
+      "expected_outcome": "20-40% cost reduction on migrated workloads within 12 months.",
+      "risk_notes": "Re-architecting carries risk. Prioritize highest-spend workloads with stable requirements."
+    },
+    {
+      "id": "TAC-ARCH-002",
+      "category": "Architecture",
+      "problem_pattern": "Cost-blind architecture decisions",
+      "solution_mechanism": "Embed cost estimation in architecture review process: require Infracost or similar tool output as part of design documents, include cost section in ADRs (Architecture Decision Records), add cost checks to PR pipelines.",
+      "case_study": "HASHICORP: Infracost integration in Terraform PRs shows predicted cost impact before merge. Engineering teams reduced cost-blind deployments by 80%.",
+      "prerequisites": ["IaC-based infrastructure", "Architecture review process"],
+      "owner_persona": "engineering_lead",
+      "expected_outcome": "100% of architecture decisions include cost modeling within 90 days.",
+      "risk_notes": "Cost estimates are approximations. Use for direction, not precision."
+    },
+    {
+      "id": "TAC-ARCH-003",
+      "category": "Architecture",
+      "problem_pattern": "Autoscaling without cost guardrails",
+      "solution_mechanism": "Implement cost-aware autoscaling: set maximum instance limits, configure cost ceiling alerts, implement circuit breakers that alert and throttle before runaway scaling. Test scaling limits in staging.",
+      "case_study": "SLACK: Implemented autoscaling with cost circuit breakers after a scaling incident. Maximum cost per scaling group is defined and enforced automatically.",
+      "prerequisites": ["Autoscaling configuration", "Cost alerting infrastructure"],
+      "owner_persona": "engineering_lead",
+      "expected_outcome": "Zero runaway scaling cost incidents.",
+      "risk_notes": "Overly aggressive limits can impact availability during genuine traffic spikes. Balance cost and reliability."
+    },
+    {
+      "id": "TAC-CULT-001",
+      "category": "Culture",
+      "problem_pattern": "Engineering teams have no cost accountability",
+      "solution_mechanism": "Implement Engineering Cost Ownership: give every team a cost dashboard for their services, include cost metrics in sprint reviews, add cost efficiency to team OKRs. Celebrate optimization wins publicly.",
+      "case_study": "UBER: Engineering teams own their service costs with monthly cost reviews. Teams that achieve significant optimization receive internal recognition and share learnings.",
+      "prerequisites": ["Team-level cost attribution", "Engineering manager buy-in"],
+      "owner_persona": "engineering_lead",
+      "expected_outcome": "Engineering-driven optimization saving 10-20% within 6 months.",
+      "risk_notes": "Cost accountability without empowerment creates frustration. Provide tooling and authority alongside targets."
+    },
+    {
+      "id": "TAC-CULT-002",
+      "category": "Culture",
+      "problem_pattern": "Finance-engineering wall preventing collaboration",
+      "solution_mechanism": "Establish cross-functional FinOps cadence: monthly FinOps review with finance, engineering, and business stakeholders. Create shared FinOps Slack channel. Embed finance business partner in engineering organization.",
+      "case_study": "ATLASSIAN: Monthly FinOps review brings engineering, finance, and product together. Shared cost vocabulary and dashboards eliminated the 'lost in translation' problem.",
+      "prerequisites": ["Executive mandate for cross-functional collaboration", "Shared tooling"],
+      "owner_persona": "cfo",
+      "expected_outcome": "Cross-functional alignment within 90 days. Shared cost language and decision-making.",
+      "risk_notes": "Meetings without agenda or outcomes become theater. Define clear inputs, outputs, and decisions for each cadence."
+    },
+    {
+      "id": "TAC-CULT-003",
+      "category": "Culture",
+      "problem_pattern": "FinOps lip service without investment",
+      "solution_mechanism": "Secure executive sponsorship with a FinOps Business Case: calculate total optimization opportunity (typically 20-30% of cloud spend), propose dedicated headcount and tooling investment, define 90-day ROI milestones.",
+      "case_study": "DATADOG: Invested in dedicated FinOps team after calculating $10M+ annual optimization opportunity. Team achieved 2x ROI in first year through systematic optimization.",
+      "prerequisites": ["Cloud spend data for business case", "Executive access"],
+      "owner_persona": "finops_lead",
+      "expected_outcome": "Funded FinOps function with measurable ROI within 6 months.",
+      "risk_notes": "Business case must be realistic. Avoid inflating savings projections — credibility is critical."
+    },
+    {
+      "id": "TAC-CULT-004",
+      "category": "Culture",
+      "problem_pattern": "Blame-based cost management culture",
+      "solution_mechanism": "Implement Blameless Cost Reviews: focus on systemic causes of cost overruns, not individual blame. Use cost anomalies as learning opportunities. Reward teams that surface and fix cost issues proactively.",
+      "case_study": "ETSY: Blameless post-mortems extended to cost incidents. Teams that self-report cost issues receive support, not punishment. Cost transparency improved dramatically.",
+      "prerequisites": ["Management commitment to blameless culture", "Cost incident process"],
+      "owner_persona": "finops_lead",
+      "expected_outcome": "Increased cost issue reporting and faster resolution within 90 days.",
+      "risk_notes": "Cultural change takes time. Leadership must model blameless behavior consistently."
+    },
+    {
+      "id": "TAC-GOV-004",
+      "category": "Governance",
+      "problem_pattern": "FinOps theater with no operational outcomes",
+      "solution_mechanism": "Implement FinOps Outcome Tracking: define KPIs (savings achieved, commitment utilization, waste %, unit economics trend), publish monthly scorecard, tie FinOps team evaluation to measurable outcomes, not activities.",
+      "case_study": "ADOBE: Shifted FinOps measurement from activities (meetings held, reports generated) to outcomes (savings delivered, waste eliminated). FinOps team impact increased 3x.",
+      "prerequisites": ["FinOps function exists", "Baseline cost metrics"],
+      "owner_persona": "finops_lead",
+      "expected_outcome": "FinOps measured by outcomes within 60 days. Accountability for savings delivery.",
+      "risk_notes": "Outcome measurement requires reliable baseline. Invest in measurement before targets."
+    },
+    {
+      "id": "TAC-OPT-005",
+      "category": "Optimization",
+      "problem_pattern": "No storage lifecycle management",
+      "solution_mechanism": "Implement automated storage lifecycle policies: define access frequency thresholds for tiering (hot/warm/cold/archive), enforce retention policies, monitor storage growth trends, automate snapshot cleanup.",
+      "case_study": "LINKEDIN: Automated storage tiering reduced storage costs by 40%. Data automatically moves to cheaper tiers based on access patterns.",
+      "prerequisites": ["Storage usage analytics", "Lifecycle policy configuration"],
+      "owner_persona": "finops_lead",
+      "expected_outcome": "20-40% storage cost reduction within 6 months.",
+      "risk_notes": "Aggressive tiering can impact data access latency. Validate access patterns before implementing."
+    }
+  ]
+}

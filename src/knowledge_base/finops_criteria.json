@@ -1,0 +1,308 @@
+{
+  "version": "1.0.0",
+  "domain": "FinOps Maturity Assessment",
+  "stream": "maturity",
+  "description": "25 FinOps maturity criteria organized into 5 domains. Each criterion has 3 sub-criteria scored 0-3.",
+  "criteria": [
+    {
+      "id": "A1",
+      "batch": "A",
+      "domain": "Cost Visibility & Allocation",
+      "title": "Comprehensive Cost Allocation & Tagging",
+      "description": "The organization must implement a consistent, enforced tagging and labeling strategy across all cloud resources. Tags must map spend to business units, applications, environments, and cost centers. Untagged resources must be actively tracked and remediated.",
+      "sub_criteria": [
+        "Is there a documented and enforced tagging policy that maps cloud resources to business units, applications, and environments?",
+        "Are untagged or mis-tagged resources actively tracked, reported, and remediated within a defined SLA?",
+        "Does the tagging strategy support both showback/chargeback and cost optimization workflows?"
+      ]
+    },
+    {
+      "id": "A2",
+      "batch": "A",
+      "domain": "Cost Visibility & Allocation",
+      "title": "Showback & Chargeback Models",
+      "description": "The organization must have mechanisms to attribute cloud costs back to consuming teams or business units. This can be showback (visibility without billing) or full chargeback (actual cost transfer). The model must be transparent and accepted by stakeholders.",
+      "sub_criteria": [
+        "Is there a functioning showback or chargeback model that attributes cloud costs to specific teams, products, or business units?",
+        "Do consuming teams accept and understand their cost allocations without disputing the methodology?",
+        "Is the allocation model refined regularly to reflect changes in shared service usage and architecture?"
+      ]
+    },
+    {
+      "id": "A3",
+      "batch": "A",
+      "domain": "Cost Visibility & Allocation",
+      "title": "Cost Anomaly Detection & Alerting",
+      "description": "The organization must have automated systems to detect unexpected cost spikes, billing anomalies, and budget threshold breaches. Alerts must reach the right stakeholders in near-real-time with actionable context.",
+      "sub_criteria": [
+        "Are automated anomaly detection systems in place that identify unexpected cost spikes within 24 hours?",
+        "Do alerts include actionable context (affected service, account, magnitude) and route to the responsible team?",
+        "Is there a defined response process for cost anomalies with documented escalation paths?"
+      ]
+    },
+    {
+      "id": "A4",
+      "batch": "A",
+      "domain": "Cost Visibility & Allocation",
+      "title": "Cloud Cost Dashboards & Reporting",
+      "description": "The organization must provide accessible, role-appropriate cost dashboards to all stakeholders. Engineering sees resource-level detail; finance sees business-unit rollups; executives see trends and forecasts. Dashboards must be current, not stale.",
+      "sub_criteria": [
+        "Are cloud cost dashboards available to all relevant stakeholders (engineering, finance, executives) with role-appropriate views?",
+        "Is cost data refreshed at least daily and presented with trend analysis and forecast projections?",
+        "Do dashboards integrate data from all cloud providers and SaaS platforms into a unified view?"
+      ]
+    },
+    {
+      "id": "A5",
+      "batch": "A",
+      "domain": "Cost Visibility & Allocation",
+      "title": "Unit Economics & Cost-Per-Transaction",
+      "description": "The organization must measure cloud cost efficiency in business terms — cost per customer, per transaction, per API call, or per revenue dollar. Raw spend is insufficient; unit economics connect cloud investment to business value.",
+      "sub_criteria": [
+        "Does the organization track unit economics (cost per customer, per transaction, per API call) as a primary efficiency metric?",
+        "Are unit cost trends monitored over time to separate growth-driven spend increases from efficiency degradation?",
+        "Are engineering teams given unit cost targets and held accountable for cost efficiency alongside performance SLAs?"
+      ]
+    },
+    {
+      "id": "B1",
+      "batch": "B",
+      "domain": "Rate & Usage Optimization",
+      "title": "Commitment-Based Discounts (RIs, Savings Plans, CUDs)",
+      "description": "The organization must actively manage commitment-based discount instruments (Reserved Instances, Savings Plans, Committed Use Discounts) to reduce on-demand pricing. Coverage targets must be set, tracked, and optimized.",
+      "sub_criteria": [
+        "Does the organization actively purchase and manage commitment-based discounts (RIs, Savings Plans, CUDs) with defined coverage targets?",
+        "Is commitment utilization tracked and optimized, with unused commitments identified and exchanged or resold?",
+        "Is there a regular review cadence (at least quarterly) to adjust commitment portfolio based on usage evolution?"
+      ]
+    },
+    {
+      "id": "B2",
+      "batch": "B",
+      "domain": "Rate & Usage Optimization",
+      "title": "Right-Sizing & Workload Optimization",
+      "description": "The organization must continuously analyze resource utilization and right-size instances, databases, and services to match actual demand. Over-provisioned resources represent waste; under-provisioned resources create performance risk.",
+      "sub_criteria": [
+        "Is there an ongoing right-sizing program that analyzes CPU, memory, and storage utilization across compute resources?",
+        "Are right-sizing recommendations generated automatically and reviewed by engineering teams on a regular cadence?",
+        "Does the organization track the financial impact of right-sizing actions and report savings achieved?"
+      ]
+    },
+    {
+      "id": "B3",
+      "batch": "B",
+      "domain": "Rate & Usage Optimization",
+      "title": "Waste Elimination (Orphaned Resources & Idle Instances)",
+      "description": "The organization must actively identify and terminate orphaned resources (unattached volumes, unused IPs, idle load balancers), zombie instances, and dev/test environments left running outside business hours.",
+      "sub_criteria": [
+        "Are orphaned and idle resources (unattached volumes, unused IPs, idle instances) systematically identified and terminated?",
+        "Is there an automated process to shut down non-production environments outside business hours or defined schedules?",
+        "Does the organization measure and report waste as a percentage of total spend with reduction targets?"
+      ]
+    },
+    {
+      "id": "B4",
+      "batch": "B",
+      "domain": "Rate & Usage Optimization",
+      "title": "Spot & Preemptible Instance Strategy",
+      "description": "The organization must leverage spot/preemptible instances for fault-tolerant and batch workloads to achieve significant rate reductions. Workload architecture must support interruption handling.",
+      "sub_criteria": [
+        "Does the organization use spot/preemptible instances for fault-tolerant workloads (batch processing, CI/CD, testing)?",
+        "Is there an architectural pattern for graceful handling of spot interruptions with automatic fallback?",
+        "Is spot instance savings tracked as a distinct optimization category with coverage expansion targets?"
+      ]
+    },
+    {
+      "id": "B5",
+      "batch": "B",
+      "domain": "Rate & Usage Optimization",
+      "title": "Storage Lifecycle & Data Tiering",
+      "description": "The organization must implement storage lifecycle policies that automatically tier data from hot to warm to cold storage based on access patterns. Retention policies must be enforced to prevent unbounded storage growth.",
+      "sub_criteria": [
+        "Are storage lifecycle policies implemented to automatically tier data based on access patterns (hot/warm/cold/archive)?",
+        "Are data retention policies defined and enforced to prevent unbounded storage growth?",
+        "Does the organization monitor storage cost per GB and optimize for the appropriate storage class?"
+      ]
+    },
+    {
+      "id": "C1",
+      "batch": "C",
+      "domain": "Governance & Policy",
+      "title": "Cloud Financial Policy Framework",
+      "description": "The organization must have a documented cloud financial management policy framework covering spend limits, approval workflows, resource provisioning standards, and accountability structures. Policies must be enforced, not aspirational.",
+      "sub_criteria": [
+        "Is there a documented cloud financial policy framework covering spend limits, provisioning standards, and approval workflows?",
+        "Are policies actively enforced through automated guardrails (e.g., Service Control Policies, Azure Policy, OPA) rather than manual review?",
+        "Is there a regular policy review cadence to update rules based on new services, pricing changes, and organizational shifts?"
+      ]
+    },
+    {
+      "id": "C2",
+      "batch": "C",
+      "domain": "Governance & Policy",
+      "title": "Budget Management & Forecasting",
+      "description": "The organization must maintain cloud budgets at the team, project, and organizational level with accurate forecasting. Budget-to-actual variance must be tracked monthly, with variance analysis driving corrective action.",
+      "sub_criteria": [
+        "Are cloud budgets maintained at team, project, and organizational levels with monthly budget-to-actual tracking?",
+        "Does the forecasting model incorporate historical trends, planned capacity changes, and business growth projections?",
+        "Is budget variance analysis performed monthly with documented corrective actions for overruns?"
+      ]
+    },
+    {
+      "id": "C3",
+      "batch": "C",
+      "domain": "Governance & Policy",
+      "title": "FinOps Operating Model (Team, Roles, RACI)",
+      "description": "The organization must have a defined FinOps operating model with clear roles, responsibilities, and RACI matrices. Whether centralized, federated, or hybrid, the model must have executive sponsorship and operational cadence.",
+      "sub_criteria": [
+        "Is there a defined FinOps operating model with explicit roles (FinOps Practitioner, Cloud Economist, Engineering Lead) and RACI matrix?",
+        "Does the operating model have executive sponsorship with regular steering committee engagement?",
+        "Is there a documented operational cadence (daily, weekly, monthly) for FinOps reviews and optimization cycles?"
+      ]
+    },
+    {
+      "id": "C4",
+      "batch": "C",
+      "domain": "Governance & Policy",
+      "title": "Procurement & Vendor Management",
+      "description": "The organization must have a structured approach to cloud procurement including Enterprise Discount Programs (EDPs), negotiated pricing, and multi-year agreements. Vendor relationships must be actively managed, not passively consumed.",
+      "sub_criteria": [
+        "Does the organization leverage Enterprise Discount Programs, private pricing, or negotiated rates with cloud providers?",
+        "Is there a structured vendor management process that evaluates cloud provider pricing against market benchmarks?",
+        "Are multi-year commitment decisions made with documented business justification and exit strategy considerations?"
+      ]
+    },
+    {
+      "id": "C5",
+      "batch": "C",
+      "domain": "Governance & Policy",
+      "title": "Compliance & Regulatory Cost Controls",
+      "description": "The organization must ensure cloud financial operations comply with regulatory requirements including data residency cost implications, audit trail requirements, and financial reporting standards.",
+      "sub_criteria": [
+        "Are data residency and sovereignty requirements factored into cloud architecture decisions with cost impact analysis?",
+        "Does the organization maintain audit trails for cloud financial decisions that satisfy regulatory requirements?",
+        "Are compliance-driven cost increases (e.g., dedicated tenancy, encryption, logging) tracked and justified separately?"
+      ]
+    },
+    {
+      "id": "D1",
+      "batch": "D",
+      "domain": "Architecture & Engineering",
+      "title": "Cost-Aware Architecture Design",
+      "description": "Engineering teams must consider cost as a first-class architecture constraint alongside performance, reliability, and security. Architecture reviews must include cost modeling. The cheapest architecture that meets requirements wins.",
+      "sub_criteria": [
+        "Is cost explicitly included as a first-class constraint in architecture design reviews alongside performance and reliability?",
+        "Are architecture proposals required to include cost modeling (estimated monthly spend, scaling cost curves)?",
+        "Do engineering teams have access to cost data during development and can see the cost impact of their design choices?"
+      ]
+    },
+    {
+      "id": "D2",
+      "batch": "D",
+      "domain": "Architecture & Engineering",
+      "title": "Infrastructure as Code with Cost Guardrails",
+      "description": "Infrastructure provisioning must be codified (Terraform, Pulumi, CloudFormation) with embedded cost guardrails. Policy-as-code must prevent provisioning of oversized or non-compliant resources before deployment.",
+      "sub_criteria": [
+        "Is all cloud infrastructure provisioned through Infrastructure as Code (Terraform, Pulumi, CloudFormation)?",
+        "Are cost guardrails embedded in the IaC pipeline (e.g., Infracost, OPA policies) to prevent over-provisioning before deployment?",
+        "Is there a cost estimation step in the CI/CD pipeline that shows predicted cost impact of infrastructure changes?"
+      ]
+    },
+    {
+      "id": "D3",
+      "batch": "D",
+      "domain": "Architecture & Engineering",
+      "title": "Automated Scaling Policies",
+      "description": "The organization must implement automated scaling (horizontal and vertical) based on demand signals to avoid both over-provisioning (waste) and under-provisioning (performance degradation). Scaling policies must be tested and monitored.",
+      "sub_criteria": [
+        "Are automated horizontal and vertical scaling policies implemented for production workloads based on demand signals?",
+        "Are scaling policies tested (including scale-to-zero) to ensure they respond correctly to traffic patterns?",
+        "Is the cost impact of scaling events monitored to identify over-aggressive or under-responsive scaling configurations?"
+      ]
+    },
+    {
+      "id": "D4",
+      "batch": "D",
+      "domain": "Architecture & Engineering",
+      "title": "Multi-Cloud & Hybrid Cost Management",
+      "description": "If operating across multiple cloud providers or hybrid environments, the organization must have unified cost visibility, consistent tagging, and cross-provider optimization strategies. Single-pane-of-glass for total cloud economics.",
+      "sub_criteria": [
+        "Does the organization have unified cost visibility across all cloud providers and hybrid environments in a single view?",
+        "Is tagging and cost allocation consistent across providers, enabling apples-to-apples comparison?",
+        "Are workload placement decisions informed by cross-provider cost analysis (not just technical preference)?"
+      ]
+    },
+    {
+      "id": "D5",
+      "batch": "D",
+      "domain": "Architecture & Engineering",
+      "title": "Containerization & Serverless Optimization",
+      "description": "The organization must optimize container orchestration (Kubernetes) for cost efficiency including pod right-sizing, cluster autoscaling, and bin-packing. Serverless workloads must be monitored for execution cost and duration optimization.",
+      "sub_criteria": [
+        "Are Kubernetes clusters optimized for cost (pod right-sizing, node autoscaling, bin-packing, spot node pools)?",
+        "Are serverless function costs monitored with optimization for execution duration, memory allocation, and concurrency?",
+        "Is there a decision framework for choosing between containers, serverless, and VMs based on cost-performance tradeoffs?"
+      ]
+    },
+    {
+      "id": "E1",
+      "batch": "E",
+      "domain": "Culture & Organization",
+      "title": "FinOps Team / Center of Excellence",
+      "description": "The organization must have a dedicated FinOps function — whether a central team, federated practitioners, or a virtual CoE. This team drives standards, tooling, training, and optimization campaigns across the organization.",
+      "sub_criteria": [
+        "Is there a dedicated FinOps team or Center of Excellence (central, federated, or virtual) with defined charter and headcount?",
+        "Does the FinOps team drive cross-organizational optimization campaigns with measurable savings targets?",
+        "Is the FinOps function positioned as a value enabler (not cost police) with engineering credibility?"
+      ]
+    },
+    {
+      "id": "E2",
+      "batch": "E",
+      "domain": "Culture & Organization",
+      "title": "Engineering Cost Accountability",
+      "description": "Engineering teams must own the cost of the resources they provision. Cost accountability must be embedded in team objectives, sprint reviews, and performance evaluations — not siloed in finance.",
+      "sub_criteria": [
+        "Do engineering teams have direct visibility into and accountability for the cloud costs of their services?",
+        "Is cost efficiency included in engineering team objectives, sprint reviews, or OKRs?",
+        "Are engineers empowered and incentivized to optimize cost (not just build features)?"
+      ]
+    },
+    {
+      "id": "E3",
+      "batch": "E",
+      "domain": "Culture & Organization",
+      "title": "Executive FinOps Sponsorship",
+      "description": "FinOps must have executive sponsorship (CTO, CFO, or VP-level) with active engagement, not just nominal support. Executives must participate in FinOps reviews and allocate budget for tooling and headcount.",
+      "sub_criteria": [
+        "Is there active executive sponsorship (CTO, CFO, VP-level) for FinOps with regular engagement in reviews?",
+        "Do executives allocate dedicated budget for FinOps tooling, training, and headcount?",
+        "Is cloud cost efficiency a standing agenda item in executive leadership meetings?"
+      ]
+    },
+    {
+      "id": "E4",
+      "batch": "E",
+      "domain": "Culture & Organization",
+      "title": "Cross-Functional Collaboration (Finance-Engineering-Business)",
+      "description": "FinOps requires active collaboration between finance, engineering, and business stakeholders. These groups must share a common language, common tools, and common goals around cloud investment.",
+      "sub_criteria": [
+        "Do finance, engineering, and business teams collaborate regularly on cloud cost decisions with shared tooling and language?",
+        "Is there a structured cadence (e.g., monthly FinOps review) that brings cross-functional stakeholders together?",
+        "Has the organization moved beyond 'engineering buys, finance pays' to a shared accountability model?"
+      ]
+    },
+    {
+      "id": "E5",
+      "batch": "E",
+      "domain": "Culture & Organization",
+      "title": "Continuous Improvement & Benchmarking",
+      "description": "The organization must treat FinOps as a continuous improvement discipline, not a one-time project. Internal benchmarking (month-over-month, team-vs-team) and external benchmarking (industry peers) must drive ongoing maturity.",
+      "sub_criteria": [
+        "Does the organization treat FinOps as a continuous improvement discipline with regular retrospectives and maturity assessments?",
+        "Is internal benchmarking (team-vs-team, month-over-month efficiency) used to drive healthy competition and learning?",
+        "Does the organization benchmark against industry peers or FinOps Foundation standards to gauge relative maturity?"
+      ]
+    }
+  ]
+}

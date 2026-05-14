@@ -1,0 +1,26 @@
+{
+  "version": "2.0.0",
+  "description": "Machine-readable validation rules consumed by src/services/validatorService.ts. This file is the source of truth: changing values here changes engine behavior.",
+  "phase1": {
+    "required_streams": ["maturity", "antipattern"],
+    "criteria_ids_per_batch": {
+      "A": ["A1", "A2", "A3", "A4", "A5"],
+      "B": ["B1", "B2", "B3", "B4", "B5"],
+      "C": ["C1", "C2", "C3", "C4", "C5"],
+      "D": ["D1", "D2", "D3", "D4", "D5"],
+      "E": ["E1", "E2", "E3", "E4", "E5"]
+    },
+    "total_criteria_per_stream": 25,
+    "score_range": { "min": 0, "max": 3 },
+    "required_fields_per_item": ["count", "evidence", "reasoning"],
+    "evidence_min_length_when_scored": 20,
+    "silence_keywords": ["silent", "absent", "not found", "no evidence", "missing", "not mentioned"],
+    "silence_evidence_max_length_before_warning": 5
+  },
+  "phase3": {
+    "executive_summary_min_length": 100,
+    "weasel_words": ["consider", "might", "could potentially", "perhaps", "it may be worth", "you could try", "we suggest exploring"],
+    "tactic_id_pattern": "TAC-[A-Z]+-\\d{3}",
+    "require_tactic_citations_when_actions_exist": true
+  }
+}
