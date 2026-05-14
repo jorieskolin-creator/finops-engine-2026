@@ -1,0 +1,19 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer components {
+  .glass-panel {
+    @apply bg-slate-900/50 backdrop-blur-md border border-white/10 shadow-lg;
+  }
+
+  .glass-card-hover {
+    @apply hover:bg-slate-800/60 hover:border-white/20 transition-all duration-300;
+  }
+}
+
+@keyframes loading {
+  0% { transform: translateX(-100%); }
+  50% { transform: translateX(0%); }
+  100% { transform: translateX(100%); }
+}
