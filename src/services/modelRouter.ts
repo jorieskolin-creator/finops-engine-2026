@@ -83,6 +83,18 @@ async function callAnthropic(profile: ModelProfile, prompt: NormalizedPrompt, st
   return postWithTimeout('/api/anthropic-generate', body);
 }
 
+// Reads the NDJSON stream emitted by api/generate.js + api/anthropic-generate.js.
+//
+// Wire frames:
+//   { type: 'text',      delta: string }    incremental text (accumulated)
+//   { type: 'keepalive' }                   ignored, keeps proxy alive
+//   { type: 'done',      text: string, usage?: any }  terminal success
+//   { type: 'error',     message: string }  terminal failure
+//
+// If the stream ends without a 'done' frame (connection dropped, server
+// crashed), we throw — the router catches it and falls forward to the
+// next model in the chain. Returning partial text would corrupt downstream
+// JSON.parse, which is worse than retrying.
 async function postWithTimeout(url: string, body: any): Promise<{ text: string }> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
@@ -97,9 +109,42 @@ async function postWithTimeout(url: string, body: any): Promise<{ text: string }
       const errText = await res.text().catch(() => '');
       throw new Error(`${url} → ${res.status}: ${errText || res.statusText}`);
     }
-    const data = await res.json();
-    if (data.error) throw new Error(data.error);
-    return data;
+    if (!res.body) {
+      throw new Error(`${url} → no response body`);
+    }
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder('utf-8');
+    let buffer = '';
+    let finalText: string | null = null;
+    let streamError: string | null = null;
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      let nl: number;
+      while ((nl = buffer.indexOf('\n')) >= 0) {
+        const line = buffer.slice(0, nl);
+        buffer = buffer.slice(nl + 1);
+        if (!line.trim()) continue;
+        let frame: any;
+        try { frame = JSON.parse(line); } catch { continue; }
+        if (frame.type === 'keepalive') continue;
+        if (frame.type === 'text') continue; // accumulated server-side
+        if (frame.type === 'done') {
+          finalText = typeof frame.text === 'string' ? frame.text : '';
+        } else if (frame.type === 'error') {
+          streamError = typeof frame.message === 'string' ? frame.message : 'stream error';
+        }
+      }
+    }
+
+    if (streamError) throw new Error(streamError);
+    if (finalText === null) {
+      throw new Error(`${url} → stream ended without 'done' frame`);
+    }
+    return { text: finalText };
   } finally {
     clearTimeout(timer);
   }
