@@ -431,7 +431,7 @@ export const ReportView: React.FC<ReportViewProps> = ({ result, onBack, onDownlo
 
         <div className="text-center py-8 border-t border-slate-200 text-sm text-slate-400">
           <p>FinOps Assessment Engine v{result.meta.engine_version}</p>
-          <p>Models: {result.meta.model_config.phase0_phase1} (Audit) | {result.meta.model_config.phase3} (Strategy)</p>
+          <p>Models: {result.meta.model_config.preflight} (Pre-Flight) | {result.meta.model_config.forensic_audit} (Audit) | {result.meta.model_config.synthesis} (Strategy) | {result.meta.model_config.fact_check} (Fact-Check)</p>
         </div>
       </div>
     </div>

@@ -8,7 +8,8 @@ import { validatePhase1Output, validatePhase3Grounding } from "./validatorServic
 import { buildEvidenceDensityBlock, runQualityGate, EVIDENCE_DENSITY_BLOCK } from "./qualityGateService";
 import { buildFactCheckPrompt, buildRegenerateAppendix, parseFactCheckResponse } from "./factCheckService";
 import { FactCheckClaim, FactCheckResult } from "../types";
-import { MODEL_PHASE1, MODEL_PHASE3, GeminiThinkingConfig } from "../models";
+import { STAGE_MODELS } from "../models";
+import { runStage } from "./modelRouter";
 
 const FACT_CHECK_MAX_RETRIES = 2;
 
@@ -65,26 +66,9 @@ const parseAiResponse = (text: string): any => {
   }
 };
 
-const callGeminiGenerate = async (
-  model: string,
-  contents: any[],
-  systemInstruction?: string,
-  thinkingConfig?: GeminiThinkingConfig
-) => {
-  const response = await fetch('/api/generate', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ model, contents, systemInstruction, thinkingConfig })
-  });
-
-  if (!response.ok) {
-    throw new Error(`Proxy Error: ${response.statusText}`);
-  }
-
-  const data = await response.json();
-  if (data.error) throw new Error(data.error);
-  return data;
-};
+// Direct model calls now flow through modelRouter (`runStage`). The router
+// resolves stage → primary+fallbacks from src/models.ts and dispatches to the
+// right provider endpoint.
 
 const validateAndSanitizeLogs = (rawData: any): Phase1AuditLogs => {
   const safeLog: Phase1AuditLogs = { maturity: {}, antipattern: {} };
@@ -251,21 +235,10 @@ export const analyzeDocument = async (
     onProgress('audit', 1);
     const dlpPrompt = generateSafetyAuditPrompt(text, images);
 
-    const dlpParts: any[] = [{ text: dlpPrompt }];
-    for (const img of images) {
-      const label = img.page_number !== undefined
-        ? `[Image: ${img.source_name} — page ${img.page_number}]`
-        : `[Image: ${img.source_name}]`;
-      dlpParts.push({ text: `\n${label}\n` });
-      dlpParts.push({ inlineData: { mimeType: img.mimeType, data: img.data } });
-    }
-
-    const dlpResponse = await callGeminiGenerate(
-      MODEL_PHASE1.id,
-      [{ role: 'user', parts: dlpParts }],
-      undefined,
-      MODEL_PHASE1.thinkingConfig
-    );
+    const dlpResponse = await runStage('preflight', {
+      userText: dlpPrompt,
+      images,
+    });
     const dlpResult = parseAiResponse(dlpResponse.text);
 
     if (dlpResult && dlpResult.safe === false) {
@@ -318,8 +291,10 @@ export const analyzeDocument = async (
           timestamp: new Date().toISOString(),
           engine_version: "finops-1.0.0",
           model_config: {
-            phase0_phase1: MODEL_PHASE1.id,
-            phase3: MODEL_PHASE3.id,
+            preflight: STAGE_MODELS.preflight.id,
+            forensic_audit: STAGE_MODELS.forensic_audit.id,
+            synthesis: STAGE_MODELS.synthesis.id,
+            fact_check: STAGE_MODELS.fact_check.id,
             validators: "deterministic"
           }
         },
@@ -366,19 +341,17 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => `  ${cat}
 `;
 
     const callPhase3 = async (correctionAppendix?: string): Promise<any> => {
-      const parts: Array<{ text: string }> = [
-        { text: STRATEGY_USER_PROMPT },
-        { text: `\n\n### THE GOLDEN STANDARD (SSOT)\nYou must ignore generic internet advice. You may ONLY prescribe solutions found in this Knowledge Base:\n\n${fullSSOT}` },
-        { text: `\n\n### DIAGNOSTIC FINDINGS (Phase 1 & 2)\nUse these specific gaps and anti-patterns to trigger the strategies above:\n${handoffSummary}` },
-        { text: `\n\n### ORIGINAL SOURCE CONTEXT\n<SOURCE_DOCUMENT_TO_AUDIT>\n${text.substring(0, 50000)}\n</SOURCE_DOCUMENT_TO_AUDIT>` }
+      const textParts: string[] = [
+        STRATEGY_USER_PROMPT,
+        `\n\n### THE GOLDEN STANDARD (SSOT)\nYou must ignore generic internet advice. You may ONLY prescribe solutions found in this Knowledge Base:\n\n${fullSSOT}`,
+        `\n\n### DIAGNOSTIC FINDINGS (Phase 1 & 2)\nUse these specific gaps and anti-patterns to trigger the strategies above:\n${handoffSummary}`,
+        `\n\n### ORIGINAL SOURCE CONTEXT\n<SOURCE_DOCUMENT_TO_AUDIT>\n${text.substring(0, 50000)}\n</SOURCE_DOCUMENT_TO_AUDIT>`,
       ];
-      if (correctionAppendix) parts.push({ text: correctionAppendix });
-      const resp = await callGeminiGenerate(
-        MODEL_PHASE3.id,
-        [{ role: 'user', parts }],
-        STRATEGY_SYSTEM_INSTRUCTION,
-        MODEL_PHASE3.thinkingConfig
-      );
+      if (correctionAppendix) textParts.push(correctionAppendix);
+      const resp = await runStage('synthesis', {
+        userText: textParts.join(''),
+        systemInstruction: STRATEGY_SYSTEM_INSTRUCTION,
+      });
       return parseAiResponse(resp.text);
     };
 
@@ -405,20 +378,10 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => `  ${cat}
           phase2: validationData,
           imageCount: images.length
         });
-        const fcParts: any[] = [{ text: fcPrompt }];
-        for (const img of images) {
-          const label = img.page_number !== undefined
-            ? `[Image: ${img.source_name} — page ${img.page_number}]`
-            : `[Image: ${img.source_name}]`;
-          fcParts.push({ text: `\n${label}\n` });
-          fcParts.push({ inlineData: { mimeType: img.mimeType, data: img.data } });
-        }
-        const fcResp = await callGeminiGenerate(
-          MODEL_PHASE1.id,
-          [{ role: 'user', parts: fcParts }],
-          undefined,
-          MODEL_PHASE1.thinkingConfig
-        );
+        const fcResp = await runStage('fact_check', {
+          userText: fcPrompt,
+          images,
+        });
         return parseFactCheckResponse(fcResp.text, attemptNumber);
       } catch (e: any) {
         return {
@@ -489,8 +452,10 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => `  ${cat}
         timestamp: new Date().toISOString(),
         engine_version: "finops-1.0.0",
         model_config: {
-          phase0_phase1: MODEL_PHASE1.id,
-          phase3: MODEL_PHASE3.id,
+          preflight: STAGE_MODELS.preflight.id,
+          forensic_audit: STAGE_MODELS.forensic_audit.id,
+          synthesis: STAGE_MODELS.synthesis.id,
+          fact_check: STAGE_MODELS.fact_check.id,
           validators: "deterministic"
         }
       },

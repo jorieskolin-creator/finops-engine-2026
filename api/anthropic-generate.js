@@ -10,7 +10,7 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { model, messages, systemPrompt } = req.body;
+    const { model, messages, systemPrompt, maxTokens, thinking } = req.body;
 
     if (!model || !messages) {
       return res.status(400).json({ error: 'Missing required fields: model, messages' });
@@ -21,6 +21,16 @@ export default async function handler(req, res) {
       return res.status(500).json({ error: 'ANTHROPIC_API_KEY not configured on server' });
     }
 
+    const payload = {
+      model,
+      max_tokens: typeof maxTokens === 'number' && maxTokens > 0 ? maxTokens : 8192,
+      system: systemPrompt || '',
+      messages,
+    };
+    if (thinking && typeof thinking === 'object') {
+      payload.thinking = thinking;
+    }
+
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
@@ -28,12 +38,7 @@ export default async function handler(req, res) {
         'x-api-key': apiKey,
         'anthropic-version': '2023-06-01'
       },
-      body: JSON.stringify({
-        model: model,
-        max_tokens: 8192,
-        system: systemPrompt || '',
-        messages: messages
-      })
+      body: JSON.stringify(payload)
     });
 
     if (!response.ok) {

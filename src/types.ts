@@ -115,8 +115,10 @@ export interface AnalysisMeta {
   timestamp: string;
   engine_version: string;
   model_config: {
-    phase0_phase1: string;
-    phase3: string;
+    preflight: string;
+    forensic_audit: string;
+    synthesis: string;
+    fact_check: string;
     validators: string;
   };
 }
