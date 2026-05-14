@@ -1,0 +1,59 @@
+CORPORATE CLOUD GOVERNANCE & FINOPS POLICY
+
+Document Owner: Chief Information Officer
+Approved by: Executive Steering Committee
+Effective Date: Calendar Year 2024
+Review Cadence: Annual
+
+1. PURPOSE AND SCOPE
+
+This policy establishes the framework for governing cloud spend across all business units. It applies to all production, non-production, and sandbox cloud accounts operated on behalf of the organization. The policy defines roles, decision rights, mandatory controls, and approval thresholds for cloud financial management activities.
+
+2. GOVERNANCE STRUCTURE
+
+A FinOps Function reports to the Office of the CIO. The function is staffed and chartered to coordinate cloud financial management across Engineering, Finance, and Procurement. The Cloud Spend Review Board, comprising representatives from Engineering, Finance, IT Operations, and Procurement, meets monthly and is the standing decision body for cloud cost matters. Escalations beyond the Board's authority route to the Executive Steering Committee.
+
+3. ACCOUNT STRUCTURE AND OWNERSHIP
+
+Every cloud account must have a named Business Owner accountable for the account's spend and an assigned Technical Owner accountable for operational hygiene. New account requests are evaluated against the Cloud Account Standards document. Accounts without a named Business Owner are not approved.
+
+4. TAGGING REQUIREMENTS
+
+All cloud resources must carry the following mandatory tags at provisioning: BusinessUnit, CostCenter, Application, Environment, and DataClassification. Tagging requirements are normative and apply to all supported cloud providers. The detailed tagging taxonomy is maintained in the Tag Standards document, referenced by this policy. Compliance with tagging requirements is the responsibility of the Technical Owner of each account.
+
+5. BUDGET AND APPROVAL THRESHOLDS
+
+Each business unit operates under an annual cloud budget approved by Finance and reviewed quarterly. Any single new workload projected to exceed the threshold set by Finance requires Cloud Spend Review Board approval before deployment. Variance from approved budget greater than the materiality threshold defined by Finance must be reported in the next monthly review.
+
+6. PROCUREMENT AND VENDOR MANAGEMENT
+
+Cloud provider procurement is centralized under the Procurement organization. Enterprise agreements, private pricing, and commitment-based discount instruments are negotiated centrally and may not be initiated by individual business units. Procurement maintains a vendor scorecard and conducts an annual review of each strategic cloud vendor.
+
+7. COMPLIANCE AND AUDIT
+
+The FinOps Function reports quarterly to the Audit Committee on cloud spend, budget variance, and policy compliance. Internal Audit is authorized to review any cloud account, vendor agreement, or financial record relating to cloud spend. Findings from audit are tracked to closure by the Business Owner of the affected account.
+
+8. POLICY EXCEPTIONS
+
+Exceptions to this policy require written approval from the CIO or designee. Granted exceptions are time-bound and reviewed at expiry. The exception register is maintained by the FinOps Function and is reviewed by the Audit Committee annually.
+
+9. ROLES AND RESPONSIBILITIES
+
+- Chief Information Officer: Policy owner. Final escalation authority.
+- FinOps Function: Day-to-day coordination of cloud financial management. Maintains policy artifacts.
+- Cloud Spend Review Board: Standing decision body for cloud spend matters.
+- Business Owners: Accountable for the spend of accounts assigned to their business unit.
+- Technical Owners: Accountable for operational and tagging hygiene of assigned accounts.
+- Finance: Maintains budgets, materiality thresholds, and variance reporting.
+- Procurement: Maintains vendor relationships, negotiates instruments, and conducts vendor reviews.
+- Internal Audit: Independent audit of cloud spend and policy compliance.
+
+10. REFERENCED DOCUMENTS
+
+- Tag Standards Document
+- Cloud Account Standards Document
+- Procurement Policy
+- Information Classification Policy
+- Audit Charter
+
+END OF POLICY

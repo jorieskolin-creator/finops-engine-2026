@@ -1,0 +1,70 @@
+CLOUD STRATEGY — THREE-YEAR PLAN
+
+Audience: Executive Steering Committee, Senior Engineering Leadership
+Strategy Horizon: Three years
+Document Owner: Chief Technology Officer
+Status: Approved Strategy
+
+EXECUTIVE LETTER
+
+Cloud is the foundational platform on which our digital ambitions will be built over the next three years. This document sets out the strategic direction for our cloud program: the providers we will rely on, the operating model we will adopt, the capabilities we intend to develop, and the principles by which we will make decisions. It does not enumerate workloads, project plans, or budgets; those are owned by the line organizations executing under this strategy.
+
+1. STRATEGIC AMBITION
+
+Our ambition is to be cloud-first by the end of the strategy horizon. Cloud-first means new workloads default to cloud, legacy workloads are evaluated for cloud-suitability on a defined schedule, and the operating model assumes elastic infrastructure as the norm. We intend to embed cost-awareness as a first-class consideration in architecture, alongside reliability, security, and performance.
+
+2. PROVIDER POSTURE
+
+We will operate a primary-plus-secondary cloud posture. The primary provider hosts the majority of workloads and is the default target for new development. A secondary provider is maintained for specific specialized workloads and for negotiation leverage. We will avoid unintentional multi-cloud sprawl by requiring justification for net-new workloads on the secondary provider.
+
+3. OPERATING MODEL
+
+Over the strategy horizon we intend to mature our cloud operating model along three axes:
+
+  Governance — We aim to establish a durable governance forum with appropriate executive sponsorship and clear escalation paths.
+
+  Engineering Enablement — We aim to provide platform capabilities that make the right cost-aware choice the easy choice for engineering teams. The specific platform capabilities are owned by the Platform Engineering organization.
+
+  Financial Discipline — We aim to bring cloud spend into the same level of financial scrutiny as other operating expenses, with clear ownership, budget accountability, and reporting cadence.
+
+4. CAPABILITIES TO DEVELOP
+
+We have identified the following capability areas as targets for development over the strategy horizon. Sequencing and investment levels are determined annually through the operating-plan process and are not committed in this document.
+
+  - Cost visibility and allocation
+  - Tagging and resource hygiene
+  - Cost-aware architecture practices
+  - Commitment-based discount management
+  - Cloud financial reporting integrated with corporate financial systems
+  - FinOps community and education
+  - Sustainability and carbon-aware computing
+
+5. ARCHITECTURE PRINCIPLES
+
+Our cloud architecture is guided by the following principles. Detailed standards and patterns are maintained by the Architecture Practice and are not reproduced here.
+
+  - Cost is a non-functional requirement evaluated in design.
+  - Stateless where possible; stateful only where necessary.
+  - Right-size by default; over-provision only with justification.
+  - Use managed services where the total cost of ownership favors them.
+  - Treat data egress as a first-class architecture concern.
+
+6. CULTURE AND TALENT
+
+We aspire to a culture in which engineers, finance partners, and product leaders share a common language for cloud cost. We will invest in foundational FinOps education and intend to recognize cost-aware engineering practices through the existing performance and reward processes. Specific incentive mechanisms are out of scope of this strategy and are owned by Human Resources.
+
+7. RISKS AND DEPENDENCIES
+
+  - Talent: maturing cloud financial discipline requires roles we do not currently staff at scale.
+  - Vendor concentration: increased dependence on the primary provider creates negotiation and continuity considerations addressed in the Procurement Strategy.
+  - Pace of change: provider feature velocity may outpace our adoption velocity, creating opportunity cost.
+
+8. DECISION RIGHTS
+
+Strategic decisions on provider posture and operating model are reserved for the Executive Steering Committee. Tactical decisions within the strategy are delegated to the relevant line organizations operating under their own governance.
+
+9. REVIEW
+
+This strategy is reviewed annually and may be updated by approval of the Executive Steering Committee.
+
+END OF STRATEGY

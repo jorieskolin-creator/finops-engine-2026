@@ -1,0 +1,55 @@
+TechScale Inc — FinOps Program Status Report
+H1 Review — Cloud Financial Management
+Prepared by: Cloud Operations & FinOps Team
+
+1. EXECUTIVE SUMMARY
+
+TechScale operates a multi-account AWS environment with approximately 1,200 resources and a growing GCP footprint for ML workloads. We established a FinOps team of two practitioners six months ago, reporting to the VP of Engineering. Monthly cloud spend is approximately reviewed in a cross-functional meeting with engineering leads and finance.
+
+Our tagging compliance has improved from 40% to 72% since the FinOps team was established, though enforcement remains inconsistent. We have implemented basic cost dashboards using AWS Cost Explorer and share weekly cost reports with engineering leads via email.
+
+2. COST VISIBILITY & ALLOCATION
+
+We have implemented a tagging standard document that defines required tags: Team, Environment, Application, and CostCenter. However, enforcement is manual — the FinOps team runs a weekly compliance scan and sends notifications to teams with untagged resources. Approximately 28% of spend remains unallocable.
+
+Cost dashboards are available through AWS Cost Explorer. The FinOps team has built a monthly report in Google Sheets that breaks down spend by team. Finance and engineering use different tools to view costs — finance uses the invoice system while engineering uses Cost Explorer, which sometimes leads to discrepancies in reported numbers.
+
+We have configured AWS Budgets with monthly thresholds for each account. Budget alerts trigger email notifications when 80% and 100% thresholds are reached. There is no automated response to budget breaches — the alerts are informational.
+
+We do not yet track unit economics or cost-per-transaction metrics. Cost reporting is at the aggregate level per team.
+
+3. RATE & USAGE OPTIMIZATION
+
+We purchased a small portfolio of 1-year Savings Plans six months ago covering approximately 30% of our steady-state compute. The purchase was based on a one-time analysis rather than a recurring optimization cycle. We have not yet explored Reserved Instances or GCP Committed Use Discounts.
+
+The FinOps team generates right-sizing recommendations quarterly using AWS Compute Optimizer. Recommendations are shared with engineering teams via Jira tickets. Adoption has been slow — approximately 40% of recommendations are implemented. Teams cite competing priorities and risk concerns.
+
+We identified and terminated 15 unused instances last quarter, saving an estimated amount. Development environments still run 24/7 — we have a proposal to implement scheduling but it has not been approved due to concerns about developer workflow disruption.
+
+4. GOVERNANCE & POLICY
+
+The FinOps team operates as a two-person function with advisory authority. They can recommend changes but cannot enforce policies directly. Budget overruns are escalated to the VP of Engineering but do not trigger automated controls.
+
+We have documented a cloud cost policy covering tagging standards, right-sizing review cadence, and commitment purchase approval process. The policy exists as a Confluence page. Compliance with the policy is not formally measured beyond tagging.
+
+There is no formal vendor negotiation strategy. AWS account management is handled by IT procurement as part of broader vendor relationships. We have not explored Enterprise Discount Programs or private pricing.
+
+5. ARCHITECTURE & ENGINEERING
+
+Most workloads run on EC2 instances. We are beginning to adopt containers via ECS for new microservices, but existing applications remain on traditional VMs. There is no cost modeling requirement in architecture reviews — cost is discussed informally but not as a formal gate.
+
+Infrastructure is managed with Terraform for newer services, but legacy applications use manual provisioning. There are no cost guardrails in the CI/CD pipeline.
+
+6. CULTURE & ORGANIZATION
+
+Engineers are aware that cloud costs matter — the monthly cost review meeting has driven some behavior change. Two engineering teams have proactively identified and eliminated waste in their services. However, there are no formal incentives or recognition tied to cost optimization.
+
+The FinOps team has conducted two training sessions on cloud cost basics. Attendance was voluntary and approximately 35% of engineers participated. There is interest from the CFO in formalizing the FinOps program, but executive sponsorship has not been formalized into specific OKRs or budget.
+
+7. KNOWN GAPS & NEXT STEPS
+
+- Tag enforcement automation (target: automated blocking of untagged deployments)
+- Expand Savings Plans coverage to 60% target
+- Implement dev/staging scheduling
+- Explore multi-cloud cost normalization for GCP workloads
+- Formalize FinOps team charter with executive sponsorship

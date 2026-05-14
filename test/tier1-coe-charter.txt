@@ -1,0 +1,73 @@
+CLOUD FINANCIAL OPERATIONS CENTER OF EXCELLENCE — CHARTER
+
+Charter Sponsor: Chief Financial Officer
+Charter Owner: Chief Information Officer
+Effective Date: Calendar Year 2024
+Charter Term: Three years, renewable
+
+PREAMBLE
+
+The Cloud Financial Operations Center of Excellence (the "FinOps CoE") is established as a permanent cross-functional function to bring financial accountability and operational discipline to the organization's cloud consumption. This Charter is signed jointly by the CFO and CIO and is endorsed by the Executive Steering Committee.
+
+1. MANDATE
+
+The FinOps CoE is mandated to:
+
+  - Establish and maintain the operating model by which Engineering, Finance, and Procurement collaborate on cloud financial management.
+  - Coordinate the activities of cloud-cost stakeholders across business units.
+  - Provide trusted, single-source cloud spend reporting to executive leadership.
+  - Develop the organization's FinOps capability over the term of this Charter.
+
+2. EXECUTIVE SPONSORSHIP
+
+The CFO is the executive sponsor of this Charter. The CFO commits to quarterly review of the CoE's objectives, removal of organizational blockers, and approval of the CoE's annual operating plan. The CIO is responsible for the day-to-day operation of the CoE.
+
+3. STAFFING AND STRUCTURE
+
+The CoE is staffed with a CoE Lead, two FinOps Practitioners, and a Data Engineer dedicated to cloud cost data pipelines. The CoE reports administratively to the CIO and has a dotted-line accountability to the CFO for financial reporting integrity.
+
+4. OPERATING MODEL
+
+The CoE operates the following standing forums:
+
+  - Monthly Cloud Spend Review (cross-functional)
+  - Quarterly Executive Review (sponsor briefing)
+  - Annual Operating Plan Review
+
+The CoE convenes the Cloud Spend Review Board on a monthly cadence. It maintains the cloud financial reporting cadence in coordination with the office of the CFO.
+
+5. SCOPE OF AUTHORITY
+
+The CoE has advisory and coordinating authority over cloud spend matters. The CoE does not own production systems and does not have unilateral authority to modify workload configurations. Where binding enforcement is required, the CoE recommends action to the Cloud Spend Review Board, which holds decision authority within thresholds approved by Finance.
+
+6. OBJECTIVES (FIRST 12 MONTHS)
+
+The CoE will pursue the following objectives during its first twelve months of operation. Specific metrics, baselines, and target values are defined in the annual operating plan and are not reproduced in this Charter.
+
+  - Stand up cross-functional reporting accepted by Engineering and Finance as a single source of truth.
+  - Establish the operating cadence and standing forums.
+  - Mature the organization's tagging and cost allocation discipline.
+  - Develop a multi-year roadmap for FinOps capability.
+
+7. EDUCATION AND COMMUNITY OF PRACTICE
+
+The CoE establishes a FinOps Community of Practice open to all interested staff. The CoE runs a quarterly internal speaker series and curates a learning path for engineers and managers seeking foundational FinOps knowledge. Participation is voluntary in the first year and is a target candidate for formalization in subsequent years.
+
+8. REPORTING
+
+The CoE provides:
+
+  - A monthly Cloud Spend Report to all Business Owners.
+  - A quarterly Executive Briefing to the Executive Steering Committee.
+  - An annual review to the Audit Committee.
+
+9. CHARTER REVIEW AND RENEWAL
+
+This Charter is reviewed annually. Material changes to mandate, staffing, or authority require approval by the CFO and CIO.
+
+SIGNED:
+  Chief Financial Officer
+  Chief Information Officer
+  Endorsed by the Executive Steering Committee
+
+END OF CHARTER

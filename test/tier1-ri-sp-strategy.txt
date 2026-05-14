@@ -1,0 +1,81 @@
+RESERVED INSTANCE AND SAVINGS PLAN COMMITMENT STRATEGY
+
+Document Type: Operational Playbook
+Owner: FinOps Function
+Reviewed by: Cloud Spend Review Board, Finance
+Cadence: Quarterly portfolio review; ad-hoc reactive trims
+
+1. PURPOSE
+
+This playbook governs how the organization purchases, manages, and exits commitment-based discount instruments for cloud compute and storage. It is operational, not aspirational. Decisions described here are made on a recurring cadence and executed against the live portfolio.
+
+2. INSTRUMENT INVENTORY
+
+The organization actively manages the following instrument classes:
+
+  - Compute Savings Plans (one-year and three-year terms; All Upfront, Partial Upfront, No Upfront)
+  - EC2 Instance Savings Plans, where regional or family-specific savings exceed the Compute equivalent
+  - Standard and Convertible Reserved Instances, used selectively for stable workloads with low expected family churn
+  - Storage commitments offered by the primary provider for capacity-pricing tiers
+
+We do not currently use exchange-traded RI brokerage services. We do not currently participate in the secondary RI marketplace.
+
+3. COVERAGE TARGETS
+
+The portfolio targets sustained coverage of 70 to 80 percent of steady-state compute. Coverage outside this band triggers portfolio review:
+
+  - Coverage below 70 percent for three consecutive months triggers a purchase analysis.
+  - Coverage above 80 percent triggers an exposure review to ensure we are not over-committed against a workload exit risk.
+
+These targets are reviewed annually against forecast steady-state demand.
+
+4. PORTFOLIO REVIEW CADENCE
+
+The FinOps Function runs a portfolio review monthly. Reviews use the utilization dashboards maintained by the FinOps Function and the demand forecast maintained jointly with Engineering Capacity Planning. Quarterly the review is presented to the Cloud Spend Review Board for ratification of recommended purchases above the discretion threshold defined by Finance.
+
+5. PURCHASE DECISION FRAMEWORK
+
+A candidate commitment must satisfy:
+
+  - Sustained utilization at or above the break-even point of the instrument, evidenced by at least 90 days of consumption data.
+  - A demand signal from Capacity Planning indicating the underlying workload class is not scheduled for migration or sunset within the term.
+  - Approval from the Cloud Spend Review Board if the purchase exceeds the discretion threshold.
+
+Purchases are sized to the steady-state floor of the workload, not to peak. We intentionally leave the variable layer on on-demand pricing.
+
+6. TERM SELECTION
+
+Term selection is guided by workload predictability:
+
+  - Three-year terms only for workloads with high confidence in technology stack and demand floor (typically core platform services).
+  - One-year terms for the bulk of the portfolio, where demand floor confidence is moderate.
+
+Upfront posture is selected by Finance to optimize against the cost of capital threshold, refreshed annually.
+
+7. UTILIZATION MONITORING AND EXIT
+
+Utilization of all active commitments is monitored weekly. Sustained under-utilization for thirty days triggers a corrective action:
+
+  - Convert (where the instrument allows) to a class with better alignment to current demand.
+  - Re-target the underlying workload onto the committed family.
+  - Accept the under-utilization as an explicit decision documented in the portfolio register.
+
+We do not allow under-utilization to persist without an explicit decision.
+
+8. STORAGE COMMITMENTS
+
+Storage capacity commitments are evaluated annually against the volume floor identified in the Storage Footprint Report maintained by the Storage Platform team.
+
+9. REPORTING
+
+The FinOps Function publishes:
+
+  - A monthly commitment portfolio report to Finance and Engineering leadership.
+  - A quarterly briefing to the Cloud Spend Review Board.
+  - An annual exposure and renewal forecast to the Office of the CFO.
+
+10. EXCLUSIONS
+
+This playbook does not cover Marketplace SaaS commitments, network-service commitments, or non-cloud commercial agreements. Those instruments are governed by Procurement under separate playbooks.
+
+END OF PLAYBOOK

@@ -1,0 +1,70 @@
+QUARTERLY CLOUD COST OPTIMIZATION REVIEW
+
+Reporting Period: Most Recent Quarter
+Prepared by: FinOps Function
+Audience: Cloud Spend Review Board, Engineering Leadership, Finance
+
+1. EXECUTIVE SUMMARY
+
+This quarter's review surfaced material optimization opportunities across compute, storage, and data egress. The Engineering organization has accepted recommendations in compute right-sizing and storage tiering. Network egress optimization remains contested and is escalated to the Cloud Spend Review Board for a binding decision in the next cycle.
+
+The portfolio shows healthy commitment coverage of compute and clear remediation paths for the two persistent waste categories identified in the previous quarter: idle non-production environments and orphaned storage volumes.
+
+2. UTILIZATION REVIEW
+
+2.1 Compute
+
+Utilization data was drawn from the central cost dashboards maintained by the FinOps Function. Average compute utilization across production fleets continues to sit below the right-sizing target established in the Optimization Standards document. The bottom decile by utilization comprises long-running workloads provisioned against legacy capacity assumptions that no longer apply.
+
+Right-sizing recommendations were generated from the provider's native advisor service and validated against application owner expectations. Of the recommendations issued in the period:
+
+  - A majority were accepted and scheduled into the next maintenance window by the application owners.
+  - A meaningful minority were rejected with documented rationale (typically performance headroom or compliance-driven over-provisioning).
+  - A small remainder remain in dispute and are escalated.
+
+2.2 Storage
+
+The storage footprint review identified a substantial volume of orphaned block-storage volumes attached to terminated compute instances. The Storage Platform team executed an automated cleanup against the resource registry; the remaining backlog is queued behind ownership confirmation.
+
+Object storage lifecycle policies were reviewed against access pattern data. Several legacy buckets were re-classified to lower-cost tiers. The team identified additional candidates for archive-tier movement, pending application-owner confirmation that the underlying data is not subject to active read patterns.
+
+3. WASTE FINDINGS
+
+The following persistent waste patterns are documented:
+
+  - Idle non-production environments running 24/7. Despite a scheduling capability available on the platform, adoption remains low because of perceived disruption to developer workflows. This is the largest single category of recurring waste this quarter.
+  - Orphaned block-storage volumes left behind by automated termination flows that do not currently detach and reap volumes.
+  - Over-provisioned database compute, where the original sizing reflected a launch-time peak that has not recurred.
+  - Idle load balancers and elastic IPs attached to retired services.
+
+4. COMMITMENT PORTFOLIO
+
+Commitment coverage sits within the target band defined in the Commitment Strategy. Utilization of active instruments was within tolerance with the exception of one Compute Savings Plan that fell below the corrective-action threshold mid-quarter; corrective action was executed and utilization has returned to target.
+
+5. DATA EGRESS
+
+Cross-region and inter-zone data transfer remains a material and growing line item. The review highlights an architecture pattern in which microservices in different availability zones exchange high-volume traffic that could be co-located. The recommendation is to introduce a co-location requirement for tightly-coupled service groups; this is contested by the affected engineering teams on resilience grounds and is escalated to the Cloud Spend Review Board.
+
+6. ANTI-PATTERN OBSERVATIONS
+
+The review explicitly catalogs the following recurring anti-patterns observed in the portfolio:
+
+  - "Cost-blind sizing": initial provisioning is based on peak-burst assumptions that never recur. Sizing reviews are not built into the deployment workflow.
+  - "Permanent non-prod": development and staging environments run continuously with no scheduling or auto-shutdown applied.
+  - "Resource orphaning": resources tied to retired services persist because no automated reaper enforces deletion.
+  - "Single-AZ overcommit, multi-AZ chatter": services placed for resilience inadvertently incur material inter-zone transfer.
+
+7. RECOMMENDATIONS
+
+The following recommendations are forwarded to the Cloud Spend Review Board for action assignment in the next cycle:
+
+  - Embed sizing review as a required step in the deployment workflow.
+  - Apply automated non-production scheduling by default; require explicit opt-out.
+  - Deploy a resource reaper to enforce deletion of orphaned auxiliary resources.
+  - Decide the co-location-vs-resilience tradeoff for the affected service groups.
+
+8. SCOPE LIMITS
+
+This review covers compute, storage, and data transfer. It does not cover SaaS spend, marketplace subscriptions, or network appliance licensing. Architecture-level rework, governance changes, and culture-level interventions are out of scope for this review and are referred to the appropriate forums.
+
+END OF REVIEW
