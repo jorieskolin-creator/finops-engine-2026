@@ -53,7 +53,13 @@ export default async function handler(req, res) {
     console.warn(`${tag} status=client_disconnected duration_ms=${Date.now() - started}`);
     upstreamController.abort();
   };
-  req.on('close', onClientGone);
+  // NOTE: do NOT listen on req.on('close'). Express's body parser fully consumes
+  // the request stream before our handler runs, and req emits 'close' on the
+  // next tick — which would fire ~1ms after the handler starts and falsely
+  // abort every call. The 'aborted' event on req only fires when the client
+  // actually aborts (TCP reset / fetch abort). res.on('close') with the
+  // writableFinished filter handles the normal-end case correctly.
+  req.on('aborted', onClientGone);
   res.on('close', onClientGone);
 
   const writeFrame = (obj) => {

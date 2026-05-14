@@ -47,7 +47,9 @@ export default async function handler(req, res) {
     clientGone = true;
     console.warn(`${tag} status=client_disconnected duration_ms=${Date.now() - started}`);
   };
-  req.on('close', onClientGone);
+  // See api/anthropic-generate.js for why req.on('close') is NOT used here.
+  // body-parser closes req on the next tick and would fire a false positive.
+  req.on('aborted', onClientGone);
   res.on('close', onClientGone);
 
   const writeFrame = (obj) => {
