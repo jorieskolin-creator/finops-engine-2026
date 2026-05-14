@@ -1,7 +1,7 @@
 
 import { generateBatchSystemInstruction, generateBatchUserPrompt } from './prompts';
 import { BATCH_DEFINITIONS } from './knowledge_base';
-import { MODEL_PHASE1, GeminiThinkingConfig } from './models';
+import { runStage } from './services/modelRouter';
 import { ImageInput } from './types';
 
 const parseAiResponse = (text: string): any => {
@@ -22,36 +22,6 @@ const parseAiResponse = (text: string): any => {
   }
 };
 
-const callGeminiGenerate = async (
-  model: string,
-  contents: any[],
-  systemInstruction: string,
-  thinkingConfig?: GeminiThinkingConfig
-) => {
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 595000);
-
-  try {
-    const response = await fetch('/api/generate', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model, contents, systemInstruction, thinkingConfig }),
-      signal: controller.signal
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`Proxy Error (${response.status}): ${errorText}`);
-    }
-
-    const data = await response.json();
-    if (data.error) throw new Error(data.error);
-    return data;
-  } finally {
-    clearTimeout(timeoutId);
-  }
-};
-
 export interface Phase1Result {
   phase_1_audit_logs: {
     maturity: Record<string, any>;
@@ -65,27 +35,13 @@ const runSingleBatch = async (batchId: string, text: string, images: ImageInput[
   const systemInstruction = generateBatchSystemInstruction(batchId, definitions.title);
   const userPrompt = generateBatchUserPrompt(batchId, definitions);
 
-  const parts: any[] = [
-    { text: userPrompt },
-    { text: `\n\n<UNTRUSTED_CONTENT>\n${text}\n</UNTRUSTED_CONTENT>` }
-  ];
-  if (images.length > 0) {
-    parts.push({ text: `\n\nThe following ${images.length} image(s) are part of the source material. Treat their visible content as evidence on equal footing with text. Each image is identified by its source filename and (for PDF-derived images) page number; for those, set evidence_source: "image" and include page_number when citing.` });
-    for (const img of images) {
-      const label = img.page_number !== undefined
-        ? `[Image: ${img.source_name} — page ${img.page_number}]`
-        : `[Image: ${img.source_name}]`;
-      parts.push({ text: `\n${label}\n` });
-      parts.push({ inlineData: { mimeType: img.mimeType, data: img.data } });
-    }
-  }
+  const userText = `${userPrompt}\n\n<UNTRUSTED_CONTENT>\n${text}\n</UNTRUSTED_CONTENT>`;
 
-  const response = await callGeminiGenerate(
-    MODEL_PHASE1.id,
-    [{ role: 'user', parts }],
+  const response = await runStage('forensic_audit', {
+    userText,
     systemInstruction,
-    MODEL_PHASE1.thinkingConfig
-  );
+    images,
+  });
 
   return parseAiResponse(response.text);
 };

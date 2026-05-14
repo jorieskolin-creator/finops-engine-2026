@@ -223,7 +223,7 @@ const generateReportHtml = (result: DiagnosticResult): string => {
   <h1>FinOps Maturity Assessment</h1>
   <div class="meta">
     <p>Generated ${escapeHtml(result.meta.timestamp)} · Engine ${escapeHtml(result.meta.engine_version)}</p>
-    <p>Models: ${escapeHtml(result.meta.model_config.phase0_phase1)} (Audit) · ${escapeHtml(result.meta.model_config.phase3)} (Strategy)</p>
+    <p>Models: ${escapeHtml(result.meta.model_config.preflight)} (Pre-Flight) · ${escapeHtml(result.meta.model_config.forensic_audit)} (Audit) · ${escapeHtml(result.meta.model_config.synthesis)} (Strategy) · ${escapeHtml(result.meta.model_config.fact_check)} (Fact-Check)</p>
   </div>
 
   ${renderQualityGate(result.quality_gate)}
