@@ -5,7 +5,7 @@ import { knowledgeBaseService, BATCH_DEFINITIONS } from "../knowledge_base";
 import { DiagnosticResult, Phase1AuditLogs, Phase2Validation, AuditItem, EvidenceQuote, EvidenceCategory, EVIDENCE_CATEGORIES, PersonaId, PERSONA_IDS, ImageInput } from "../types";
 import { generateSafetyAuditPrompt } from "./securityService";
 import { validatePhase1Output, validatePhase3Grounding } from "./validatorService";
-import { buildEvidenceDensityBlock, runQualityGate, EVIDENCE_DENSITY_BLOCK } from "./qualityGateService";
+import { buildEvidenceDensityBlock, runQualityGate, runQualityGateExplanation, EVIDENCE_DENSITY_BLOCK } from "./qualityGateService";
 import { buildFactCheckPrompt, buildRegenerateAppendix, parseFactCheckResponse } from "./factCheckService";
 import { FactCheckClaim, FactCheckResult } from "../types";
 import { STAGE_MODELS } from "../models";
@@ -220,10 +220,17 @@ const calculateMetrics = (logs: Phase1AuditLogs): Phase2Validation => {
   };
 };
 
+export interface AnalyzeOptions {
+  // User-controlled override: forces synthesis_escalation (Opus 4.7) even when
+  // auto-rules wouldn't fire. Use for high-stakes / board-level assessments.
+  deepMode?: boolean;
+}
+
 export const analyzeDocument = async (
   text: string,
   images: ImageInput[],
-  onProgress: (stage: 'audit' | 'calc' | 'strategy', progress?: number) => void
+  onProgress: (stage: 'audit' | 'calc' | 'strategy', progress?: number) => void,
+  options: AnalyzeOptions = {}
 ): Promise<DiagnosticResult> => {
   const runId = newRunId();
   const pipelineStarted = Date.now();
@@ -234,11 +241,12 @@ export const analyzeDocument = async (
     fact_check: STAGE_MODELS.fact_check.id,
   };
 
-  console.log(`[FinOps] === Pipeline start === run=${runId}`);
+  console.log(`[FinOps] === Pipeline start === run=${runId} deepMode=${!!options.deepMode}`);
   serverLog(runId, 'info', 'pipeline_start', {
     text_chars: text.length,
     image_count: images.length,
     image_kb: Math.round(images.reduce((s, i) => s + i.data.length, 0) / 1024),
+    deep_mode: !!options.deepMode,
     preflight: STAGE_MODELS.preflight.id,
     forensic_audit: STAGE_MODELS.forensic_audit.id,
     synthesis: STAGE_MODELS.synthesis.id,
@@ -320,6 +328,32 @@ export const analyzeDocument = async (
 
     console.log(`[FinOps] Phase 2 Complete. Readiness: ${Math.round(validationData.metrics.finops_readiness)}%, Classification: ${validationData.crawl_walk_run}`);
 
+    // Synthesis escalation decision (rules + user override).
+    // Rules are conservative: only escalate to Opus 4.7 when the org is messy
+    // enough that a deeper roadmap is worth the cost premium.
+    const autoEscalate =
+      (validationData.crawl_walk_run === 'Crawl' && validationData.antipattern_findings.length >= 5)
+      || validationData.metrics.finops_readiness < 30
+      || validationData.maturity_gaps.length >= 15
+      || validationData.metrics.antipattern_burden > 70;
+    const useEscalation = options.deepMode || autoEscalate;
+    const synthesisStage = useEscalation ? 'synthesis_escalation' : 'synthesis';
+    const escalationReason = options.deepMode
+      ? 'user_deep_mode'
+      : autoEscalate
+        ? `auto:readiness=${Math.round(validationData.metrics.finops_readiness)},burden=${Math.round(validationData.metrics.antipattern_burden)},antipatterns=${validationData.antipattern_findings.length},gaps=${validationData.maturity_gaps.length},class=${validationData.crawl_walk_run}`
+        : 'none';
+    console.log(`[FinOps] [${runId}] Synthesis stage: ${synthesisStage} (${escalationReason})`);
+    serverLog(runId, 'info', 'synthesis_routing', {
+      stage: synthesisStage,
+      reason: escalationReason,
+      readiness: Math.round(validationData.metrics.finops_readiness),
+      burden: Math.round(validationData.metrics.antipattern_burden),
+      antipatterns: validationData.antipattern_findings.length,
+      gaps: validationData.maturity_gaps.length,
+      class: validationData.crawl_walk_run,
+    });
+
     if (validationData.metrics.evidence_density < EVIDENCE_DENSITY_BLOCK) {
       onProgress('strategy', 100);
       console.log(`[FinOps] [${runId}] Pipeline complete (early exit: low evidence density) duration_ms=${Date.now() - pipelineStarted}`);
@@ -393,13 +427,13 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => `  ${cat}
       ];
       if (correctionAppendix) textParts.push(correctionAppendix);
       const synthStarted = Date.now();
-      const resp = await runStage('synthesis', {
+      const resp = await runStage(synthesisStage, {
         userText: textParts.join(''),
         systemInstruction: STRATEGY_SYSTEM_INSTRUCTION,
       }, { runId });
       actuals.synthesis = resp.modelUsed.id;
       serverLog(runId, 'info', 'stage_complete', {
-        stage: 'synthesis',
+        stage: synthesisStage,
         model: resp.modelUsed.id,
         duration_ms: Date.now() - synthStarted,
         regen: correctionAppendix ? 'yes' : 'no',
@@ -503,6 +537,21 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => `  ${cat}
 
     const qualityGate = runQualityGate(auditLogs, validationData, phase1Validation, groundingValidation, factCheck);
     console.log(`[FinOps] [${runId}] Quality Gate decision: ${qualityGate.decision}`);
+
+    // LLM-augmented explanation only when the deterministic gate flagged
+    // something. GO results don't need narrative — the metrics speak for them.
+    if (qualityGate.decision !== 'GO') {
+      const qgExplainStarted = Date.now();
+      const explanation = await runQualityGateExplanation(qualityGate, text, { runId });
+      qualityGate.llm_explanation = explanation;
+      serverLog(runId, explanation.failed ? 'warn' : 'info', 'qg_explanation', {
+        decision: qualityGate.decision,
+        model: explanation.model_used || 'n/a',
+        duration_ms: Date.now() - qgExplainStarted,
+        ok: !explanation.failed,
+        ...(explanation.failed ? { failure_reason: explanation.failure_reason } : {}),
+      });
+    }
 
     onProgress('strategy', 100);
 

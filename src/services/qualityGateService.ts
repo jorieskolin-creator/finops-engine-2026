@@ -1,5 +1,6 @@
 
-import { AuditItem, FactCheckResult, Phase1AuditLogs, Phase2Validation, QualityGateResult, ValidationResult } from '../types';
+import { AuditItem, FactCheckResult, Phase1AuditLogs, Phase2Validation, QualityGateResult, QualityGateLlmExplanation, ValidationResult } from '../types';
+import { runStage, RunContext } from './modelRouter';
 
 export const EVIDENCE_DENSITY_BLOCK = 30;
 export const EVIDENCE_DENSITY_WARN = 60;
@@ -112,4 +113,81 @@ export const runQualityGate = (
   }
 
   return { decision, blocking_reasons, warnings, notes, thresholds: THRESHOLDS, fact_check: factCheck };
+};
+
+// LLM-augmented reasoning. Only runs when the deterministic gate decided
+// WARN or BLOCK — we use the model (default Gemini 3.1 Pro, see STAGE_MODELS)
+// to write a plain-language explanation that grounds each reason in source
+// quotes. This does NOT change the decision; it only annotates it.
+
+const QG_PROMPT_PREAMBLE = `You are a senior FinOps reviewer. A deterministic Quality Gate has flagged issues with this assessment. Your job is to explain WHY each blocker / warning matters in plain English, and where possible, anchor the explanation in a direct quote from the source document.
+
+Return STRICT JSON in this shape:
+{
+  "summary": "2-3 sentences in plain language: what's wrong with this assessment and what the reader should do.",
+  "blocking_details": [
+    { "reason": "<verbatim text of the blocking reason>", "explanation": "1-2 sentences why this matters for the FinOps maturity reading", "quote": "<short quote from source if relevant, else omit>", "source_location": "<section name / page / 'unknown'>" }
+  ],
+  "warning_details": [
+    { "reason": "<verbatim text of the warning>", "explanation": "...", "quote": "...", "source_location": "..." }
+  ]
+}
+
+Rules:
+- Echo each reason VERBATIM in the matching "reason" field. Do not paraphrase or merge.
+- "quote" must be a literal substring of the source document; omit it if no relevant evidence exists. Never invent quotes.
+- Keep "explanation" terse. No marketing language, no apologies, no recommendations to "consider X".
+- If a reason is purely structural (e.g. "scored 4 but no evidence captured"), omit "quote" and explain what the audit was unable to ground.
+- Output JSON only. No prose before or after.`;
+
+export const runQualityGateExplanation = async (
+  gate: QualityGateResult,
+  sourceDocument: string,
+  ctx: RunContext
+): Promise<QualityGateLlmExplanation> => {
+  const sourceExcerpt = sourceDocument.length > 50000
+    ? sourceDocument.substring(0, 50000) + '\n\n[...truncated]'
+    : sourceDocument;
+
+  const userText = [
+    QG_PROMPT_PREAMBLE,
+    `\n\n### DETERMINISTIC GATE OUTPUT`,
+    `Decision: ${gate.decision}`,
+    `Blocking reasons (${gate.blocking_reasons.length}):`,
+    ...gate.blocking_reasons.map((r, i) => `  ${i + 1}. ${r}`),
+    `Warnings (${gate.warnings.length}):`,
+    ...gate.warnings.map((w, i) => `  ${i + 1}. ${w}`),
+    `\n\n### SOURCE DOCUMENT\n<SOURCE_DOCUMENT>\n${sourceExcerpt}\n</SOURCE_DOCUMENT>`,
+  ].join('\n');
+
+  try {
+    const resp = await runStage('quality_gate', { userText }, ctx);
+    const text = resp.text || '';
+    const cleaned = text.replace(/```json/gi, '').replace(/```/g, '').trim();
+    const match = cleaned.match(/\{[\s\S]*\}/);
+    if (!match) throw new Error('QG explanation: response had no JSON');
+    const parsed = JSON.parse(match[0]);
+
+    const sanitizeItem = (raw: any) => ({
+      reason: typeof raw?.reason === 'string' ? raw.reason : '',
+      explanation: typeof raw?.explanation === 'string' ? raw.explanation : '',
+      quote: typeof raw?.quote === 'string' && raw.quote.length > 0 ? raw.quote : undefined,
+      source_location: typeof raw?.source_location === 'string' ? raw.source_location : undefined,
+    });
+
+    return {
+      summary: typeof parsed.summary === 'string' ? parsed.summary : '',
+      blocking_details: Array.isArray(parsed.blocking_details) ? parsed.blocking_details.map(sanitizeItem) : [],
+      warning_details: Array.isArray(parsed.warning_details) ? parsed.warning_details.map(sanitizeItem) : [],
+      model_used: resp.modelUsed.id,
+    };
+  } catch (e: any) {
+    return {
+      summary: '',
+      blocking_details: [],
+      warning_details: [],
+      failed: true,
+      failure_reason: e?.message || String(e),
+    };
+  }
 };

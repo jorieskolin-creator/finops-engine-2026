@@ -107,6 +107,7 @@ const App: React.FC = () => {
   const [authenticated, setAuthenticated] = useState(false);
   const [showLogin, setShowLogin] = useState(false);
   const [activePersona, setActivePersona] = useState<PersonaId>('finops_lead');
+  const [deepMode, setDeepMode] = useState(false);
   const [perPackRunning, setPerPackRunning] = useState(false);
   const [perPackCurrent, setPerPackCurrent] = useState<number>(0);
   const [perPackCurrentLabel, setPerPackCurrentLabel] = useState<string>('');
@@ -272,7 +273,7 @@ const App: React.FC = () => {
       const data = await analyzeDocument(safeText, images, (stage, progress) => {
         setLoadingStage(stage);
         if (progress !== undefined) setAuditProgress(progress);
-      });
+      }, { deepMode });
       if (!data.phase_2_validation?.metrics) throw new Error("Analysis returned incomplete data.");
       if (opts?.label) {
         data.meta = { ...data.meta, document_analyzed: opts.label };
@@ -574,10 +575,24 @@ const App: React.FC = () => {
                   </div>
 
                   <div className="flex justify-between items-center px-10 py-6 bg-slate-900/60 backdrop-blur-xl relative z-10 border-t border-white/5">
-                    <button onClick={() => fileInputRef.current?.click()} disabled={files.length >= MAX_FILES} className="text-sm font-bold text-slate-400 hover:text-white transition-colors flex items-center gap-2 hover:bg-white/5 px-4 py-2 rounded-lg">
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 6v6m0 0v6m0-6h6m-6 0H6" /></svg>
-                      Add PDF or HTML
-                    </button>
+                    <div className="flex items-center gap-4">
+                      <button onClick={() => fileInputRef.current?.click()} disabled={files.length >= MAX_FILES} className="text-sm font-bold text-slate-400 hover:text-white transition-colors flex items-center gap-2 hover:bg-white/5 px-4 py-2 rounded-lg">
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 6v6m0 0v6m0-6h6m-6 0H6" /></svg>
+                        Add PDF or HTML
+                      </button>
+                      <label
+                        title="Forces synthesis to use Opus 4.7 (slower, more expensive, deeper roadmap reasoning). Auto-enabled for crawl-stage orgs with high anti-pattern burden."
+                        className="flex items-center gap-2 text-xs text-slate-400 hover:text-white cursor-pointer select-none px-3 py-2 rounded-lg hover:bg-white/5 transition-colors"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={deepMode}
+                          onChange={(e) => setDeepMode(e.target.checked)}
+                          className="accent-emerald-500 cursor-pointer"
+                        />
+                        <span className="font-bold">Deep analysis (Opus 4.7)</span>
+                      </label>
+                    </div>
                     <input type="file" ref={fileInputRef} onChange={handleFileSelect} className="hidden" accept=".pdf,.html,.json,.png,.jpg,.jpeg,.webp,image/png,image/jpeg,image/webp" multiple />
                     <button onClick={handleAnalyze} disabled={!scanResult.canRun || files.length < MIN_FILES || files.length > MAX_FILES} className={`px-8 py-4 rounded-xl font-bold shadow-2xl transition-all transform active:scale-[0.98] flex items-center gap-3 border ${!scanResult.canRun || files.length < MIN_FILES || files.length > MAX_FILES ? 'bg-slate-800 text-slate-500 border-slate-700 cursor-not-allowed shadow-none' : 'text-slate-900 bg-white border-white hover:bg-emerald-400 hover:border-emerald-400 hover:shadow-[0_0_30px_rgba(16,185,129,0.4)]'}`}>
                       {!scanResult.canRun || files.length < MIN_FILES || files.length > MAX_FILES ? (

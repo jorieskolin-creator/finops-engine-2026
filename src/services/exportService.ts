@@ -14,25 +14,42 @@ const renderQualityGate = (gate: QualityGateResult): string => {
     return `<div class="gate gate-go"><strong>Quality Gate: GO</strong> — ${escapeHtml(gate.notes[0] ?? '')}</div>`;
   }
   const cls = gate.decision === 'BLOCK' ? 'gate-block' : 'gate-warn';
+  const llm = gate.llm_explanation;
+  const findExplanation = (reason: string, items?: { reason: string; explanation: string; quote?: string; source_location?: string }[]) =>
+    items?.find((it) => it.reason === reason);
+  const renderItem = (text: string, ex?: { explanation: string; quote?: string; source_location?: string }) => {
+    if (!ex) return `<li>${escapeHtml(text)}</li>`;
+    const explanation = ex.explanation ? `<div class="gate-explanation">${escapeHtml(ex.explanation)}</div>` : '';
+    const quote = ex.quote
+      ? `<div class="gate-quote"><em>&ldquo;${escapeHtml(ex.quote)}&rdquo;</em>${ex.source_location ? ` — ${escapeHtml(ex.source_location)}` : ''}</div>`
+      : '';
+    return `<li>${escapeHtml(text)}${explanation}${quote}</li>`;
+  };
   return `
   <div class="gate ${cls}">
     <h2 class="gate-title">Quality Gate: ${gate.decision}</h2>
     <p class="gate-note">${escapeHtml(gate.notes[0] ?? '')}</p>
+    ${llm?.summary ? `
+    <div class="gate-summary">
+      <div class="gate-label">Reviewer Summary${llm.model_used ? ` · ${escapeHtml(llm.model_used)}` : ''}</div>
+      <p>${escapeHtml(llm.summary)}</p>
+    </div>` : ''}
     ${gate.blocking_reasons.length > 0 ? `
     <div class="gate-block-section">
       <div class="gate-label">Blocking</div>
-      <ul>${gate.blocking_reasons.map(r => `<li>${escapeHtml(r)}</li>`).join('')}</ul>
+      <ul>${gate.blocking_reasons.map(r => renderItem(r, findExplanation(r, llm?.blocking_details))).join('')}</ul>
     </div>` : ''}
     ${gate.warnings.length > 0 ? `
     <div class="gate-warn-section">
       <div class="gate-label">Warnings</div>
-      <ul>${gate.warnings.map(w => `<li>${escapeHtml(w)}</li>`).join('')}</ul>
+      <ul>${gate.warnings.map(w => renderItem(w, findExplanation(w, llm?.warning_details))).join('')}</ul>
     </div>` : ''}
     ${gate.fact_check && !gate.fact_check.failed && gate.fact_check.unsupported_claims.length > 0 ? `
     <div class="gate-factcheck">
       <div class="gate-label">Unverified claims (${gate.fact_check.unsupported_claims.length} survived ${gate.fact_check.attempts} pass${gate.fact_check.attempts === 1 ? '' : 'es'})</div>
       <ul>${gate.fact_check.unsupported_claims.map(c => `<li><em>&ldquo;${escapeHtml(c.claim)}&rdquo;</em>${c.rationale ? `<span class="gate-rationale"> — ${escapeHtml(c.rationale)}</span>` : ''}</li>`).join('')}</ul>
     </div>` : ''}
+    ${llm?.failed ? `<p class="gate-llm-failed">Reviewer narrative unavailable: ${escapeHtml(llm.failure_reason || '')}</p>` : ''}
   </div>`;
 };
 
@@ -210,6 +227,11 @@ const generateReportHtml = (result: DiagnosticResult): string => {
     .gate li { padding-left: 0.75rem; border-left: 2px solid currentColor; margin: 0.4rem 0; opacity: 0.95; font-size: 0.875rem; }
     .gate-factcheck { margin-top: 1rem; padding-top: 1rem; border-top: 1px solid rgba(0,0,0,0.1); }
     .gate-rationale { font-size: 0.75rem; opacity: 0.75; font-style: normal; }
+    .gate-summary { margin: 0.75rem 0; padding: 0.75rem; background: rgba(255,255,255,0.6); border: 1px solid rgba(0,0,0,0.08); border-radius: 6px; }
+    .gate-summary p { margin: 0; font-size: 0.875rem; }
+    .gate-explanation { font-size: 0.78rem; opacity: 0.8; margin-top: 0.25rem; }
+    .gate-quote { font-size: 0.78rem; opacity: 0.8; margin-top: 0.25rem; }
+    .gate-llm-failed { font-size: 0.75rem; opacity: 0.6; font-style: italic; margin-top: 0.75rem; }
     .footer { text-align: center; padding: 2rem 0; margin-top: 3rem; border-top: 1px solid #e2e8f0; font-size: 0.85rem; color: #94a3b8; }
     ${SVG_CSS}
     @media print {
