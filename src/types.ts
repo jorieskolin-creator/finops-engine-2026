@@ -125,7 +125,7 @@ export interface AnalysisMeta {
 
 export type QualityGateDecision = 'GO' | 'WARN' | 'BLOCK';
 
-export type ClaimClassification = 'supported_by_source' | 'supported_by_audit' | 'unsupported';
+export type ClaimClassification = 'supported_by_source' | 'supported_by_audit' | 'supported_by_tactics_db' | 'unsupported';
 
 export type ClaimFailureType =
   | 'fabricated_number'

@@ -1,7 +1,7 @@
 
 import { STRATEGY_SYSTEM_INSTRUCTION, STRATEGY_USER_PROMPT } from "../constants";
 import { runPhase1Audit } from "../orchestrator";
-import { knowledgeBaseService, BATCH_DEFINITIONS } from "../knowledge_base";
+import { knowledgeBaseService, BATCH_DEFINITIONS, FINOPS_TACTICS_LOCAL } from "../knowledge_base";
 import { DiagnosticResult, Phase1AuditLogs, Phase2Validation, AuditItem, EvidenceQuote, EvidenceCategory, EVIDENCE_CATEGORIES, PersonaId, PERSONA_IDS, ImageInput } from "../types";
 import { generateSafetyAuditPrompt } from "./securityService";
 import { validatePhase1Output, validatePhase3Grounding } from "./validatorService";
@@ -462,7 +462,8 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => `  ${cat}
           sourceDocument: text,
           phase1: auditLogs,
           phase2: validationData,
-          imageCount: images.length
+          imageCount: images.length,
+          tactics: FINOPS_TACTICS_LOCAL,
         });
         const fcStarted = Date.now();
         const fcResp = await runStage('fact_check', {
