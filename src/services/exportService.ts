@@ -177,6 +177,10 @@ const generateReportHtml = (result: DiagnosticResult): string => {
     .chart-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); gap: 1.25rem; }
     .summary { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 1rem; padding: 2rem; line-height: 1.75; color: #334155; margin-bottom: 1.5rem; }
     .summary strong { color: #0f172a; }
+    .summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1rem; margin-top: 1rem; }
+    .summary-sub h3 { font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: #64748b; margin: 0 0 0.5rem 0; }
+    .summary-sub ul { margin: 0; padding-left: 1.25rem; }
+    .summary-sub li { font-size: 0.875rem; margin-bottom: 0.35rem; }
     .persona-heading { font-size: 0.875rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: #047857; margin: 0.5rem 0 0.75rem 0; }
     .confidence-notes { background: #fffbeb; border: 1px solid #fde68a; border-radius: 0.75rem; padding: 1rem 1.25rem; margin: 0.5rem 0 1.5rem 0; }
     .confidence-title { font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: #b45309; margin: 0 0 0.5rem 0; }
@@ -299,7 +303,26 @@ const generateReportHtml = (result: DiagnosticResult): string => {
     </div>
   </div>
 
-  <h2>Executive Summary</h2>
+  <h2>Evidence Summary</h2>
+  ${(() => {
+    const evidence = result.phase_3_strategy.evidence_summary;
+    if (!evidence) return '';
+    const list = (title: string, items?: string[]) => items && items.length > 0
+      ? `<div class="summary-sub"><h3>${escapeHtml(title)}</h3><ul>${items.map(i => `<li>${escapeHtml(i)}</li>`).join('')}</ul></div>`
+      : '';
+    return `
+      <div class="summary evidence-summary">
+        <p class="persona-heading">Fact-only current state · ${escapeHtml(evidence.maturity_classification)}</p>
+        <h3>${escapeHtml(evidence.headline)}</h3>
+        <div class="summary-grid">
+          ${list('Key metrics', evidence.key_metrics)}
+          ${list('Confirmed strengths', evidence.confirmed_strengths)}
+          ${list('Confirmed gaps', evidence.confirmed_gaps)}
+          ${list('Confirmed anti-patterns', evidence.confirmed_antipatterns)}
+          ${list('Silent / missing evidence', evidence.silent_or_missing_evidence)}
+        </div>
+      </div>`;
+  })()}
   ${(() => {
     const summaries = result.phase_3_strategy.executive_summaries;
     const personas: Array<{ id: 'finops_lead' | 'cfo' | 'engineering_lead'; label: string }> = [
@@ -323,12 +346,43 @@ const generateReportHtml = (result: DiagnosticResult): string => {
     };
     if (summaries && personas.some(p => summaries[p.id])) {
       return personas.map(p => `
-        <h3 class="persona-heading">For the ${escapeHtml(p.label)}</h3>
+        <h3 class="persona-heading">Evidence summary for the ${escapeHtml(p.label)}</h3>
         <div class="summary">${(summaries[p.id] || '').replace(/\n/g, '<br>')}</div>
         ${renderConfidence(p.id)}
       `).join('');
     }
     return `<div class="summary">${(result.phase_3_strategy.executive_summary || '').replace(/\n/g, '<br>')}</div>`;
+  })()}
+
+  ${(() => {
+    const diagnosis = result.phase_3_strategy.diagnosis;
+    if (!diagnosis) return '';
+    return `
+      <h2>Diagnosis</h2>
+      <div class="summary diagnosis">
+        <p class="persona-heading">Interpretation of evidence — not the implementation plan</p>
+        <h3>Primary bottleneck</h3>
+        <p>${escapeHtml(diagnosis.primary_bottleneck)}</p>
+        <div class="summary-grid">
+          <div class="summary-sub"><h3>Root causes</h3><ul>${(diagnosis.root_causes || []).map(i => `<li>${escapeHtml(i)}</li>`).join('')}</ul></div>
+          <div class="summary-sub"><h3>Domain diagnosis</h3><ul>${Object.entries(diagnosis.domain_diagnosis || {}).map(([d, text]) => `<li><strong>${escapeHtml(d)}:</strong> ${escapeHtml(text)}</li>`).join('')}</ul></div>
+        </div>
+        <p><strong>Confidence (${escapeHtml(diagnosis.confidence)}):</strong> ${escapeHtml(diagnosis.confidence_rationale)}</p>
+      </div>`;
+  })()}
+
+  ${(() => {
+    const decision = result.phase_3_strategy.planning_decision;
+    if (!decision) return '';
+    return `
+      <h2>Planning Decision: ${escapeHtml(decision.decision?.replace('_', ' ') || '')}</h2>
+      <div class="summary planning-decision">
+        <p>${escapeHtml(decision.rationale)}</p>
+        <div class="summary-grid">
+          <div class="summary-sub"><h3>Safe to act on</h3><ul>${(decision.safe_to_act_on || []).map(i => `<li>${escapeHtml(i)}</li>`).join('')}</ul></div>
+          <div class="summary-sub"><h3>Evidence needed before action</h3><ul>${(decision.evidence_needed_before_action || []).map(i => `<li>${escapeHtml(i)}</li>`).join('')}</ul></div>
+        </div>
+      </div>`;
   })()}
 
   ${(() => {

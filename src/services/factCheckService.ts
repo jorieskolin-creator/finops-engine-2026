@@ -2,7 +2,7 @@
 import { AuditItem, FactCheckClaim, FactCheckResult, Phase1AuditLogs, Phase2Validation, ClaimFailureType, ClaimSourceLocation, StrategicTactic } from '../types';
 
 const VALID_FAILURE_TYPES: ClaimFailureType[] = ['fabricated_number', 'unverifiable_entity', 'unsupported_org_claim', 'out_of_scope', 'other'];
-const VALID_SOURCE_LOCATIONS: ClaimSourceLocation[] = ['finops_lead', 'cfo', 'engineering_lead', 'roadmap'];
+const VALID_SOURCE_LOCATIONS: ClaimSourceLocation[] = ['finops_lead', 'cfo', 'engineering_lead', 'diagnosis', 'planning_decision', 'roadmap'];
 
 export interface FactCheckInputs {
   executiveSummary: string;
@@ -108,7 +108,7 @@ ${(inputs.imageCount ?? 0) > 0
 - Specifically check: percentages, named tools/companies/teams/products, numerical counts (e.g. "22 anti-patterns"), claims about specific organizational structures, claims about specific named processes.
 - Be skeptical: if a claim is specific enough to be falsifiable but you cannot find it in the inputs, classify as "unsupported".
 - Maximum 15 claims per pass — focus on the most consequential.
-- The strategy output below is divided into sections with [Persona: finops_lead | cfo | engineering_lead] headers, followed by REMEDIATION ROADMAP ACTIONS. For every claim you flag, tag "source_location" as the persona id the claim was found under, or "roadmap" if it was found in the roadmap actions block.
+- The strategy output below is divided into persona evidence summaries (with [Persona: ...] headers), [Diagnosis], [Planning Decision], and REMEDIATION ROADMAP ACTIONS. For every claim you flag, tag "source_location" as the persona id, "diagnosis", "planning_decision", or "roadmap" based on where it was found.
 - For every claim classified "unsupported", you MUST additionally emit:
   - "failure_type": one of "fabricated_number" (invented %, $, count), "unverifiable_entity" (named tool / company / team / product that is NOT in the source AND NOT in the VERIFIED_TACTICS_DB; legitimate KB-sanctioned references must be classified "supported_by_tactics_db" instead), "unsupported_org_claim" (assertion about org structure or behavior not in source), "out_of_scope" (claim about something the inputs simply do not address), or "other".
   - "missing_material": one short sentence describing what specific evidence in a future source document would make this claim supportable (e.g., "a tagging policy document", "a monthly cost review meeting note", "a named FinOps team headcount").
@@ -122,7 +122,7 @@ ${(inputs.imageCount ?? 0) > 0
       "claim": "exact phrase from the strategy output",
       "classification": "supported_by_source" | "supported_by_audit" | "supported_by_tactics_db" | "unsupported",
       "rationale": "one short sentence",
-      "source_location": "finops_lead | cfo | engineering_lead | roadmap",
+      "source_location": "finops_lead | cfo | engineering_lead | diagnosis | planning_decision | roadmap",
       "failure_type": "fabricated_number | unverifiable_entity | unsupported_org_claim | out_of_scope | other (REQUIRED when classification is unsupported, otherwise omit)",
       "missing_material": "what additional source content would make this claim supportable (REQUIRED when classification is unsupported, otherwise omit)"
     }
@@ -248,15 +248,15 @@ ${items.map(c => `  - "${c.claim}"\n      Found in: ${c.source_location || 'unsp
 
 ### REGENERATE INSTRUCTIONS — your previous output failed fact-check
 
-A separate fact-check pass found these claims in your previous executive summaries or roadmap that were not supported by ANY of the three sources of truth (the source document, the verified Phase 1 evidence, or the Verified Tactics Database). Each is grouped by failure mode with specific guidance for how to fix it.
+A separate fact-check pass found these claims in your previous evidence summaries, diagnosis, planning decision, or roadmap that were not supported by ANY of the three sources of truth (the source document, the verified Phase 1 evidence, or the Verified Tactics Database). Each is grouped by failure mode with specific guidance for how to fix it.
 
 ${groupBlocks}${ungroupedBlock}
 
-Regenerate the executive summaries (all three personas) AND remediation roadmap. The new output:
+Regenerate the evidence summaries (all three personas), diagnosis, planning decision, AND remediation roadmap. The new output:
 - MUST NOT include any of the above claims, even rephrased.
 - MUST follow the failure-mode-specific guidance above.
 - MUST cite only facts that appear in <SOURCE_DOCUMENT_TO_AUDIT>, in the Phase 1 evidence quotes already provided, or in the Verified Tactics Database (tactic IDs and the companies actually paired with each tactic in the database).
 - Prefer fewer specific claims over inventing replacements. It is better to be vague but truthful than precise but unsupported.
-- Keep the exact same JSON output shape (executive_summaries with finops_lead / cfo / engineering_lead, visual_scorecard, remediation_roadmap).
+- Keep the exact same JSON output shape (executive_summaries with finops_lead / cfo / engineering_lead, evidence_summary, diagnosis, planning_decision, visual_scorecard, remediation_roadmap).
 `;
 };
