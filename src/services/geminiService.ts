@@ -2,7 +2,7 @@
 import { STRATEGY_SYSTEM_INSTRUCTION, STRATEGY_USER_PROMPT, STRATEGY_USER_PROMPT_CAUTIOUS, STRATEGY_USER_PROMPT_FINDINGS } from "../constants";
 import { bracketFromValidation, explainBracket } from "./confidenceBracket";
 import { runPhase1Audit } from "../orchestrator";
-import { knowledgeBaseService, BATCH_DEFINITIONS, FINOPS_TACTICS_LOCAL, buildTacticIdTable, validTacticIdSet } from "../knowledge_base";
+import { knowledgeBaseService, BATCH_DEFINITIONS, FINOPS_TACTICS_LOCAL, FINOPS_TAXONOMY_REGISTRY, buildTacticIdTable, validTacticIdSet } from "../knowledge_base";
 import { DiagnosticResult, Phase1AuditLogs, Phase2Validation, AuditItem, EvidenceQuote, EvidenceCategory, EVIDENCE_CATEGORIES, PersonaId, PERSONA_IDS, ImageInput } from "../types";
 import { generateSafetyAuditPrompt } from "./securityService";
 import { validatePhase1Output, validatePhase3Grounding } from "./validatorService";
@@ -414,6 +414,7 @@ export const analyzeDocument = async (
     const tacticsContext = await tacticsPromise;
 
     const definitionsContext = JSON.stringify(BATCH_DEFINITIONS, null, 2);
+    const taxonomyContext = JSON.stringify(FINOPS_TAXONOMY_REGISTRY, null, 2);
     // Hard ID lookup at the TOP — prevents the model from confusing which
     // company goes with which tactic ID. See knowledge_base/index.ts for
     // the rationale. The prose case studies still follow below.
@@ -421,10 +422,13 @@ export const analyzeDocument = async (
     const fullSSOT = `=== TACTIC IDS — LOOKUP TABLE (use ONLY these IDs; never invent, abbreviate, or modify) ===
 ${tacticIdTable}
 
-=== PART 1: THE CRITERIA (DEFINITIONS) ===
+=== PART 1: TAXONOMY REGISTRY (INDEXING + KB USAGE BOUNDARIES) ===
+${taxonomyContext}
+
+=== PART 2: THE CRITERIA (DEFINITIONS) ===
 ${definitionsContext}
 
-=== PART 2: THE PLAYBOOK (SOLUTIONS) ===
+=== PART 3: THE PLAYBOOK (SOLUTIONS) ===
 ${tacticsContext}`;
 
     onProgress('strategy', 50);
@@ -491,11 +495,14 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => `  ${cat}
         })
         .filter(Boolean)
         .join('\n\n---\n\n');
+      const diagnosisText = strategy.diagnosis ? `\n\n[Diagnosis]\n${JSON.stringify(strategy.diagnosis)}` : '';
+      const planningText = strategy.planning_decision ? `\n\n[Planning Decision]\n${JSON.stringify(strategy.planning_decision)}` : '';
+      const checkedSummary = `${summary}${diagnosisText}${planningText}`;
       const roadmap = strategy.remediation_roadmap || [];
       const roadmapText = roadmap.flatMap((p: any) => Array.isArray(p.actions) ? p.actions : []).join('\n');
       try {
         const fcPrompt = buildFactCheckPrompt({
-          executiveSummary: summary,
+          executiveSummary: checkedSummary,
           remediationRoadmapText: roadmapText,
           sourceDocument: text,
           phase1: auditLogs,
@@ -528,6 +535,50 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => `  ${cat}
       }
     };
 
+    const buildFallbackEvidenceSummary = () => ({
+      headline: `${validationData.crawl_walk_run} FinOps maturity with ${Math.round(validationData.metrics.antipattern_burden)}% anti-pattern burden`,
+      maturity_classification: validationData.crawl_walk_run,
+      key_metrics: [
+        `FinOps readiness: ${Math.round(validationData.metrics.finops_readiness)}/100`,
+        `Maturity depth: ${Math.round(validationData.metrics.maturity_depth)}%`,
+        `Anti-pattern burden: ${Math.round(validationData.metrics.antipattern_burden)}%`,
+        `Delivery integrity: ${Math.round(validationData.metrics.delivery_integrity)}%`,
+        `Evidence density: ${Math.round(validationData.metrics.evidence_density)}%`
+      ],
+      confirmed_strengths: Object.entries(validationData.category_scores)
+        .filter(([, score]) => score >= 10)
+        .map(([cat, score]) => `Domain ${cat} shows relatively strong maturity signal (${score}/15).`),
+      confirmed_gaps: validationData.maturity_gaps.slice(0, 8),
+      confirmed_antipatterns: validationData.antipattern_findings.slice(0, 8),
+      silent_or_missing_evidence: validationData.silent_areas.slice(0, 8)
+    });
+
+    const buildFallbackDiagnosis = () => ({
+      primary_bottleneck: validationData.maturity_gaps[0] || validationData.antipattern_findings[0] || 'No single bottleneck dominated the validated audit output.',
+      root_causes: [
+        ...validationData.maturity_gaps.slice(0, 3),
+        ...validationData.antipattern_findings.slice(0, 3)
+      ].slice(0, 5),
+      domain_diagnosis: Object.fromEntries(
+        Object.entries(validationData.category_scores).map(([cat, score]) => [cat, `Maturity signal ${score}/15 in domain ${cat}.`])
+      ),
+      confidence: confidenceBracket === 'HIGH' ? 'high' : confidenceBracket === 'MEDIUM' ? 'medium' : 'low',
+      confidence_rationale: bracketDetail
+    });
+
+    const buildFallbackPlanningDecision = () => ({
+      decision: confidenceBracket === 'LOW' ? 'NO_GO' : confidenceBracket === 'MEDIUM' ? 'CONDITIONAL_GO' : 'GO',
+      rationale: confidenceBracket === 'LOW'
+        ? 'Evidence is not strong enough for a directive roadmap; gather missing source material first.'
+        : confidenceBracket === 'MEDIUM'
+          ? 'Use high-confidence actions first and validate assumptions before scaling later phases.'
+          : 'Evidence supports a directive roadmap subject to the Quality Gate result.',
+      safe_to_act_on: confidenceBracket === 'LOW'
+        ? ['Collect missing evidence listed in the findings report.', 'Validate candidate remediation themes before execution.']
+        : ['Act on roadmap phases that cite validated findings and valid tactic IDs.'],
+      evidence_needed_before_action: validationData.silent_areas.slice(0, 6)
+    });
+
     const normalizeStrategy = (raw: any): any => {
       if (!raw?.phase_3_strategy) return raw;
       const normalized = normalizePersonaSummaries(raw.phase_3_strategy);
@@ -535,7 +586,10 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => `  ${cat}
         ...raw.phase_3_strategy,
         executive_summaries: normalized.executive_summaries,
         executive_summary: normalized.executive_summary,
-        active_persona: normalized.active_persona
+        active_persona: normalized.active_persona,
+        evidence_summary: raw.phase_3_strategy.evidence_summary || buildFallbackEvidenceSummary(),
+        diagnosis: raw.phase_3_strategy.diagnosis || buildFallbackDiagnosis(),
+        planning_decision: raw.phase_3_strategy.planning_decision || buildFallbackPlanningDecision()
       };
       return raw;
     };
@@ -698,6 +752,9 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => `  ${cat}
           engineering_lead: "Strategy incomplete."
         },
         active_persona: DEFAULT_PERSONA,
+        evidence_summary: buildFallbackEvidenceSummary(),
+        diagnosis: buildFallbackDiagnosis(),
+        planning_decision: buildFallbackPlanningDecision(),
         visual_scorecard: { headline: "Error", maturity_score: "N/A", burden_score: "N/A" },
         remediation_roadmap: []
       },

@@ -668,7 +668,7 @@ const App: React.FC = () => {
             <div className="flex justify-center mb-8">
               <div className="glass-panel p-1.5 rounded-2xl flex gap-1 bg-slate-900/60">
                 {[
-                  { id: 'overview', label: 'Executive Summary' },
+                  { id: 'overview', label: 'Summary & Diagnosis' },
                   { id: 'audit', label: 'Forensic Audit' },
                   { id: 'strategy', label: 'Optimization Roadmap' }
                 ].map(tab => (
@@ -683,7 +683,7 @@ const App: React.FC = () => {
                   <div className="flex items-start gap-6 mb-8">
                     <div className="flex items-center justify-center w-12 h-12 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 font-bold font-display text-lg shadow-[0_0_15px_rgba(16,185,129,0.2)] flex-shrink-0">01</div>
                     <div>
-                      <h3 className="text-2xl font-display font-bold text-white mb-2">FinOps Strategic Diagnosis</h3>
+                      <h3 className="text-2xl font-display font-bold text-white mb-2">Evidence Summary</h3>
                       <p className="text-xs font-bold uppercase tracking-widest text-slate-400">
                         Classification: <span className={`${result.phase_2_validation.crawl_walk_run.includes('Crawl') ? 'text-rose-400' : result.phase_2_validation.crawl_walk_run.includes('Run') ? 'text-emerald-400' : 'text-amber-400'}`}>{result.phase_2_validation.crawl_walk_run}</span>
                       </p>
@@ -703,6 +703,13 @@ const App: React.FC = () => {
                       ))}
                     </div>
                     <MarkdownRenderer content={result.phase_3_strategy.executive_summaries?.[activePersona] || result.phase_3_strategy.executive_summary} />
+                    {result.phase_3_strategy.evidence_summary && (
+                      <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-3">
+                        {result.phase_3_strategy.evidence_summary.key_metrics?.map((metric, i) => (
+                          <div key={i} className="p-3 rounded-lg bg-white/5 border border-white/10 text-xs text-slate-300">{metric}</div>
+                        ))}
+                      </div>
+                    )}
                     {(() => {
                       const claims = result.quality_gate?.fact_check?.unsupported_claims || [];
                       const personaClaims = claims.filter(c => c.source_location === activePersona);
@@ -780,6 +787,45 @@ const App: React.FC = () => {
                     </div>
                   );
                 })()}
+
+                {result.phase_3_strategy.diagnosis && (
+                  <div className="glass-panel p-8 md:p-10 rounded-[2rem] bg-slate-900/40 border border-white/10">
+                    <div className="flex items-start gap-4 mb-5">
+                      <div className="flex items-center justify-center w-10 h-10 rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 font-bold text-sm flex-shrink-0">02</div>
+                      <div>
+                        <h3 className="text-lg font-display font-bold text-white">Diagnosis</h3>
+                        <p className="text-xs text-slate-400 mt-1">Interpretation of the evidence. Recommendations remain separated in the roadmap tab.</p>
+                      </div>
+                    </div>
+                    <div className="pl-14 space-y-4">
+                      <div>
+                        <p className="text-[10px] font-bold uppercase tracking-widest text-cyan-300 mb-2">Primary bottleneck</p>
+                        <p className="text-sm text-slate-200">{result.phase_3_strategy.diagnosis.primary_bottleneck}</p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] font-bold uppercase tracking-widest text-cyan-300 mb-2">Root causes</p>
+                        <ul className="space-y-1.5">
+                          {result.phase_3_strategy.diagnosis.root_causes?.map((cause, i) => (
+                            <li key={i} className="flex items-start gap-2 text-sm text-slate-300"><span className="mt-1.5 w-1 h-1 rounded-full bg-cyan-400 shrink-0"></span><span>{cause}</span></li>
+                          ))}
+                        </ul>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {result.phase_3_strategy.planning_decision && (
+                  <div className="glass-panel p-8 md:p-10 rounded-[2rem] bg-slate-900/40 border border-emerald-500/20">
+                    <div className="flex items-start gap-4 mb-5">
+                      <div className="flex items-center justify-center w-10 h-10 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-bold text-sm flex-shrink-0">03</div>
+                      <div>
+                        <h3 className="text-lg font-display font-bold text-white">Planning Decision: {result.phase_3_strategy.planning_decision.decision.replace('_', ' ')}</h3>
+                        <p className="text-xs text-slate-400 mt-1">{result.phase_3_strategy.planning_decision.rationale}</p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
 
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
                   <div className="md:col-span-2 md:row-span-2">

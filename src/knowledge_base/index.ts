@@ -1,5 +1,5 @@
 
-import { StrategicTactic } from '../types';
+import { KnowledgeTaxonomyRegistry, StrategicTactic } from '../types';
 import criteriaData from './finops_criteria.json';
 import antipatternData from './finops_antipatterns.json';
 import keywordsData from './finops_preflight_keywords.json';
@@ -7,6 +7,7 @@ import taxonomyData from './finops_evidence_taxonomy.json';
 import personasData from './finops_personas.json';
 import tacticsData from './finops_tactics_database.json';
 import validationData from './finops_validation_rules.json';
+import taxonomyRegistryData from './finops_taxonomy_registry.json';
 
 export const FINOPS_CRITERIA = criteriaData.criteria;
 export const FINOPS_ANTIPATTERNS = antipatternData.criteria;
@@ -15,6 +16,7 @@ export const FINOPS_EVIDENCE_TAXONOMY = taxonomyData;
 export const FINOPS_PERSONAS = personasData;
 export const FINOPS_TACTICS_LOCAL = tacticsData.tactics as StrategicTactic[];
 export const FINOPS_VALIDATION_RULES = validationData;
+export const FINOPS_TAXONOMY_REGISTRY = taxonomyRegistryData as KnowledgeTaxonomyRegistry;
 
 // Extract the primary case-study company from a tactic. The DB uses the
 // convention "COMPANY: prose..." for each case_study; we pull the leading
@@ -85,6 +87,9 @@ export const BATCH_TITLES: Record<string, string> = {
   D: 'Architecture & Engineering',
   E: 'Culture & Organization'
 };
+
+export const TAXONOMY_DOCUMENT_NAMING = FINOPS_TAXONOMY_REGISTRY.kb_document_naming;
+export const TAXONOMY_USAGE_BOUNDARIES = FINOPS_TAXONOMY_REGISTRY.usage_boundaries;
 
 export const BATCH_DEFINITIONS: Record<string, BatchDefinition> = {};
 for (const batchId of ['A', 'B', 'C', 'D', 'E']) {
