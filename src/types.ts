@@ -84,7 +84,22 @@ export interface Phase2Validation {
 export interface RemediationStep {
   phase: string;
   actions: string[];
+  // Populated when synthesis ran in CAUTIOUS (MEDIUM bracket) mode.
+  confidence?: 'high' | 'medium' | 'low';
+  assumptions?: string[];
 }
+
+// Output of the FINDINGS synthesis mode (LOW bracket): evidence-backed
+// observations and an explicit validation plan, NOT a directive roadmap.
+// No tactic IDs, no case studies, no claimed outcomes.
+export interface FindingsModeOutput {
+  evidence_backed_findings: string[];
+  candidate_themes: string[];
+  missing_evidence: string[];
+  validation_plan: string[];
+}
+
+export type ConfidenceBracket = 'HIGH' | 'MEDIUM' | 'LOW';
 
 export interface VisualScorecard {
   headline: string;
@@ -108,6 +123,15 @@ export interface Phase3Strategy {
   active_persona: PersonaId;
   visual_scorecard: VisualScorecard;
   remediation_roadmap: RemediationStep[];
+  // Bracket the synthesis was instructed to operate in, derived from Phase 2
+  // metrics before the LLM call. HIGH=directive, MEDIUM=cautious, LOW=findings.
+  confidence_bracket?: ConfidenceBracket;
+  // After fact-check, this may downgrade to LOW if QG flips to BLOCK. The UI
+  // renders based on effective_bracket so a poor fact-check result hides
+  // case studies and directive language even if synthesis produced them.
+  effective_bracket?: ConfidenceBracket;
+  // Populated only when synthesis ran in FINDINGS mode (LOW bracket).
+  findings_mode?: FindingsModeOutput;
 }
 
 export interface AnalysisMeta {

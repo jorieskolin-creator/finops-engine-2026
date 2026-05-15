@@ -174,3 +174,105 @@ STRICTLY return a JSON object.
 }
 </output_format>
 `;
+
+// ============================================================================
+// CAUTIOUS variant — MEDIUM bracket. Same shape as DIRECTIVE but every phase
+// declares its confidence and the assumptions that must hold for it to apply.
+// Hedged verbs allowed alongside directive ones. Tactic IDs and case studies
+// remain in use (and stay verified against the Tactics DB by fact-check).
+// ============================================================================
+export const STRATEGY_USER_PROMPT_CAUTIOUS = `
+${STRATEGY_USER_PROMPT}
+
+<cautious_mode_overrides>
+This run produced MEDIUM-confidence evidence (mixed density, some silent areas, partial delivery integrity). Apply these overrides on top of the rules above:
+
+1. **Hedged language permitted alongside directive verbs.** Where evidence directly supports a step, use "Implement"/"Eliminate"/"Enforce". Where evidence is partial or inferred, use "Pilot", "Establish a baseline for", "Validate before scaling". Do NOT use "consider"/"might"/"could" — those remain weasel words.
+
+2. **Per-phase confidence (REQUIRED).** Each entry in remediation_roadmap MUST include a "confidence" field with value "high", "medium", or "low":
+   - "high"   = phase is supported by direct evidence in Phase 1/2 and the prerequisite signals exist in the source.
+   - "medium" = phase is reasonable given audit findings but rests on assumptions about org context not directly evidenced.
+   - "low"    = phase is generic FinOps best practice; the source does not yet support a confident prescription.
+
+3. **Per-phase assumptions (REQUIRED).** Each entry MUST include an "assumptions" array — short statements (≤15 words each, max 4 per phase) listing what must hold for the phase to be applicable. Examples: "tag coverage baseline exists today", "engineering teams have dashboard tooling", "finance approves multi-year commitments". If a phase has no non-trivial assumptions, return an empty array.
+
+4. **Persona summaries.** In the 3rd paragraph ("Strategic Directives"), the persona summaries must include a one-sentence confidence statement that mirrors the strongest phase confidence (e.g., "Confidence in this roadmap is medium overall; the Crawl phase is high-confidence, later phases rest on assumptions about org readiness.").
+
+5. **Output schema additions.** The remediation_roadmap items now look like:
+   { "phase": "1. Crawl — Foundation (0-3 Months)", "actions": [...], "confidence": "high|medium|low", "assumptions": ["...", "..."] }
+   All other fields (executive_summaries, visual_scorecard) keep their existing shape.
+</cautious_mode_overrides>
+`;
+
+// ============================================================================
+// FINDINGS variant — LOW bracket. NO directive roadmap, NO tactic IDs, NO
+// case studies, NO claimed outcomes. The output describes what the audit CAN
+// say truthfully and what evidence the user needs to gather before a real
+// strategy can be prescribed. The schema diverges materially.
+// ============================================================================
+export const STRATEGY_USER_PROMPT_FINDINGS = `
+<role>
+You are an evidence-only FinOps reviewer. The audit you are reading produced LOW-confidence signal: insufficient evidence density, low delivery integrity, or too many silent criteria. A directive roadmap would be irresponsible — you would be inventing prescriptions on top of insufficient data.
+
+Instead, produce an HONEST FINDINGS REPORT that tells the reader what the audit can support, what it cannot, and what they need to gather before a real strategy can be written.
+</role>
+
+<reference_material>
+${FINOPS_METHODOLOGY_CONTEXT}
+</reference_material>
+
+<personas>
+You still write three persona-tailored executive summaries (finops_lead, cfo, engineering_lead). All three describe THE SAME findings. They differ only in vocabulary and emphasis.
+${STRATEGY_PERSONAS_BLOCK}
+</personas>
+
+<strict_constraints>
+1. **NO directive language.** Do NOT use "Implement", "Eliminate", "Enforce", "Automate", or any other verb that prescribes action on this organization. Use evidence verbs: "The audit shows", "The source document indicates", "No evidence was found for".
+2. **NO tactic IDs.** Do NOT reference [TAC-XXX-NNN] codes. Do NOT cite external companies (Spotify, Netflix, Airbnb, etc.). The Verified Tactics Database is OFF-LIMITS in this mode.
+3. **NO claimed outcomes.** Do NOT promise percentages, savings, or timelines.
+4. **NO remediation_roadmap.** Return an empty array for that field.
+5. **EVIDENCE REQUIREMENT.** Every finding you state MUST be traceable to a specific Phase 1 evidence quote or Phase 2 metric. If you cannot anchor it, do not state it.
+6. **JSON STRING SAFETY.** No double quotes inside string values. Use asterisks for emphasis.
+7. **BREVITY.** Each persona summary: 150-250 words (shorter than directive mode — there is less to say).
+</strict_constraints>
+
+<task>
+1. **Executive summaries (one per persona)** with this 3-paragraph structure:
+   **1. What the audit found:** Concise summary of the evidence-backed observations. Reference the Crawl/Walk/Run classification ONLY if Phase 2 metrics directly support it; otherwise say "classification is provisional pending more evidence".
+   **2. What is missing:** Explicit list of what the audit could NOT confirm — silent criteria, contradictions in the source, areas where evidence density is too low to score.
+   **3. What is needed before a directive roadmap can be written:** The validation plan — what specific source material the next assessment cycle should include.
+
+2. **Visual scorecard** — produce as usual; this is mechanical (Phase 2 numbers).
+
+3. **Findings mode payload (REQUIRED):**
+   - "evidence_backed_findings": 4-8 short observations directly traceable to Phase 1/2.
+   - "candidate_themes": 3-6 high-level remediation THEMES (NOT directives). Examples: "tagging governance", "commitment strategy", "engineering cost ownership". No tactic IDs, no companies.
+   - "missing_evidence": 4-8 specific things the source did not contain that would have raised confidence (e.g., "no tagging policy document attached", "no quarterly cost review minutes", "no named FinOps team headcount").
+   - "validation_plan": 3-6 concrete next-cycle actions for the user — what to gather before re-running the assessment.
+</task>
+
+<output_format>
+STRICTLY return JSON. The schema in FINDINGS mode:
+{
+  "phase_3_strategy": {
+    "executive_summaries": {
+      "finops_lead": "String, Markdown, 3-paragraph structure, 150-250 words",
+      "cfo": "String, Markdown, 3-paragraph structure, 150-250 words",
+      "engineering_lead": "String, Markdown, 3-paragraph structure, 150-250 words"
+    },
+    "visual_scorecard": {
+      "headline": "String (e.g. 'Insufficient Evidence — Provisional Findings Only')",
+      "maturity_score": "String",
+      "burden_score": "String"
+    },
+    "remediation_roadmap": [],
+    "findings_mode": {
+      "evidence_backed_findings": ["..."],
+      "candidate_themes": ["..."],
+      "missing_evidence": ["..."],
+      "validation_plan": ["..."]
+    }
+  }
+}
+</output_format>
+`;

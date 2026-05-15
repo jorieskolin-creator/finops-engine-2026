@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { AuditItem, DiagnosticResult, QualityGateResult, PersonaId, PERSONA_LABELS } from '../types';
+import { AuditItem, DiagnosticResult, QualityGateResult, PersonaId, PERSONA_LABELS, ConfidenceBracket, FindingsModeOutput, RemediationStep } from '../types';
 import { MarkdownRenderer } from './DashboardComponents';
 import { BATCH_TITLES, MASTER_BINGO_FINOPS } from '../knowledge_base';
 import { METRIC_DESCRIPTIONS } from '../constants';
@@ -8,6 +8,96 @@ import { SVG_CSS, svgGaugeCard, svgRadar, svgScatter } from '../services/svgChar
 const InlineSvg: React.FC<{ html: string; className?: string }> = ({ html, className }) => (
   <div className={className} dangerouslySetInnerHTML={{ __html: html }} />
 );
+
+const BracketBadge: React.FC<{ synthesis?: ConfidenceBracket; effective?: ConfidenceBracket }> = ({ synthesis, effective }) => {
+  if (!effective) return null;
+  const downgraded = synthesis && synthesis !== effective;
+  const palette: Record<ConfidenceBracket, { ring: string; text: string; label: string }> = {
+    HIGH:   { ring: 'ring-emerald-300 bg-emerald-50',  text: 'text-emerald-800', label: 'High Confidence — Directive Roadmap' },
+    MEDIUM: { ring: 'ring-amber-300 bg-amber-50',      text: 'text-amber-800',   label: 'Medium Confidence — Cautious Roadmap' },
+    LOW:    { ring: 'ring-rose-300 bg-rose-50',        text: 'text-rose-800',    label: 'Low Confidence — Findings Only' },
+  };
+  const p = palette[effective];
+  return (
+    <div className={`mb-4 p-3 rounded-xl ring-1 ${p.ring} text-xs flex items-center gap-2`}>
+      <span className={`font-bold uppercase tracking-wider ${p.text}`}>{p.label}</span>
+      {downgraded && (
+        <span className="text-slate-600 italic">
+          (synthesized as {synthesis}; downgraded by Quality Gate)
+        </span>
+      )}
+    </div>
+  );
+};
+
+const FindingsPanel: React.FC<{ findings: FindingsModeOutput }> = ({ findings }) => {
+  const Section: React.FC<{ title: string; items: string[]; accent: string }> = ({ title, items, accent }) => {
+    if (!items || items.length === 0) return null;
+    return (
+      <div className="mb-6">
+        <h3 className={`text-xs font-bold uppercase tracking-wider mb-2 ${accent}`}>{title}</h3>
+        <ul className="space-y-2">
+          {items.map((it, i) => (
+            <li key={i} className="flex items-start gap-3 text-sm text-slate-700">
+              <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-slate-400 shrink-0"></span>
+              <span>{it}</span>
+            </li>
+          ))}
+        </ul>
+      </div>
+    );
+  };
+  return (
+    <div className="mb-12 p-6 bg-rose-50/50 rounded-xl border border-rose-200">
+      <h2 className="text-2xl font-display font-bold text-slate-900 mb-2">Findings &amp; Validation Plan</h2>
+      <p className="text-sm text-slate-600 mb-6 italic">
+        Evidence in the source did not support a directive roadmap. This section reports what the audit can confirm and what additional material is needed before a confident strategy can be written.
+      </p>
+      <Section title="Evidence-backed findings" items={findings.evidence_backed_findings} accent="text-slate-700" />
+      <Section title="Candidate remediation themes" items={findings.candidate_themes} accent="text-slate-700" />
+      <Section title="Missing evidence" items={findings.missing_evidence} accent="text-rose-700" />
+      <Section title="Validation plan (next assessment cycle)" items={findings.validation_plan} accent="text-emerald-700" />
+    </div>
+  );
+};
+
+const RemediationStepBlock: React.FC<{ step: RemediationStep; index: number }> = ({ step, index }) => {
+  const confLabel: Record<NonNullable<RemediationStep['confidence']>, { text: string; chip: string }> = {
+    high:   { text: 'High confidence',   chip: 'bg-emerald-100 text-emerald-800' },
+    medium: { text: 'Medium confidence', chip: 'bg-amber-100 text-amber-800' },
+    low:    { text: 'Low confidence',    chip: 'bg-rose-100 text-rose-800' },
+  };
+  return (
+    <div className="p-6 bg-slate-50 rounded-xl border border-slate-200">
+      <div className="flex items-center justify-between flex-wrap gap-2 mb-4">
+        <h3 className="font-bold text-lg text-slate-900">{step.phase}</h3>
+        {step.confidence && (
+          <span className={`text-xs font-bold uppercase tracking-wider px-2 py-1 rounded ${confLabel[step.confidence].chip}`}>
+            {confLabel[step.confidence].text}
+          </span>
+        )}
+      </div>
+      <ul className="space-y-3 mb-4">
+        {step.actions.map((action, i) => (
+          <li key={i} className="flex items-start gap-3 text-sm text-slate-700">
+            <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0"></span>
+            <span>{action}</span>
+          </li>
+        ))}
+      </ul>
+      {step.assumptions && step.assumptions.length > 0 && (
+        <div className="pt-3 border-t border-slate-200">
+          <p className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-1.5">Assumptions</p>
+          <ul className="space-y-1 text-xs text-slate-600">
+            {step.assumptions.map((a, i) => (
+              <li key={i} className="pl-3 border-l-2 border-slate-300">{a}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
+  );
+};
 
 const QualityGateBlock: React.FC<{ gate: QualityGateResult }> = ({ gate }) => {
   if (gate.decision === 'GO') {
@@ -288,6 +378,10 @@ export const ReportView: React.FC<ReportViewProps> = ({ result, onBack, onDownlo
           <p className="text-slate-500">Generated: {result.meta.timestamp} | Engine: {result.meta.engine_version}</p>
         </div>
 
+        <BracketBadge
+          synthesis={result.phase_3_strategy.confidence_bracket}
+          effective={result.phase_3_strategy.effective_bracket ?? result.phase_3_strategy.confidence_bracket}
+        />
         <QualityGateBlock gate={result.quality_gate} />
 
         <div className="mb-12 p-8 bg-slate-50 rounded-2xl border border-slate-200">
@@ -426,26 +520,28 @@ export const ReportView: React.FC<ReportViewProps> = ({ result, onBack, onDownlo
           );
         })()}
 
-        {result.phase_3_strategy.remediation_roadmap.length > 0 && (
-          <div className="mb-12">
-            <h2 className="text-2xl font-display font-bold text-slate-900 mb-6 pb-3 border-b border-slate-200">Remediation Roadmap</h2>
-            <div className="space-y-6">
-              {result.phase_3_strategy.remediation_roadmap.map((step, index) => (
-                <div key={index} className="p-6 bg-slate-50 rounded-xl border border-slate-200">
-                  <h3 className="font-bold text-lg text-slate-900 mb-4">{step.phase}</h3>
-                  <ul className="space-y-3">
-                    {step.actions.map((action, i) => (
-                      <li key={i} className="flex items-start gap-3 text-sm text-slate-700">
-                        <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0"></span>
-                        <span>{action}</span>
-                      </li>
-                    ))}
-                  </ul>
+        {(() => {
+          const effective = result.phase_3_strategy.effective_bracket ?? result.phase_3_strategy.confidence_bracket;
+          // LOW: findings panel replaces the roadmap entirely.
+          if (effective === 'LOW' && result.phase_3_strategy.findings_mode) {
+            return <FindingsPanel findings={result.phase_3_strategy.findings_mode} />;
+          }
+          // HIGH/MEDIUM: render the roadmap, with per-phase confidence + assumptions
+          // surfaced when the synthesis populated them.
+          if (result.phase_3_strategy.remediation_roadmap.length > 0) {
+            return (
+              <div className="mb-12">
+                <h2 className="text-2xl font-display font-bold text-slate-900 mb-6 pb-3 border-b border-slate-200">Remediation Roadmap</h2>
+                <div className="space-y-6">
+                  {result.phase_3_strategy.remediation_roadmap.map((step, index) => (
+                    <RemediationStepBlock key={index} step={step} index={index} />
+                  ))}
                 </div>
-              ))}
-            </div>
-          </div>
-        )}
+              </div>
+            );
+          }
+          return null;
+        })()}
 
         <ForensicSection
           title="Forensic Audit: FinOps Maturity"

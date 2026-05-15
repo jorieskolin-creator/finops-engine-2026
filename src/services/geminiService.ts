@@ -1,11 +1,12 @@
 
-import { STRATEGY_SYSTEM_INSTRUCTION, STRATEGY_USER_PROMPT } from "../constants";
+import { STRATEGY_SYSTEM_INSTRUCTION, STRATEGY_USER_PROMPT, STRATEGY_USER_PROMPT_CAUTIOUS, STRATEGY_USER_PROMPT_FINDINGS } from "../constants";
+import { bracketFromValidation, explainBracket } from "./confidenceBracket";
 import { runPhase1Audit } from "../orchestrator";
 import { knowledgeBaseService, BATCH_DEFINITIONS, FINOPS_TACTICS_LOCAL } from "../knowledge_base";
 import { DiagnosticResult, Phase1AuditLogs, Phase2Validation, AuditItem, EvidenceQuote, EvidenceCategory, EVIDENCE_CATEGORIES, PersonaId, PERSONA_IDS, ImageInput } from "../types";
 import { generateSafetyAuditPrompt } from "./securityService";
 import { validatePhase1Output, validatePhase3Grounding } from "./validatorService";
-import { buildEvidenceDensityBlock, runQualityGate, runQualityGateExplanation, EVIDENCE_DENSITY_BLOCK } from "./qualityGateService";
+import { runQualityGate, runQualityGateExplanation } from "./qualityGateService";
 import { buildFactCheckPrompt, buildRegenerateAppendix, parseFactCheckResponse } from "./factCheckService";
 import { FactCheckClaim, FactCheckResult } from "../types";
 import { STAGE_MODELS } from "../models";
@@ -328,6 +329,24 @@ export const analyzeDocument = async (
 
     console.log(`[FinOps] Phase 2 Complete. Readiness: ${Math.round(validationData.metrics.finops_readiness)}%, Classification: ${validationData.crawl_walk_run}`);
 
+    // Confidence bracket: drives which synthesis prompt runs.
+    // LOW   → findings (no roadmap, no case studies)
+    // MEDIUM → cautious (per-phase confidence + assumptions, hedged verbs)
+    // HIGH  → directive (current behavior — full tactics, case studies)
+    const confidenceBracket = bracketFromValidation(validationData);
+    const bracketDetail = explainBracket(confidenceBracket, {
+      evidence_density: validationData.metrics.evidence_density,
+      delivery_integrity: validationData.metrics.delivery_integrity,
+      silent_areas_count: validationData.silent_areas.length,
+    });
+    console.log(`[FinOps] [${runId}] Synthesis confidence: ${bracketDetail}`);
+    serverLog(runId, 'info', 'synthesis_confidence', {
+      bracket: confidenceBracket,
+      evidence_density: Math.round(validationData.metrics.evidence_density),
+      delivery_integrity: Math.round(validationData.metrics.delivery_integrity),
+      silent_areas: validationData.silent_areas.length,
+    });
+
     // Synthesis escalation decision (rules + user override).
     // Rules are conservative: only escalate to Opus 4.7 when the org is messy
     // enough that a deeper roadmap is worth the cost premium.
@@ -354,44 +373,12 @@ export const analyzeDocument = async (
       class: validationData.crawl_walk_run,
     });
 
-    if (validationData.metrics.evidence_density < EVIDENCE_DENSITY_BLOCK) {
-      onProgress('strategy', 100);
-      console.log(`[FinOps] [${runId}] Pipeline complete (early exit: low evidence density) duration_ms=${Date.now() - pipelineStarted}`);
-      serverLog(runId, 'info', 'pipeline_complete', {
-        outcome: 'early_exit_low_evidence_density',
-        evidence_density: validationData.metrics.evidence_density,
-        duration_ms: Date.now() - pipelineStarted,
-        models: actuals,
-      });
-      return {
-        meta: {
-          document_analyzed: "Uploaded Text",
-          timestamp: new Date().toISOString(),
-          engine_version: "finops-1.0.0",
-          model_config: {
-            preflight: actuals.preflight,
-            forensic_audit: actuals.forensic_audit,
-            synthesis: 'skipped',
-            fact_check: 'skipped',
-            validators: "deterministic"
-          }
-        },
-        phase_1_audit_logs: auditLogs,
-        phase_2_validation: validationData,
-        phase_3_strategy: {
-          executive_summary: `_Strategy generation skipped — see Quality Gate above._`,
-          executive_summaries: {
-            finops_lead: `_Strategy generation skipped — see Quality Gate above._`,
-            cfo: `_Strategy generation skipped — see Quality Gate above._`,
-            engineering_lead: `_Strategy generation skipped — see Quality Gate above._`
-          },
-          active_persona: DEFAULT_PERSONA,
-          visual_scorecard: { headline: "Audit Inconclusive", maturity_score: "N/A", burden_score: "N/A" },
-          remediation_roadmap: []
-        },
-        quality_gate: buildEvidenceDensityBlock(validationData.metrics.evidence_density)
-      };
-    }
+    // Note: the previous "skip strategy on low evidence density" early-exit
+    // is gone. Low-evidence runs are now handled by FINDINGS-mode synthesis
+    // (bracket=LOW above), which produces an honest evidence + validation
+    // report instead of a placeholder. The deterministic QG below still
+    // emits BLOCK if evidence_density crosses the threshold, but the report
+    // ships with real findings content.
 
     onProgress('strategy', 20);
     const tacticsContext = await tacticsPromise;
@@ -418,13 +405,22 @@ CATEGORY BREAKDOWN:
 ${Object.entries(validationData.category_scores).map(([cat, score]) => `  ${cat}: ${score}/15`).join('\n')}
 `;
 
+    // Pick prompt variant by bracket. LOW=findings (no roadmap), MEDIUM=cautious
+    // (per-phase confidence + assumptions), HIGH=directive (current behavior).
+    // FINDINGS mode strips the SSOT block — that mode is forbidden from using
+    // the tactics DB and including it would just tempt the model to cite it.
+    const promptVariant =
+      confidenceBracket === 'LOW' ? STRATEGY_USER_PROMPT_FINDINGS :
+      confidenceBracket === 'MEDIUM' ? STRATEGY_USER_PROMPT_CAUTIOUS :
+      STRATEGY_USER_PROMPT;
+
     const callPhase3 = async (correctionAppendix?: string): Promise<any> => {
-      const textParts: string[] = [
-        STRATEGY_USER_PROMPT,
-        `\n\n### THE GOLDEN STANDARD (SSOT)\nYou must ignore generic internet advice. You may ONLY prescribe solutions found in this Knowledge Base:\n\n${fullSSOT}`,
-        `\n\n### DIAGNOSTIC FINDINGS (Phase 1 & 2)\nUse these specific gaps and anti-patterns to trigger the strategies above:\n${handoffSummary}`,
-        `\n\n### ORIGINAL SOURCE CONTEXT\n<SOURCE_DOCUMENT_TO_AUDIT>\n${text.substring(0, 50000)}\n</SOURCE_DOCUMENT_TO_AUDIT>`,
-      ];
+      const textParts: string[] = [promptVariant];
+      if (confidenceBracket !== 'LOW') {
+        textParts.push(`\n\n### THE GOLDEN STANDARD (SSOT)\nYou must ignore generic internet advice. You may ONLY prescribe solutions found in this Knowledge Base:\n\n${fullSSOT}`);
+      }
+      textParts.push(`\n\n### DIAGNOSTIC FINDINGS (Phase 1 & 2)\nUse these specific gaps and anti-patterns to trigger the strategies above:\n${handoffSummary}`);
+      textParts.push(`\n\n### ORIGINAL SOURCE CONTEXT\n<SOURCE_DOCUMENT_TO_AUDIT>\n${text.substring(0, 50000)}\n</SOURCE_DOCUMENT_TO_AUDIT>`);
       if (correctionAppendix) textParts.push(correctionAppendix);
       const synthStarted = Date.now();
       const resp = await runStage(synthesisStage, {
@@ -435,6 +431,7 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => `  ${cat}
       serverLog(runId, 'info', 'stage_complete', {
         stage: synthesisStage,
         model: resp.modelUsed.id,
+        bracket: confidenceBracket,
         duration_ms: Date.now() - synthStarted,
         regen: correctionAppendix ? 'yes' : 'no',
       });
@@ -554,14 +551,34 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => `  ${cat}
       });
     }
 
+    // Stamp the strategy with the bracket synthesis ran in, plus the effective
+    // bracket the UI should render against. A post-fact-check QG=BLOCK downgrades
+    // any directive/cautious run to LOW for display purposes — case studies and
+    // directive language stay hidden when confidence collapsed after generation.
+    const effectiveBracket = qualityGate.decision === 'BLOCK' ? 'LOW' : confidenceBracket;
+    if (strategyData?.phase_3_strategy && typeof strategyData.phase_3_strategy === 'object') {
+      strategyData.phase_3_strategy.confidence_bracket = confidenceBracket;
+      strategyData.phase_3_strategy.effective_bracket = effectiveBracket;
+    }
+    if (effectiveBracket !== confidenceBracket) {
+      console.warn(`[FinOps] [${runId}] Strategy downgraded by QG: ${confidenceBracket} → ${effectiveBracket} (decision=${qualityGate.decision})`);
+      serverLog(runId, 'warn', 'strategy_downgraded', {
+        from: confidenceBracket,
+        to: effectiveBracket,
+        decision: qualityGate.decision,
+      });
+    }
+
     onProgress('strategy', 100);
 
     const totalDuration = Date.now() - pipelineStarted;
-    console.log(`[FinOps] [${runId}] === Pipeline complete === duration_ms=${totalDuration} quality_gate=${qualityGate.decision}`);
+    console.log(`[FinOps] [${runId}] === Pipeline complete === duration_ms=${totalDuration} quality_gate=${qualityGate.decision} bracket=${effectiveBracket}`);
     serverLog(runId, 'info', 'pipeline_complete', {
       outcome: 'ok',
       duration_ms: totalDuration,
       quality_gate: qualityGate.decision,
+      bracket: effectiveBracket,
+      synthesis_bracket: confidenceBracket,
       fact_check_supported: factCheck.supported_count,
       fact_check_total: factCheck.total_claims,
       models: actuals,
