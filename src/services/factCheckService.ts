@@ -1,5 +1,5 @@
 
-import { AuditItem, FactCheckClaim, FactCheckResult, Phase1AuditLogs, Phase2Validation, ClaimFailureType, ClaimSourceLocation } from '../types';
+import { AuditItem, FactCheckClaim, FactCheckResult, Phase1AuditLogs, Phase2Validation, ClaimFailureType, ClaimSourceLocation, StrategicTactic } from '../types';
 
 const VALID_FAILURE_TYPES: ClaimFailureType[] = ['fabricated_number', 'unverifiable_entity', 'unsupported_org_claim', 'out_of_scope', 'other'];
 const VALID_SOURCE_LOCATIONS: ClaimSourceLocation[] = ['finops_lead', 'cfo', 'engineering_lead', 'roadmap'];
@@ -11,6 +11,11 @@ export interface FactCheckInputs {
   phase1: Phase1AuditLogs;
   phase2: Phase2Validation;
   imageCount?: number;
+  // Compact index of the Verified Tactics Database that the synthesis step
+  // was instructed to draw from. Prescription claims (e.g. "modeled on
+  // Spotify's tag governance" or "Implement [TAC-VIS-002]") are verified
+  // against THIS, not the customer source document.
+  tactics?: StrategicTactic[];
 }
 
 const MAX_SOURCE_CHARS = 40000;
@@ -26,6 +31,29 @@ const compactEvidence = (phase1: Phase1AuditLogs): string => {
     }
   }
   return lines.join('\n');
+};
+
+// Extract company names from a tactic's case_study field. Most entries follow
+// "COMPANY: ..." but we also pick up any ALL-CAPS word (Spotify, Netflix etc.
+// are usually capitalized) as a fallback.
+const extractCompanies = (caseStudy: string): string[] => {
+  if (!caseStudy) return [];
+  const set = new Set<string>();
+  const colon = caseStudy.match(/^([A-Z][A-Z0-9 &/.-]+):/);
+  if (colon) set.add(colon[1].trim());
+  for (const word of caseStudy.match(/\b[A-Z][A-Z0-9]{2,}\b/g) || []) {
+    if (word.length <= 30) set.add(word);
+  }
+  return Array.from(set);
+};
+
+const compactTactics = (tactics: StrategicTactic[] | undefined): string => {
+  if (!tactics || tactics.length === 0) return '(no tactics database supplied)';
+  return tactics.map(t => {
+    const companies = extractCompanies(t.case_study);
+    const companyList = companies.length > 0 ? companies.join(', ') : '(no named company)';
+    return `${t.id} [${t.category}]: "${t.problem_pattern}" → companies: ${companyList}`;
+  }).join('\n');
 };
 
 const compactMetrics = (phase2: Phase2Validation): string => {
@@ -52,9 +80,18 @@ Your job: extract every distinct factual claim from the STRATEGY OUTPUT below, t
 </role>
 
 <classifications>
-- "supported_by_source": the claim is directly stated or clearly implied in the SOURCE_DOCUMENT, OR is clearly visible in one of the attached SOURCE_IMAGES (dashboard screenshot, architecture diagram, org chart, PDF page rendered as image).
-- "supported_by_audit": the claim is derived from PHASE_1_EVIDENCE or PHASE_2_METRICS (both produced by this engine from the source).
-- "unsupported": the claim cannot be traced to either above. This includes invented numbers, named entities not in the source, organizational claims with no evidence, and confident assertions about facts not present in the inputs.
+A claim must be verified against the correct source of truth depending on what kind of claim it is.
+
+CURRENT-STATE CLAIMS (about the audited organization — what they have, what they do, what their numbers are):
+- "supported_by_source": directly stated or clearly implied in the SOURCE_DOCUMENT, OR clearly visible in one of the attached SOURCE_IMAGES.
+- "supported_by_audit": derived from PHASE_1_EVIDENCE or PHASE_2_METRICS (both produced by this engine from the source).
+
+PRESCRIPTION CLAIMS (about external best-practice patterns the strategy is recommending — tactic IDs, mechanism names, named companies cited as exemplars):
+- "supported_by_tactics_db": the claim references a tactic ID (e.g. "TAC-VIS-002"), mechanism, or company case study (e.g. "modeled on Spotify") that EXISTS in the VERIFIED_TACTICS_DB section below. This is a legitimate prescription pattern, NOT a hallucination. The synthesis step is explicitly instructed to use this database — these references are sanctioned.
+  IMPORTANT: a company name (Spotify, Netflix, Airbnb, etc.) is supported_by_tactics_db ONLY if the database actually pairs that company with the specific tactic/mechanism being prescribed. "Implement TAC-VIS-002 modeled on Spotify" → supported only if TAC-VIS-002's case_study references Spotify. "Implement TAC-VIS-002 modeled on Datadog" → unsupported (Datadog not in the DB at all). "Implement TAC-OPT-001 modeled on Spotify" → unsupported (Spotify is in TAC-VIS-001's case study, not TAC-OPT-001's).
+
+NEITHER:
+- "unsupported": the claim cannot be traced to any of the three sources above. This includes invented numbers, named entities not in the source AND not in the tactics DB, organizational claims with no evidence, mismatched pairings (right company / wrong tactic), and confident assertions about facts not present in any input.
 </classifications>
 
 <image_verification_rule>
@@ -70,7 +107,7 @@ ${(inputs.imageCount ?? 0) > 0
 - Maximum 15 claims per pass — focus on the most consequential.
 - The strategy output below is divided into sections with [Persona: finops_lead | cfo | engineering_lead] headers, followed by REMEDIATION ROADMAP ACTIONS. For every claim you flag, tag "source_location" as the persona id the claim was found under, or "roadmap" if it was found in the roadmap actions block.
 - For every claim classified "unsupported", you MUST additionally emit:
-  - "failure_type": one of "fabricated_number" (invented %, $, count), "unverifiable_entity" (named tool / company / team / product not in source), "unsupported_org_claim" (assertion about org structure or behavior not in source), "out_of_scope" (claim about something the inputs simply do not address), or "other".
+  - "failure_type": one of "fabricated_number" (invented %, $, count), "unverifiable_entity" (named tool / company / team / product that is NOT in the source AND NOT in the VERIFIED_TACTICS_DB; legitimate KB-sanctioned references must be classified "supported_by_tactics_db" instead), "unsupported_org_claim" (assertion about org structure or behavior not in source), "out_of_scope" (claim about something the inputs simply do not address), or "other".
   - "missing_material": one short sentence describing what specific evidence in a future source document would make this claim supportable (e.g., "a tagging policy document", "a monthly cost review meeting note", "a named FinOps team headcount").
 - Output JSON ONLY, no prose.
 </rules>
@@ -80,7 +117,7 @@ ${(inputs.imageCount ?? 0) > 0
   "claims": [
     {
       "claim": "exact phrase from the strategy output",
-      "classification": "supported_by_source" | "supported_by_audit" | "unsupported",
+      "classification": "supported_by_source" | "supported_by_audit" | "supported_by_tactics_db" | "unsupported",
       "rationale": "one short sentence",
       "source_location": "finops_lead | cfo | engineering_lead | roadmap",
       "failure_type": "fabricated_number | unverifiable_entity | unsupported_org_claim | out_of_scope | other (REQUIRED when classification is unsupported, otherwise omit)",
@@ -97,6 +134,10 @@ ${compactMetrics(inputs.phase2)}
 <phase_1_evidence>
 ${compactEvidence(inputs.phase1)}
 </phase_1_evidence>
+
+<verified_tactics_db>
+${compactTactics(inputs.tactics)}
+</verified_tactics_db>
 
 <source_document>
 ${inputs.sourceDocument.substring(0, MAX_SOURCE_CHARS)}
@@ -130,7 +171,7 @@ export const parseFactCheckResponse = (text: string, attempts: number): FactChec
     const validClaims: FactCheckClaim[] = claims
       .filter((c: any) => c && typeof c.claim === 'string' && typeof c.classification === 'string')
       .map((c: any) => {
-        const classification = ['supported_by_source', 'supported_by_audit', 'unsupported'].includes(c.classification)
+        const classification = ['supported_by_source', 'supported_by_audit', 'supported_by_tactics_db', 'unsupported'].includes(c.classification)
           ? c.classification
           : 'unsupported';
         const claim: FactCheckClaim = {
@@ -173,7 +214,7 @@ export const parseFactCheckResponse = (text: string, attempts: number): FactChec
 
 const FAILURE_TYPE_GUIDANCE: Record<ClaimFailureType, string> = {
   fabricated_number: 'You invented a number not present in Phase 2 metrics or the source. Do not replace it with another invented number. Reference the relevant metric generically ("the audit shows significant burden") or omit the figure.',
-  unverifiable_entity: 'You named a tool, team, company, or product not present in the source. Remove the named entity. Reference it generically ("the deployment pipeline", "the central team") or omit it.',
+  unverifiable_entity: 'You named a tool, team, company, or product that is NOT in the source AND NOT in the Verified Tactics Database. Legitimate KB-sanctioned references (tactic IDs like [TAC-VIS-002], or companies paired with their actual tactic in the database) are allowed — DO NOT strip those. For the flagged items below, the entity is genuinely not in any source: remove it, reference it generically ("the deployment pipeline", "the central team"), or replace with a verified tactic ID from the database.',
   unsupported_org_claim: 'You asserted something about the organization (structure, behavior, ownership) that is not in the source. Remove the assertion or qualify it as a recommended state, not a current one.',
   out_of_scope: 'You made a claim about something the source simply does not address. Do not address it at all in the regenerated output.',
   other: 'The claim could not be verified. Remove it or replace with a verified statement from the Phase 1 evidence.'
@@ -204,14 +245,14 @@ ${items.map(c => `  - "${c.claim}"\n      Found in: ${c.source_location || 'unsp
 
 ### REGENERATE INSTRUCTIONS — your previous output failed fact-check
 
-A separate fact-check pass found these claims in your previous executive summaries or roadmap that were not supported by the source document or the verified Phase 1 evidence. Each is grouped by failure mode with specific guidance for how to fix it.
+A separate fact-check pass found these claims in your previous executive summaries or roadmap that were not supported by ANY of the three sources of truth (the source document, the verified Phase 1 evidence, or the Verified Tactics Database). Each is grouped by failure mode with specific guidance for how to fix it.
 
 ${groupBlocks}${ungroupedBlock}
 
 Regenerate the executive summaries (all three personas) AND remediation roadmap. The new output:
 - MUST NOT include any of the above claims, even rephrased.
 - MUST follow the failure-mode-specific guidance above.
-- MUST cite only facts that appear in <SOURCE_DOCUMENT_TO_AUDIT> or in the Phase 1 evidence quotes already provided.
+- MUST cite only facts that appear in <SOURCE_DOCUMENT_TO_AUDIT>, in the Phase 1 evidence quotes already provided, or in the Verified Tactics Database (tactic IDs and the companies actually paired with each tactic in the database).
 - Prefer fewer specific claims over inventing replacements. It is better to be vague but truthful than precise but unsupported.
 - Keep the exact same JSON output shape (executive_summaries with finops_lead / cfo / engineering_lead, visual_scorecard, remediation_roadmap).
 `;
