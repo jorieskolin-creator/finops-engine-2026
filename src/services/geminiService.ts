@@ -587,9 +587,9 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => `  ${cat}
         executive_summaries: normalized.executive_summaries,
         executive_summary: normalized.executive_summary,
         active_persona: normalized.active_persona,
-        evidence_summary: raw.phase_3_strategy.evidence_summary || buildFallbackEvidenceSummary(),
-        diagnosis: raw.phase_3_strategy.diagnosis || buildFallbackDiagnosis(),
-        planning_decision: raw.phase_3_strategy.planning_decision || buildFallbackPlanningDecision()
+        evidence_summary: raw.phase_3_strategy.evidence_summary?.headline ? raw.phase_3_strategy.evidence_summary : buildFallbackEvidenceSummary(),
+        diagnosis: raw.phase_3_strategy.diagnosis?.primary_bottleneck ? raw.phase_3_strategy.diagnosis : buildFallbackDiagnosis(),
+        planning_decision: raw.phase_3_strategy.planning_decision?.decision ? raw.phase_3_strategy.planning_decision : buildFallbackPlanningDecision()
       };
       return raw;
     };
