@@ -77,7 +77,7 @@ export const validatePhase1Output = (rawData: any): ValidationResult => {
   };
 };
 
-export const validatePhase3Grounding = (strategyData: any, phase2: Phase2Validation): ValidationResult => {
+export const validatePhase3Grounding = (strategyData: any, phase2: Phase2Validation, sourceText?: string): ValidationResult => {
   const errors: string[] = [];
   const warnings: string[] = [];
 
@@ -153,18 +153,52 @@ export const validatePhase3Grounding = (strategyData: any, phase2: Phase2Validat
     errors.push(`Strategy contains ${allActions.length} actions but cites zero tactic IDs. Phase 3 prompt requires inline tactic citations on every tactic-bearing action.`);
   }
 
+  // Percentage check. The deterministic version of this used to flag every
+  // source-quoted percentage as a fabrication because it only compared against
+  // Phase 2 headline metrics. Now we accept any number that legitimately
+  // exists in the audit context:
+  //   • Phase 2 metrics (rounded)
+  //   • Phase 2 category_scores (the X/15 numbers, expressed as X*100/15)
+  //   • 0, 100 (trivial)
+  //   • Any percentage that literally appears in the source document text
+  // The LLM-based fact-checker remains the primary verifier for percentages;
+  // this check only fires on numbers that look invented to a deterministic
+  // pattern matcher.
   const percentPattern = /(\d+)%/g;
+  const metricsValues = Object.values(phase2.metrics) as number[];
+  const roundedMetrics = new Set(metricsValues.map(v => Math.round(v)));
+  // category_scores are 0–15 ints. The strategy may quote them as raw "X/15"
+  // (handled below) or as percentages — accept both forms.
+  const categoryScoresRaw = Object.values(phase2.category_scores || {}) as number[];
+  const sourcePercents = sourceText
+    ? new Set(Array.from(sourceText.matchAll(/(\d+)%/g)).map(m => parseInt(m[1])))
+    : new Set<number>();
   for (const { key, text } of summaries) {
     const percentMatches = text.match(percentPattern);
     if (!percentMatches) continue;
     for (const pctStr of percentMatches) {
       const pct = parseInt(pctStr);
       if (isNaN(pct)) continue;
-      const metricsValues = Object.values(phase2.metrics) as number[];
-      const roundedMetrics = metricsValues.map(v => Math.round(v));
-      if (!roundedMetrics.includes(pct) && pct !== 100 && pct !== 0) {
-        warnings.push(`Percentage ${pctStr} in summary [${key}] may not match Phase 2 metrics`);
-      }
+      if (pct === 0 || pct === 100) continue;
+      if (roundedMetrics.has(pct)) continue;
+      if (sourcePercents.has(pct)) continue;
+      // category_scores expressed as percentage of 15
+      if (categoryScoresRaw.some(s => Math.round((s / 15) * 100) === pct)) continue;
+      warnings.push(`Percentage ${pctStr} in summary [${key}] not grounded in Phase 2 metrics, category scores, or source document`);
+    }
+  }
+
+  // Category score citations like "Architecture scores 9/15" must reference
+  // an actual category_score from Phase 2.
+  const slashFifteenPattern = /(\d+)\s*\/\s*15\b/g;
+  for (const { key, text } of summaries) {
+    const slashMatches = Array.from(text.matchAll(slashFifteenPattern));
+    if (!slashMatches.length) continue;
+    for (const m of slashMatches) {
+      const n = parseInt(m[1]);
+      if (isNaN(n)) continue;
+      if (categoryScoresRaw.includes(n)) continue;
+      warnings.push(`X/15 score ${m[0]} in summary [${key}] does not match any Phase 2 category_score`);
     }
   }
 

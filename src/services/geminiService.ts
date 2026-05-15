@@ -2,17 +2,47 @@
 import { STRATEGY_SYSTEM_INSTRUCTION, STRATEGY_USER_PROMPT, STRATEGY_USER_PROMPT_CAUTIOUS, STRATEGY_USER_PROMPT_FINDINGS } from "../constants";
 import { bracketFromValidation, explainBracket } from "./confidenceBracket";
 import { runPhase1Audit } from "../orchestrator";
-import { knowledgeBaseService, BATCH_DEFINITIONS, FINOPS_TACTICS_LOCAL } from "../knowledge_base";
+import { knowledgeBaseService, BATCH_DEFINITIONS, FINOPS_TACTICS_LOCAL, buildTacticIdTable, validTacticIdSet } from "../knowledge_base";
 import { DiagnosticResult, Phase1AuditLogs, Phase2Validation, AuditItem, EvidenceQuote, EvidenceCategory, EVIDENCE_CATEGORIES, PersonaId, PERSONA_IDS, ImageInput } from "../types";
 import { generateSafetyAuditPrompt } from "./securityService";
 import { validatePhase1Output, validatePhase3Grounding } from "./validatorService";
 import { runQualityGate, runQualityGateExplanation } from "./qualityGateService";
 import { buildFactCheckPrompt, buildRegenerateAppendix, parseFactCheckResponse } from "./factCheckService";
-import { FactCheckClaim, FactCheckResult } from "../types";
+import { FactCheckClaim, FactCheckResult, FactCheckPassSnapshot } from "../types";
 import { STAGE_MODELS } from "../models";
 import { runStage, serverLog, newRunId } from "./modelRouter";
 
 const FACT_CHECK_MAX_RETRIES = 2;
+const ID_VALIDATION_MAX_REGENS = 2;
+
+// Pull every [TAC-XXX-NNN] (or [TAC-XXX-NNN-XXX]) reference out of the raw
+// strategy JSON and check each against the verified DB. Returns the list of
+// invalid IDs (deduplicated, sorted) — empty means everything checked out.
+const findInvalidTacticIds = (strategyData: any, validIds: Set<string>): string[] => {
+  const blob = JSON.stringify(strategyData ?? {});
+  const found = new Set<string>();
+  const RX = /\[(TAC-[A-Z]+-\d+(?:-[A-Z]+)?)\]/g;
+  let m: RegExpExecArray | null;
+  while ((m = RX.exec(blob)) !== null) {
+    const id = m[1];
+    if (!validIds.has(id)) found.add(id);
+  }
+  return Array.from(found).sort();
+};
+
+const buildInvalidIdAppendix = (invalid: string[], validIds: Set<string>): string => `
+
+### REGENERATE INSTRUCTIONS — your previous output cited tactic IDs that do not exist
+
+The output contained these tactic IDs that are NOT in the Verified Tactics Database:
+${invalid.map(id => `  - ${id}`).join('\n')}
+
+These are not valid. You either invented them, abbreviated a real ID (e.g. TAC-CUL- vs TAC-CULT-, TAC-ARC- vs TAC-ARCH-), or appended a suffix (e.g. -COM) that does not exist.
+
+The COMPLETE list of valid tactic IDs is in the TACTIC IDS — LOOKUP TABLE section above. Use ONLY those exact strings.
+
+Regenerate the full output with the same shape. Replace every invalid ID with a valid one (matching the underlying mechanism you intended), or remove the bracketed ID entirely if no valid one fits. Do NOT introduce any new invalid IDs.
+`;
 
 const ALL_CRITERIA_IDS = [
   'A1', 'A2', 'A3', 'A4', 'A5',
@@ -384,7 +414,18 @@ export const analyzeDocument = async (
     const tacticsContext = await tacticsPromise;
 
     const definitionsContext = JSON.stringify(BATCH_DEFINITIONS, null, 2);
-    const fullSSOT = `=== PART 1: THE CRITERIA (DEFINITIONS) ===\n${definitionsContext}\n\n=== PART 2: THE PLAYBOOK (SOLUTIONS) ===\n${tacticsContext}`;
+    // Hard ID lookup at the TOP — prevents the model from confusing which
+    // company goes with which tactic ID. See knowledge_base/index.ts for
+    // the rationale. The prose case studies still follow below.
+    const tacticIdTable = buildTacticIdTable();
+    const fullSSOT = `=== TACTIC IDS — LOOKUP TABLE (use ONLY these IDs; never invent, abbreviate, or modify) ===
+${tacticIdTable}
+
+=== PART 1: THE CRITERIA (DEFINITIONS) ===
+${definitionsContext}
+
+=== PART 2: THE PLAYBOOK (SOLUTIONS) ===
+${tacticsContext}`;
 
     onProgress('strategy', 50);
 
@@ -499,10 +540,52 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => `  ${cat}
       return raw;
     };
 
-    let strategyData: any = normalizeStrategy(await callPhase3());
+    // Wrap callPhase3 with a deterministic ID-validity gate. Before any
+    // fact-check spend, we extract all [TAC-...] references and verify each
+    // exists in the DB. Invalid IDs trigger a targeted regen with the full
+    // valid-ID list. Catches structural failures the LLM-based fact-check
+    // sometimes misses, and avoids burning fact-check tokens on output with
+    // obvious tactic-ID errors.
+    const validIds = validTacticIdSet();
+    const callPhase3Validated = async (correctionAppendix?: string): Promise<any> => {
+      let data = normalizeStrategy(await callPhase3(correctionAppendix));
+      let invalid = findInvalidTacticIds(data, validIds);
+      let regen = 0;
+      while (invalid.length > 0 && regen < ID_VALIDATION_MAX_REGENS) {
+        regen++;
+        console.warn(`[FinOps] [${runId}] Strategy cites ${invalid.length} invalid tactic IDs (${invalid.join(', ')}); regen ${regen}/${ID_VALIDATION_MAX_REGENS}`);
+        serverLog(runId, 'warn', 'invalid_tactic_ids', {
+          invalid_ids: invalid.join(','),
+          regen,
+        });
+        const idAppendix = buildInvalidIdAppendix(invalid, validIds);
+        const combined = correctionAppendix ? `${correctionAppendix}\n\n${idAppendix}` : idAppendix;
+        data = normalizeStrategy(await callPhase3(combined));
+        invalid = findInvalidTacticIds(data, validIds);
+      }
+      if (invalid.length > 0) {
+        console.error(`[FinOps] [${runId}] Strategy STILL contains invalid tactic IDs after ${ID_VALIDATION_MAX_REGENS} regens: ${invalid.join(', ')}`);
+        serverLog(runId, 'error', 'invalid_tactic_ids_persisted', {
+          invalid_ids: invalid.join(','),
+        });
+      }
+      return data;
+    };
+
+    const trajectory: FactCheckPassSnapshot[] = [];
+    const snapshot = (fc: FactCheckResult): FactCheckPassSnapshot => ({
+      attempt: fc.attempts,
+      total_claims: fc.total_claims,
+      supported_count: fc.supported_count,
+      unsupported_count: fc.unsupported_claims.length,
+      unsupported_signatures: fc.unsupported_claims.map(c => c.claim.substring(0, 80)),
+    });
+
+    let strategyData: any = await callPhase3Validated();
     onProgress('strategy', 70);
     let factCheck = await runFactCheck(strategyData, 1);
     let lastUnsupported: FactCheckClaim[] = factCheck.unsupported_claims;
+    if (!factCheck.failed) trajectory.push(snapshot(factCheck));
 
     let attempt = 1;
     while (
@@ -511,21 +594,29 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => `  ${cat}
       attempt <= FACT_CHECK_MAX_RETRIES
     ) {
       console.log(`[FinOps] Fact-check pass ${attempt}: ${lastUnsupported.length} unsupported claims, regenerating...`);
-      strategyData = normalizeStrategy(await callPhase3(buildRegenerateAppendix(lastUnsupported)));
+      strategyData = await callPhase3Validated(buildRegenerateAppendix(lastUnsupported));
       attempt++;
       factCheck = await runFactCheck(strategyData, attempt);
       lastUnsupported = factCheck.unsupported_claims;
+      if (!factCheck.failed) trajectory.push(snapshot(factCheck));
     }
+
+    factCheck.trajectory = trajectory;
 
     if (factCheck.failed) {
       console.warn(`[FinOps] Fact-check unavailable: ${factCheck.failure_reason}`);
     } else {
       console.log(`[FinOps] Fact-check complete after ${factCheck.attempts} pass(es): ${factCheck.supported_count}/${factCheck.total_claims} claims supported, ${lastUnsupported.length} unsupported.`);
+      if (trajectory.length > 1) {
+        const traj = trajectory.map(p => `pass${p.attempt}:${p.supported_count}/${p.total_claims}supp,${p.unsupported_count}unsupp`).join(' → ');
+        console.log(`[FinOps] [${runId}] Fact-check trajectory: ${traj}`);
+        serverLog(runId, 'info', 'fact_check_trajectory', { trajectory: traj, passes: trajectory.length });
+      }
     }
 
     onProgress('strategy', 90);
 
-    const groundingValidation = validatePhase3Grounding(strategyData, validationData);
+    const groundingValidation = validatePhase3Grounding(strategyData, validationData, text);
     if (groundingValidation.errors.length > 0) {
       console.error("[FinOps] Phase 3 grounding errors:", groundingValidation.errors);
     }

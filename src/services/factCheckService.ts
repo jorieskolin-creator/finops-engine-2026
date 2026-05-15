@@ -58,6 +58,9 @@ const compactTactics = (tactics: StrategicTactic[] | undefined): string => {
 
 const compactMetrics = (phase2: Phase2Validation): string => {
   const m = phase2.metrics;
+  const categoryScoreLines = Object.entries(phase2.category_scores || {})
+    .map(([cat, score]) => `  ${cat}: ${score}/15`)
+    .join('\n');
   return [
     `finops_readiness=${Math.round(m.finops_readiness)}%`,
     `maturity_depth=${Math.round(m.maturity_depth)}%`,
@@ -69,8 +72,8 @@ const compactMetrics = (phase2: Phase2Validation): string => {
     `classification=${phase2.crawl_walk_run}`,
     `silent_areas_count=${phase2.silent_areas.length}`,
     `maturity_gaps_count=${phase2.maturity_gaps.length}`,
-    `antipattern_findings_count=${phase2.antipattern_findings.length}`
-  ].join(', ');
+    `antipattern_findings_count=${phase2.antipattern_findings.length}`,
+  ].join(', ') + (categoryScoreLines ? `\n\nCATEGORY SCORES (these are the X/15 numbers the strategy may legitimately quote):\n${categoryScoreLines}` : '');
 };
 
 export const buildFactCheckPrompt = (inputs: FactCheckInputs): string => `
