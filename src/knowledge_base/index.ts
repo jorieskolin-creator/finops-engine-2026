@@ -16,6 +16,31 @@ export const FINOPS_PERSONAS = personasData;
 export const FINOPS_TACTICS_LOCAL = tacticsData.tactics as StrategicTactic[];
 export const FINOPS_VALIDATION_RULES = validationData;
 
+// Extract the primary case-study company from a tactic. The DB uses the
+// convention "COMPANY: prose..." for each case_study; we pull the leading
+// upper-case token. Falls back to "(no company)" if absent.
+export function extractTacticCompany(t: StrategicTactic): string {
+  const cs = t.case_study || '';
+  const m = cs.match(/^([A-Z][A-Z0-9 &/.-]+):/);
+  return m ? m[1].trim() : '(no company)';
+}
+
+// Hard ID → canonical_name → company table, one line per tactic. Designed to
+// be injected at the TOP of the synthesis SSOT so the model can never confuse
+// which company is paired with which tactic ID. Without this, the model leans
+// on training-data associations (e.g. Spotify ↔ tagging) and emits IDs that
+// don't match the DB's actual pairings.
+export function buildTacticIdTable(tactics: StrategicTactic[] = FINOPS_TACTICS_LOCAL): string {
+  return tactics
+    .map(t => `${t.id} — ${t.canonical_name ?? '(unnamed)'} — ${extractTacticCompany(t)}`)
+    .join('\n');
+}
+
+// Set of valid tactic IDs for the post-synthesis ID scanner.
+export function validTacticIdSet(tactics: StrategicTactic[] = FINOPS_TACTICS_LOCAL): Set<string> {
+  return new Set(tactics.map(t => t.id));
+}
+
 const MASTER_BINGO_FINOPS = {
   maturity: FINOPS_CRITERIA.map(c => ({
     id: c.id,

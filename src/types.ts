@@ -169,6 +169,16 @@ export interface FactCheckClaim {
   source_location?: ClaimSourceLocation;
 }
 
+export interface FactCheckPassSnapshot {
+  attempt: number;
+  total_claims: number;
+  supported_count: number;
+  unsupported_count: number;
+  // First ~80 chars of each unsupported claim. Lets the UI diff passes to
+  // show whether regen is making progress or stuck on the same claims.
+  unsupported_signatures: string[];
+}
+
 export interface FactCheckResult {
   attempts: number;
   total_claims: number;
@@ -176,6 +186,9 @@ export interface FactCheckResult {
   unsupported_claims: FactCheckClaim[];
   failed: boolean;
   failure_reason?: string;
+  // Per-pass trajectory accumulated across the fact-check + regen loop.
+  // Populated by the orchestrator (geminiService), not by parseFactCheckResponse.
+  trajectory?: FactCheckPassSnapshot[];
 }
 
 export interface QualityGateExplanationItem {
@@ -236,6 +249,10 @@ export interface ValidationResult {
 export interface StrategicTactic {
   id: string;
   category: 'Visibility' | 'Optimization' | 'Governance' | 'Architecture' | 'Culture';
+  // Short, stable human-readable name. Used to anchor model output: "Implement
+  // the {canonical_name} [{id}] modeled on {company}". Distinct from the
+  // longer solution_mechanism prose. Required for all DB entries.
+  canonical_name?: string;
   problem_pattern: string;
   solution_mechanism: string;
   case_study: string;

@@ -168,6 +168,29 @@ const QualityGateBlock: React.FC<{ gate: QualityGateResult }> = ({ gate }) => {
       {llm?.failed && (
         <p className="text-xs text-slate-500 italic mt-3">Reviewer narrative unavailable: {llm.failure_reason}</p>
       )}
+      {gate.fact_check && !gate.fact_check.failed && (gate.fact_check.trajectory?.length ?? 0) > 1 && (
+        <div className="mt-4 pt-4 border-t border-slate-300">
+          <p className="text-xs font-bold uppercase tracking-wider text-slate-600 mb-2">
+            Fact-check trajectory ({gate.fact_check.trajectory!.length} pass{gate.fact_check.trajectory!.length === 1 ? '' : 'es'})
+          </p>
+          <ul className="space-y-1 text-xs text-slate-700 font-mono">
+            {gate.fact_check.trajectory!.map((p, i) => {
+              const prev = i > 0 ? gate.fact_check!.trajectory![i - 1] : null;
+              const overlap = prev
+                ? p.unsupported_signatures.filter(s => prev.unsupported_signatures.some(ps => ps === s)).length
+                : 0;
+              return (
+                <li key={i} className="pl-3 border-l-2 border-slate-400">
+                  pass {p.attempt}: {p.supported_count}/{p.total_claims} supported, {p.unsupported_count} unsupported
+                  {prev && overlap > 0 && (
+                    <span className="text-rose-600"> · {overlap} claims unchanged from previous pass</span>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      )}
       {gate.fact_check && !gate.fact_check.failed && gate.fact_check.unsupported_claims.length > 0 && (
         <div className="mt-4 pt-4 border-t border-slate-300">
           <p className="text-xs font-bold uppercase tracking-wider text-slate-600 mb-2">

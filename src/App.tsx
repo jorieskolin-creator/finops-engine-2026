@@ -212,6 +212,18 @@ const App: React.FC = () => {
       return;
     }
 
+    // Reject composite drift fixtures. These describe three DIFFERENT
+    // archetype organizations (Crawl / Walk / Run) and were never meant to
+    // be assessed together — doing so produces a "consolidated audit across
+    // the corpus" that mixes the three orgs' evidence into one fictional
+    // composite. Route them to the Drift Test panel instead.
+    const driftFixturePattern = /^golden-(crawl|walk|run)\.txt$/i;
+    const driftFiles = [...files, ...newFiles].filter(f => driftFixturePattern.test(('name' in f ? f.name : '')));
+    if (driftFiles.length >= 2) {
+      setError(`Multiple drift fixtures detected (${driftFiles.map(f => f.name).join(', ')}). These describe DIFFERENT archetype organizations and must not be combined into one assessment. Use the Drift Test panel for comparison runs.`);
+      return;
+    }
+
     // Cap on JPEG/PNG screenshot files (independent of PDF-derived images,
     // which scale with the source document). Counted across existing +
     // incoming images so a second upload can't sneak past the limit.

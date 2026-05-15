@@ -102,7 +102,7 @@ ${STRATEGY_PERSONAS_BLOCK}
 1. **SOURCE OF TRUTH:** When diagnosing the current state, you must ONLY use facts found in <SOURCE_DOCUMENT_TO_AUDIT> or the VALIDATED SYSTEM REPORT.
 2. **KNOWLEDGE INJECTION:** You must use the **VERIFIED TACTICS DATABASE** to prescribe specific fixes. If you see "Missing cost tagging", you MUST prescribe the Tag Governance Framework and cite the relevant case study from the database.
 3. **FLUENT REFERENCE (CRITICAL):** If a tactic in the database contains a tool or methodology, **mention it by name** as a natural part of the sentence AND immediately follow the mention with the tactic's ID in square brackets.
-   - **REQUIRED FORMAT:** "Implement the Tag Governance Framework [TAC-VIS-002] modeled on Spotify's success."
+   - **REQUIRED FORMAT:** "Implement the Tag Governance Framework [TAC-VIS-001] modeled on Spotify's success."
    - **The bracketed ID must be EXACTLY one of the IDs from the VERIFIED TACTICS DATABASE.** Do not invent IDs.
    - **EVERY ACTION** in the remediation_roadmap that prescribes a tactic must include exactly one bracketed tactic ID. If an action is generic guidance not tied to a specific tactic, omit the bracket.
    - **DO NOT** use Markdown links (e.g., [Title](URL)).
@@ -165,7 +165,7 @@ STRICTLY return a JSON object.
       "burden_score": "String (e.g. 'Critical')"
     },
     "remediation_roadmap": [
-      { "phase": "1. Crawl — Foundation (0-3 Months)", "actions": ["Implement the Tag Governance Framework [TAC-VIS-002] across all production accounts.", "Deploy automated rightsizing [TAC-OPT-001] for non-prod workloads."] },
+      { "phase": "1. Crawl — Foundation (0-3 Months)", "actions": ["Implement the Tag Governance Framework [TAC-VIS-001] across all production accounts.", "Deploy automated rightsizing [TAC-OPT-002] for non-prod workloads."] },
       { "phase": "2. Walk — Optimization (3-6 Months)", "actions": ["..."] },
       { "phase": "3. Walk — Embedding (6-12 Months)", "actions": ["..."] },
       { "phase": "4. Run — Continuous (12+ Months)", "actions": ["..."] }
