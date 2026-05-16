@@ -3,6 +3,7 @@ import { AuditItem, DiagnosticResult, QualityGateResult } from '../types';
 import { BATCH_TITLES, MASTER_BINGO_FINOPS } from '../knowledge_base';
 import { METRIC_DESCRIPTIONS } from '../constants';
 import { SVG_CSS, svgGaugeCard, svgRadar, svgScatter } from './svgChartService';
+import { isInsufficientEvidenceReport, renderInlineMarkdownHtml, renderMarkdownSummaryHtml, strengthsSectionTitle } from './reportTextService';
 
 const BATCHES: Array<'A' | 'B' | 'C' | 'D' | 'E'> = ['A', 'B', 'C', 'D', 'E'];
 
@@ -225,6 +226,10 @@ const generateReportHtml = (result: DiagnosticResult): string => {
     .chart-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); gap: 1.25rem; }
     .summary { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 1rem; padding: 2rem; line-height: 1.75; color: #334155; margin-bottom: 1.5rem; }
     .summary strong { color: #0f172a; }
+    .summary em { color: #047857; font-style: normal; font-weight: 600; }
+    .summary-markdown { text-align: left; }
+    .summary-paragraph { margin: 0 0 1.5rem 0; text-align: left; }
+    .summary-paragraph:last-child { margin-bottom: 0; }
     .summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1rem; margin-top: 1rem; }
     .summary-sub h3 { font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: #64748b; margin: 0 0 0.5rem 0; }
     .summary-sub ul { margin: 0; padding-left: 1.25rem; }
@@ -367,8 +372,13 @@ const generateReportHtml = (result: DiagnosticResult): string => {
   ${(() => {
     const evidence = result.phase_3_strategy.evidence_summary;
     if (!evidence) return '';
+    const useSourceObservationTitle = isInsufficientEvidenceReport(
+      evidence.maturity_classification,
+      m.evidence_density,
+      result.quality_gate.decision
+    );
     const list = (title: string, items?: string[]) => items && items.length > 0
-      ? `<div class="summary-sub"><h3>${escapeHtml(title)}</h3><ul>${items.map(i => `<li>${escapeHtml(i)}</li>`).join('')}</ul></div>`
+      ? `<div class="summary-sub"><h3>${escapeHtml(title)}</h3><ul>${items.map(i => `<li>${renderInlineMarkdownHtml(i)}</li>`).join('')}</ul></div>`
       : '';
     return `
       <div class="summary evidence-summary">
@@ -376,7 +386,7 @@ const generateReportHtml = (result: DiagnosticResult): string => {
         <h3>${escapeHtml(evidence.headline)}</h3>
         <div class="summary-grid">
           ${list('Key metrics', evidence.key_metrics)}
-          ${list('Confirmed strengths', evidence.confirmed_strengths)}
+          ${list(strengthsSectionTitle(useSourceObservationTitle), evidence.confirmed_strengths)}
           ${list('Confirmed gaps', evidence.confirmed_gaps)}
           ${list('Confirmed anti-patterns', evidence.confirmed_antipatterns)}
           ${list('Silent / missing evidence', evidence.silent_or_missing_evidence)}
@@ -407,11 +417,11 @@ const generateReportHtml = (result: DiagnosticResult): string => {
     if (summaries && personas.some(p => summaries[p.id])) {
       return personas.map(p => `
         <h3 class="persona-heading">Evidence summary for the ${escapeHtml(p.label)}</h3>
-        <div class="summary">${(summaries[p.id] || '').replace(/\n/g, '<br>')}</div>
+        <div class="summary summary-markdown">${renderMarkdownSummaryHtml(summaries[p.id] || '')}</div>
         ${renderConfidence(p.id)}
       `).join('');
     }
-    return `<div class="summary">${(result.phase_3_strategy.executive_summary || '').replace(/\n/g, '<br>')}</div>`;
+    return `<div class="summary summary-markdown">${renderMarkdownSummaryHtml(result.phase_3_strategy.executive_summary || '')}</div>`;
   })()}
 
   ${(() => {
