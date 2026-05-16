@@ -173,10 +173,13 @@ export const downloadReport = (result: DiagnosticResult) => {
 const generateReportHtml = (result: DiagnosticResult): string => {
   const m = result.phase_2_validation.metrics;
   const cwrClass = result.phase_2_validation.crawl_walk_run;
-  const cwrSlug = cwrClass.toLowerCase().includes('crawl') ? 'crawl' : cwrClass.toLowerCase().includes('run') ? 'run' : 'walk';
+  const isBlocked = result.quality_gate.decision === 'BLOCK';
+  const isInsufficientEvidence = isBlocked || m.evidence_density < 30;
+  const cwrSlug = cwrClass.toLowerCase().includes('insufficient') || cwrClass.toLowerCase().includes('crawl') ? 'crawl' : cwrClass.toLowerCase().includes('run') ? 'run' : 'walk';
+  const readinessDescription = m.readiness_cap_reason || METRIC_DESCRIPTIONS.finops_readiness;
 
   const gauges = [
-    { value: m.finops_readiness, label: 'FinOps Readiness', color: '#10b981', description: METRIC_DESCRIPTIONS.finops_readiness, trend: 'positive' as const, size: 'large' as const },
+    { value: m.finops_readiness, label: 'Evidence-Gated Readiness', color: isBlocked ? '#f43f5e' : '#10b981', description: readinessDescription, trend: 'positive' as const, size: 'large' as const },
     { value: m.maturity_ratio, label: 'Maturity Level', color: '#14b8a6', description: METRIC_DESCRIPTIONS.maturity_ratio, trend: 'positive' as const },
     { value: m.maturity_depth, label: 'Maturity Depth', color: '#06b6d4', description: METRIC_DESCRIPTIONS.maturity_depth, trend: 'positive' as const },
     { value: m.antipattern_ratio, label: 'Anti-Pattern Level', color: '#f43f5e', description: METRIC_DESCRIPTIONS.antipattern_ratio, trend: 'negative' as const },
@@ -319,9 +322,9 @@ const generateReportHtml = (result: DiagnosticResult): string => {
     </div>
     <div class="metric-grid">
       <div class="metric">
-        <div class="metric-label">FinOps Readiness</div>
-        <div class="metric-value emerald">${Math.round(m.finops_readiness)}%</div>
-        <div class="metric-desc">${escapeHtml(METRIC_DESCRIPTIONS.finops_readiness)}</div>
+        <div class="metric-label">Evidence-Gated Readiness</div>
+        <div class="metric-value ${isBlocked ? 'rose' : 'emerald'}">${Math.round(m.finops_readiness)}%</div>
+        <div class="metric-desc">${escapeHtml(readinessDescription)}</div>
       </div>
       <div class="metric">
         <div class="metric-label">Maturity Depth</div>
@@ -355,8 +358,8 @@ const generateReportHtml = (result: DiagnosticResult): string => {
     </div>
     <div class="chart-card">
       <h3>Position vs. Quadrants</h3>
-      <p class="chart-desc">FinOps Readiness (x-axis) plotted against Anti-Pattern Burden (y-axis). The bottom-right quadrant is the goal: high readiness, low burden.</p>
-      ${svgScatter(m.finops_readiness, m.antipattern_burden)}
+      <p class="chart-desc">Validated maturity depth (x-axis) plotted against confirmed anti-pattern burden (y-axis). When evidence is insufficient, quadrant labels are suppressed.</p>
+      ${svgScatter(m.maturity_depth, m.antipattern_burden, isInsufficientEvidence)}
     </div>
   </div>
 

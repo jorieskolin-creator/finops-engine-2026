@@ -685,7 +685,7 @@ const App: React.FC = () => {
                     <div>
                       <h3 className="text-2xl font-display font-bold text-white mb-2">Evidence Summary</h3>
                       <p className="text-xs font-bold uppercase tracking-widest text-slate-400">
-                        Classification: <span className={`${result.phase_2_validation.crawl_walk_run.includes('Crawl') ? 'text-rose-400' : result.phase_2_validation.crawl_walk_run.includes('Run') ? 'text-emerald-400' : 'text-amber-400'}`}>{result.phase_2_validation.crawl_walk_run}</span>
+                        Classification: <span className={`${result.phase_2_validation.crawl_walk_run.includes('Insufficient') || result.phase_2_validation.crawl_walk_run.includes('Crawl') ? 'text-rose-400' : result.phase_2_validation.crawl_walk_run.includes('Run') ? 'text-emerald-400' : 'text-amber-400'}`}>{result.phase_2_validation.crawl_walk_run}</span>
                       </p>
                     </div>
                   </div>
@@ -829,7 +829,15 @@ const App: React.FC = () => {
 
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
                   <div className="md:col-span-2 md:row-span-2">
-                    <GaugeCard size="large" value={result.phase_2_validation.metrics.finops_readiness} label="FinOps Readiness" color="#10b981" trend="positive" subLabel="Composite Index" description={METRIC_DESCRIPTIONS.finops_readiness} />
+                    <GaugeCard
+                      size="large"
+                      value={result.phase_2_validation.metrics.finops_readiness}
+                      label="Evidence-Gated Readiness"
+                      color={result.quality_gate.decision === 'BLOCK' ? '#f43f5e' : '#10b981'}
+                      trend="positive"
+                      subLabel={result.phase_2_validation.metrics.readiness_cap_reason ? `Capped at ${Math.round(result.phase_2_validation.metrics.readiness_cap ?? result.phase_2_validation.metrics.finops_readiness)}%` : 'Validated Index'}
+                      description={result.phase_2_validation.metrics.readiness_cap_reason || METRIC_DESCRIPTIONS.finops_readiness}
+                    />
                   </div>
                   <div className="md:col-span-1">
                     <GaugeCard value={result.phase_2_validation.metrics.maturity_ratio} label="Maturity Level" color="#14b8a6" trend="positive" description={METRIC_DESCRIPTIONS.maturity_ratio} />
@@ -847,7 +855,12 @@ const App: React.FC = () => {
 
                 <div className="grid grid-cols-1 lg:grid-cols-5 gap-6 h-full items-stretch">
                   <div className="h-full lg:col-span-3">
-                    <BenchmarkingChart x={result.phase_2_validation.metrics.finops_readiness} y={result.phase_2_validation.metrics.antipattern_burden} />
+                    <BenchmarkingChart
+                      x={result.phase_2_validation.metrics.maturity_depth}
+                      y={result.phase_2_validation.metrics.antipattern_burden}
+                      evidenceDensity={result.phase_2_validation.metrics.evidence_density}
+                      qualityGateDecision={result.quality_gate.decision}
+                    />
                   </div>
                   <div className="glass-panel p-8 rounded-[2rem] bg-slate-900/50 flex flex-col lg:col-span-2 border-white/5">
                     <h3 className="text-xl font-display font-bold text-white mb-6">Domain Balance</h3>
