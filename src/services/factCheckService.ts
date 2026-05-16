@@ -5,7 +5,7 @@ const VALID_FAILURE_TYPES: ClaimFailureType[] = ['fabricated_number', 'unverifia
 const VALID_SOURCE_LOCATIONS: ClaimSourceLocation[] = ['finops_lead', 'cfo', 'engineering_lead', 'diagnosis', 'planning_decision', 'roadmap'];
 
 export interface FactCheckInputs {
-  executiveSummary: string;
+  contentToCheck: string;
   remediationRoadmapText: string;
   sourceDocument: string;
   phase1: Phase1AuditLogs;
@@ -152,7 +152,7 @@ ${inputs.sourceDocument.substring(0, MAX_SOURCE_CHARS)}
 
 <strategy_output_to_check>
 EXECUTIVE SUMMARY:
-${inputs.executiveSummary}
+${inputs.contentToCheck}
 
 REMEDIATION ROADMAP ACTIONS:
 ${inputs.remediationRoadmapText}
@@ -317,7 +317,7 @@ ${inputs.sourceDocument.substring(0, MAX_SOURCE_CHARS)}
 </source_document>
 
 <summary_and_diagnosis_to_check>
-${inputs.executiveSummary}
+${inputs.contentToCheck}
 </summary_and_diagnosis_to_check>
 `;
 
@@ -382,7 +382,7 @@ ${inputs.sourceDocument.substring(0, MAX_SOURCE_CHARS)}
 
 <planning_and_roadmap_to_check>
 PLANNING DECISION:
-${inputs.executiveSummary}
+${inputs.contentToCheck}
 
 REMEDIATION ROADMAP ACTIONS:
 ${inputs.remediationRoadmapText}

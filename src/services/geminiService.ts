@@ -4,7 +4,8 @@ import {
   EVIDENCE_SYNTHESIS_USER_PROMPT,
   ROADMAP_SYNTHESIS_PROMPT_CAUTIOUS_APPENDIX,
   ROADMAP_SYNTHESIS_SYSTEM_INSTRUCTION,
-  ROADMAP_SYNTHESIS_USER_PROMPT
+  ROADMAP_SYNTHESIS_USER_PROMPT,
+  STRATEGY_USER_PROMPT_FINDINGS
 } from "../constants";
 import { bracketFromValidation, explainBracket } from "./confidenceBracket";
 import { runPhase1Audit } from "../orchestrator";
@@ -517,9 +518,6 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => `  ${cat}
     const callRoadmapSynthesis = async (lockedStrategy: any, correctionAppendix?: string): Promise<any> => {
       const textParts: string[] = [ROADMAP_SYNTHESIS_USER_PROMPT];
       if (confidenceBracket === 'MEDIUM') textParts.push(ROADMAP_SYNTHESIS_PROMPT_CAUTIOUS_APPENDIX);
-      if (confidenceBracket === 'LOW') {
-        textParts.push(`\n\n<low_confidence_override>\nEvidence is LOW confidence. Return planning_decision=NO_GO, remediation_roadmap=[], and put validation needs in evidence_needed_before_action. Do not cite tactic IDs.\n</low_confidence_override>`);
-      }
       if (confidenceBracket !== 'LOW') {
         textParts.push(`\n\n### THE GOLDEN STANDARD (SSOT)\nYou may ONLY prescribe solutions found in this Knowledge Base. Use it for roadmap actions only; never alter locked findings from it:\n\n${fullSSOT}`);
       }
@@ -543,8 +541,29 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => `  ${cat}
       return parseAiResponse(resp.text);
     };
 
-    const mergePhase3Outputs = (summaryData: any, roadmapData: any): any => {
-      const summary = summaryData?.phase_3_strategy || {};
+    const callFindingsSynthesis = async (correctionAppendix?: string): Promise<any> => {
+      const textParts: string[] = [STRATEGY_USER_PROMPT_FINDINGS];
+      textParts.push(`\n\n### DIAGNOSTIC FINDINGS (Phase 1 & 2)\nUse these findings to produce the findings-mode report:\n${handoffSummary}`);
+      textParts.push(`\n\n### ORIGINAL SOURCE CONTEXT\n<SOURCE_DOCUMENT_TO_AUDIT>\n${text.substring(0, 50000)}\n</SOURCE_DOCUMENT_TO_AUDIT>`);
+      if (correctionAppendix) textParts.push(correctionAppendix);
+      const synthStarted = Date.now();
+      const resp = await runStage(synthesisStage, {
+        userText: textParts.join(''),
+        systemInstruction: EVIDENCE_SYNTHESIS_SYSTEM_INSTRUCTION,
+      }, { runId });
+      actuals.synthesis = resp.modelUsed.id;
+      serverLog(runId, 'info', 'stage_complete', {
+        stage: synthesisStage,
+        model: resp.modelUsed.id,
+        substage: 'findings_mode',
+        bracket: confidenceBracket,
+        duration_ms: Date.now() - synthStarted,
+        regen: correctionAppendix ? 'yes' : 'no',
+      });
+      return parseAiResponse(resp.text);
+    };
+
+    const mergePhase3Outputs = (summary: any, roadmapData: any): any => {
       const roadmap = roadmapData?.phase_3_strategy || {};
       return {
         phase_3_strategy: {
@@ -557,10 +576,13 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => `  ${cat}
     };
 
     const callPhase3 = async (correctionAppendix?: string): Promise<any> => {
+      if (confidenceBracket === 'LOW') {
+        return callFindingsSynthesis(correctionAppendix);
+      }
       const summaryData = await callEvidenceSynthesis(correctionAppendix);
       const normalizedSummary = normalizeStrategy(summaryData)?.phase_3_strategy || summaryData?.phase_3_strategy || {};
       const roadmapData = await callRoadmapSynthesis(normalizedSummary, correctionAppendix);
-      return mergePhase3Outputs({ phase_3_strategy: normalizedSummary }, roadmapData);
+      return mergePhase3Outputs(normalizedSummary, roadmapData);
     };
 
     const mergeFactChecks = (summary: FactCheckResult, roadmap: FactCheckResult, attemptNumber: number): FactCheckResult => {
@@ -589,7 +611,7 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => `  ${cat}
       const roadmapText = roadmap.flatMap((p: any) => Array.isArray(p.actions) ? p.actions : []).join('\n');
       try {
         const summaryPrompt = buildSummaryFactCheckPrompt({
-          executiveSummary: buildSummaryCheckText(strategy),
+          contentToCheck: buildSummaryCheckText(strategy),
           remediationRoadmapText: '',
           sourceDocument: text,
           phase1: auditLogs,
@@ -612,7 +634,7 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => `  ${cat}
         const summaryCheck = parseFactCheckResponse(summaryResp.text, attemptNumber);
 
         const roadmapPrompt = buildRoadmapFactCheckPrompt({
-          executiveSummary: buildRoadmapCheckText(strategy),
+          contentToCheck: buildRoadmapCheckText(strategy),
           remediationRoadmapText: roadmapText,
           lockedFindingsText: compactLockedFindings(strategy),
           sourceDocument: text,
@@ -692,9 +714,31 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => `  ${cat}
       evidence_needed_before_action: validationData.silent_areas.slice(0, 6)
     });
 
+    const buildFallbackFindingsMode = () => ({
+      evidence_backed_findings: [
+        ...validationData.maturity_gaps.slice(0, 4),
+        ...validationData.antipattern_findings.slice(0, 4)
+      ].slice(0, 8),
+      candidate_themes: validationData.silent_areas.length > 0
+        ? validationData.silent_areas.slice(0, 6)
+        : validationData.maturity_gaps.slice(0, 6),
+      missing_evidence: validationData.silent_areas.slice(0, 8),
+      validation_plan: [
+        'Provide source material that documents current FinOps ownership, cadence, and decision rights.',
+        'Attach evidence of tagging, allocation, budget, and forecasting practices.',
+        'Include recent cost review outputs or optimization decision records before rerunning the assessment.'
+      ]
+    });
+
     const normalizeStrategy = (raw: any): any => {
       if (!raw?.phase_3_strategy) return raw;
       const normalized = normalizePersonaSummaries(raw.phase_3_strategy);
+      const incomingPlanningDecision = raw.phase_3_strategy.planning_decision;
+      const normalizedPlanningDecision = confidenceBracket === 'LOW'
+        ? incomingPlanningDecision?.decision === 'NO_GO'
+          ? incomingPlanningDecision
+          : buildFallbackPlanningDecision()
+        : incomingPlanningDecision || buildFallbackPlanningDecision();
       raw.phase_3_strategy = {
         ...raw.phase_3_strategy,
         executive_summaries: normalized.executive_summaries,
@@ -702,7 +746,11 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => `  ${cat}
         active_persona: normalized.active_persona,
         evidence_summary: raw.phase_3_strategy.evidence_summary || buildFallbackEvidenceSummary(),
         diagnosis: raw.phase_3_strategy.diagnosis || buildFallbackDiagnosis(),
-        planning_decision: raw.phase_3_strategy.planning_decision || buildFallbackPlanningDecision()
+        planning_decision: normalizedPlanningDecision,
+        remediation_roadmap: confidenceBracket === 'LOW' ? [] : (raw.phase_3_strategy.remediation_roadmap || []),
+        findings_mode: confidenceBracket === 'LOW'
+          ? raw.phase_3_strategy.findings_mode || buildFallbackFindingsMode()
+          : raw.phase_3_strategy.findings_mode
       };
       return raw;
     };
