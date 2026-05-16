@@ -201,6 +201,6 @@ export const runPhase1Audit = async (
   await Promise.all(auditPromises);
   aggregated.models_used = Array.from(modelsSeen);
   aggregated.evidence_check_models_used = Array.from(evidenceModelsSeen);
-  aggregated.evidence_check = mergeEvidenceCheckResults(evidenceResults);
+  aggregated.evidence_check = mergeEvidenceCheckResults(evidenceResults.sort((a, b) => (a.batch_id || '').localeCompare(b.batch_id || '')));
   return aggregated;
 };
