@@ -37,6 +37,7 @@ export interface ModelProfile {
 export type StageId =
   | 'preflight'           // Phase 0: DLP / safety scan
   | 'forensic_audit'      // Phase 1: 5 parallel batch audits
+  | 'evidence_check'      // Phase 1.5: verify batch evidence before scoring
   | 'synthesis'           // Phase 3: strategy + roadmap (default)
   | 'synthesis_escalation'// Phase 3: high-stakes / complex orgs
   | 'fact_check'          // Phase 3.5: claim verification
@@ -105,6 +106,7 @@ export const PROFILES = {
 export const STAGE_MODELS: Record<StageId, ModelProfile> = {
   preflight:            PROFILES.GEMINI_3_FLASH,
   forensic_audit:       PROFILES.SONNET_46,
+  evidence_check:       PROFILES.GEMINI_31_PRO,
   synthesis:            PROFILES.SONNET_46,
   synthesis_escalation: PROFILES.OPUS_47,
   fact_check:           PROFILES.GEMINI_31_PRO,
@@ -122,6 +124,7 @@ export const STAGE_MODELS: Record<StageId, ModelProfile> = {
 export const FALLBACK_CHAIN: Record<StageId, ModelProfile[]> = {
   preflight:            [PROFILES.GEMINI_25_FLASH, PROFILES.HAIKU_45],
   forensic_audit:       [PROFILES.HAIKU_45, PROFILES.GEMINI_25_PRO],
+  evidence_check:       [PROFILES.GEMINI_25_PRO, PROFILES.SONNET_46],
   synthesis:            [PROFILES.HAIKU_45, PROFILES.GEMINI_25_PRO],
   synthesis_escalation: [PROFILES.SONNET_46, PROFILES.GEMINI_25_PRO],
   fact_check:           [PROFILES.GEMINI_25_PRO, PROFILES.SONNET_46],

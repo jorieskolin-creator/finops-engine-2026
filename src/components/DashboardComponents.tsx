@@ -177,7 +177,7 @@ export const NeuralLoadingGrid: React.FC<{ progress: number; stage: string }> = 
           <div className="relative">
             <div className="flex items-center gap-3 mb-3">
               <span className="w-2 h-2 rounded-full bg-violet-500 animate-pulse shadow-[0_0_10px_rgba(139,92,246,0.6)]"></span>
-              <span className="text-[10px] font-bold uppercase tracking-widest text-slate-300">Evidence Context</span>
+              <span className="text-[10px] font-bold uppercase tracking-widest text-slate-300">Evidence Check</span>
             </div>
             <div className="h-1.5 w-full bg-slate-800 rounded-full overflow-hidden">
               <div className="h-full bg-violet-500 transition-all duration-1000 ease-out shadow-[0_0_10px_rgba(139,92,246,0.5)]" style={{ width: `${progress}%` }}></div>
@@ -291,6 +291,7 @@ export const BenchmarkingChart: React.FC<BenchmarkingProps> = ({ x, y }) => {
 
 export const QualityGateBanner: React.FC<{ gate: QualityGateResult }> = ({ gate }) => {
   const [expanded, setExpanded] = useState(gate.decision === 'BLOCK');
+  const evidenceAdjustments = gate.evidence_check?.adjustments || [];
 
   if (gate.decision === 'GO') {
     return (
@@ -377,6 +378,22 @@ export const QualityGateBanner: React.FC<{ gate: QualityGateResult }> = ({ gate 
                   </ul>
                 </div>
               )}
+              {evidenceAdjustments.length > 0 && (
+                <div className="pt-3 border-t border-slate-700/50">
+                  <p className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">
+                    Evidence-check adjustments ({evidenceAdjustments.length})
+                  </p>
+                  <ul className="space-y-2">
+                    {evidenceAdjustments.slice(0, 8).map((a, i) => (
+                      <li key={i} className="text-slate-300 pl-3 border-l-2 border-slate-600">
+                        <span className="font-mono text-xs">{a.stream}.{a.id}</span>
+                        <span className="text-xs text-slate-400"> · {a.original_count}→{a.verified_count} · {a.status}{a.rescan_attempted ? ' · rescanned' : ''}</span>
+                        {a.reason && <span className="block text-xs text-slate-500 mt-0.5">{a.reason}</span>}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -438,6 +455,29 @@ export const AuditGrid: React.FC<AuditGridProps> = ({ title, data, isAntipattern
     return s === 'OK' ? "bg-emerald-950/40 text-emerald-400 border border-emerald-900" : s === 'PARTIAL' ? "bg-teal-950/40 text-teal-400 border border-teal-900" : "bg-slate-800 text-slate-400 border border-slate-700";
   };
 
+  const getEvidenceCheckStyle = (status?: AuditItem['evidence_check_status']) => {
+    if (status === 'supported') return 'bg-emerald-950/40 text-emerald-300 border-emerald-800';
+    if (status === 'weak') return 'bg-amber-950/40 text-amber-300 border-amber-800';
+    if (status === 'unsupported') return 'bg-rose-950/40 text-rose-300 border-rose-800';
+    if (status === 'missing') return 'bg-slate-800 text-slate-300 border-slate-700';
+    return '';
+  };
+
+  const renderEvidenceCheckBadge = (item: AuditItem) => {
+    if (!item.evidence_check_status) return null;
+    const score = item.original_count !== undefined && item.verified_count !== undefined
+      ? ` ${item.original_count}→${item.verified_count}`
+      : '';
+    return (
+      <span
+        title={item.adjustment_reason || 'Evidence-check verified this criterion before Phase 2.'}
+        className={`text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md border ${getEvidenceCheckStyle(item.evidence_check_status)}`}
+      >
+        EC {item.evidence_check_status}{score}{item.rescan_attempted ? ' R' : ''}
+      </span>
+    );
+  };
+
   const topOffenders = useMemo(() => {
     const candidates = (Object.entries(data) as [string, AuditItem][]).filter(([, item]) => !item.is_silent);
     if (isAntipattern) return candidates.filter(([, item]) => item.count > 0).sort((a, b) => b[1].count - a[1].count).slice(0, 3).map(([id, item]) => ({ id, ...item, title: metadataMap.get(id)?.title || "Anti-Pattern Detected" }));
@@ -472,6 +512,7 @@ export const AuditGrid: React.FC<AuditGridProps> = ({ title, data, isAntipattern
                 <h5 className="text-sm font-bold text-slate-200">{item.title}</h5>
                 <span className={`ml-auto text-[10px] font-bold px-2 py-0.5 rounded uppercase ${isAntipattern ? 'bg-rose-900/50 text-rose-300' : 'bg-slate-800 text-slate-400'}`}>{item.status}</span>
               </div>
+              {renderEvidenceCheckBadge(item)}
               <p className="text-xs text-slate-300 leading-relaxed italic mb-3">"{item.reasoning}"</p>
               {item.evidence_quotes && item.evidence_quotes.length > 0 && (
                 <div className="mb-3 space-y-2">
@@ -506,7 +547,10 @@ export const AuditGrid: React.FC<AuditGridProps> = ({ title, data, isAntipattern
               <div className="mb-2 relative z-10">
                 <div className="flex justify-between items-start mb-2">
                   <span className="font-mono text-xs font-bold opacity-50">{key}</span>
-                  {!item.is_silent && <span className={`text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md ${labelColor}`}>{item.status}</span>}
+                  <div className="flex flex-col items-end gap-1">
+                    {!item.is_silent && <span className={`text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md ${labelColor}`}>{item.status}</span>}
+                    {renderEvidenceCheckBadge(item)}
+                  </div>
                 </div>
                 <h4 className="font-display font-bold text-sm leading-tight mb-2 text-slate-200">{def.title}</h4>
                 <p className="text-xs text-slate-300 leading-relaxed opacity-90">{firstSentence}</p>

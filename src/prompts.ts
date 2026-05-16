@@ -116,3 +116,71 @@ For the 5 criteria in Stream A (${columnId}1-${columnId}5) AND the 5 criteria in
 }
 </execution_task>
 `;
+
+export const generateTargetedBatchUserPrompt = (
+  columnId: string,
+  definitions: any,
+  maturityIds: string[],
+  antipatternIds: string[],
+  verifierFeedback: string
+) => `
+<system_directive>
+You are an automated JSON extraction engine.
+Output ONLY valid JSON. No conversational text.
+</system_directive>
+
+<audit_scope>
+This is a targeted rescan for Batch ${columnId}. Re-evaluate ONLY the criteria listed below. Use the raw material inside <UNTRUSTED_CONTENT> and any IMAGE parts as the only evidence source.
+</audit_scope>
+
+<target_criteria>
+Maturity IDs: ${maturityIds.length > 0 ? maturityIds.join(', ') : '(none)'}
+Anti-pattern IDs: ${antipatternIds.length > 0 ? antipatternIds.join(', ') : '(none)'}
+</target_criteria>
+
+<verifier_feedback>
+The previous scan was checked by an independent evidence verifier. Correct the scores and evidence using this feedback:
+${verifierFeedback}
+</verifier_feedback>
+
+<ssot_definitions>
+=== STREAM A: FINOPS MATURITY (The Target State) ===
+${definitions.maturity}
+
+=== STREAM B: ANTI-PATTERNS (The Risk Indicators) ===
+${definitions.antipattern}
+</ssot_definitions>
+
+<investigation_rules>
+${SHARED_GUARDRAILS}
+</investigation_rules>
+
+<execution_task>
+For ONLY the listed criteria, re-evaluate all 3 sub-criteria and return corrected JSON.
+
+Rules:
+1. If evidence is not directly present in the source, lower the Count.
+2. For Count > 0, include at least one direct text quote or visible-image description in evidence_quotes.
+3. Do not return criteria that were not listed in <target_criteria>.
+
+Required JSON shape:
+{
+  "maturity": {
+    "${columnId}1": {
+      "count": 0,
+      "evidence": "Corrected summary of evidence...",
+      "evidence_quotes": [{ "quote": "Direct text from document OR visible image description", "section": "Section name if identifiable", "category": "Policy | Process | Operational | Automation | Accountability | Financial-Integration | Cultural", "evidence_source": "text | image", "page_number": 3 }],
+      "reasoning": "Crit 1: Found/Not found. Crit 2: Found/Not found. Crit 3: Found/Not found. Total: N."
+    }
+  },
+  "antipattern": {
+    "${columnId}1": {
+      "count": 0,
+      "evidence": "Corrected summary of evidence...",
+      "evidence_quotes": [],
+      "reasoning": "Crit 1: Found/Not found. Crit 2: Found/Not found. Crit 3: Found/Not found. Total: N."
+    }
+  }
+}
+</execution_task>
+`;

@@ -44,6 +44,11 @@ export interface AuditItem {
   reasoning?: string;
   is_silent?: boolean;
   category_footprint?: Partial<Record<EvidenceCategory, number>>;
+  evidence_check_status?: EvidenceCheckStatus;
+  original_count?: number;
+  verified_count?: number;
+  adjustment_reason?: string;
+  rescan_attempted?: boolean;
 }
 
 export interface AuditCategory {
@@ -79,6 +84,45 @@ export interface Phase2Validation {
   category_scores: Record<string, number>;
   evidence_category_totals?: Partial<Record<EvidenceCategory, number>>;
   crawl_walk_run: 'Crawl' | 'Walk' | 'Walk with significant friction' | 'Run';
+}
+
+export type EvidenceCheckStatus = 'supported' | 'weak' | 'unsupported' | 'missing';
+
+export interface EvidenceCheckItem {
+  stream: 'maturity' | 'antipattern';
+  id: string;
+  status: EvidenceCheckStatus;
+  original_count: number;
+  verified_count: number;
+  rationale: string;
+  rescan_recommended?: boolean;
+  quote_supported?: boolean;
+}
+
+export interface EvidenceCheckAdjustment {
+  stream: 'maturity' | 'antipattern';
+  id: string;
+  original_count: number;
+  verified_count: number;
+  status: EvidenceCheckStatus;
+  reason: string;
+  rescan_attempted: boolean;
+}
+
+export interface EvidenceCheckResult {
+  batch_id?: string;
+  model_used?: string;
+  total_items: number;
+  supported_count: number;
+  weak_count: number;
+  unsupported_count: number;
+  missing_count: number;
+  downgraded_count: number;
+  rescan_count: number;
+  items: EvidenceCheckItem[];
+  adjustments: EvidenceCheckAdjustment[];
+  failed?: boolean;
+  failure_reason?: string;
 }
 
 export interface RemediationStep {
@@ -179,6 +223,7 @@ export interface AnalysisMeta {
   model_config: {
     preflight: string;
     forensic_audit: string;
+    evidence_check: string;
     synthesis: string;
     fact_check: string;
     validators: string;
@@ -257,12 +302,14 @@ export interface QualityGateResult {
     unsupported_claims_block: number;
   };
   fact_check?: FactCheckResult;
+  evidence_check?: EvidenceCheckResult;
   llm_explanation?: QualityGateLlmExplanation;
 }
 
 export interface DiagnosticResult {
   meta: AnalysisMeta;
   phase_1_audit_logs: Phase1AuditLogs;
+  evidence_check: EvidenceCheckResult;
   phase_2_validation: Phase2Validation;
   phase_3_strategy: Phase3Strategy;
   quality_gate: QualityGateResult;

@@ -60,6 +60,45 @@ const statusBadgeClass = (status: string): string => {
   return 'badge-none';
 };
 
+const evidenceCheckClass = (status?: AuditItem['evidence_check_status']): string => {
+  if (status === 'supported') return 'ec-supported';
+  if (status === 'weak') return 'ec-weak';
+  if (status === 'unsupported') return 'ec-unsupported';
+  if (status === 'missing') return 'ec-missing';
+  return 'ec-missing';
+};
+
+const renderEvidenceCheckSummary = (result: DiagnosticResult): string => {
+  const ec = result.evidence_check;
+  if (!ec || ec.total_items === 0) return '';
+  const stats: Array<[string, number]> = [
+    ['Supported', ec.supported_count],
+    ['Weak', ec.weak_count],
+    ['Unsupported', ec.unsupported_count],
+    ['Missing', ec.missing_count],
+    ['Downgraded', ec.downgraded_count],
+    ['Rescanned', ec.rescan_count],
+  ];
+  return `
+  <h2>Evidence Check</h2>
+  <div class="evidence-check-summary">
+    <p>Phase 1 findings were verified against the raw material before Phase 2 metrics were calculated.</p>
+    <div class="evidence-check-grid">
+      ${stats.map(([label, value]) => `<div class="evidence-check-stat"><span>${escapeHtml(label)}</span><strong>${value}</strong></div>`).join('')}
+    </div>
+    ${ec.adjustments.length > 0 ? `
+    <div>
+      <div class="gate-label">Adjusted criteria</div>
+      ${ec.adjustments.slice(0, 12).map(a => `
+        <div class="evidence-check-item">
+          <strong>${escapeHtml(a.stream)}.${escapeHtml(a.id)}</strong> · ${a.original_count}→${a.verified_count} · ${escapeHtml(a.status)}${a.rescan_attempted ? ' · rescanned' : ''}
+          ${a.reason ? `<div class="gate-rationale">${escapeHtml(a.reason)}</div>` : ''}
+        </div>
+      `).join('')}
+    </div>` : ''}
+  </div>`;
+};
+
 const renderForensicCriterion = (cat: { id: string; title: string; desc: string }, item: AuditItem | undefined): string => `
     <div class="forensic-card">
       <div class="forensic-head">
@@ -70,6 +109,12 @@ const renderForensicCriterion = (cat: { id: string; title: string; desc: string 
         <span class="badge ${statusBadgeClass(item?.status ?? '')}">${escapeHtml(item?.status ?? 'No Data')}</span>
       </div>
       <p class="forensic-desc">${escapeHtml(cat.desc)}</p>
+      ${item?.evidence_check_status ? `
+      <div class="forensic-block">
+        <span class="evidence-check-badge ${evidenceCheckClass(item.evidence_check_status)}">Evidence-check: ${escapeHtml(item.evidence_check_status)}</span>
+        ${item.original_count !== undefined && item.verified_count !== undefined ? `<div class="gate-rationale">score ${item.original_count}→${item.verified_count}${item.rescan_attempted ? ' · targeted rescan' : ''}</div>` : ''}
+        ${item.adjustment_reason ? `<div class="gate-rationale">${escapeHtml(item.adjustment_reason)}</div>` : ''}
+      </div>` : ''}
       ${item?.reasoning ? `
       <div class="forensic-block">
         <div class="forensic-label">AI Reasoning</div>
@@ -211,6 +256,17 @@ const generateReportHtml = (result: DiagnosticResult): string => {
     .badge-partial { background: #fef3c7; color: #b45309; }
     .badge-nok { background: #ffe4e6; color: #be123c; }
     .badge-none { background: #f1f5f9; color: #64748b; }
+    .evidence-check-summary { background: #fff; border: 1px solid #e2e8f0; border-radius: 1rem; padding: 1.5rem; margin: 1.5rem 0 2rem; }
+    .evidence-check-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 0.75rem; margin: 1rem 0; }
+    .evidence-check-stat { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 0.75rem; padding: 0.8rem; }
+    .evidence-check-stat span { display: block; font-size: 0.68rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: #64748b; }
+    .evidence-check-stat strong { display: block; font-size: 1.5rem; margin-top: 0.15rem; }
+    .evidence-check-item { font-size: 0.85rem; color: #334155; padding-left: 0.75rem; border-left: 2px solid #cbd5e1; margin: 0.45rem 0; }
+    .evidence-check-badge { display: inline-block; margin: 0.35rem 0 0.25rem; padding: 0.25rem 0.5rem; border-radius: 0.4rem; font-size: 0.68rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; }
+    .ec-supported { background: #d1fae5; color: #047857; }
+    .ec-weak { background: #fef3c7; color: #b45309; }
+    .ec-unsupported { background: #ffe4e6; color: #be123c; }
+    .ec-missing { background: #f1f5f9; color: #475569; }
     .forensic-desc { font-size: 0.875rem; color: #64748b; margin: 0.5rem 0 0.75rem; }
     .forensic-block { margin-top: 0.75rem; }
     .forensic-label { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.1em; color: #94a3b8; font-weight: 700; margin-bottom: 0.4rem; }
@@ -249,10 +305,11 @@ const generateReportHtml = (result: DiagnosticResult): string => {
   <h1>FinOps Maturity Assessment</h1>
   <div class="meta">
     <p>Generated ${escapeHtml(result.meta.timestamp)} · Engine ${escapeHtml(result.meta.engine_version)}</p>
-    <p>Models: ${escapeHtml(result.meta.model_config.preflight)} (Pre-Flight) · ${escapeHtml(result.meta.model_config.forensic_audit)} (Audit) · ${escapeHtml(result.meta.model_config.synthesis)} (Strategy) · ${escapeHtml(result.meta.model_config.fact_check)} (Fact-Check)</p>
+    <p>Models: ${escapeHtml(result.meta.model_config.preflight)} (Pre-Flight) · ${escapeHtml(result.meta.model_config.forensic_audit)} (Audit) · ${escapeHtml(result.meta.model_config.evidence_check)} (Evidence Check) · ${escapeHtml(result.meta.model_config.synthesis)} (Strategy) · ${escapeHtml(result.meta.model_config.fact_check)} (Fact-Check)</p>
   </div>
 
   ${renderQualityGate(result.quality_gate)}
+  ${renderEvidenceCheckSummary(result)}
 
   <div class="classification-panel">
     <div class="classification-row">
