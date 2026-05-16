@@ -1,5 +1,12 @@
 
-import { STRATEGY_SYSTEM_INSTRUCTION, STRATEGY_USER_PROMPT, STRATEGY_USER_PROMPT_CAUTIOUS, STRATEGY_USER_PROMPT_FINDINGS } from "../constants";
+import {
+  EVIDENCE_SYNTHESIS_SYSTEM_INSTRUCTION,
+  EVIDENCE_SYNTHESIS_USER_PROMPT,
+  ROADMAP_SYNTHESIS_PROMPT_CAUTIOUS_APPENDIX,
+  ROADMAP_SYNTHESIS_SYSTEM_INSTRUCTION,
+  ROADMAP_SYNTHESIS_USER_PROMPT,
+  STRATEGY_USER_PROMPT_FINDINGS
+} from "../constants";
 import { bracketFromValidation, explainBracket } from "./confidenceBracket";
 import { runPhase1Audit } from "../orchestrator";
 import { knowledgeBaseService, BATCH_DEFINITIONS, FINOPS_TACTICS_LOCAL, FINOPS_TAXONOMY_REGISTRY, buildTacticIdTable, validTacticIdSet } from "../knowledge_base";
@@ -7,7 +14,12 @@ import { DiagnosticResult, Phase1AuditLogs, Phase2Validation, AuditItem, Evidenc
 import { generateSafetyAuditPrompt } from "./securityService";
 import { validatePhase1Output, validatePhase3Grounding } from "./validatorService";
 import { runQualityGate, runQualityGateExplanation } from "./qualityGateService";
-import { buildFactCheckPrompt, buildRegenerateAppendix, parseFactCheckResponse } from "./factCheckService";
+import {
+  buildRegenerateAppendix,
+  buildRoadmapFactCheckPrompt,
+  buildSummaryFactCheckPrompt,
+  parseFactCheckResponse
+} from "./factCheckService";
 import { FactCheckClaim, FactCheckResult, FactCheckPassSnapshot } from "../types";
 import { STAGE_MODELS } from "../models";
 import { runStage, serverLog, newRunId } from "./modelRouter";
@@ -450,41 +462,14 @@ CATEGORY BREAKDOWN:
 ${Object.entries(validationData.category_scores).map(([cat, score]) => `  ${cat}: ${score}/15`).join('\n')}
 `;
 
-    // Pick prompt variant by bracket. LOW=findings (no roadmap), MEDIUM=cautious
-    // (per-phase confidence + assumptions), HIGH=directive (current behavior).
-    // FINDINGS mode strips the SSOT block — that mode is forbidden from using
-    // the tactics DB and including it would just tempt the model to cite it.
-    const promptVariant =
-      confidenceBracket === 'LOW' ? STRATEGY_USER_PROMPT_FINDINGS :
-      confidenceBracket === 'MEDIUM' ? STRATEGY_USER_PROMPT_CAUTIOUS :
-      STRATEGY_USER_PROMPT;
+    const compactLockedFindings = (strategy: any): string => JSON.stringify({
+      executive_summaries: strategy?.executive_summaries || {},
+      evidence_summary: strategy?.evidence_summary || null,
+      diagnosis: strategy?.diagnosis || null,
+      visual_scorecard: strategy?.visual_scorecard || null,
+    }, null, 2);
 
-    const callPhase3 = async (correctionAppendix?: string): Promise<any> => {
-      const textParts: string[] = [promptVariant];
-      if (confidenceBracket !== 'LOW') {
-        textParts.push(`\n\n### THE GOLDEN STANDARD (SSOT)\nYou must ignore generic internet advice. You may ONLY prescribe solutions found in this Knowledge Base:\n\n${fullSSOT}`);
-      }
-      textParts.push(`\n\n### DIAGNOSTIC FINDINGS (Phase 1 & 2)\nUse these specific gaps and anti-patterns to trigger the strategies above:\n${handoffSummary}`);
-      textParts.push(`\n\n### ORIGINAL SOURCE CONTEXT\n<SOURCE_DOCUMENT_TO_AUDIT>\n${text.substring(0, 50000)}\n</SOURCE_DOCUMENT_TO_AUDIT>`);
-      if (correctionAppendix) textParts.push(correctionAppendix);
-      const synthStarted = Date.now();
-      const resp = await runStage(synthesisStage, {
-        userText: textParts.join(''),
-        systemInstruction: STRATEGY_SYSTEM_INSTRUCTION,
-      }, { runId });
-      actuals.synthesis = resp.modelUsed.id;
-      serverLog(runId, 'info', 'stage_complete', {
-        stage: synthesisStage,
-        model: resp.modelUsed.id,
-        bracket: confidenceBracket,
-        duration_ms: Date.now() - synthStarted,
-        regen: correctionAppendix ? 'yes' : 'no',
-      });
-      return parseAiResponse(resp.text);
-    };
-
-    const runFactCheck = async (data: any, attemptNumber: number): Promise<FactCheckResult> => {
-      const strategy = data?.phase_3_strategy || {};
+    const buildSummaryCheckText = (strategy: any): string => {
       const summaries = strategy.executive_summaries && typeof strategy.executive_summaries === 'object'
         ? strategy.executive_summaries
         : { [DEFAULT_PERSONA]: strategy.executive_summary || '' };
@@ -495,34 +480,184 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => `  ${cat}
         })
         .filter(Boolean)
         .join('\n\n---\n\n');
+      const evidenceText = strategy.evidence_summary ? `\n\n[Evidence Summary]\n${JSON.stringify(strategy.evidence_summary)}` : '';
       const diagnosisText = strategy.diagnosis ? `\n\n[Diagnosis]\n${JSON.stringify(strategy.diagnosis)}` : '';
+      return `${summary}${evidenceText}${diagnosisText}`;
+    };
+
+    const buildRoadmapCheckText = (strategy: any): string => {
       const planningText = strategy.planning_decision ? `\n\n[Planning Decision]\n${JSON.stringify(strategy.planning_decision)}` : '';
-      const checkedSummary = `${summary}${diagnosisText}${planningText}`;
+      return planningText.trim();
+    };
+
+    const callEvidenceSynthesis = async (correctionAppendix?: string): Promise<any> => {
+      const textParts: string[] = [EVIDENCE_SYNTHESIS_USER_PROMPT];
+      textParts.push(`\n\n### DIAGNOSTIC FINDINGS (Phase 1 & 2)\nUse only these findings and the source document for summary and diagnosis:\n${handoffSummary}`);
+      textParts.push(`\n\n### ORIGINAL SOURCE CONTEXT\n<SOURCE_DOCUMENT_TO_AUDIT>\n${text.substring(0, 50000)}\n</SOURCE_DOCUMENT_TO_AUDIT>`);
+      if (confidenceBracket === 'LOW') {
+        textParts.push(`\n\n### LOW-CONFIDENCE OVERRIDE\nEvidence is LOW confidence. Keep diagnosis provisional, return low diagnostic confidence, and emphasize missing evidence rather than root-cause certainty.`);
+      }
+      if (correctionAppendix) textParts.push(correctionAppendix);
+      const synthStarted = Date.now();
+      const resp = await runStage(synthesisStage, {
+        userText: textParts.join(''),
+        systemInstruction: EVIDENCE_SYNTHESIS_SYSTEM_INSTRUCTION,
+      }, { runId });
+      actuals.synthesis = resp.modelUsed.id;
+      serverLog(runId, 'info', 'stage_complete', {
+        stage: synthesisStage,
+        model: resp.modelUsed.id,
+        substage: 'evidence_summary',
+        bracket: confidenceBracket,
+        duration_ms: Date.now() - synthStarted,
+        regen: correctionAppendix ? 'yes' : 'no',
+      });
+      return parseAiResponse(resp.text);
+    };
+
+    const callRoadmapSynthesis = async (lockedStrategy: any, correctionAppendix?: string): Promise<any> => {
+      const textParts: string[] = [ROADMAP_SYNTHESIS_USER_PROMPT];
+      if (confidenceBracket === 'MEDIUM') textParts.push(ROADMAP_SYNTHESIS_PROMPT_CAUTIOUS_APPENDIX);
+      if (confidenceBracket !== 'LOW') {
+        textParts.push(`\n\n### THE GOLDEN STANDARD (SSOT)\nYou may ONLY prescribe solutions found in this Knowledge Base. Use it for roadmap actions only; never alter locked findings from it:\n\n${fullSSOT}`);
+      }
+      textParts.push(`\n\n### LOCKED FINDINGS JSON (IMMUTABLE)\n${compactLockedFindings(lockedStrategy)}`);
+      textParts.push(`\n\n### DIAGNOSTIC FINDINGS (Phase 1 & 2)\n${handoffSummary}`);
+      if (correctionAppendix) textParts.push(correctionAppendix);
+      const synthStarted = Date.now();
+      const resp = await runStage(synthesisStage, {
+        userText: textParts.join(''),
+        systemInstruction: ROADMAP_SYNTHESIS_SYSTEM_INSTRUCTION,
+      }, { runId });
+      actuals.synthesis = resp.modelUsed.id;
+      serverLog(runId, 'info', 'stage_complete', {
+        stage: synthesisStage,
+        model: resp.modelUsed.id,
+        substage: 'roadmap',
+        bracket: confidenceBracket,
+        duration_ms: Date.now() - synthStarted,
+        regen: correctionAppendix ? 'yes' : 'no',
+      });
+      return parseAiResponse(resp.text);
+    };
+
+    const callFindingsSynthesis = async (correctionAppendix?: string): Promise<any> => {
+      const textParts: string[] = [STRATEGY_USER_PROMPT_FINDINGS];
+      textParts.push(`\n\n### DIAGNOSTIC FINDINGS (Phase 1 & 2)\nUse these findings to produce the findings-mode report:\n${handoffSummary}`);
+      textParts.push(`\n\n### ORIGINAL SOURCE CONTEXT\n<SOURCE_DOCUMENT_TO_AUDIT>\n${text.substring(0, 50000)}\n</SOURCE_DOCUMENT_TO_AUDIT>`);
+      if (correctionAppendix) textParts.push(correctionAppendix);
+      const synthStarted = Date.now();
+      const resp = await runStage(synthesisStage, {
+        userText: textParts.join(''),
+        systemInstruction: EVIDENCE_SYNTHESIS_SYSTEM_INSTRUCTION,
+      }, { runId });
+      actuals.synthesis = resp.modelUsed.id;
+      serverLog(runId, 'info', 'stage_complete', {
+        stage: synthesisStage,
+        model: resp.modelUsed.id,
+        substage: 'findings_mode',
+        bracket: confidenceBracket,
+        duration_ms: Date.now() - synthStarted,
+        regen: correctionAppendix ? 'yes' : 'no',
+      });
+      return parseAiResponse(resp.text);
+    };
+
+    const mergePhase3Outputs = (summary: any, roadmapData: any): any => {
+      const roadmap = roadmapData?.phase_3_strategy || {};
+      return {
+        phase_3_strategy: {
+          ...summary,
+          planning_decision: roadmap.planning_decision,
+          remediation_roadmap: Array.isArray(roadmap.remediation_roadmap) ? roadmap.remediation_roadmap : [],
+          findings_mode: summary.findings_mode || roadmap.findings_mode,
+        }
+      };
+    };
+
+    const callPhase3 = async (correctionAppendix?: string): Promise<any> => {
+      if (confidenceBracket === 'LOW') {
+        return callFindingsSynthesis(correctionAppendix);
+      }
+      const summaryData = await callEvidenceSynthesis(correctionAppendix);
+      const normalizedSummary = normalizeStrategy(summaryData)?.phase_3_strategy || summaryData?.phase_3_strategy || {};
+      const roadmapData = await callRoadmapSynthesis(normalizedSummary, correctionAppendix);
+      return mergePhase3Outputs(normalizedSummary, roadmapData);
+    };
+
+    const mergeFactChecks = (summary: FactCheckResult, roadmap: FactCheckResult, attemptNumber: number): FactCheckResult => {
+      if (summary.failed || roadmap.failed) {
+        return {
+          attempts: attemptNumber,
+          total_claims: summary.total_claims + roadmap.total_claims,
+          supported_count: summary.supported_count + roadmap.supported_count,
+          unsupported_claims: [...summary.unsupported_claims, ...roadmap.unsupported_claims],
+          failed: true,
+          failure_reason: [summary.failed ? summary.failure_reason : '', roadmap.failed ? roadmap.failure_reason : ''].filter(Boolean).join(' | ')
+        };
+      }
+      return {
+        attempts: attemptNumber,
+        total_claims: summary.total_claims + roadmap.total_claims,
+        supported_count: summary.supported_count + roadmap.supported_count,
+        unsupported_claims: [...summary.unsupported_claims, ...roadmap.unsupported_claims],
+        failed: false
+      };
+    };
+
+    const runFactCheck = async (data: any, attemptNumber: number): Promise<FactCheckResult> => {
+      const strategy = data?.phase_3_strategy || {};
       const roadmap = strategy.remediation_roadmap || [];
       const roadmapText = roadmap.flatMap((p: any) => Array.isArray(p.actions) ? p.actions : []).join('\n');
       try {
-        const fcPrompt = buildFactCheckPrompt({
-          executiveSummary: checkedSummary,
+        const summaryPrompt = buildSummaryFactCheckPrompt({
+          contentToCheck: buildSummaryCheckText(strategy),
+          remediationRoadmapText: '',
+          sourceDocument: text,
+          phase1: auditLogs,
+          phase2: validationData,
+          imageCount: images.length,
+        });
+        const summaryStarted = Date.now();
+        const summaryResp = await runStage('fact_check', {
+          userText: summaryPrompt,
+          images,
+        }, { runId });
+        actuals.fact_check = summaryResp.modelUsed.id;
+        serverLog(runId, 'info', 'stage_complete', {
+          stage: 'fact_check',
+          model: summaryResp.modelUsed.id,
+          substage: 'summary',
+          duration_ms: Date.now() - summaryStarted,
+          attempt: attemptNumber,
+        });
+        const summaryCheck = parseFactCheckResponse(summaryResp.text, attemptNumber);
+
+        const roadmapPrompt = buildRoadmapFactCheckPrompt({
+          contentToCheck: buildRoadmapCheckText(strategy),
           remediationRoadmapText: roadmapText,
+          lockedFindingsText: compactLockedFindings(strategy),
           sourceDocument: text,
           phase1: auditLogs,
           phase2: validationData,
           imageCount: images.length,
           tactics: FINOPS_TACTICS_LOCAL,
         });
-        const fcStarted = Date.now();
-        const fcResp = await runStage('fact_check', {
-          userText: fcPrompt,
+        const roadmapStarted = Date.now();
+        const roadmapResp = await runStage('fact_check', {
+          userText: roadmapPrompt,
           images,
         }, { runId });
-        actuals.fact_check = fcResp.modelUsed.id;
+        actuals.fact_check = roadmapResp.modelUsed.id;
         serverLog(runId, 'info', 'stage_complete', {
           stage: 'fact_check',
-          model: fcResp.modelUsed.id,
-          duration_ms: Date.now() - fcStarted,
+          model: roadmapResp.modelUsed.id,
+          substage: 'roadmap',
+          duration_ms: Date.now() - roadmapStarted,
           attempt: attemptNumber,
         });
-        return parseFactCheckResponse(fcResp.text, attemptNumber);
+        const roadmapCheck = parseFactCheckResponse(roadmapResp.text, attemptNumber);
+        return mergeFactChecks(summaryCheck, roadmapCheck, attemptNumber);
       } catch (e: any) {
         return {
           attempts: attemptNumber,
@@ -579,9 +714,31 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => `  ${cat}
       evidence_needed_before_action: validationData.silent_areas.slice(0, 6)
     });
 
+    const buildFallbackFindingsMode = () => ({
+      evidence_backed_findings: [
+        ...validationData.maturity_gaps.slice(0, 4),
+        ...validationData.antipattern_findings.slice(0, 4)
+      ].slice(0, 8),
+      candidate_themes: validationData.silent_areas.length > 0
+        ? validationData.silent_areas.slice(0, 6)
+        : validationData.maturity_gaps.slice(0, 6),
+      missing_evidence: validationData.silent_areas.slice(0, 8),
+      validation_plan: [
+        'Provide source material that documents current FinOps ownership, cadence, and decision rights.',
+        'Attach evidence of tagging, allocation, budget, and forecasting practices.',
+        'Include recent cost review outputs or optimization decision records before rerunning the assessment.'
+      ]
+    });
+
     const normalizeStrategy = (raw: any): any => {
       if (!raw?.phase_3_strategy) return raw;
       const normalized = normalizePersonaSummaries(raw.phase_3_strategy);
+      const incomingPlanningDecision = raw.phase_3_strategy.planning_decision;
+      const normalizedPlanningDecision = confidenceBracket === 'LOW'
+        ? incomingPlanningDecision?.decision === 'NO_GO'
+          ? incomingPlanningDecision
+          : buildFallbackPlanningDecision()
+        : incomingPlanningDecision || buildFallbackPlanningDecision();
       raw.phase_3_strategy = {
         ...raw.phase_3_strategy,
         executive_summaries: normalized.executive_summaries,
@@ -589,7 +746,11 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => `  ${cat}
         active_persona: normalized.active_persona,
         evidence_summary: raw.phase_3_strategy.evidence_summary?.headline ? raw.phase_3_strategy.evidence_summary : buildFallbackEvidenceSummary(),
         diagnosis: raw.phase_3_strategy.diagnosis?.primary_bottleneck ? raw.phase_3_strategy.diagnosis : buildFallbackDiagnosis(),
-        planning_decision: raw.phase_3_strategy.planning_decision?.decision ? raw.phase_3_strategy.planning_decision : buildFallbackPlanningDecision()
+        planning_decision: normalizedPlanningDecision,
+        remediation_roadmap: confidenceBracket === 'LOW' ? [] : (raw.phase_3_strategy.remediation_roadmap || []),
+        findings_mode: confidenceBracket === 'LOW'
+          ? raw.phase_3_strategy.findings_mode || buildFallbackFindingsMode()
+          : raw.phase_3_strategy.findings_mode
       };
       return raw;
     };
