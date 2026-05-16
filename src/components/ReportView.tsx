@@ -626,7 +626,7 @@ export const ReportView: React.FC<ReportViewProps> = ({ result, onBack, onDownlo
               : 'bg-rose-50 border-rose-200 text-rose-900';
           return (
             <div className={`mb-12 p-6 rounded-xl border ${palette}`}>
-              <h2 className="text-2xl font-display font-bold mb-2">Planning Decision: {decision.decision.replace('_', ' ')}</h2>
+              <h2 className="text-2xl font-display font-bold mb-2">Planning Decision: {decision.decision?.replace('_', ' ')}</h2>
               <p className="text-sm mb-5 opacity-90">{decision.rationale}</p>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>

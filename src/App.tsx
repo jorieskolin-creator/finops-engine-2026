@@ -819,7 +819,7 @@ const App: React.FC = () => {
                     <div className="flex items-start gap-4 mb-5">
                       <div className="flex items-center justify-center w-10 h-10 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-bold text-sm flex-shrink-0">03</div>
                       <div>
-                        <h3 className="text-lg font-display font-bold text-white">Planning Decision: {result.phase_3_strategy.planning_decision.decision.replace('_', ' ')}</h3>
+                        <h3 className="text-lg font-display font-bold text-white">Planning Decision: {result.phase_3_strategy.planning_decision.decision?.replace('_', ' ')}</h3>
                         <p className="text-xs text-slate-400 mt-1">{result.phase_3_strategy.planning_decision.rationale}</p>
                       </div>
                     </div>

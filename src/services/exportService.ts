@@ -375,7 +375,7 @@ const generateReportHtml = (result: DiagnosticResult): string => {
     const decision = result.phase_3_strategy.planning_decision;
     if (!decision) return '';
     return `
-      <h2>Planning Decision: ${escapeHtml(decision.decision.replace('_', ' '))}</h2>
+      <h2>Planning Decision: ${escapeHtml(decision.decision?.replace('_', ' ') || '')}</h2>
       <div class="summary planning-decision">
         <p>${escapeHtml(decision.rationale)}</p>
         <div class="summary-grid">
