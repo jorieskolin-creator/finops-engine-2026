@@ -111,7 +111,12 @@ export const validatePhase3Grounding = (strategyData: any, phase2: Phase2Validat
     }
   }
 
-  if (!strategy.remediation_roadmap || !Array.isArray(strategy.remediation_roadmap) || strategy.remediation_roadmap.length === 0) {
+  const isFindingsMode =
+    strategy.confidence_bracket === 'LOW' ||
+    strategy.effective_bracket === 'LOW' ||
+    (strategy.planning_decision?.decision === 'NO_GO' && strategy.findings_mode);
+
+  if (!isFindingsMode && (!strategy.remediation_roadmap || !Array.isArray(strategy.remediation_roadmap) || strategy.remediation_roadmap.length === 0)) {
     errors.push('Remediation roadmap missing or empty');
   }
 

@@ -280,6 +280,7 @@ export const analyzeDocument = async (
   const actuals: Record<string, string> = {
     preflight: STAGE_MODELS.preflight.id,
     forensic_audit: STAGE_MODELS.forensic_audit.id,
+    evidence_check: STAGE_MODELS.evidence_check.id,
     synthesis: STAGE_MODELS.synthesis.id,
     fact_check: STAGE_MODELS.fact_check.id,
   };
@@ -292,6 +293,7 @@ export const analyzeDocument = async (
     deep_mode: !!options.deepMode,
     preflight: STAGE_MODELS.preflight.id,
     forensic_audit: STAGE_MODELS.forensic_audit.id,
+    evidence_check: STAGE_MODELS.evidence_check.id,
     synthesis: STAGE_MODELS.synthesis.id,
     fact_check: STAGE_MODELS.fact_check.id,
   });
@@ -336,11 +338,17 @@ export const analyzeDocument = async (
     if (aggregatedRawData.models_used.length > 0) {
       actuals.forensic_audit = aggregatedRawData.models_used.join(',');
     }
+    if (aggregatedRawData.evidence_check_models_used.length > 0) {
+      actuals.evidence_check = aggregatedRawData.evidence_check_models_used.join(',');
+    }
     serverLog(runId, 'info', 'stage_complete', {
       stage: 'forensic_audit',
       model: aggregatedRawData.models_used.join(',') || STAGE_MODELS.forensic_audit.id,
+      evidence_check_model: aggregatedRawData.evidence_check_models_used.join(',') || STAGE_MODELS.evidence_check.id,
       duration_ms: Date.now() - phase1Started,
       failed_batches: aggregatedRawData.failed_batches.join(',') || 'none',
+      evidence_downgrades: aggregatedRawData.evidence_check.downgraded_count,
+      evidence_rescans: aggregatedRawData.evidence_check.rescan_count,
     });
 
     if (aggregatedRawData.failed_batches.length > 0) {
@@ -748,6 +756,7 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => `  ${cat}
         diagnosis: raw.phase_3_strategy.diagnosis?.primary_bottleneck ? raw.phase_3_strategy.diagnosis : buildFallbackDiagnosis(),
         planning_decision: normalizedPlanningDecision,
         remediation_roadmap: confidenceBracket === 'LOW' ? [] : (raw.phase_3_strategy.remediation_roadmap || []),
+        confidence_bracket: confidenceBracket,
         findings_mode: confidenceBracket === 'LOW'
           ? raw.phase_3_strategy.findings_mode || buildFallbackFindingsMode()
           : raw.phase_3_strategy.findings_mode
@@ -839,7 +848,7 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => `  ${cat}
       console.warn("[FinOps] Phase 3 grounding warnings:", groundingValidation.warnings);
     }
 
-    const qualityGate = runQualityGate(auditLogs, validationData, phase1Validation, groundingValidation, factCheck);
+    const qualityGate = runQualityGate(auditLogs, validationData, phase1Validation, groundingValidation, aggregatedRawData.evidence_check, factCheck);
     console.log(`[FinOps] [${runId}] Quality Gate decision: ${qualityGate.decision}`);
 
     // LLM-augmented explanation only when the deterministic gate flagged
@@ -898,12 +907,14 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => `  ${cat}
         model_config: {
           preflight: actuals.preflight,
           forensic_audit: actuals.forensic_audit,
+          evidence_check: actuals.evidence_check,
           synthesis: actuals.synthesis,
           fact_check: actuals.fact_check,
           validators: "deterministic"
         }
       },
       phase_1_audit_logs: auditLogs,
+      evidence_check: aggregatedRawData.evidence_check,
       phase_2_validation: validationData,
       phase_3_strategy: strategyData.phase_3_strategy || {
         executive_summary: "Strategy incomplete.",

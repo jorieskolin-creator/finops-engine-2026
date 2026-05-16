@@ -219,6 +219,14 @@ const statusBadgeClass = (status: string): string => {
   return 'bg-slate-100 text-slate-500';
 };
 
+const evidenceCheckBadgeClass = (status?: AuditItem['evidence_check_status']): string => {
+  if (status === 'supported') return 'bg-emerald-100 text-emerald-700';
+  if (status === 'weak') return 'bg-amber-100 text-amber-700';
+  if (status === 'unsupported') return 'bg-rose-100 text-rose-700';
+  if (status === 'missing') return 'bg-slate-100 text-slate-600';
+  return 'bg-slate-100 text-slate-500';
+};
+
 const ForensicCriterion: React.FC<{
   catalog: { id: string; title: string; desc: string };
   item?: AuditItem;
@@ -233,6 +241,19 @@ const ForensicCriterion: React.FC<{
         {item?.status ?? 'No Data'}
       </span>
     </div>
+    {item?.evidence_check_status && (
+      <div className="mb-3 flex flex-wrap items-center gap-2">
+        <span className={`px-2 py-1 rounded text-xs font-bold uppercase tracking-wider ${evidenceCheckBadgeClass(item.evidence_check_status)}`}>
+          Evidence-check: {item.evidence_check_status}
+        </span>
+        {item.original_count !== undefined && item.verified_count !== undefined && (
+          <span className="text-xs font-mono text-slate-500">
+            score {item.original_count}→{item.verified_count}{item.rescan_attempted ? ' · targeted rescan' : ''}
+          </span>
+        )}
+        {item.adjustment_reason && <p className="basis-full text-xs text-slate-500">{item.adjustment_reason}</p>}
+      </div>
+    )}
     <p className="text-sm text-slate-500 mb-3">{catalog.desc}</p>
     {item?.reasoning && (
       <div className="mb-3">
@@ -360,6 +381,45 @@ const ForensicSection: React.FC<{
   );
 };
 
+const EvidenceCheckSummaryBlock: React.FC<{ result: DiagnosticResult['evidence_check'] }> = ({ result }) => {
+  if (!result || result.total_items === 0) return null;
+  const stats = [
+    ['Supported', result.supported_count, 'text-emerald-700'],
+    ['Weak', result.weak_count, 'text-amber-700'],
+    ['Unsupported', result.unsupported_count, 'text-rose-700'],
+    ['Missing', result.missing_count, 'text-slate-600'],
+    ['Downgraded', result.downgraded_count, 'text-rose-700'],
+    ['Rescanned', result.rescan_count, 'text-slate-700'],
+  ] as const;
+  return (
+    <div className="mb-8 p-6 rounded-xl border border-slate-200 bg-white">
+      <h2 className="text-xl font-display font-bold text-slate-900 mb-2">Evidence Check</h2>
+      <p className="text-sm text-slate-600 mb-4">
+        Phase 1 findings were verified against the raw material before Phase 2 metrics were calculated.
+      </p>
+      <div className="grid grid-cols-2 md:grid-cols-6 gap-3 mb-4">
+        {stats.map(([label, value, color]) => (
+          <div key={label} className="p-3 rounded-lg bg-slate-50 border border-slate-200">
+            <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">{label}</p>
+            <p className={`text-2xl font-bold ${color}`}>{value}</p>
+          </div>
+        ))}
+      </div>
+      {result.adjustments.length > 0 && (
+        <ul className="space-y-2 text-sm text-slate-700">
+          {result.adjustments.slice(0, 10).map((a, i) => (
+            <li key={i} className="pl-3 border-l-2 border-slate-300">
+              <span className="font-mono text-xs">{a.stream}.{a.id}</span>
+              <span className="text-slate-500"> · {a.original_count}→{a.verified_count} · {a.status}{a.rescan_attempted ? ' · rescanned' : ''}</span>
+              {a.reason && <span className="block text-xs text-slate-500 mt-0.5">{a.reason}</span>}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+};
+
 interface ReportViewProps {
   result: DiagnosticResult;
   onBack: () => void;
@@ -406,6 +466,7 @@ export const ReportView: React.FC<ReportViewProps> = ({ result, onBack, onDownlo
           effective={result.phase_3_strategy.effective_bracket ?? result.phase_3_strategy.confidence_bracket}
         />
         <QualityGateBlock gate={result.quality_gate} />
+        <EvidenceCheckSummaryBlock result={result.evidence_check} />
 
         <div className="mb-12 p-8 bg-slate-50 rounded-2xl border border-slate-200">
           <div className="flex items-center gap-4 mb-6">
@@ -687,7 +748,7 @@ export const ReportView: React.FC<ReportViewProps> = ({ result, onBack, onDownlo
 
         <div className="text-center py-8 border-t border-slate-200 text-sm text-slate-400">
           <p>FinOps Assessment Engine v{result.meta.engine_version}</p>
-          <p>Models: {result.meta.model_config.preflight} (Pre-Flight) | {result.meta.model_config.forensic_audit} (Audit) | {result.meta.model_config.synthesis} (Strategy) | {result.meta.model_config.fact_check} (Fact-Check)</p>
+          <p>Models: {result.meta.model_config.preflight} (Pre-Flight) | {result.meta.model_config.forensic_audit} (Audit) | {result.meta.model_config.evidence_check} (Evidence Check) | {result.meta.model_config.synthesis} (Strategy) | {result.meta.model_config.fact_check} (Fact-Check)</p>
         </div>
       </div>
     </div>

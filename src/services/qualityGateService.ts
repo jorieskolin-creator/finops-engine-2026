@@ -1,5 +1,5 @@
 
-import { AuditItem, FactCheckResult, Phase1AuditLogs, Phase2Validation, QualityGateResult, QualityGateLlmExplanation, ValidationResult } from '../types';
+import { AuditItem, EvidenceCheckResult, FactCheckResult, Phase1AuditLogs, Phase2Validation, QualityGateResult, QualityGateLlmExplanation, ValidationResult } from '../types';
 import { runStage, RunContext } from './modelRouter';
 
 export const EVIDENCE_DENSITY_BLOCK = 30;
@@ -22,7 +22,8 @@ export const buildEvidenceDensityBlock = (density: number): QualityGateResult =>
   warnings: [],
   notes: ['Skipped Phase 3 (strategy) and fact-check to avoid building on unreliable signal.'],
   thresholds: THRESHOLDS,
-  fact_check: undefined
+  fact_check: undefined,
+  evidence_check: undefined
 });
 
 export const runQualityGate = (
@@ -30,6 +31,7 @@ export const runQualityGate = (
   phase2: Phase2Validation,
   phase1Validation: ValidationResult,
   phase3Validation: ValidationResult,
+  evidenceCheck?: EvidenceCheckResult,
   factCheck?: FactCheckResult
 ): QualityGateResult => {
   const blocking_reasons: string[] = [];
@@ -54,6 +56,28 @@ export const runQualityGate = (
 
   for (const err of phase3Validation.errors) {
     blocking_reasons.push(`Phase 3: ${err}`);
+  }
+
+  if (evidenceCheck?.failed) {
+    warnings.push(
+      `Evidence-check did not complete (${evidenceCheck.failure_reason}). Phase 2 may still include unverified scanner evidence.`
+    );
+  } else if (evidenceCheck) {
+    if (evidenceCheck.downgraded_count > 0) {
+      warnings.push(
+        `Evidence-check downgraded ${evidenceCheck.downgraded_count} scored finding(s) before Phase 2 because raw material did not support the scanner score.`
+      );
+    }
+    if (evidenceCheck.rescan_count > 0) {
+      notes.push(
+        `Evidence-check triggered ${evidenceCheck.rescan_count} targeted rescan(s) for weak or unsupported criteria.`
+      );
+    }
+    if (evidenceCheck.unsupported_count > 0 || evidenceCheck.missing_count > 0) {
+      warnings.push(
+        `Evidence-check found ${evidenceCheck.unsupported_count} unsupported and ${evidenceCheck.missing_count} missing evidence item(s); affected scores were lowered before metrics were calculated.`
+      );
+    }
   }
 
   if (factCheck && !factCheck.failed) {
@@ -112,7 +136,7 @@ export const runQualityGate = (
     notes.push('Strategy is unsafe to act on. Re-run with stronger source material or after the listed issues are resolved.');
   }
 
-  return { decision, blocking_reasons, warnings, notes, thresholds: THRESHOLDS, fact_check: factCheck };
+  return { decision, blocking_reasons, warnings, notes, thresholds: THRESHOLDS, fact_check: factCheck, evidence_check: evidenceCheck };
 };
 
 // LLM-augmented reasoning. Only runs when the deterministic gate decided
