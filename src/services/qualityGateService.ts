@@ -103,7 +103,7 @@ export const runQualityGate = (
   if (decision === 'GO') {
     notes.push(
       factCheck && !factCheck.failed
-        ? `All quality checks passed. Fact-check verified ${factCheck.supported_count} of ${factCheck.total_claims} claims against the source.`
+        ? `All quality checks passed. Fact-check verified ${factCheck.supported_count} of ${factCheck.total_claims} claims against source evidence, audit metrics, or the approved tactics database.`
         : 'All quality checks passed. Strategy is grounded in validated findings.'
     );
   } else if (decision === 'WARN') {

@@ -2,7 +2,7 @@
 import { AuditItem, FactCheckClaim, FactCheckResult, Phase1AuditLogs, Phase2Validation, ClaimFailureType, ClaimSourceLocation, StrategicTactic } from '../types';
 
 const VALID_FAILURE_TYPES: ClaimFailureType[] = ['fabricated_number', 'unverifiable_entity', 'unsupported_org_claim', 'out_of_scope', 'other'];
-const VALID_SOURCE_LOCATIONS: ClaimSourceLocation[] = ['finops_lead', 'cfo', 'engineering_lead', 'roadmap'];
+const VALID_SOURCE_LOCATIONS: ClaimSourceLocation[] = ['finops_lead', 'cfo', 'engineering_lead', 'diagnosis', 'planning_decision', 'roadmap'];
 
 export interface FactCheckInputs {
   executiveSummary: string;
@@ -16,6 +16,10 @@ export interface FactCheckInputs {
   // Spotify's tag governance" or "Implement [TAC-VIS-002]") are verified
   // against THIS, not the customer source document.
   tactics?: StrategicTactic[];
+}
+
+export interface RoadmapFactCheckInputs extends FactCheckInputs {
+  lockedFindingsText: string;
 }
 
 const MAX_SOURCE_CHARS = 40000;
@@ -108,7 +112,7 @@ ${(inputs.imageCount ?? 0) > 0
 - Specifically check: percentages, named tools/companies/teams/products, numerical counts (e.g. "22 anti-patterns"), claims about specific organizational structures, claims about specific named processes.
 - Be skeptical: if a claim is specific enough to be falsifiable but you cannot find it in the inputs, classify as "unsupported".
 - Maximum 15 claims per pass — focus on the most consequential.
-- The strategy output below is divided into sections with [Persona: finops_lead | cfo | engineering_lead] headers, followed by REMEDIATION ROADMAP ACTIONS. For every claim you flag, tag "source_location" as the persona id the claim was found under, or "roadmap" if it was found in the roadmap actions block.
+- The strategy output below is divided into persona evidence summaries, DIAGNOSIS, PLANNING DECISION, and REMEDIATION ROADMAP ACTIONS. For every claim you flag, tag "source_location" as the persona id, "diagnosis", "planning_decision", or "roadmap" based on where it was found.
 - For every claim classified "unsupported", you MUST additionally emit:
   - "failure_type": one of "fabricated_number" (invented %, $, count), "unverifiable_entity" (named tool / company / team / product that is NOT in the source AND NOT in the VERIFIED_TACTICS_DB; legitimate KB-sanctioned references must be classified "supported_by_tactics_db" instead), "unsupported_org_claim" (assertion about org structure or behavior not in source), "out_of_scope" (claim about something the inputs simply do not address), or "other".
   - "missing_material": one short sentence describing what specific evidence in a future source document would make this claim supportable (e.g., "a tagging policy document", "a monthly cost review meeting note", "a named FinOps team headcount").
@@ -122,7 +126,7 @@ ${(inputs.imageCount ?? 0) > 0
       "claim": "exact phrase from the strategy output",
       "classification": "supported_by_source" | "supported_by_audit" | "supported_by_tactics_db" | "unsupported",
       "rationale": "one short sentence",
-      "source_location": "finops_lead | cfo | engineering_lead | roadmap",
+      "source_location": "finops_lead | cfo | engineering_lead | diagnosis | planning_decision | roadmap",
       "failure_type": "fabricated_number | unverifiable_entity | unsupported_org_claim | out_of_scope | other (REQUIRED when classification is unsupported, otherwise omit)",
       "missing_material": "what additional source content would make this claim supportable (REQUIRED when classification is unsupported, otherwise omit)"
     }
@@ -248,15 +252,139 @@ ${items.map(c => `  - "${c.claim}"\n      Found in: ${c.source_location || 'unsp
 
 ### REGENERATE INSTRUCTIONS — your previous output failed fact-check
 
-A separate fact-check pass found these claims in your previous executive summaries or roadmap that were not supported by ANY of the three sources of truth (the source document, the verified Phase 1 evidence, or the Verified Tactics Database). Each is grouped by failure mode with specific guidance for how to fix it.
+A separate split fact-check pass found these claims in your previous output. Evidence summaries and diagnosis are verified ONLY against the source document, Phase 1 evidence, and Phase 2 metrics. Planning decisions and roadmap actions are verified against the locked findings plus the Verified Tactics Database. Each issue is grouped by failure mode with specific guidance for how to fix it.
 
 ${groupBlocks}${ungroupedBlock}
 
-Regenerate the executive summaries (all three personas) AND remediation roadmap. The new output:
+Regenerate the evidence summaries (all three personas), diagnosis, planning decision, AND remediation roadmap. The new output:
 - MUST NOT include any of the above claims, even rephrased.
 - MUST follow the failure-mode-specific guidance above.
-- MUST cite only facts that appear in <SOURCE_DOCUMENT_TO_AUDIT>, in the Phase 1 evidence quotes already provided, or in the Verified Tactics Database (tactic IDs and the companies actually paired with each tactic in the database).
+- Evidence summaries and diagnosis MUST cite only facts that appear in <SOURCE_DOCUMENT_TO_AUDIT>, Phase 1 evidence quotes, or Phase 2 metrics. Do not use tactics DB knowledge there.
+- Planning decisions and roadmap actions MUST trace to the locked findings and may use only tactic IDs/companies actually paired in the Verified Tactics Database.
 - Prefer fewer specific claims over inventing replacements. It is better to be vague but truthful than precise but unsupported.
-- Keep the exact same JSON output shape (executive_summaries with finops_lead / cfo / engineering_lead, visual_scorecard, remediation_roadmap).
+- Keep the exact same JSON output shape (executive_summaries with finops_lead / cfo / engineering_lead, evidence_summary, diagnosis, planning_decision, visual_scorecard, remediation_roadmap).
 `;
 };
+
+
+export const buildSummaryFactCheckPrompt = (inputs: FactCheckInputs): string => `
+<role>
+You are the evidence-summary fact-checker for a FinOps maturity assessment.
+Your job: verify ONLY the evidence summaries and diagnosis. The tactics database is intentionally absent because summaries must be grounded only in source evidence and Phase 1/2 findings.
+</role>
+
+<classifications>
+- "supported_by_source": directly stated or clearly implied in SOURCE_DOCUMENT or visible in attached SOURCE_IMAGES.
+- "supported_by_audit": derived from PHASE_1_EVIDENCE or PHASE_2_METRICS.
+- "unsupported": cannot be traced to source, Phase 1 evidence, or Phase 2 metrics.
+- Do NOT use "supported_by_tactics_db" in this check. If a summary/diagnosis uses tactic IDs, external case studies, or KB-only facts, classify the claim as unsupported.
+</classifications>
+
+<rules>
+- Check only current-state and diagnostic claims in the evidence summaries and diagnosis.
+- Be especially skeptical of claims about organizational ownership, executive sponsorship, culture, tooling adoption, team behavior, savings, and root causes.
+- If the source appears to be a best-practices or case-study document rather than evidence about the audited organization, flag claims that treat document coverage as proven operational adoption.
+- Maximum 15 claims per pass — focus on consequential claims.
+- For every unsupported claim, emit failure_type and missing_material.
+- Output JSON ONLY, no prose.
+</rules>
+
+<output_format>
+{
+  "claims": [
+    {
+      "claim": "exact phrase from the summary or diagnosis",
+      "classification": "supported_by_source | supported_by_audit | unsupported",
+      "rationale": "one short sentence",
+      "source_location": "finops_lead | cfo | engineering_lead | diagnosis",
+      "failure_type": "fabricated_number | unverifiable_entity | unsupported_org_claim | out_of_scope | other (REQUIRED when unsupported)",
+      "missing_material": "what evidence would make this claim supportable (REQUIRED when unsupported)"
+    }
+  ]
+}
+</output_format>
+
+<phase_2_metrics>
+${compactMetrics(inputs.phase2)}
+</phase_2_metrics>
+
+<phase_1_evidence>
+${compactEvidence(inputs.phase1)}
+</phase_1_evidence>
+
+<source_document>
+${inputs.sourceDocument.substring(0, MAX_SOURCE_CHARS)}
+</source_document>
+
+<summary_and_diagnosis_to_check>
+${inputs.executiveSummary}
+</summary_and_diagnosis_to_check>
+`;
+
+export const buildRoadmapFactCheckPrompt = (inputs: RoadmapFactCheckInputs): string => `
+<role>
+You are the roadmap-grounding reviewer for a FinOps maturity assessment.
+Your job: verify that the planning decision and roadmap are logical, grounded responses to the LOCKED FINDINGS, and that any tactic references are valid in the Verified Tactics Database.
+</role>
+
+<classifications>
+ROADMAP GROUNDING:
+- "supported_by_audit": the action or planning rationale logically follows from LOCKED_FINDINGS, PHASE_1_EVIDENCE, or PHASE_2_METRICS.
+- "supported_by_source": the action or rationale is directly supported by the SOURCE_DOCUMENT.
+- "supported_by_tactics_db": tactic IDs, mechanism names, and named case-study references are valid and correctly paired in VERIFIED_TACTICS_DB.
+- "unsupported": the roadmap action, planning rationale, or tactic reference does not trace to locked findings/evidence, uses a mismatched tactic/company pairing, or introduces a new current-state claim not present in LOCKED_FINDINGS.
+</classifications>
+
+<rules>
+- Do NOT re-score the evidence summary. Treat LOCKED_FINDINGS as the current-state baseline.
+- Ask: does this roadmap answer the findings? If an action does not address a confirmed gap, anti-pattern, missing-evidence item, or diagnosis statement, classify it as unsupported.
+- Planning decision must be proportionate to confidence. If the plan says GO while locked findings contain major uncertainty, unsupported claims, or evidence gaps, flag the GO rationale as unsupported or overconfident.
+- Tactic IDs are allowed only in roadmap actions and must exist in the tactics DB.
+- Maximum 15 claims per pass — focus on consequential grounding errors.
+- For every unsupported claim, emit failure_type and missing_material.
+- Output JSON ONLY, no prose.
+</rules>
+
+<output_format>
+{
+  "claims": [
+    {
+      "claim": "exact phrase from planning decision or roadmap",
+      "classification": "supported_by_source | supported_by_audit | supported_by_tactics_db | unsupported",
+      "rationale": "one short sentence",
+      "source_location": "planning_decision | roadmap",
+      "failure_type": "fabricated_number | unverifiable_entity | unsupported_org_claim | out_of_scope | other (REQUIRED when unsupported)",
+      "missing_material": "what evidence or locked finding would make this supportable (REQUIRED when unsupported)"
+    }
+  ]
+}
+</output_format>
+
+<locked_findings>
+${inputs.lockedFindingsText}
+</locked_findings>
+
+<phase_2_metrics>
+${compactMetrics(inputs.phase2)}
+</phase_2_metrics>
+
+<phase_1_evidence>
+${compactEvidence(inputs.phase1)}
+</phase_1_evidence>
+
+<verified_tactics_db>
+${compactTactics(inputs.tactics)}
+</verified_tactics_db>
+
+<source_document>
+${inputs.sourceDocument.substring(0, MAX_SOURCE_CHARS)}
+</source_document>
+
+<planning_and_roadmap_to_check>
+PLANNING DECISION:
+${inputs.executiveSummary}
+
+REMEDIATION ROADMAP ACTIONS:
+${inputs.remediationRoadmapText}
+</planning_and_roadmap_to_check>
+`;

@@ -472,7 +472,47 @@ export const ReportView: React.FC<ReportViewProps> = ({ result, onBack, onDownlo
         </div>
 
         <div className="mb-12">
-          <h2 className="text-2xl font-display font-bold text-slate-900 mb-6 pb-3 border-b border-slate-200">Executive Summary</h2>
+          <h2 className="text-2xl font-display font-bold text-slate-900 mb-6 pb-3 border-b border-slate-200">Evidence Summary</h2>
+          {(() => {
+            const evidence = result.phase_3_strategy.evidence_summary;
+            if (!evidence) return null;
+            const renderList = (title: string, items?: string[]) => {
+              if (!items || items.length === 0) return null;
+              return (
+                <div>
+                  <h3 className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-2">{title}</h3>
+                  <ul className="space-y-1.5">
+                    {items.map((item, i) => (
+                      <li key={i} className="flex items-start gap-2 text-sm text-slate-700">
+                        <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0"></span>
+                        <span>{item}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              );
+            };
+            return (
+              <div className="mb-8 p-6 rounded-xl bg-emerald-50/60 border border-emerald-200">
+                <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-3 mb-5">
+                  <div>
+                    <p className="text-xs font-bold uppercase tracking-widest text-emerald-700 mb-1">Fact-only current state</p>
+                    <h3 className="text-xl font-display font-bold text-slate-900">{evidence.headline}</h3>
+                  </div>
+                  <span className="px-3 py-1 rounded-full bg-white border border-emerald-200 text-xs font-bold text-emerald-800 whitespace-nowrap">
+                    {evidence.maturity_classification}
+                  </span>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {renderList('Key metrics', evidence.key_metrics)}
+                  {renderList('Confirmed strengths', evidence.confirmed_strengths)}
+                  {renderList('Confirmed gaps', evidence.confirmed_gaps)}
+                  {renderList('Confirmed anti-patterns', evidence.confirmed_antipatterns)}
+                  {renderList('Silent / missing evidence', evidence.silent_or_missing_evidence)}
+                </div>
+              </div>
+            );
+          })()}
           {(() => {
             const summaries = result.phase_3_strategy.executive_summaries;
             const ids: PersonaId[] = ['finops_lead', 'cfo', 'engineering_lead'];
@@ -485,7 +525,7 @@ export const ReportView: React.FC<ReportViewProps> = ({ result, onBack, onDownlo
                     const personaClaims = unsupported.filter(c => c.source_location === id);
                     return (
                       <div key={id}>
-                        <h3 className="text-sm font-bold uppercase tracking-widest text-emerald-700 mb-3">For the {PERSONA_LABELS[id]}</h3>
+                        <h3 className="text-sm font-bold uppercase tracking-widest text-emerald-700 mb-3">Evidence summary for the {PERSONA_LABELS[id]}</h3>
                         <MarkdownRenderer content={summaries[id]} textColor="text-slate-700" />
                         {personaClaims.length > 0 && (
                           <div className="mt-4 p-4 rounded-lg bg-amber-50 border border-amber-200">
@@ -510,6 +550,39 @@ export const ReportView: React.FC<ReportViewProps> = ({ result, onBack, onDownlo
             return <MarkdownRenderer content={result.phase_3_strategy.executive_summary} textColor="text-slate-700" />;
           })()}
         </div>
+
+        {(() => {
+          const diagnosis = result.phase_3_strategy.diagnosis;
+          if (!diagnosis) return null;
+          return (
+            <div className="mb-12 p-6 rounded-xl bg-slate-50 border border-slate-200">
+              <h2 className="text-2xl font-display font-bold text-slate-900 mb-2">Diagnosis</h2>
+              <p className="text-sm text-slate-600 mb-5">Interpretation of the evidence. This section explains causes and bottlenecks, but does not prescribe the implementation plan.</p>
+              <div className="mb-5">
+                <p className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-1">Primary bottleneck</p>
+                <p className="text-slate-800">{diagnosis.primary_bottleneck}</p>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-2">Root causes</p>
+                  <ul className="space-y-1.5">
+                    {(diagnosis.root_causes || []).map((item, i) => <li key={i} className="text-sm text-slate-700">• {item}</li>)}
+                  </ul>
+                </div>
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-2">Domain diagnosis</p>
+                  <ul className="space-y-1.5">
+                    {Object.entries(diagnosis.domain_diagnosis || {}).map(([domain, text]) => <li key={domain} className="text-sm text-slate-700"><span className="font-bold">{domain}:</span> {text}</li>)}
+                  </ul>
+                </div>
+              </div>
+              <div className="mt-5 p-4 rounded-lg bg-white border border-slate-200">
+                <p className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-1">Diagnostic confidence: {diagnosis.confidence}</p>
+                <p className="text-sm text-slate-700">{diagnosis.confidence_rationale}</p>
+              </div>
+            </div>
+          );
+        })()}
 
         {(() => {
           const claims = result.quality_gate?.fact_check?.unsupported_claims || [];
@@ -538,6 +611,36 @@ export const ReportView: React.FC<ReportViewProps> = ({ result, onBack, onDownlo
                     </ul>
                   </div>
                 ))}
+              </div>
+            </div>
+          );
+        })()}
+
+        {(() => {
+          const decision = result.phase_3_strategy.planning_decision;
+          if (!decision) return null;
+          const palette = decision.decision === 'GO'
+            ? 'bg-emerald-50 border-emerald-200 text-emerald-900'
+            : decision.decision === 'CONDITIONAL_GO'
+              ? 'bg-amber-50 border-amber-200 text-amber-900'
+              : 'bg-rose-50 border-rose-200 text-rose-900';
+          return (
+            <div className={`mb-12 p-6 rounded-xl border ${palette}`}>
+              <h2 className="text-2xl font-display font-bold mb-2">Planning Decision: {decision.decision.replace('_', ' ')}</h2>
+              <p className="text-sm mb-5 opacity-90">{decision.rationale}</p>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-widest mb-2 opacity-80">Safe to act on</p>
+                  <ul className="space-y-1.5 text-sm">
+                    {(decision.safe_to_act_on || []).map((item, i) => <li key={i}>• {item}</li>)}
+                  </ul>
+                </div>
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-widest mb-2 opacity-80">Evidence needed before action</p>
+                  <ul className="space-y-1.5 text-sm">
+                    {(decision.evidence_needed_before_action || []).map((item, i) => <li key={i}>• {item}</li>)}
+                  </ul>
+                </div>
               </div>
             </div>
           );

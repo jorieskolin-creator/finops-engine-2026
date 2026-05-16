@@ -117,10 +117,48 @@ export const PERSONA_LABELS: Record<PersonaId, string> = {
   engineering_lead: 'Engineering Lead'
 };
 
+
+export interface AssessmentEvidenceSummary {
+  // Fact-only synopsis. Must be grounded in Phase 1 quotes or Phase 2 metrics;
+  // no tactic IDs, case studies, or implementation directives.
+  headline: string;
+  maturity_classification: Phase2Validation['crawl_walk_run'];
+  key_metrics: string[];
+  confirmed_strengths: string[];
+  confirmed_gaps: string[];
+  confirmed_antipatterns: string[];
+  silent_or_missing_evidence: string[];
+}
+
+export interface AssessmentDiagnosis {
+  // Interpretation of the evidence summary. This explains why the assessed
+  // state exists, but still does not prescribe an implementation plan.
+  primary_bottleneck: string;
+  root_causes: string[];
+  domain_diagnosis: Record<string, string>;
+  confidence: 'high' | 'medium' | 'low';
+  confidence_rationale: string;
+}
+
+export interface PlanningDecision {
+  // Prognosis / actionability gate for the plan. GO means roadmap can be used;
+  // CONDITIONAL_GO means act only on high-confidence phases; NO_GO means gather
+  // evidence before executing recommendations.
+  decision: 'GO' | 'CONDITIONAL_GO' | 'NO_GO';
+  rationale: string;
+  safe_to_act_on: string[];
+  evidence_needed_before_action: string[];
+}
+
 export interface Phase3Strategy {
+  // Backward-compatible summary fields now represent evidence-only summaries.
+  // They should not contain tactic IDs or implementation directives.
   executive_summary: string;
   executive_summaries: Record<PersonaId, string>;
   active_persona: PersonaId;
+  evidence_summary?: AssessmentEvidenceSummary;
+  diagnosis?: AssessmentDiagnosis;
+  planning_decision?: PlanningDecision;
   visual_scorecard: VisualScorecard;
   remediation_roadmap: RemediationStep[];
   // Bracket the synthesis was instructed to operate in, derived from Phase 2
@@ -158,7 +196,7 @@ export type ClaimFailureType =
   | 'out_of_scope'
   | 'other';
 
-export type ClaimSourceLocation = PersonaId | 'roadmap';
+export type ClaimSourceLocation = PersonaId | 'diagnosis' | 'planning_decision' | 'roadmap';
 
 export interface FactCheckClaim {
   claim: string;
@@ -244,6 +282,36 @@ export interface ValidationResult {
   errors: string[];
   warnings: string[];
   repaired?: boolean;
+}
+
+
+export type KnowledgeStream = 'maturity' | 'antipattern';
+export type DomainId = 'A' | 'B' | 'C' | 'D' | 'E';
+export type CapabilityId = `${DomainId}${1 | 2 | 3 | 4 | 5}`;
+
+export interface KnowledgeDomain {
+  id: DomainId;
+  name: string;
+  capabilities: CapabilityId[];
+}
+
+export interface KnowledgeTaxonomyRegistry {
+  version: string;
+  description: string;
+  domains: KnowledgeDomain[];
+  streams: KnowledgeStream[];
+  evidence_categories: EvidenceCategory[];
+  kb_document_naming: {
+    pattern: string;
+    examples: string[];
+    required_front_matter: {
+      forbidden_uses: string[];
+    };
+  };
+  usage_boundaries: {
+    reference_kb_allowed_uses: string[];
+    reference_kb_forbidden_uses: string[];
+  };
 }
 
 export interface StrategicTactic {

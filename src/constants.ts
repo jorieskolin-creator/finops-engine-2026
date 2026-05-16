@@ -88,12 +88,13 @@ ${FINOPS_METHODOLOGY_CONTEXT}
 </reference_material>
 
 <personas>
-You will produce THREE persona-tailored executive summaries from the same diagnostic data. The three personas:
+You will produce THREE persona-tailored evidence summaries from the same diagnostic data. These are summary-only views; diagnosis and plan are separate JSON objects. The three personas:
 ${STRATEGY_PERSONAS_BLOCK}
 
 **PERSONA CONSISTENCY RULES (NON-NEGOTIABLE):**
-- All three summaries must AGREE on facts: scores, classification (Crawl/Walk/Run), top blockers, top tactics.
+- All three summaries must AGREE on facts: scores, classification (Crawl/Walk/Run), confirmed findings, gaps, and anti-pattern burden.
 - They differ only in lens, vocabulary, and emphasis — driven by each persona's focus_areas and language_style.
+- They must NOT include tactic IDs, external case studies, implementation directives, or roadmap actions. Those belong only in planning_decision and remediation_roadmap.
 - The CFO summary must NOT invent dollar amounts. Reference impact in business terms (e.g., "material risk exposure", "investment justification") but never fabricate numbers not present in Phase 2.
 - The Engineering Lead summary uses technical/architectural vocabulary; the FinOps Lead summary uses FinOps Foundation terminology; the CFO summary uses financial-decision-maker vocabulary.
 </personas>
@@ -109,14 +110,18 @@ ${STRATEGY_PERSONAS_BLOCK}
    - **DO NOT** use command phrases like "Download", "Read", or "Click here".
    - **DO NOT** output URLs in the narrative.
 4. **METHODOLOGY:** You MUST structure the "Remediation Roadmap" according to the Crawl-Walk-Run methodology.
-5. **BREVITY:** Each persona-tailored Executive Summary must be > 300 words but < 500 words.
-6. **JSON STRING SAFETY (CRITICAL):**
+5. **SEPARATION OF THINKING:**
+   - executive_summaries = fact-only evidence summary. No prescriptions, no tactic IDs, no case studies.
+   - diagnosis = interpretation of why the current state exists. No implementation roadmap.
+   - planning_decision + remediation_roadmap = prognosis and next steps.
+6. **BREVITY:** Each persona-tailored evidence summary must be > 180 words but < 320 words.
+7. **JSON STRING SAFETY (CRITICAL):**
    - **ABSOLUTELY NO DOUBLE QUOTES** inside JSON values. Use single quotes or asterisks.
    - **USE ASTERISKS:** Use asterisks (*) for emphasis.
-7. **FORMATTING STYLE (MANDATORY):**
-   - **DO NOT** use large headers (###) for the main sections of the Executive Summary.
-   - **USE** the specific 3-paragraph structure below, using inline bold labels.
-8. **FINANCIAL SENSITIVITY:** Do NOT repeat specific dollar amounts or pricing terms from the source documents. Reference them generically.
+8. **FORMATTING STYLE (MANDATORY):**
+   - **DO NOT** use large headers (###) for the main sections of the evidence summary.
+   - **USE** the specific 3-paragraph summary structure below, using inline bold labels.
+9. **FINANCIAL SENSITIVITY:** Do NOT repeat specific dollar amounts or pricing terms from the source documents. Reference them generically.
 </strict_constraints>
 
 <task>
@@ -127,21 +132,22 @@ ${STRATEGY_PERSONAS_BLOCK}
      - Use the Crawl-Walk-Run framework to structure the roadmap.
      - Use case studies from the DATABASE to prescribe specific mechanisms.
 
-2. **Draft Executive Summaries (One per Persona — Three Total):**
-   For EACH of the three personas (finops_lead, cfo, engineering_lead), write a high-impact narrative using exactly this 3-paragraph structure, with the vocabulary and emphasis adapted to that persona's focus_areas and language_style:
+2. **Draft Evidence Summaries (One per Persona — Three Total):**
+   For EACH persona (finops_lead, cfo, engineering_lead), write a fact-only summary using exactly this 3-paragraph structure, adapted to that persona's vocabulary and emphasis:
 
-   **1. FinOps Maturity Verdict:** (A concise verdict of the organization*s current FinOps maturity. Reference the Crawl/Walk/Run classification. State the anti-pattern burden.)
+   **1. Current-State Snapshot:** State the Crawl/Walk/Run classification, readiness score, maturity depth, anti-pattern burden, delivery integrity, and evidence density.
 
-   **2. Key Findings & Evidence:**
-   (Specific evidence of maturity gaps, anti-patterns, or silent areas found in the audit. Reference actual domains and scores.)
+   **2. Evidence-Backed Findings:** Summarize confirmed maturity strengths, confirmed gaps, anti-patterns, and silent areas. Reference domains and scores only when present in Phase 2 or Phase 1.
 
-   **3. Strategic Directives:**
-   (Concrete directives for the optimization roadmap. Reference tactics by name from the database.)
+   **3. Source Confidence & Boundaries:** State what the evidence can and cannot support. Do NOT include recommendations, tactic IDs, external case studies, or implementation directives.
 
-   All three summaries must agree on facts; they differ only in lens. Each summary must be > 300 words and < 500 words.
+   All three summaries must agree on facts; they differ only in lens. Each summary must be > 180 words and < 320 words.
 
-3. **Visual Scorecard:** Create short, punchy headlines for the scorecard.
-4. **Remediation Roadmap:** Create a 4-phase roadmap:
+3. **Evidence Summary Object:** Populate evidence_summary with concise, fact-only bullets derived from Phase 1/2.
+4. **Diagnosis Object:** Populate diagnosis with interpretation: primary bottleneck, root causes, per-domain diagnosis, confidence, and confidence rationale. No tactic IDs or roadmap actions.
+5. **Planning Decision Object:** Populate planning_decision with GO / CONDITIONAL_GO / NO_GO based on evidence strength and Quality Gate risk. This is the bridge from diagnosis to plan.
+6. **Visual Scorecard:** Create short, punchy headlines for the scorecard.
+7. **Remediation Roadmap:** Create a 4-phase roadmap:
    - **Phase 1: Crawl — Foundation (0-3 Months):** Basic visibility and waste elimination.
    - **Phase 2: Walk — Optimization (3-6 Months):** Rate optimization and governance.
    - **Phase 3: Walk — Embedding (6-12 Months):** Architecture integration and culture.
@@ -155,9 +161,31 @@ STRICTLY return a JSON object.
 {
   "phase_3_strategy": {
     "executive_summaries": {
-      "finops_lead": "String (Markdown. 3-paragraph structure with bold labels. Operational FinOps vocabulary. USE ASTERISKS (*) for emphasis; NO double quotes.)",
-      "cfo": "String (Markdown. 3-paragraph structure. Financial/strategic vocabulary; ROI/risk/investment framing. No fabricated dollar amounts. USE ASTERISKS (*) for emphasis; NO double quotes.)",
-      "engineering_lead": "String (Markdown. 3-paragraph structure. Technical/architectural vocabulary; performance-cost tradeoffs. USE ASTERISKS (*) for emphasis; NO double quotes.)"
+      "finops_lead": "String (Markdown. FACT-ONLY 3-paragraph summary. No directives, no tactic IDs.)",
+      "cfo": "String (Markdown. FACT-ONLY 3-paragraph summary. No directives, no tactic IDs.)",
+      "engineering_lead": "String (Markdown. FACT-ONLY 3-paragraph summary. No directives, no tactic IDs.)"
+    },
+    "evidence_summary": {
+      "headline": "String, fact-only current-state headline",
+      "maturity_classification": "Crawl | Walk | Walk with significant friction | Run",
+      "key_metrics": ["String bullets with Phase 2 numbers"],
+      "confirmed_strengths": ["String bullets"],
+      "confirmed_gaps": ["String bullets"],
+      "confirmed_antipatterns": ["String bullets"],
+      "silent_or_missing_evidence": ["String bullets"]
+    },
+    "diagnosis": {
+      "primary_bottleneck": "String, interpretation of the main maturity blocker",
+      "root_causes": ["String bullets"],
+      "domain_diagnosis": { "A": "...", "B": "...", "C": "...", "D": "...", "E": "..." },
+      "confidence": "high | medium | low",
+      "confidence_rationale": "String"
+    },
+    "planning_decision": {
+      "decision": "GO | CONDITIONAL_GO | NO_GO",
+      "rationale": "String explaining actionability",
+      "safe_to_act_on": ["String bullets"],
+      "evidence_needed_before_action": ["String bullets"]
     },
     "visual_scorecard": {
       "headline": "String (e.g. 'Crawl-Stage FinOps Detected')",
@@ -173,6 +201,158 @@ STRICTLY return a JSON object.
   }
 }
 </output_format>
+`;
+
+
+// ============================================================================
+// SPLIT synthesis prompts. The first pass is evidence-only and intentionally
+// does NOT receive the tactics KB. The second pass receives the locked findings
+// plus the KB and may only prescribe actions that trace back to those findings.
+// ============================================================================
+export const EVIDENCE_SYNTHESIS_SYSTEM_INSTRUCTION = `
+You are an evidence-only FinOps assessment reviewer.
+You do not prescribe fixes, cite external case studies, or use the tactics knowledge base.
+Your job is to turn Phase 1/2 audit findings into a factual current-state summary and cautious diagnosis.
+If a cause is not directly evidenced, label it as a hypothesis or omit it.
+`;
+
+export const EVIDENCE_SYNTHESIS_USER_PROMPT = `
+<input_data>
+You will be provided ONLY with the ORIGINAL DOCUMENT CONTENT and the VALIDATED SYSTEM REPORT from Phase 1/2.
+You will NOT receive the Verified Tactics Database. This is intentional: evidence summaries and diagnosis must not be influenced by remediation knowledge.
+</input_data>
+
+<personas>
+Produce THREE persona-tailored evidence summaries from the same findings. They are summary-only views; they must not contain roadmap actions, tactic IDs, external companies, or prescriptions.
+${STRATEGY_PERSONAS_BLOCK}
+</personas>
+
+<strict_constraints>
+1. **NO KNOWLEDGE-BASE INJECTION:** Do not mention tactic IDs, external case studies, benchmark companies, or remediation mechanisms. If the text is not in Phase 1/2 findings or the source, it does not belong here.
+2. **FINDINGS ONLY:** executive_summaries and evidence_summary must contain only Phase 2 metrics, Phase 1 supported findings, and explicitly silent/missing evidence.
+3. **DIAGNOSIS IS CAUTIOUS:** diagnosis may interpret score patterns, but root causes must be directly supported by evidence. If a cause is plausible but not evidenced, phrase it as an evidence gap, not a fact.
+4. **NO IMPLEMENTATION LANGUAGE:** Do not use directive verbs such as Implement, Enforce, Automate, Launch, Establish, Deploy, or Optimize except when quoting source evidence.
+5. **SOURCE-TYPE SAFETY:** If the source appears to describe best practices, case studies, or methodology rather than the audited organization's operations, say the audit can assess document coverage but cannot prove operational adoption.
+6. **JSON STRING SAFETY:** No double quotes inside JSON values. Use single quotes or asterisks.
+</strict_constraints>
+
+<task>
+1. Draft persona evidence summaries using this 3-paragraph structure:
+   **1. Current-State Snapshot:** classification, readiness score, maturity depth, anti-pattern burden, delivery integrity, and evidence density.
+   **2. Evidence-Backed Findings:** confirmed strengths, confirmed gaps, anti-patterns, and silent areas with domain scores where present.
+   **3. Source Confidence & Boundaries:** what the evidence can and cannot prove. No recommendations.
+2. Populate evidence_summary with concise fact-only bullets.
+3. Populate diagnosis as interpretation only; no roadmap, no tactic IDs, no prescriptions.
+4. Populate visual_scorecard from Phase 2 metrics.
+</task>
+
+<output_format>
+STRICTLY return JSON:
+{
+  "phase_3_strategy": {
+    "executive_summaries": {
+      "finops_lead": "String, Markdown, fact-only 3-paragraph summary",
+      "cfo": "String, Markdown, fact-only 3-paragraph summary",
+      "engineering_lead": "String, Markdown, fact-only 3-paragraph summary"
+    },
+    "evidence_summary": {
+      "headline": "String, fact-only current-state headline",
+      "maturity_classification": "Crawl | Walk | Walk with significant friction | Run",
+      "key_metrics": ["String bullets with Phase 2 numbers"],
+      "confirmed_strengths": ["String bullets"],
+      "confirmed_gaps": ["String bullets"],
+      "confirmed_antipatterns": ["String bullets"],
+      "silent_or_missing_evidence": ["String bullets"]
+    },
+    "diagnosis": {
+      "primary_bottleneck": "String, interpretation of the main evidenced blocker",
+      "root_causes": ["String bullets; direct evidence only or clearly marked as evidence gaps"],
+      "domain_diagnosis": { "A": "...", "B": "...", "C": "...", "D": "...", "E": "..." },
+      "confidence": "high | medium | low",
+      "confidence_rationale": "String"
+    },
+    "visual_scorecard": {
+      "headline": "String",
+      "maturity_score": "String",
+      "burden_score": "String"
+    }
+  }
+}
+</output_format>
+`;
+
+export const ROADMAP_SYNTHESIS_SYSTEM_INSTRUCTION = `
+You are the FinOps roadmap planner for the Crawl-Walk-Run maturity framework.
+You receive a locked evidence summary and diagnosis plus the verified tactics knowledge base.
+Your job is to decide whether action is safe and produce a roadmap only where actions are logically grounded in the locked findings.
+Do not modify the locked summary or diagnosis.
+`;
+
+export const ROADMAP_SYNTHESIS_USER_PROMPT = `
+<input_data>
+You will be provided with:
+1. **LOCKED FINDINGS JSON:** evidence summaries, evidence_summary, diagnosis, and visual_scorecard already created without the tactics KB. Treat these as immutable.
+2. **VERIFIED TACTICS DATABASE:** approved remediation mechanisms and tactic IDs.
+3. **METHODOLOGY:** Crawl-Walk-Run sequencing.
+4. **PHASE 2 METRICS:** numeric confidence signals and Quality Gate precursors.
+</input_data>
+
+<reference_material>
+${FINOPS_METHODOLOGY_CONTEXT}
+</reference_material>
+
+<strict_constraints>
+1. **LOCKED FINDINGS:** Do not change, reinterpret, or add factual claims to the evidence summary or diagnosis. The roadmap must answer: what actions logically follow from these findings?
+2. **GROUNDING RULE:** Every roadmap action must trace to at least one confirmed gap, confirmed anti-pattern, silent/missing evidence item, or diagnosis statement in LOCKED FINDINGS.
+3. **TACTICS KB SCOPE:** Use the Verified Tactics Database only for prescriptions, mechanism names, case-study references, and tactic IDs. Never use it to alter current-state findings.
+4. **TACTIC ID RULE:** Every prescribed tactic action must include exactly one valid bracketed tactic ID from the database. Generic evidence-gathering actions should omit tactic IDs.
+5. **PLANNING DECISION:**
+   - GO only when evidence is strong and no unresolved fact-check warnings are being regenerated.
+   - CONDITIONAL_GO when action is useful but some source claims, assumptions, or confidence limitations remain.
+   - NO_GO when the evidence supports validation only.
+6. **NO NEW CURRENT-STATE CLAIMS:** Roadmap and planning_decision may not introduce new assertions about the audited organization that are absent from LOCKED FINDINGS.
+7. **JSON STRING SAFETY:** No double quotes inside JSON values. Use single quotes or asterisks.
+</strict_constraints>
+
+<task>
+1. Populate planning_decision from the locked findings and confidence signals.
+2. Create a 4-phase remediation_roadmap using Crawl-Walk-Run sequencing:
+   - 1. Crawl — Foundation (0-3 Months)
+   - 2. Walk — Optimization (3-6 Months)
+   - 3. Walk — Embedding (6-12 Months)
+   - 4. Run — Continuous (12+ Months)
+3. If evidence is low or mixed, use validation/baseline actions first and mark assumptions/confidence when requested by the prompt appendix.
+</task>
+
+<output_format>
+STRICTLY return JSON:
+{
+  "phase_3_strategy": {
+    "planning_decision": {
+      "decision": "GO | CONDITIONAL_GO | NO_GO",
+      "rationale": "String explaining actionability from locked findings",
+      "safe_to_act_on": ["String bullets"],
+      "evidence_needed_before_action": ["String bullets"]
+    },
+    "remediation_roadmap": [
+      { "phase": "1. Crawl — Foundation (0-3 Months)", "actions": ["Action grounded in locked findings with [TAC-XXX-000] when prescribing a tactic"] },
+      { "phase": "2. Walk — Optimization (3-6 Months)", "actions": ["..."] },
+      { "phase": "3. Walk — Embedding (6-12 Months)", "actions": ["..."] },
+      { "phase": "4. Run — Continuous (12+ Months)", "actions": ["..."] }
+    ]
+  }
+}
+</output_format>
+`;
+
+export const ROADMAP_SYNTHESIS_PROMPT_CAUTIOUS_APPENDIX = `
+<cautious_mode_overrides>
+This run produced MEDIUM-confidence evidence. The roadmap may proceed only as CONDITIONAL_GO unless the locked findings clearly state high confidence and no major evidence gaps.
+Each remediation_roadmap item MUST include:
+- "confidence": "high" | "medium" | "low"
+- "assumptions": short assumptions that must hold for that phase to apply.
+Prefer baseline/validation actions before scaling controls.
+</cautious_mode_overrides>
 `;
 
 // ============================================================================
@@ -196,11 +376,11 @@ This run produced MEDIUM-confidence evidence (mixed density, some silent areas, 
 
 3. **Per-phase assumptions (REQUIRED).** Each entry MUST include an "assumptions" array — short statements (≤15 words each, max 4 per phase) listing what must hold for the phase to be applicable. Examples: "tag coverage baseline exists today", "engineering teams have dashboard tooling", "finance approves multi-year commitments". If a phase has no non-trivial assumptions, return an empty array.
 
-4. **Persona summaries.** In the 3rd paragraph ("Strategic Directives"), the persona summaries must include a one-sentence confidence statement that mirrors the strongest phase confidence (e.g., "Confidence in this roadmap is medium overall; the Crawl phase is high-confidence, later phases rest on assumptions about org readiness.").
+4. **Persona summaries.** In the 3rd paragraph ("Source Confidence & Boundaries"), include a one-sentence confidence statement that mirrors the strongest phase confidence (e.g., "Evidence confidence is medium overall; the Crawl phase is high-confidence, later phases rest on assumptions about org readiness."). Do not place directives in the summary.
 
 5. **Output schema additions.** The remediation_roadmap items now look like:
    { "phase": "1. Crawl — Foundation (0-3 Months)", "actions": [...], "confidence": "high|medium|low", "assumptions": ["...", "..."] }
-   All other fields (executive_summaries, visual_scorecard) keep their existing shape.
+   Keep evidence_summary, diagnosis, planning_decision, executive_summaries, and visual_scorecard in the output shape.
 </cautious_mode_overrides>
 `;
 
@@ -222,7 +402,7 @@ ${FINOPS_METHODOLOGY_CONTEXT}
 </reference_material>
 
 <personas>
-You still write three persona-tailored executive summaries (finops_lead, cfo, engineering_lead). All three describe THE SAME findings. They differ only in vocabulary and emphasis.
+You still write three persona-tailored evidence summaries (finops_lead, cfo, engineering_lead). All three describe THE SAME findings. They differ only in vocabulary and emphasis.
 ${STRATEGY_PERSONAS_BLOCK}
 </personas>
 
@@ -259,6 +439,28 @@ STRICTLY return JSON. The schema in FINDINGS mode:
       "finops_lead": "String, Markdown, 3-paragraph structure, 150-250 words",
       "cfo": "String, Markdown, 3-paragraph structure, 150-250 words",
       "engineering_lead": "String, Markdown, 3-paragraph structure, 150-250 words"
+    },
+    "evidence_summary": {
+      "headline": "String, fact-only findings headline",
+      "maturity_classification": "Crawl | Walk | Walk with significant friction | Run",
+      "key_metrics": ["String bullets with Phase 2 numbers"],
+      "confirmed_strengths": ["String bullets"],
+      "confirmed_gaps": ["String bullets"],
+      "confirmed_antipatterns": ["String bullets"],
+      "silent_or_missing_evidence": ["String bullets"]
+    },
+    "diagnosis": {
+      "primary_bottleneck": "String, provisional interpretation only",
+      "root_causes": ["String bullets"],
+      "domain_diagnosis": { "A": "...", "B": "...", "C": "...", "D": "...", "E": "..." },
+      "confidence": "low",
+      "confidence_rationale": "String"
+    },
+    "planning_decision": {
+      "decision": "NO_GO",
+      "rationale": "Evidence does not support a directive roadmap yet.",
+      "safe_to_act_on": ["Gather missing evidence", "Validate candidate themes"],
+      "evidence_needed_before_action": ["String bullets"]
     },
     "visual_scorecard": {
       "headline": "String (e.g. 'Insufficient Evidence — Provisional Findings Only')",
