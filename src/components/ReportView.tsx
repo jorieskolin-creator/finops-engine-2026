@@ -4,6 +4,7 @@ import { MarkdownRenderer } from './DashboardComponents';
 import { BATCH_TITLES, MASTER_BINGO_FINOPS } from '../knowledge_base';
 import { METRIC_DESCRIPTIONS } from '../constants';
 import { SVG_CSS, svgGaugeCard, svgRadar, svgScatter } from '../services/svgChartService';
+import { isInsufficientEvidenceReport, renderInlineMarkdownHtml, strengthsSectionTitle } from '../services/reportTextService';
 
 const InlineSvg: React.FC<{ html: string; className?: string }> = ({ html, className }) => (
   <div className={className} dangerouslySetInnerHTML={{ __html: html }} />
@@ -541,6 +542,11 @@ export const ReportView: React.FC<ReportViewProps> = ({ result, onBack, onDownlo
           {(() => {
             const evidence = result.phase_3_strategy.evidence_summary;
             if (!evidence) return null;
+            const useSourceObservationTitle = isInsufficientEvidenceReport(
+              evidence.maturity_classification,
+              result.phase_2_validation.metrics.evidence_density,
+              result.quality_gate.decision
+            );
             const renderList = (title: string, items?: string[]) => {
               if (!items || items.length === 0) return null;
               return (
@@ -550,7 +556,7 @@ export const ReportView: React.FC<ReportViewProps> = ({ result, onBack, onDownlo
                     {items.map((item, i) => (
                       <li key={i} className="flex items-start gap-2 text-sm text-slate-700">
                         <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0"></span>
-                        <span>{item}</span>
+                        <span dangerouslySetInnerHTML={{ __html: renderInlineMarkdownHtml(item) }} />
                       </li>
                     ))}
                   </ul>
@@ -570,7 +576,7 @@ export const ReportView: React.FC<ReportViewProps> = ({ result, onBack, onDownlo
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   {renderList('Key metrics', evidence.key_metrics)}
-                  {renderList('Confirmed strengths', evidence.confirmed_strengths)}
+                  {renderList(strengthsSectionTitle(useSourceObservationTitle), evidence.confirmed_strengths)}
                   {renderList('Confirmed gaps', evidence.confirmed_gaps)}
                   {renderList('Confirmed anti-patterns', evidence.confirmed_antipatterns)}
                   {renderList('Silent / missing evidence', evidence.silent_or_missing_evidence)}

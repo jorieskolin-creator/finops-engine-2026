@@ -78,7 +78,7 @@ export const MarkdownRenderer: React.FC<{ content: string; textColor?: string }>
           const items = trimmed.split('\n').map(l => l.replace(/^\d+\.\s*/, ''));
           return <ol key={index} className={`list-decimal pl-5 space-y-2 ${textColor}`}>{items.map((it, i) => <li key={i}>{parseInline(it)}</li>)}</ol>;
         }
-        return <p key={index} className={`${textColor} leading-relaxed font-normal text-base text-justify`}>{parseInline(trimmed)}</p>;
+        return <p key={index} className={`${textColor} leading-relaxed font-normal text-base text-left`}>{parseInline(trimmed)}</p>;
       })}
     </div>
   );

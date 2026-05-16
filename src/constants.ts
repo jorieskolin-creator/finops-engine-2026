@@ -137,13 +137,13 @@ ${STRATEGY_PERSONAS_BLOCK}
 
    **1. Current-State Snapshot:** State the evidence-gated classification, readiness score, maturity depth, anti-pattern burden, delivery integrity, and evidence density.
 
-   **2. Evidence-Backed Findings:** Summarize confirmed maturity strengths, confirmed gaps, anti-patterns, and silent areas. Reference domains and scores only when present in Phase 2 or Phase 1.
+   **2. Evidence-Backed Findings:** Summarize confirmed FinOps maturity strengths, confirmed gaps, anti-patterns, and silent areas. Reference domains and scores only when present in Phase 2 or Phase 1. If source material has generic process facts but no FinOps evidence, describe them as source observations outside FinOps scope.
 
    **3. Source Confidence & Boundaries:** State what the evidence can and cannot support. Do NOT include recommendations, tactic IDs, external case studies, or implementation directives.
 
    All three summaries must agree on facts; they differ only in lens. Each summary must be > 180 words and < 320 words.
 
-3. **Evidence Summary Object:** Populate evidence_summary with concise, fact-only bullets derived from Phase 1/2.
+3. **Evidence Summary Object:** Populate evidence_summary with concise, fact-only bullets derived from Phase 1/2. Put items in confirmed_strengths only when they are FinOps-relevant strengths. If the assessment is Insufficient evidence, generic process facts may be listed there only as source observations, not as maturity proof.
 4. **Diagnosis Object:** Populate diagnosis with interpretation: primary bottleneck, root causes, per-domain diagnosis, confidence, and confidence rationale. No tactic IDs or roadmap actions.
 5. **Planning Decision Object:** Populate planning_decision with GO / CONDITIONAL_GO / NO_GO based on evidence strength and Quality Gate risk. This is the bridge from diagnosis to plan.
 6. **Visual Scorecard:** Create short, punchy headlines for the scorecard.
@@ -169,7 +169,7 @@ STRICTLY return a JSON object.
       "headline": "String, fact-only current-state headline",
       "maturity_classification": "Insufficient evidence | Crawl | Walk | Walk with significant friction | Run",
       "key_metrics": ["String bullets with Phase 2 numbers"],
-      "confirmed_strengths": ["String bullets"],
+      "confirmed_strengths": ["String bullets. FinOps-relevant strengths only; in Insufficient evidence, generic facts are source observations, not maturity strengths."],
       "confirmed_gaps": ["String bullets"],
       "confirmed_antipatterns": ["String bullets"],
       "silent_or_missing_evidence": ["String bullets"]
@@ -239,7 +239,7 @@ ${STRATEGY_PERSONAS_BLOCK}
 <task>
 1. Draft persona evidence summaries using this 3-paragraph structure:
    **1. Current-State Snapshot:** classification, evidence-gated readiness score, maturity depth, anti-pattern burden, delivery integrity, and evidence density.
-   **2. Evidence-Backed Findings:** confirmed strengths, confirmed gaps, anti-patterns, and silent areas with domain scores where present.
+   **2. Evidence-Backed Findings:** confirmed FinOps strengths, confirmed gaps, anti-patterns, and silent areas with domain scores where present. If the source has generic process facts but no FinOps evidence, describe them as source observations outside FinOps scope.
    **3. Source Confidence & Boundaries:** what the evidence can and cannot prove. No recommendations.
 2. Populate evidence_summary with concise fact-only bullets.
 3. Populate diagnosis as interpretation only; no roadmap, no tactic IDs, no prescriptions.
@@ -259,7 +259,7 @@ STRICTLY return JSON:
       "headline": "String, fact-only current-state headline",
       "maturity_classification": "Insufficient evidence | Crawl | Walk | Walk with significant friction | Run",
       "key_metrics": ["String bullets with Phase 2 numbers"],
-      "confirmed_strengths": ["String bullets"],
+      "confirmed_strengths": ["String bullets. FinOps-relevant strengths only; in Insufficient evidence, generic facts are source observations, not maturity strengths."],
       "confirmed_gaps": ["String bullets"],
       "confirmed_antipatterns": ["String bullets"],
       "silent_or_missing_evidence": ["String bullets"]
@@ -444,7 +444,7 @@ STRICTLY return JSON. The schema in FINDINGS mode:
       "headline": "String, fact-only findings headline",
       "maturity_classification": "Insufficient evidence | Crawl | Walk | Walk with significant friction | Run",
       "key_metrics": ["String bullets with Phase 2 numbers"],
-      "confirmed_strengths": ["String bullets"],
+      "confirmed_strengths": ["String bullets. FinOps-relevant strengths only; in Insufficient evidence, generic facts are source observations, not maturity strengths."],
       "confirmed_gaps": ["String bullets"],
       "confirmed_antipatterns": ["String bullets"],
       "silent_or_missing_evidence": ["String bullets"]
