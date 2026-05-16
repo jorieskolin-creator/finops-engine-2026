@@ -14,6 +14,7 @@ import { DiagnosticResult, Phase1AuditLogs, Phase2Validation, AuditItem, Evidenc
 import { generateSafetyAuditPrompt } from "./securityService";
 import { validatePhase1Output, validatePhase3Grounding } from "./validatorService";
 import { runQualityGate, runQualityGateExplanation } from "./qualityGateService";
+import { calculateMetrics } from "./metricsService";
 import {
   buildRegenerateAppendix,
   buildRoadmapFactCheckPrompt,
@@ -177,90 +178,6 @@ const validateAndSanitizeLogs = (rawData: any): Phase1AuditLogs => {
   ALL_CRITERIA_IDS.forEach(id => safeLog.antipattern[id] = validateItem(rawAntipattern[id], true));
 
   return safeLog;
-};
-
-const calculateMetrics = (logs: Phase1AuditLogs): Phase2Validation => {
-  let maturityCount = 0; let maturitySum = 0; const maturityGaps: string[] = [];
-  let antipatternCount = 0; let antipatternSum = 0; const antipatternFindings: string[] = [];
-  let deliveredItems = 0;
-  let itemsWithEvidence = 0;
-  const silentAreas: string[] = [];
-  const categoryScores: Record<string, number> = { A: 0, B: 0, C: 0, D: 0, E: 0 };
-  const evidenceCategoryTotals: Partial<Record<EvidenceCategory, number>> = {};
-
-  const tally = (item: AuditItem) => {
-    if (item.count !== -1) deliveredItems++;
-    if (item.evidence_quotes && item.evidence_quotes.length > 0) itemsWithEvidence++;
-    if (item.category_footprint) {
-      for (const [cat, n] of Object.entries(item.category_footprint)) {
-        const c = cat as EvidenceCategory;
-        evidenceCategoryTotals[c] = (evidenceCategoryTotals[c] || 0) + (n as number);
-      }
-    }
-  };
-
-  Object.entries(logs.maturity).forEach(([key, rawItem]) => {
-    const item = rawItem as AuditItem;
-    tally(item);
-    maturitySum += Math.max(item.count, 0);
-    if (item.status === 'OK') maturityCount++;
-    const catPrefix = key.charAt(0);
-    if (categoryScores[catPrefix] !== undefined) categoryScores[catPrefix] += Math.max(item.count, 0);
-    if (item.count === 0) {
-      silentAreas.push(`Missing Capability: ${key}`);
-      maturityGaps.push(`[${key}] Missing: ${item.reasoning}`);
-    }
-  });
-
-  Object.entries(logs.antipattern).forEach(([key, rawItem]) => {
-    const item = rawItem as AuditItem;
-    tally(item);
-    antipatternSum += Math.max(item.count, 0);
-    if (item.status === 'NOK') antipatternCount++;
-    if (item.count > 0) {
-      antipatternFindings.push(`[${key}] Finding: ${item.evidence.substring(0, 100)}...`);
-    }
-  });
-
-  const delivery_integrity = Math.round((deliveredItems / 50) * 100);
-  const evidence_density = Math.round((itemsWithEvidence / 50) * 100);
-
-  const maturity_ratio = (maturityCount / 25) * 100;
-  const maturity_depth = (maturitySum / 75) * 100;
-  const antipattern_ratio = (antipatternCount / 25) * 100;
-  const antipattern_burden = (antipatternSum / 75) * 100;
-  const finops_readiness = ((maturitySum + (75 - antipatternSum)) / 150) * 100;
-
-  let crawl_walk_run: Phase2Validation['crawl_walk_run'];
-  if (finops_readiness < 33) {
-    crawl_walk_run = 'Crawl';
-  } else if (finops_readiness < 66) {
-    crawl_walk_run = antipattern_burden > 50 ? 'Walk with significant friction' : 'Walk';
-  } else {
-    crawl_walk_run = 'Run';
-  }
-
-  return {
-    metrics: {
-      maturity_ratio,
-      antipattern_ratio,
-      maturity_depth,
-      antipattern_burden,
-      finops_readiness,
-      delivery_integrity,
-      evidence_density
-    },
-    raw_counts: {
-      maturity_sub_criteria_met: maturitySum,
-      antipattern_sub_criteria_met: antipatternSum
-    },
-    maturity_gaps: maturityGaps,
-    antipattern_findings: antipatternFindings,
-    silent_areas: silentAreas,
-    category_scores: categoryScores,
-    evidence_category_totals: evidenceCategoryTotals,
-    crawl_walk_run
-  };
 };
 
 export interface AnalyzeOptions {
@@ -456,12 +373,14 @@ ${tacticsContext}`;
     const handoffSummary = `
 FINOPS DIAGNOSTIC REPORT SUMMARY (Computed by System):
 -------------------------------------------------------
-FinOps Readiness Score: ${Math.round(validationData.metrics.finops_readiness)}/100
+Evidence-Gated FinOps Readiness Score: ${Math.round(validationData.metrics.finops_readiness)}/100
 Maturity Classification: ${validationData.crawl_walk_run}
 Maturity Depth Index: ${Math.round(validationData.metrics.maturity_depth)}%
 Anti-Pattern Burden: ${Math.round(validationData.metrics.antipattern_burden)}%
+Anti-Pattern Burden Confidence: ${validationData.metrics.antipattern_burden_confidence || 'unknown'}
 Delivery Integrity: ${validationData.metrics.delivery_integrity}% (criteria the audit returned data for)
 Evidence Density: ${validationData.metrics.evidence_density}% (criteria with quotable evidence from source)
+${validationData.metrics.readiness_cap_reason ? `Readiness Cap: ${validationData.metrics.readiness_cap_reason}` : ''}
 Anti-Pattern Findings: ${validationData.antipattern_findings.length}
 Maturity Gaps: ${validationData.maturity_gaps.length}
 Silent Areas: ${validationData.silent_areas.length}
@@ -679,14 +598,15 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => `  ${cat}
     };
 
     const buildFallbackEvidenceSummary = () => ({
-      headline: `${validationData.crawl_walk_run} FinOps maturity with ${Math.round(validationData.metrics.antipattern_burden)}% anti-pattern burden`,
+      headline: `${validationData.crawl_walk_run} FinOps maturity with ${Math.round(validationData.metrics.finops_readiness)}/100 evidence-gated readiness`,
       maturity_classification: validationData.crawl_walk_run,
       key_metrics: [
-        `FinOps readiness: ${Math.round(validationData.metrics.finops_readiness)}/100`,
+        `Evidence-gated readiness: ${Math.round(validationData.metrics.finops_readiness)}/100`,
         `Maturity depth: ${Math.round(validationData.metrics.maturity_depth)}%`,
-        `Anti-pattern burden: ${Math.round(validationData.metrics.antipattern_burden)}%`,
+        `Anti-pattern burden: ${Math.round(validationData.metrics.antipattern_burden)}% (${validationData.metrics.antipattern_burden_confidence || 'unknown'} confidence)`,
         `Delivery integrity: ${Math.round(validationData.metrics.delivery_integrity)}%`,
-        `Evidence density: ${Math.round(validationData.metrics.evidence_density)}%`
+        `Evidence density: ${Math.round(validationData.metrics.evidence_density)}%`,
+        ...(validationData.metrics.readiness_cap_reason ? [validationData.metrics.readiness_cap_reason] : [])
       ],
       confirmed_strengths: Object.entries(validationData.category_scores)
         .filter(([, score]) => score >= 10)

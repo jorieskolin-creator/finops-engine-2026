@@ -31,6 +31,8 @@ interface RadarProps {
 interface BenchmarkingProps {
   x: number;
   y: number;
+  evidenceDensity?: number;
+  qualityGateDecision?: QualityGateResult['decision'];
 }
 
 const ALL_CRITERIA_IDS = [
@@ -218,18 +220,19 @@ export const TransferProtocol: React.FC = () => (
   </div>
 );
 
-export const BenchmarkingChart: React.FC<BenchmarkingProps> = ({ x, y }) => {
+export const BenchmarkingChart: React.FC<BenchmarkingProps> = ({ x, y, evidenceDensity = 100, qualityGateDecision }) => {
   const [hoveredQuadrant, setHoveredQuadrant] = useState<string | null>(null);
   const xPos = Math.min(Math.max(x, 0), 100);
   const yPos = Math.min(Math.max(y, 0), 100);
   const isHighUp = yPos > 50;
   const isLeft = xPos < 50;
+  const insufficientEvidence = qualityGateDecision === 'BLOCK' || evidenceDensity < 30;
 
   const quadrants = [
     { id: 'q1', label: 'Cost Blindness', sub: 'Reactive Spend', desc: 'High anti-pattern burden with low maturity. Cloud costs are unmanaged, unoptimized, and invisible to stakeholders.', position: 'top-0 left-0', style: 'bg-gradient-to-br from-rose-950/30 via-slate-900/50 to-transparent border-r border-b border-white/5', text: 'text-rose-400' },
     { id: 'q2', label: 'FinOps Theater', sub: 'Process Without Outcomes', desc: 'Some maturity exists but anti-patterns persist. FinOps meetings happen but optimization outcomes are minimal.', position: 'top-0 right-0', style: 'bg-gradient-to-bl from-amber-950/30 via-slate-900/50 to-transparent border-b border-white/5', text: 'text-amber-400' },
-    { id: 'q3', label: 'Chaos Zone', sub: 'No Discipline', desc: 'Neither maturity nor anti-patterns are strongly present. Cloud governance is absent — spend drifts without direction.', position: 'bottom-0 left-0', style: 'bg-gradient-to-tr from-slate-900/80 via-slate-900/50 to-transparent border-r border-white/5', text: 'text-slate-500' },
-    { id: 'q4', label: 'FinOps Excellence', sub: 'The Goal', desc: 'High maturity with low anti-pattern burden. Cost optimization is embedded in culture, architecture, and automation.', position: 'bottom-0 right-0', style: 'bg-gradient-to-tl from-emerald-950/30 via-slate-900/50 to-transparent', text: 'text-emerald-400' }
+    { id: 'q3', label: 'Unproven / Low Signal', sub: 'Evidence Gap', desc: 'Low validated maturity and low confirmed burden. This may indicate immature practice, sparse evidence, or an irrelevant source document.', position: 'bottom-0 left-0', style: 'bg-gradient-to-tr from-slate-900/80 via-slate-900/50 to-transparent border-r border-white/5', text: 'text-slate-500' },
+    { id: 'q4', label: 'Validated Strength', sub: 'High Confidence Only', desc: 'High validated maturity with low confirmed anti-pattern burden. This quadrant requires enough source evidence to trust both dimensions.', position: 'bottom-0 right-0', style: 'bg-gradient-to-tl from-emerald-950/30 via-slate-900/50 to-transparent', text: 'text-emerald-400' }
   ];
 
   return (
@@ -239,7 +242,7 @@ export const BenchmarkingChart: React.FC<BenchmarkingProps> = ({ x, y }) => {
           <h3 className="text-white font-display font-bold text-2xl tracking-tight pointer-events-auto">FinOps Maturity Matrix</h3>
           <div className="flex items-center gap-2 mt-1.5">
             <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-            <p className="text-slate-300 text-[11px] font-bold uppercase tracking-widest">Maturity (X) vs. Anti-Pattern Burden (Y)</p>
+            <p className="text-slate-300 text-[11px] font-bold uppercase tracking-widest">Validated Maturity (X) vs. Confirmed Burden (Y)</p>
           </div>
         </div>
       </div>
@@ -262,15 +265,23 @@ export const BenchmarkingChart: React.FC<BenchmarkingProps> = ({ x, y }) => {
           <div className="absolute left-3 bottom-3 text-[10px] font-bold text-slate-500 font-mono z-20 pointer-events-none">Low Burden</div>
           <div className="absolute left-3 top-3 text-[10px] font-bold text-slate-500 font-mono z-20 pointer-events-none">High Burden</div>
           <div className="absolute right-3 bottom-3 text-[10px] font-bold text-slate-500 font-mono z-20 pointer-events-none">High Maturity</div>
+          {insufficientEvidence && (
+            <div className="absolute inset-0 z-30 flex items-center justify-center bg-slate-950/70 backdrop-blur-[2px] text-center px-8">
+              <div>
+                <p className="text-rose-300 text-sm font-black uppercase tracking-widest mb-2">Insufficient Evidence</p>
+                <p className="text-xs text-slate-300 leading-relaxed">Matrix placement is held back because the quality gate blocked or source evidence is below the confidence floor.</p>
+              </div>
+            </div>
+          )}
         </div>
         <div
-          className={`absolute z-50 cursor-pointer group/dot transition-all duration-500 ease-out -translate-x-1/2 translate-y-1/2 ${hoveredQuadrant ? 'opacity-0 pointer-events-none scale-50' : 'opacity-100 scale-100'}`}
+          className={`absolute z-50 cursor-pointer group/dot transition-all duration-500 ease-out -translate-x-1/2 translate-y-1/2 ${hoveredQuadrant ? 'opacity-0 pointer-events-none scale-50' : 'opacity-100 scale-100'} ${insufficientEvidence ? 'opacity-70' : ''}`}
           style={{ left: `${xPos}%`, bottom: `${yPos}%` }}
         >
-          <div className="absolute -inset-6 bg-emerald-400/20 rounded-full blur-xl opacity-70 animate-pulse pointer-events-none"></div>
-          <div className="absolute -inset-8 border border-emerald-400/10 rounded-full animate-[ping_2s_cubic-bezier(0,0,0.2,1)_infinite] pointer-events-none"></div>
+          <div className={`absolute -inset-6 rounded-full blur-xl opacity-70 animate-pulse pointer-events-none ${insufficientEvidence ? 'bg-rose-400/20' : 'bg-emerald-400/20'}`}></div>
+          <div className={`absolute -inset-8 border rounded-full animate-[ping_2s_cubic-bezier(0,0,0.2,1)_infinite] pointer-events-none ${insufficientEvidence ? 'border-rose-400/10' : 'border-emerald-400/10'}`}></div>
           <div className="absolute -inset-1.5 bg-white/10 backdrop-blur-sm rounded-full shadow-sm"></div>
-          <div className="relative w-8 h-8 rounded-full shadow-[0_0_20px_rgba(16,185,129,0.8)] border-[2px] border-white bg-gradient-to-br from-emerald-400 via-teal-500 to-cyan-600 group-hover/dot:scale-110 transition-transform duration-300 flex items-center justify-center">
+          <div className={`relative w-8 h-8 rounded-full border-[2px] border-white group-hover/dot:scale-110 transition-transform duration-300 flex items-center justify-center ${insufficientEvidence ? 'bg-gradient-to-br from-rose-400 via-amber-500 to-slate-500 shadow-[0_0_20px_rgba(251,113,133,0.7)]' : 'bg-gradient-to-br from-emerald-400 via-teal-500 to-cyan-600 shadow-[0_0_20px_rgba(16,185,129,0.8)]'}`}>
             <div className="w-2 h-2 bg-white rounded-full shadow-[0_0_5px_white]"></div>
           </div>
           <div className={`absolute ${!isHighUp ? 'bottom-full mb-6' : 'top-full mt-6'} ${isLeft ? 'left-1/2 -translate-x-4' : 'right-1/2 translate-x-4'} bg-slate-900/95 backdrop-blur-xl text-white rounded-2xl shadow-2xl border border-white/10 p-5 min-w-[200px] transition-all duration-300 z-50`}>
@@ -281,6 +292,7 @@ export const BenchmarkingChart: React.FC<BenchmarkingProps> = ({ x, y }) => {
             <div className="space-y-2">
               <div className="flex justify-between items-center gap-6"><span className="text-xs font-bold text-slate-300">Maturity</span><div className="flex items-center gap-2"><div className="w-16 h-1.5 bg-slate-800 rounded-full overflow-hidden border border-slate-700"><div className="h-full bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.5)]" style={{ width: `${xPos}%` }}></div></div><span className="text-sm font-bold font-mono text-emerald-400">{Math.round(x)}%</span></div></div>
               <div className="flex justify-between items-center gap-6"><span className="text-xs font-bold text-slate-300">Burden</span><div className="flex items-center gap-2"><div className="w-16 h-1.5 bg-slate-800 rounded-full overflow-hidden border border-slate-700"><div className="h-full bg-rose-400 shadow-[0_0_8px_rgba(251,113,133,0.5)]" style={{ width: `${yPos}%` }}></div></div><span className="text-sm font-bold font-mono text-rose-400">{Math.round(y)}%</span></div></div>
+              {insufficientEvidence && <p className="text-[10px] text-rose-200 pt-2 border-t border-white/10">Insufficient evidence: quadrant label suppressed.</p>}
             </div>
           </div>
         </div>

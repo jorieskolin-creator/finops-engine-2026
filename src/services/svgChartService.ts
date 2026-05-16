@@ -128,13 +128,13 @@ export const svgRadar = (phase1: Phase1AuditLogs): string => {
   </svg>`;
 };
 
-export const svgScatter = (readiness: number, burden: number): string => {
+export const svgScatter = (maturityDepth: number, burden: number, insufficientEvidence = false): string => {
   const w = 400;
   const h = 360;
   const padding = 56;
   const plotW = w - 2 * padding;
   const plotH = h - 2 * padding;
-  const xVal = Math.max(0, Math.min(100, readiness));
+  const xVal = Math.max(0, Math.min(100, maturityDepth));
   const yVal = Math.max(0, Math.min(100, burden));
   const px = padding + (xVal / 100) * plotW;
   const py = padding + (1 - yVal / 100) * plotH;
@@ -150,19 +150,23 @@ export const svgScatter = (readiness: number, burden: number): string => {
     <rect x="${padding + quadW}" y="${padding + quadH}" width="${quadW}" height="${quadH}" fill="#ecfdf5" />
     <text x="${padding + quadW / 2}" y="${padding + 16}" text-anchor="middle" font-size="10" font-weight="700" fill="#be123c" font-family="system-ui">COST BLINDNESS</text>
     <text x="${padding + 1.5 * quadW}" y="${padding + 16}" text-anchor="middle" font-size="10" font-weight="700" fill="#b45309" font-family="system-ui">FINOPS THEATER</text>
-    <text x="${padding + quadW / 2}" y="${padding + plotH - 8}" text-anchor="middle" font-size="10" font-weight="700" fill="#475569" font-family="system-ui">CHAOS ZONE</text>
-    <text x="${padding + 1.5 * quadW}" y="${padding + plotH - 8}" text-anchor="middle" font-size="10" font-weight="700" fill="#059669" font-family="system-ui">FINOPS EXCELLENCE</text>
+    <text x="${padding + quadW / 2}" y="${padding + plotH - 8}" text-anchor="middle" font-size="10" font-weight="700" fill="#475569" font-family="system-ui">LOW / UNPROVEN SIGNAL</text>
+    <text x="${padding + 1.5 * quadW}" y="${padding + plotH - 8}" text-anchor="middle" font-size="10" font-weight="700" fill="#059669" font-family="system-ui">VALIDATED STRENGTH</text>
     <line x1="${padding + quadW}" y1="${padding}" x2="${padding + quadW}" y2="${padding + plotH}" stroke="#cbd5e1" stroke-width="1" stroke-dasharray="3 3" />
     <line x1="${padding}" y1="${padding + quadH}" x2="${padding + plotW}" y2="${padding + quadH}" stroke="#cbd5e1" stroke-width="1" stroke-dasharray="3 3" />
     <rect x="${padding}" y="${padding}" width="${plotW}" height="${plotH}" fill="none" stroke="#cbd5e1" stroke-width="1" />
-    <text x="${w / 2}" y="${h - 18}" text-anchor="middle" font-size="11" font-weight="700" fill="#334155" font-family="system-ui">FinOps Readiness →</text>
-    <text x="18" y="${h / 2}" text-anchor="middle" font-size="11" font-weight="700" fill="#334155" font-family="system-ui" transform="rotate(-90 18 ${h / 2})">Anti-Pattern Burden →</text>
+    <text x="${w / 2}" y="${h - 18}" text-anchor="middle" font-size="11" font-weight="700" fill="#334155" font-family="system-ui">Validated Maturity →</text>
+    <text x="18" y="${h / 2}" text-anchor="middle" font-size="11" font-weight="700" fill="#334155" font-family="system-ui" transform="rotate(-90 18 ${h / 2})">Confirmed Burden →</text>
+    ${insufficientEvidence ? `
+    <rect x="${padding}" y="${padding}" width="${plotW}" height="${plotH}" fill="#0f172a" fill-opacity="0.72" />
+    <text x="${w / 2}" y="${h / 2 - 10}" text-anchor="middle" font-size="14" font-weight="800" fill="#fecdd3" font-family="system-ui">INSUFFICIENT EVIDENCE</text>
+    <text x="${w / 2}" y="${h / 2 + 10}" text-anchor="middle" font-size="10" fill="#e2e8f0" font-family="system-ui">Quadrant placement withheld</text>` : ''}
     <text x="${padding}" y="${padding + plotH + 16}" text-anchor="middle" font-size="10" fill="#94a3b8" font-family="system-ui">0%</text>
     <text x="${padding + plotW}" y="${padding + plotH + 16}" text-anchor="middle" font-size="10" fill="#94a3b8" font-family="system-ui">100%</text>
     <text x="${padding - 8}" y="${padding + 3}" text-anchor="end" dominant-baseline="middle" font-size="10" fill="#94a3b8" font-family="system-ui">100%</text>
     <text x="${padding - 8}" y="${padding + plotH}" text-anchor="end" dominant-baseline="middle" font-size="10" fill="#94a3b8" font-family="system-ui">0%</text>
     <circle cx="${px.toFixed(2)}" cy="${py.toFixed(2)}" r="12" fill="#0f172a" fill-opacity="0.12" />
-    <circle cx="${px.toFixed(2)}" cy="${py.toFixed(2)}" r="7" fill="#0f172a" stroke="#fff" stroke-width="2" />
+    <circle cx="${px.toFixed(2)}" cy="${py.toFixed(2)}" r="7" fill="${insufficientEvidence ? '#e11d48' : '#0f172a'}" stroke="#fff" stroke-width="2" />
     <text x="${px.toFixed(2)}" y="${(py - 16).toFixed(2)}" text-anchor="middle" font-size="11" font-weight="700" fill="#0f172a" font-family="system-ui">${Math.round(xVal)}% / ${Math.round(yVal)}%</text>
   </svg>`;
 };

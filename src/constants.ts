@@ -3,7 +3,7 @@ import { STRATEGY_GUARDRAILS, FINOPS_PERSONAS } from './knowledge_base';
 
 export const METRIC_DESCRIPTIONS: Record<string, string> = {
   finops_readiness:
-    'Composite score combining maturity points earned and anti-pattern burden, normalized to 0–100. Higher = closer to embedded FinOps practice.',
+    'Evidence-gated readiness score. Based on validated maturity depth, reduced by confirmed anti-pattern burden, and capped when source evidence is sparse.',
   maturity_ratio:
     'Share of the 25 maturity criteria that scored as fully embedded (3 of 3 sub-criteria met).',
   maturity_depth:
@@ -11,7 +11,7 @@ export const METRIC_DESCRIPTIONS: Record<string, string> = {
   antipattern_ratio:
     'Share of the 25 anti-patterns scored as deeply entrenched (3 of 3 sub-criteria met). Higher = worse.',
   antipattern_burden:
-    'Average severity across all 25 anti-patterns. Higher = more friction blocking current FinOps practice.',
+    'Average severity across all 25 anti-patterns. Higher = more friction blocking current FinOps practice. Low values mean "low confirmed burden" only when source evidence is strong enough.',
   delivery_integrity:
     'Did the audit pipeline complete? Share of 50 criteria the LLM returned valid data for. Below 100% means batches failed.',
   evidence_density:
@@ -92,7 +92,7 @@ You will produce THREE persona-tailored evidence summaries from the same diagnos
 ${STRATEGY_PERSONAS_BLOCK}
 
 **PERSONA CONSISTENCY RULES (NON-NEGOTIABLE):**
-- All three summaries must AGREE on facts: scores, classification (Crawl/Walk/Run), confirmed findings, gaps, and anti-pattern burden.
+- All three summaries must AGREE on facts: scores, classification (Insufficient evidence/Crawl/Walk/Run), confirmed findings, gaps, and anti-pattern burden.
 - They differ only in lens, vocabulary, and emphasis — driven by each persona's focus_areas and language_style.
 - They must NOT include tactic IDs, external case studies, implementation directives, or roadmap actions. Those belong only in planning_decision and remediation_roadmap.
 - The CFO summary must NOT invent dollar amounts. Reference impact in business terms (e.g., "material risk exposure", "investment justification") but never fabricate numbers not present in Phase 2.
@@ -135,7 +135,7 @@ ${STRATEGY_PERSONAS_BLOCK}
 2. **Draft Evidence Summaries (One per Persona — Three Total):**
    For EACH persona (finops_lead, cfo, engineering_lead), write a fact-only summary using exactly this 3-paragraph structure, adapted to that persona's vocabulary and emphasis:
 
-   **1. Current-State Snapshot:** State the Crawl/Walk/Run classification, readiness score, maturity depth, anti-pattern burden, delivery integrity, and evidence density.
+   **1. Current-State Snapshot:** State the evidence-gated classification, readiness score, maturity depth, anti-pattern burden, delivery integrity, and evidence density.
 
    **2. Evidence-Backed Findings:** Summarize confirmed maturity strengths, confirmed gaps, anti-patterns, and silent areas. Reference domains and scores only when present in Phase 2 or Phase 1.
 
@@ -167,7 +167,7 @@ STRICTLY return a JSON object.
     },
     "evidence_summary": {
       "headline": "String, fact-only current-state headline",
-      "maturity_classification": "Crawl | Walk | Walk with significant friction | Run",
+      "maturity_classification": "Insufficient evidence | Crawl | Walk | Walk with significant friction | Run",
       "key_metrics": ["String bullets with Phase 2 numbers"],
       "confirmed_strengths": ["String bullets"],
       "confirmed_gaps": ["String bullets"],
@@ -238,7 +238,7 @@ ${STRATEGY_PERSONAS_BLOCK}
 
 <task>
 1. Draft persona evidence summaries using this 3-paragraph structure:
-   **1. Current-State Snapshot:** classification, readiness score, maturity depth, anti-pattern burden, delivery integrity, and evidence density.
+   **1. Current-State Snapshot:** classification, evidence-gated readiness score, maturity depth, anti-pattern burden, delivery integrity, and evidence density.
    **2. Evidence-Backed Findings:** confirmed strengths, confirmed gaps, anti-patterns, and silent areas with domain scores where present.
    **3. Source Confidence & Boundaries:** what the evidence can and cannot prove. No recommendations.
 2. Populate evidence_summary with concise fact-only bullets.
@@ -257,7 +257,7 @@ STRICTLY return JSON:
     },
     "evidence_summary": {
       "headline": "String, fact-only current-state headline",
-      "maturity_classification": "Crawl | Walk | Walk with significant friction | Run",
+      "maturity_classification": "Insufficient evidence | Crawl | Walk | Walk with significant friction | Run",
       "key_metrics": ["String bullets with Phase 2 numbers"],
       "confirmed_strengths": ["String bullets"],
       "confirmed_gaps": ["String bullets"],
@@ -442,7 +442,7 @@ STRICTLY return JSON. The schema in FINDINGS mode:
     },
     "evidence_summary": {
       "headline": "String, fact-only findings headline",
-      "maturity_classification": "Crawl | Walk | Walk with significant friction | Run",
+      "maturity_classification": "Insufficient evidence | Crawl | Walk | Walk with significant friction | Run",
       "key_metrics": ["String bullets with Phase 2 numbers"],
       "confirmed_strengths": ["String bullets"],
       "confirmed_gaps": ["String bullets"],

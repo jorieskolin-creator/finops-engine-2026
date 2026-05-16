@@ -66,6 +66,10 @@ export interface Metrics {
   maturity_depth: number;
   antipattern_burden: number;
   finops_readiness: number;
+  uncapped_readiness?: number;
+  readiness_cap?: number;
+  readiness_cap_reason?: string;
+  antipattern_burden_confidence?: 'confirmed' | 'unknown';
   delivery_integrity: number;
   evidence_density: number;
 }
@@ -83,7 +87,7 @@ export interface Phase2Validation {
   silent_areas: string[];
   category_scores: Record<string, number>;
   evidence_category_totals?: Partial<Record<EvidenceCategory, number>>;
-  crawl_walk_run: 'Crawl' | 'Walk' | 'Walk with significant friction' | 'Run';
+  crawl_walk_run: 'Insufficient evidence' | 'Crawl' | 'Walk' | 'Walk with significant friction' | 'Run';
 }
 
 export type EvidenceCheckStatus = 'supported' | 'weak' | 'unsupported' | 'missing';

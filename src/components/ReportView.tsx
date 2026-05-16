@@ -429,9 +429,13 @@ interface ReportViewProps {
 export const ReportView: React.FC<ReportViewProps> = ({ result, onBack, onDownload }) => {
   const m = result.phase_2_validation.metrics;
   const cwrClass = result.phase_2_validation.crawl_walk_run;
+  const isBlocked = result.quality_gate.decision === 'BLOCK';
+  const isInsufficientEvidence = isBlocked || m.evidence_density < 30;
+  const readinessColor = isBlocked ? '#f43f5e' : '#10b981';
+  const readinessDescription = m.readiness_cap_reason || METRIC_DESCRIPTIONS.finops_readiness;
 
   const gauges = [
-    { value: m.finops_readiness, label: 'FinOps Readiness', color: '#10b981', description: METRIC_DESCRIPTIONS.finops_readiness, trend: 'positive' as const, size: 'large' as const },
+    { value: m.finops_readiness, label: 'Evidence-Gated Readiness', color: readinessColor, description: readinessDescription, trend: 'positive' as const, size: 'large' as const },
     { value: m.maturity_ratio, label: 'Maturity Level', color: '#14b8a6', description: METRIC_DESCRIPTIONS.maturity_ratio, trend: 'positive' as const },
     { value: m.maturity_depth, label: 'Maturity Depth', color: '#06b6d4', description: METRIC_DESCRIPTIONS.maturity_depth, trend: 'positive' as const },
     { value: m.antipattern_ratio, label: 'Anti-Pattern Level', color: '#f43f5e', description: METRIC_DESCRIPTIONS.antipattern_ratio, trend: 'negative' as const },
@@ -470,7 +474,7 @@ export const ReportView: React.FC<ReportViewProps> = ({ result, onBack, onDownlo
 
         <div className="mb-12 p-8 bg-slate-50 rounded-2xl border border-slate-200">
           <div className="flex items-center gap-4 mb-6">
-            <span className={`px-4 py-2 rounded-lg font-bold text-sm ${cwrClass.includes('Crawl') ? 'bg-rose-100 text-rose-700' : cwrClass.includes('Run') ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
+            <span className={`px-4 py-2 rounded-lg font-bold text-sm ${cwrClass.includes('Insufficient') || cwrClass.includes('Crawl') ? 'bg-rose-100 text-rose-700' : cwrClass.includes('Run') ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
               {cwrClass}
             </span>
             <span className="text-slate-400">|</span>
@@ -481,9 +485,9 @@ export const ReportView: React.FC<ReportViewProps> = ({ result, onBack, onDownlo
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
-              <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">FinOps Readiness</p>
-              <p className="text-3xl font-bold text-emerald-600">{Math.round(m.finops_readiness)}%</p>
-              <p className="text-xs text-slate-500 mt-1 leading-snug">{METRIC_DESCRIPTIONS.finops_readiness}</p>
+              <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Evidence-Gated Readiness</p>
+              <p className={`text-3xl font-bold ${isBlocked ? 'text-rose-600' : 'text-emerald-600'}`}>{Math.round(m.finops_readiness)}%</p>
+              <p className="text-xs text-slate-500 mt-1 leading-snug">{readinessDescription}</p>
             </div>
             <div>
               <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Maturity Depth</p>
@@ -526,8 +530,8 @@ export const ReportView: React.FC<ReportViewProps> = ({ result, onBack, onDownlo
             </div>
             <div className="chart-card">
               <h3>Position vs. Quadrants</h3>
-              <p className="chart-desc">FinOps Readiness (x-axis) plotted against Anti-Pattern Burden (y-axis). The bottom-right quadrant is the goal: high readiness, low burden.</p>
-              <InlineSvg html={svgScatter(m.finops_readiness, m.antipattern_burden)} />
+              <p className="chart-desc">Validated maturity depth (x-axis) plotted against confirmed anti-pattern burden (y-axis). When evidence is insufficient, quadrant labels are suppressed.</p>
+              <InlineSvg html={svgScatter(m.maturity_depth, m.antipattern_burden, isInsufficientEvidence)} />
             </div>
           </div>
         </div>

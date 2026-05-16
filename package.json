@@ -8,6 +8,7 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "test:evidence-check": "node scripts/test-evidence-check.mjs",
+    "test:metrics": "node scripts/test-metrics.mjs",
     "preview": "vite preview",
     "start": "node server.js"
   },
