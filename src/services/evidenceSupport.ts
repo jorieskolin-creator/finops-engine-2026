@@ -23,7 +23,7 @@ export const verifyTextEvidenceSupport = (item: Partial<AuditItem> | undefined, 
   const normalizedSource = normalizeEvidenceText(sourceText);
   for (const q of textQuotes) {
     const quote = normalizeEvidenceText(q.quote);
-    if (quote.length >= 8 && normalizedSource.includes(quote)) return 'supported';
+    if (quote.length >= 4 && normalizedSource.includes(quote)) return 'supported';
 
     const meaningfulWords = quote
       .split(/\W+/)
