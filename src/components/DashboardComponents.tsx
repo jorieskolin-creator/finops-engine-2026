@@ -324,15 +324,17 @@ export const QualityGateBanner: React.FC<{ gate: QualityGateResult }> = ({ gate 
 
   const isBlock = gate.decision === 'BLOCK';
   const { primaryWarnings, appendixDiagnostics } = splitQualityGateDiagnostics(gate);
+  const sanitizedCount = gate.fact_check?.sanitized_claims?.length || 0;
   const palette = isBlock
     ? { border: 'border-l-rose-500', bg: 'bg-rose-950/10', dot: 'text-rose-400', label: 'text-rose-300', chip: 'bg-rose-900/40 text-rose-200 border-rose-500/30' }
     : { border: 'border-l-amber-500', bg: 'bg-amber-950/10', dot: 'text-amber-400', label: 'text-amber-300', chip: 'bg-amber-900/40 text-amber-200 border-amber-500/30' };
 
-  const totalIssues = gate.blocking_reasons.length + primaryWarnings.length + appendixDiagnostics.length;
+  const totalIssues = gate.blocking_reasons.length + primaryWarnings.length + appendixDiagnostics.length + sanitizedCount;
   const issueParts = [
     gate.blocking_reasons.length > 0 ? `${gate.blocking_reasons.length} blocking` : '',
     primaryWarnings.length > 0 ? `${primaryWarnings.length} warning${primaryWarnings.length === 1 ? '' : 's'}` : '',
-    appendixDiagnostics.length > 0 ? `${appendixDiagnostics.length} appendix` : ''
+    appendixDiagnostics.length > 0 ? `${appendixDiagnostics.length} appendix` : '',
+    sanitizedCount > 0 ? `${sanitizedCount} sanitized` : ''
   ].filter(Boolean);
 
   return (
@@ -401,6 +403,23 @@ export const QualityGateBanner: React.FC<{ gate: QualityGateResult }> = ({ gate 
                     {gate.fact_check.unsupported_claims.map((c, i) => (
                       <li key={i} className="text-slate-300 pl-3 border-l-2 border-slate-600">
                         <span className="italic">&ldquo;{c.claim}&rdquo;</span>
+                        {c.rationale && <span className="block text-xs text-slate-500 mt-0.5">{c.rationale}</span>}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {gate.fact_check?.sanitized_claims && gate.fact_check.sanitized_claims.length > 0 && (
+                <div className="pt-3 border-t border-slate-700/50">
+                  <p className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">
+                    Sanitized strategy items ({gate.fact_check.sanitized_claims.length})
+                  </p>
+                  <ul className="space-y-2">
+                    {gate.fact_check.sanitized_claims.map((c, i) => (
+                      <li key={i} className="text-slate-300 pl-3 border-l-2 border-slate-600">
+                        <span className="font-mono text-xs">{c.action}</span>
+                        <span className="text-xs text-slate-400"> · {c.source_location || 'unknown'}</span>
+                        <span className="block italic">&ldquo;{c.claim}&rdquo;</span>
                         {c.rationale && <span className="block text-xs text-slate-500 mt-0.5">{c.rationale}</span>}
                       </li>
                     ))}

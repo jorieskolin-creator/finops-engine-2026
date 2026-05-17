@@ -25,6 +25,7 @@ import { FactCheckClaim, FactCheckResult, FactCheckPassSnapshot } from "../types
 import { STAGE_MODELS } from "../models";
 import { runStage, serverLog, newRunId } from "./modelRouter";
 import { sanitizeRoadmapTacticGrounding } from "./tacticGroundingService";
+import { sanitizeStrategyAfterFactCheck } from "./strategySanitationService";
 
 const FACT_CHECK_MAX_RETRIES = 2;
 const ID_VALIDATION_MAX_REGENS = 2;
@@ -785,6 +786,23 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => `  ${cat}
         console.log(`[FinOps] [${runId}] Fact-check trajectory: ${traj}`);
         serverLog(runId, 'info', 'fact_check_trajectory', { trajectory: traj, passes: trajectory.length });
       }
+    }
+
+    const sanitation = sanitizeStrategyAfterFactCheck(strategyData, factCheck);
+    strategyData = sanitation.strategyData;
+    factCheck = sanitation.factCheck;
+    if (sanitation.sanitized.length > 0) {
+      const removed = sanitation.sanitized.filter(i => i.action === 'removed').length;
+      const rewritten = sanitation.sanitized.filter(i => i.action === 'rewritten').length;
+      const quarantined = sanitation.sanitized.filter(i => i.action === 'quarantined').length;
+      console.warn(`[FinOps] [${runId}] Strategy sanitation handled ${sanitation.sanitized.length} unsupported item(s): removed=${removed}, rewritten=${rewritten}, quarantined=${quarantined}.`);
+      serverLog(runId, 'warn', 'strategy_sanitized', {
+        total: sanitation.sanitized.length,
+        removed,
+        rewritten,
+        quarantined,
+        remaining_unsupported: factCheck.unsupported_claims.length,
+      });
     }
 
     onProgress('strategy', 90);
