@@ -24,6 +24,7 @@ import {
 import { FactCheckClaim, FactCheckResult, FactCheckPassSnapshot } from "../types";
 import { STAGE_MODELS } from "../models";
 import { runStage, serverLog, newRunId } from "./modelRouter";
+import { sanitizeRoadmapTacticGrounding } from "./tacticGroundingService";
 
 const FACT_CHECK_MAX_RETRIES = 2;
 const ID_VALIDATION_MAX_REGENS = 2;
@@ -726,7 +727,15 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => `  ${cat}
           invalid_ids: invalid.join(','),
         });
       }
-      return data;
+      const grounding = sanitizeRoadmapTacticGrounding(data, validationData);
+      if (grounding.adjustments.length > 0) {
+        console.warn(`[FinOps] [${runId}] Roadmap tactic grounding adjusted ${grounding.adjustments.length} tactic reference(s) before fact-check.`);
+        serverLog(runId, 'warn', 'roadmap_tactic_grounding_adjusted', {
+          adjustments: grounding.adjustments.length,
+          tactic_ids: grounding.adjustments.map(a => a.tactic_id).join(','),
+        });
+      }
+      return grounding.strategyData;
     };
 
     const trajectory: FactCheckPassSnapshot[] = [];
