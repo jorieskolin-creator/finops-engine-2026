@@ -13,6 +13,7 @@
     "test:report-rendering": "node scripts/test-report-rendering.mjs",
     "test:report-diagnostics": "node scripts/test-report-diagnostics.mjs",
     "test:quality-gate": "node scripts/test-quality-gate-severity.mjs",
+    "test:model-routing": "node scripts/test-model-routing.mjs",
     "test:tactic-grounding": "node scripts/test-tactic-grounding.mjs",
     "preview": "vite preview",
     "start": "node server.js"

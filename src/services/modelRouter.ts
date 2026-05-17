@@ -83,6 +83,36 @@ async function callAnthropic(profile: ModelProfile, prompt: NormalizedPrompt, st
   return postWithTimeout('/api/anthropic-generate', body);
 }
 
+async function callOpenAI(profile: ModelProfile, prompt: NormalizedPrompt, stage: StageId, ctx: RunContext): Promise<{ text: string }> {
+  const content: any[] = [{ type: 'input_text', text: prompt.userText }];
+  if (prompt.images?.length) {
+    content.push({
+      type: 'input_text',
+      text: `\n\nThe following ${prompt.images.length} image(s) are part of the source material. Treat their visible content as evidence on equal footing with text. Each image is identified by its source filename and (for PDF-derived images) page number; for those, set evidence_source: "image" and include page_number when citing.`,
+    });
+    for (const img of prompt.images) {
+      const label = img.page_number !== undefined
+        ? `[Image: ${img.source_name} — page ${img.page_number}]`
+        : `[Image: ${img.source_name}]`;
+      content.push({ type: 'input_text', text: `\n${label}\n` });
+      content.push({
+        type: 'input_image',
+        image_url: `data:${img.mimeType};base64,${img.data}`,
+      });
+    }
+  }
+
+  return postWithTimeout('/api/openai-generate', {
+    model: profile.id,
+    input: [{ role: 'user', content }],
+    instructions: prompt.systemInstruction,
+    reasoning: profile.openaiReasoning,
+    maxOutputTokens: profile.maxTokens ?? 4096,
+    stage,
+    runId: ctx.runId,
+  });
+}
+
 // Reads the NDJSON stream emitted by api/generate.js + api/anthropic-generate.js.
 //
 // Wire frames:
@@ -153,6 +183,7 @@ async function postWithTimeout(url: string, body: any): Promise<{ text: string }
 export async function callModel(profile: ModelProfile, prompt: NormalizedPrompt, stage: StageId, ctx: RunContext): Promise<{ text: string }> {
   if (profile.provider === 'gemini') return callGemini(profile, prompt, stage, ctx);
   if (profile.provider === 'anthropic') return callAnthropic(profile, prompt, stage, ctx);
+  if (profile.provider === 'openai') return callOpenAI(profile, prompt, stage, ctx);
   throw new Error(`Unknown provider: ${(profile as any).provider}`);
 }
 

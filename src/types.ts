@@ -259,6 +259,13 @@ export type ClaimFailureType =
   | 'out_of_scope'
   | 'other';
 
+export type ClaimSeverity =
+  | 'BLOCKING_UNSUPPORTED_FACT'
+  | 'BLOCKING_UNSAFE_ROADMAP'
+  | 'WARN_MISCLASSIFIED_BUT_REAL'
+  | 'WARN_TACTIC_HYGIENE'
+  | 'SUPPORTED';
+
 export type ClaimSourceLocation = PersonaId | 'diagnosis' | 'planning_decision' | 'roadmap';
 
 export interface FactCheckClaim {
@@ -266,6 +273,7 @@ export interface FactCheckClaim {
   classification: ClaimClassification;
   rationale: string;
   failure_type?: ClaimFailureType;
+  severity?: ClaimSeverity;
   missing_material?: string;
   source_location?: ClaimSourceLocation;
 }

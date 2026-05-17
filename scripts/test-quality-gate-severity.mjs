@@ -25,6 +25,8 @@ await writeFile(
 
 const {
   isDomainTaxonomyHygieneClaim,
+  isMisclassifiedButRealClaim,
+  isTacticHygieneClaim,
   isBlockingUnsupportedClaim,
   runQualityGate
 } = await import(`file://${modulePath}`);
@@ -58,6 +60,30 @@ const domainClaim = {
 assert.equal(isDomainTaxonomyHygieneClaim(domainClaim), true);
 assert.equal(isBlockingUnsupportedClaim(domainClaim), false);
 
+const misclassifiedRealClaim = {
+  claim: 'CI runner spot fallback is manual.',
+  classification: 'unsupported',
+  source_location: 'diagnosis',
+  failure_type: 'unsupported_org_claim',
+  severity: 'WARN_MISCLASSIFIED_BUT_REAL',
+  rationale: 'While this gap exists in the source, it is incorrectly listed as a confirmed anti-pattern.',
+  missing_material: 'Phase 1 evidence explicitly identifying it as a confirmed anti-pattern.'
+};
+assert.equal(isMisclassifiedButRealClaim(misclassifiedRealClaim), true);
+assert.equal(isBlockingUnsupportedClaim(misclassifiedRealClaim), false);
+
+const planningTacticHygieneClaim = {
+  claim: 'Enforce lifecycle tiering [TAC-OPT-005].',
+  classification: 'unsupported',
+  source_location: 'planning_decision',
+  failure_type: 'other',
+  severity: 'WARN_TACTIC_HYGIENE',
+  rationale: 'Tactic IDs are allowed only in roadmap actions; the action itself is grounded.',
+  missing_material: 'No additional evidence required.'
+};
+assert.equal(isTacticHygieneClaim(planningTacticHygieneClaim), true);
+assert.equal(isBlockingUnsupportedClaim(planningTacticHygieneClaim), false);
+
 {
   const gate = runQualityGate(
     phase1,
@@ -90,6 +116,26 @@ assert.equal(isBlockingUnsupportedClaim(domainClaim), false);
     validationOk,
     undefined,
     {
+      attempts: 3,
+      total_claims: 6,
+      supported_count: 2,
+      unsupported_claims: [misclassifiedRealClaim, planningTacticHygieneClaim, domainClaim, domainClaim],
+      failed: false
+    }
+  );
+  assert.equal(gate.decision, 'WARN');
+  assert.equal(gate.blocking_reasons.length, 0);
+  assert.ok(gate.warnings.some(w => w.startsWith('Strategy hygiene: 4')));
+}
+
+{
+  const gate = runQualityGate(
+    phase1,
+    phase2,
+    validationOk,
+    validationOk,
+    undefined,
+    {
       attempts: 1,
       total_claims: 1,
       supported_count: 0,
@@ -99,6 +145,31 @@ assert.equal(isBlockingUnsupportedClaim(domainClaim), false);
         source_location: 'roadmap',
         failure_type: 'fabricated_number',
         rationale: 'The number is not in the source.'
+      }],
+      failed: false
+    }
+  );
+  assert.equal(gate.decision, 'BLOCK');
+}
+
+{
+  const gate = runQualityGate(
+    phase1,
+    phase2,
+    validationOk,
+    validationOk,
+    undefined,
+    {
+      attempts: 1,
+      total_claims: 1,
+      supported_count: 0,
+      unsupported_claims: [{
+        claim: 'Replace all production workloads with spot instances immediately.',
+        classification: 'unsupported',
+        source_location: 'roadmap',
+        failure_type: 'other',
+        severity: 'BLOCKING_UNSAFE_ROADMAP',
+        rationale: 'The action is unsafe and does not follow from locked findings.'
       }],
       failed: false
     }
