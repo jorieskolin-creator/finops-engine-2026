@@ -4,6 +4,7 @@ import { BATCH_TITLES, MASTER_BINGO_FINOPS } from '../knowledge_base';
 import { METRIC_DESCRIPTIONS } from '../constants';
 import { SVG_CSS, svgGaugeCard, svgRadar, svgScatter } from './svgChartService';
 import { isInsufficientEvidenceReport, renderInlineMarkdownHtml, renderMarkdownSummaryHtml, strengthsSectionTitle } from './reportTextService';
+import { antiPatternStatusLabel, inferAntiPatternAbsenceStatus } from './antiPatternSemantics';
 
 const BATCHES: Array<'A' | 'B' | 'C' | 'D' | 'E'> = ['A', 'B', 'C', 'D', 'E'];
 
@@ -61,6 +62,14 @@ const statusBadgeClass = (status: string): string => {
   return 'badge-none';
 };
 
+const antiPatternBadgeClass = (item?: AuditItem): string => {
+  const status = inferAntiPatternAbsenceStatus(item);
+  if (status === 'confirmed_present') return 'badge-nok';
+  if (status === 'partially_present') return 'badge-partial';
+  if (status === 'tested_absent') return 'badge-ok';
+  return 'badge-none';
+};
+
 const evidenceCheckClass = (status?: AuditItem['evidence_check_status']): string => {
   if (status === 'supported') return 'ec-supported';
   if (status === 'weak') return 'ec-weak';
@@ -100,16 +109,17 @@ const renderEvidenceCheckSummary = (result: DiagnosticResult): string => {
   </div>`;
 };
 
-const renderForensicCriterion = (cat: { id: string; title: string; desc: string }, item: AuditItem | undefined): string => `
+const renderForensicCriterion = (cat: { id: string; title: string; desc: string }, item: AuditItem | undefined, stream: 'maturity' | 'antipattern'): string => `
     <div class="forensic-card">
       <div class="forensic-head">
         <div>
           <span class="forensic-id">${escapeHtml(cat.id)}</span>
           <h4>${escapeHtml(cat.title)}</h4>
         </div>
-        <span class="badge ${statusBadgeClass(item?.status ?? '')}">${escapeHtml(item?.status ?? 'No Data')}</span>
+        <span class="badge ${stream === 'antipattern' ? antiPatternBadgeClass(item) : statusBadgeClass(item?.status ?? '')}">${escapeHtml(stream === 'antipattern' ? antiPatternStatusLabel(item) : (item?.status ?? 'No Data'))}</span>
       </div>
       <p class="forensic-desc">${escapeHtml(cat.desc)}</p>
+      ${stream === 'antipattern' && item?.coverage_reason ? `<div class="gate-rationale">${escapeHtml(item.coverage_reason)}</div>` : ''}
       ${item?.evidence_check_status ? `
       <div class="forensic-block">
         <span class="evidence-check-badge ${evidenceCheckClass(item.evidence_check_status)}">Evidence-check: ${escapeHtml(item.evidence_check_status)}</span>
@@ -152,7 +162,7 @@ const renderForensicSection = (
     return `
     <div class="forensic-batch">
       <h3 class="forensic-batch-title">${batchId} · ${escapeHtml(BATCH_TITLES[batchId])}</h3>
-      ${items.map(cat => renderForensicCriterion(cat, logs[cat.id])).join('')}
+      ${items.map(cat => renderForensicCriterion(cat, logs[cat.id], stream)).join('')}
     </div>`;
   }).join('');
   return `
@@ -175,7 +185,7 @@ const generateReportHtml = (result: DiagnosticResult): string => {
   const m = result.phase_2_validation.metrics;
   const cwrClass = result.phase_2_validation.crawl_walk_run;
   const isBlocked = result.quality_gate.decision === 'BLOCK';
-  const isInsufficientEvidence = isBlocked || m.evidence_density < 30;
+  const isInsufficientEvidence = isBlocked || m.evidence_density < 30 || m.antipattern_coverage < 60;
   const cwrSlug = cwrClass.toLowerCase().includes('insufficient') || cwrClass.toLowerCase().includes('crawl') ? 'crawl' : cwrClass.toLowerCase().includes('run') ? 'run' : 'walk';
   const readinessDescription = m.readiness_cap_reason || METRIC_DESCRIPTIONS.finops_readiness;
 
@@ -185,6 +195,8 @@ const generateReportHtml = (result: DiagnosticResult): string => {
     { value: m.maturity_depth, label: 'Maturity Depth', color: '#06b6d4', description: METRIC_DESCRIPTIONS.maturity_depth, trend: 'positive' as const },
     { value: m.antipattern_ratio, label: 'Anti-Pattern Level', color: '#f43f5e', description: METRIC_DESCRIPTIONS.antipattern_ratio, trend: 'negative' as const },
     { value: m.antipattern_burden, label: 'Anti-Pattern Burden', color: '#e11d48', description: METRIC_DESCRIPTIONS.antipattern_burden, trend: 'negative' as const },
+    { value: m.antipattern_clearance, label: 'Anti-Pattern Clearance', color: '#10b981', description: METRIC_DESCRIPTIONS.antipattern_clearance, trend: 'positive' as const },
+    { value: m.antipattern_coverage, label: 'Anti-Pattern Coverage', color: '#64748b', description: METRIC_DESCRIPTIONS.antipattern_coverage, trend: 'positive' as const },
     { value: m.delivery_integrity, label: 'Delivery Integrity', color: '#475569', description: METRIC_DESCRIPTIONS.delivery_integrity, trend: 'positive' as const },
     { value: m.evidence_density, label: 'Evidence Density', color: '#475569', description: METRIC_DESCRIPTIONS.evidence_density, trend: 'positive' as const }
   ];
@@ -342,6 +354,16 @@ const generateReportHtml = (result: DiagnosticResult): string => {
         <div class="metric-desc">${escapeHtml(METRIC_DESCRIPTIONS.antipattern_burden)}</div>
       </div>
       <div class="metric">
+        <div class="metric-label">Anti-Pattern Clearance</div>
+        <div class="metric-value emerald">${Math.round(m.antipattern_clearance)}%</div>
+        <div class="metric-desc">${escapeHtml(METRIC_DESCRIPTIONS.antipattern_clearance)}</div>
+      </div>
+      <div class="metric">
+        <div class="metric-label">Anti-Pattern Coverage</div>
+        <div class="metric-value">${Math.round(m.antipattern_coverage)}%</div>
+        <div class="metric-desc">${escapeHtml(METRIC_DESCRIPTIONS.antipattern_coverage)}</div>
+      </div>
+      <div class="metric">
         <div class="metric-label">Maturity Ratio</div>
         <div class="metric-value violet">${Math.round(m.maturity_ratio)}%</div>
         <div class="metric-desc">${escapeHtml(METRIC_DESCRIPTIONS.maturity_ratio)}</div>
@@ -363,7 +385,7 @@ const generateReportHtml = (result: DiagnosticResult): string => {
     </div>
     <div class="chart-card">
       <h3>Position vs. Quadrants</h3>
-      <p class="chart-desc">Validated maturity depth (x-axis) plotted against confirmed anti-pattern burden (y-axis). When evidence is insufficient, quadrant labels are suppressed.</p>
+      <p class="chart-desc">Validated maturity depth (x-axis) plotted against confirmed anti-pattern burden (y-axis). When evidence or anti-pattern coverage is insufficient, quadrant labels are suppressed.</p>
       ${svgScatter(m.maturity_depth, m.antipattern_burden, isInsufficientEvidence)}
     </div>
   </div>
@@ -389,6 +411,8 @@ const generateReportHtml = (result: DiagnosticResult): string => {
           ${list(strengthsSectionTitle(useSourceObservationTitle), evidence.confirmed_strengths)}
           ${list('Confirmed gaps', evidence.confirmed_gaps)}
           ${list('Confirmed anti-patterns', evidence.confirmed_antipatterns)}
+          ${list('Verified anti-pattern absences', result.phase_2_validation.verified_antipattern_absences)}
+          ${list('Anti-patterns not assessable from source', result.phase_2_validation.unknown_antipattern_absences)}
           ${list('Silent / missing evidence', evidence.silent_or_missing_evidence)}
         </div>
       </div>`;

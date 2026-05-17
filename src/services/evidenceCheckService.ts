@@ -5,10 +5,16 @@ import {
   EvidenceCheckItem,
   EvidenceCheckResult,
   EvidenceCheckStatus,
-  ImageInput
+  ImageInput,
+  AntiPatternAbsenceStatus
 } from '../types';
 import { runStage, RunContext } from './modelRouter';
 import { verifyTextEvidenceSupport } from './evidenceSupport';
+import {
+  antiPatternStatusDescription,
+  inferAntiPatternAbsenceStatus,
+  normalizeAntiPatternAbsenceStatus
+} from './antiPatternSemantics';
 
 type Stream = 'maturity' | 'antipattern';
 
@@ -97,6 +103,12 @@ ${summarizeBatch(batch)}
 - Do not invent stronger scores. If unsure, recommend the lower score.
 - verified_count must be 0-3 and must not exceed original_count.
 - rescan_recommended should be true when status is weak, unsupported, or missing and original_count > 0.
+- For anti-pattern items, also return antipattern_absence_status:
+  - "confirmed_present": verified_count > 0 and the harmful pattern is evidenced.
+  - "partially_present": verified_count is 1-2 or the harmful pattern signal is weak/partial.
+  - "tested_absent": verified_count is 0 AND the source has relevant coverage that would reasonably reveal the anti-pattern if present.
+  - "unknown_absent": verified_count is 0 BUT the source is silent, irrelevant, or too weak to prove absence.
+- For anti-pattern "tested_absent" or "unknown_absent", include coverage_reason explaining why absence is meaningful or why it is not assessable.
 </rules>
 
 <output_format>
@@ -111,6 +123,8 @@ Return STRICT JSON:
       "verified_count": 1,
       "rationale": "Short explanation of what the raw material does or does not support.",
       "quote_supported": true,
+      "antipattern_absence_status": "confirmed_present | partially_present | tested_absent | unknown_absent",
+      "coverage_reason": "For anti-patterns only: why absence is verified or not assessable.",
       "rescan_recommended": true
     }
   ]
@@ -151,7 +165,9 @@ export const runEvidenceCheck = async (
         const raw = byKey.get(`${stream}.${id}`);
         const scannerItem = (batch as any)[stream]?.[id] as Partial<AuditItem> | undefined;
         const localStatus = verifyTextEvidenceSupport(scannerItem, text);
-        let status = original === 0 && !raw ? 'supported' : statusFor(raw?.status);
+        let status = original === 0
+          ? (raw && statusFor(raw?.status) !== 'missing' ? statusFor(raw?.status) : 'supported')
+          : statusFor(raw?.status);
         if (original > 0 && localStatus !== 'supported') {
           status = status === 'supported' || localStatus === 'missing' || localStatus === 'unsupported'
             ? localStatus
@@ -172,23 +188,39 @@ export const runEvidenceCheck = async (
         if (original > verified_count && status === 'supported') {
           status = verified_count === 0 ? 'unsupported' : 'weak';
         }
+        const rationale = typeof raw?.rationale === 'string'
+          ? raw.rationale
+          : original === 0
+            ? 'Scanner reported no finding; anti-pattern absence still depends on source coverage.'
+            : localStatus === 'supported'
+              ? 'Deterministic fallback found scanner evidence in the raw source.'
+              : 'Evidence verifier did not return a supported result for this scored finding.';
+        const antipattern_absence_status = stream === 'antipattern'
+          ? antiPatternStatusForItem(
+            verified_count,
+            raw?.antipattern_absence_status,
+            scannerItem || {},
+            typeof raw?.coverage_reason === 'string' ? raw.coverage_reason : rationale
+          )
+          : undefined;
+        const coverage_reason = stream === 'antipattern'
+          ? (typeof raw?.coverage_reason === 'string'
+            ? raw.coverage_reason
+            : antiPatternStatusDescription(antipattern_absence_status || 'unknown_absent'))
+          : undefined;
         items.push({
           stream,
           id,
           status,
           original_count: original,
           verified_count,
-          rationale: typeof raw?.rationale === 'string'
-            ? raw.rationale
-            : original === 0
-              ? 'Scanner reported no finding; no evidence support required.'
-              : localStatus === 'supported'
-                ? 'Deterministic fallback found scanner evidence in the raw source.'
-                : 'Evidence verifier did not return a supported result for this scored finding.',
+          rationale,
           rescan_recommended: Boolean(raw?.rescan_recommended) || (original > verified_count),
           quote_supported: localStatus === 'supported'
             ? (typeof raw?.quote_supported === 'boolean' ? raw.quote_supported : status === 'supported')
-            : false
+            : false,
+          antipattern_absence_status,
+          coverage_reason
         });
       }
     }
@@ -231,6 +263,23 @@ const statusForScore = (stream: Stream, count: number): AuditItem['status'] => {
   return 'Partial';
 };
 
+const antiPatternStatusForItem = (
+  verified: number,
+  rawStatus: unknown,
+  existing: Partial<AuditItem>,
+  rationale: string
+): AntiPatternAbsenceStatus => {
+  const explicit = normalizeAntiPatternAbsenceStatus(rawStatus);
+  if (verified >= 3) return 'confirmed_present';
+  if (verified > 0) return 'partially_present';
+  if (explicit === 'tested_absent' || explicit === 'unknown_absent') return explicit;
+  return inferAntiPatternAbsenceStatus({
+    ...existing,
+    count: verified,
+    coverage_reason: existing.coverage_reason || rationale
+  });
+};
+
 export const applyEvidenceCheckToBatch = (
   batch: BatchAuditResult,
   result: EvidenceCheckResult,
@@ -249,6 +298,9 @@ export const applyEvidenceCheckToBatch = (
     const key = `${item.stream}.${item.id}`;
     const downgraded = verified < item.original_count;
     const reason = item.rationale || 'Evidence verifier adjusted this score.';
+    const antipatternAbsenceStatus = item.stream === 'antipattern'
+      ? item.antipattern_absence_status || antiPatternStatusForItem(verified, undefined, existing, reason)
+      : undefined;
 
     streamBucket[item.id] = {
       ...existing,
@@ -257,12 +309,19 @@ export const applyEvidenceCheckToBatch = (
       evidence: downgraded && verified === 0
         ? `Evidence-check downgraded this finding: ${reason}`
         : existing.evidence,
-      evidence_quotes: verified === 0 ? [] : (existing.evidence_quotes || []),
+      evidence_quotes: verified === 0 && antipatternAbsenceStatus !== 'tested_absent'
+        ? []
+        : (existing.evidence_quotes || []),
+      is_silent: item.stream === 'antipattern'
+        ? antipatternAbsenceStatus === 'unknown_absent'
+        : existing.is_silent,
       evidence_check_status: item.status,
       original_count: item.original_count,
       verified_count: verified,
       adjustment_reason: reason,
-      rescan_attempted: rescannedKeys.has(key)
+      rescan_attempted: rescannedKeys.has(key),
+      antipattern_absence_status: antipatternAbsenceStatus,
+      coverage_reason: item.coverage_reason || existing.coverage_reason || (antipatternAbsenceStatus ? antiPatternStatusDescription(antipatternAbsenceStatus) : undefined)
     };
 
     if (downgraded || item.status !== 'supported' || rescannedKeys.has(key)) {

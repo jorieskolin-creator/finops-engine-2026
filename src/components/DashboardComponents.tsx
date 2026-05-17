@@ -2,6 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { ResponsiveContainer, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar, Legend, Tooltip } from 'recharts';
 import { AuditCategory, AuditItem, QualityGateResult, RemediationStep } from '../types';
 import { BATCH_DEFINITIONS, MASTER_BINGO_FINOPS } from '../knowledge_base';
+import { antiPatternStatusLabel, inferAntiPatternAbsenceStatus } from '../services/antiPatternSemantics';
 
 interface GaugeProps {
   value: number;
@@ -32,6 +33,7 @@ interface BenchmarkingProps {
   x: number;
   y: number;
   evidenceDensity?: number;
+  antipatternCoverage?: number;
   qualityGateDecision?: QualityGateResult['decision'];
 }
 
@@ -220,13 +222,13 @@ export const TransferProtocol: React.FC = () => (
   </div>
 );
 
-export const BenchmarkingChart: React.FC<BenchmarkingProps> = ({ x, y, evidenceDensity = 100, qualityGateDecision }) => {
+export const BenchmarkingChart: React.FC<BenchmarkingProps> = ({ x, y, evidenceDensity = 100, antipatternCoverage = 100, qualityGateDecision }) => {
   const [hoveredQuadrant, setHoveredQuadrant] = useState<string | null>(null);
   const xPos = Math.min(Math.max(x, 0), 100);
   const yPos = Math.min(Math.max(y, 0), 100);
   const isHighUp = yPos > 50;
   const isLeft = xPos < 50;
-  const insufficientEvidence = qualityGateDecision === 'BLOCK' || evidenceDensity < 30;
+  const insufficientEvidence = qualityGateDecision === 'BLOCK' || evidenceDensity < 30 || antipatternCoverage < 60;
 
   const quadrants = [
     { id: 'q1', label: 'Cost Blindness', sub: 'Reactive Spend', desc: 'High anti-pattern burden with low maturity. Cloud costs are unmanaged, unoptimized, and invisible to stakeholders.', position: 'top-0 left-0', style: 'bg-gradient-to-br from-rose-950/30 via-slate-900/50 to-transparent border-r border-b border-white/5', text: 'text-rose-400' },
@@ -269,7 +271,7 @@ export const BenchmarkingChart: React.FC<BenchmarkingProps> = ({ x, y, evidenceD
             <div className="absolute inset-0 z-30 flex items-center justify-center bg-slate-950/70 backdrop-blur-[2px] text-center px-8">
               <div>
                 <p className="text-rose-300 text-sm font-black uppercase tracking-widest mb-2">Insufficient Evidence</p>
-                <p className="text-xs text-slate-300 leading-relaxed">Matrix placement is held back because the quality gate blocked or source evidence is below the confidence floor.</p>
+                <p className="text-xs text-slate-300 leading-relaxed">Matrix placement is held back because the quality gate blocked, source evidence is below the confidence floor, or anti-pattern coverage is too low to trust absence.</p>
               </div>
             </div>
           )}
@@ -292,7 +294,7 @@ export const BenchmarkingChart: React.FC<BenchmarkingProps> = ({ x, y, evidenceD
             <div className="space-y-2">
               <div className="flex justify-between items-center gap-6"><span className="text-xs font-bold text-slate-300">Maturity</span><div className="flex items-center gap-2"><div className="w-16 h-1.5 bg-slate-800 rounded-full overflow-hidden border border-slate-700"><div className="h-full bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.5)]" style={{ width: `${xPos}%` }}></div></div><span className="text-sm font-bold font-mono text-emerald-400">{Math.round(x)}%</span></div></div>
               <div className="flex justify-between items-center gap-6"><span className="text-xs font-bold text-slate-300">Burden</span><div className="flex items-center gap-2"><div className="w-16 h-1.5 bg-slate-800 rounded-full overflow-hidden border border-slate-700"><div className="h-full bg-rose-400 shadow-[0_0_8px_rgba(251,113,133,0.5)]" style={{ width: `${yPos}%` }}></div></div><span className="text-sm font-bold font-mono text-rose-400">{Math.round(y)}%</span></div></div>
-              {insufficientEvidence && <p className="text-[10px] text-rose-200 pt-2 border-t border-white/10">Insufficient evidence: quadrant label suppressed.</p>}
+              {insufficientEvidence && <p className="text-[10px] text-rose-200 pt-2 border-t border-white/10">Insufficient evidence or anti-pattern coverage: quadrant label suppressed.</p>}
             </div>
           </div>
         </div>
@@ -456,14 +458,26 @@ export const AuditGrid: React.FC<AuditGridProps> = ({ title, data, isAntipattern
   const getStatusStyle = (item: AuditItem, isAnti: boolean) => {
     if (item.is_silent) return 'bg-slate-900/30 border-slate-800 text-slate-500';
     const s = (item.status || "NOK").toUpperCase();
-    if (isAnti) return s === 'NOK' ? 'bg-rose-950/20 border-rose-900/50 hover:shadow-[0_0_15px_rgba(244,63,94,0.1)]' : s === 'PARTIAL' ? 'bg-orange-950/20 border-orange-900/50' : 'bg-emerald-950/20 border-emerald-900/50';
+    if (isAnti) {
+      const antiStatus = inferAntiPatternAbsenceStatus(item);
+      if (antiStatus === 'confirmed_present') return 'bg-rose-950/20 border-rose-900/50 hover:shadow-[0_0_15px_rgba(244,63,94,0.1)]';
+      if (antiStatus === 'partially_present') return 'bg-orange-950/20 border-orange-900/50';
+      if (antiStatus === 'tested_absent') return 'bg-emerald-950/20 border-emerald-900/50';
+      return 'bg-slate-900/30 border-slate-800 text-slate-500';
+    }
     return s === 'OK' ? 'bg-emerald-950/20 border-emerald-900/50 hover:shadow-[0_0_15px_rgba(16,185,129,0.1)]' : s === 'PARTIAL' ? 'bg-teal-950/20 border-teal-900/50' : 'bg-slate-900/50 border-slate-800';
   };
 
   const getStatusLabelColor = (item: AuditItem, isAnti: boolean) => {
     const s = (item.status || "NOK").toUpperCase();
     if (item.is_silent) return "bg-slate-800 text-slate-500 border border-slate-700";
-    if (isAnti) return s === 'NOK' ? "bg-rose-950/40 text-rose-400 border border-rose-900" : s === 'PARTIAL' ? "bg-orange-950/40 text-orange-400 border border-orange-900" : "bg-emerald-950/40 text-emerald-400 border border-emerald-900";
+    if (isAnti) {
+      const antiStatus = inferAntiPatternAbsenceStatus(item);
+      if (antiStatus === 'confirmed_present') return "bg-rose-950/40 text-rose-400 border border-rose-900";
+      if (antiStatus === 'partially_present') return "bg-orange-950/40 text-orange-400 border border-orange-900";
+      if (antiStatus === 'tested_absent') return "bg-emerald-950/40 text-emerald-400 border border-emerald-900";
+      return "bg-slate-800 text-slate-500 border border-slate-700";
+    }
     return s === 'OK' ? "bg-emerald-950/40 text-emerald-400 border border-emerald-900" : s === 'PARTIAL' ? "bg-teal-950/40 text-teal-400 border border-teal-900" : "bg-slate-800 text-slate-400 border border-slate-700";
   };
 
@@ -522,7 +536,7 @@ export const AuditGrid: React.FC<AuditGridProps> = ({ title, data, isAntipattern
               <div className="flex items-center gap-3 mb-2">
                 <span className={`text-xs font-mono font-bold ${isAntipattern ? 'text-rose-400' : 'text-emerald-400'}`}>{item.id}</span>
                 <h5 className="text-sm font-bold text-slate-200">{item.title}</h5>
-                <span className={`ml-auto text-[10px] font-bold px-2 py-0.5 rounded uppercase ${isAntipattern ? 'bg-rose-900/50 text-rose-300' : 'bg-slate-800 text-slate-400'}`}>{item.status}</span>
+                <span className={`ml-auto text-[10px] font-bold px-2 py-0.5 rounded uppercase ${isAntipattern ? 'bg-rose-900/50 text-rose-300' : 'bg-slate-800 text-slate-400'}`}>{isAntipattern ? antiPatternStatusLabel(item) : item.status}</span>
               </div>
               {renderEvidenceCheckBadge(item)}
               <p className="text-xs text-slate-300 leading-relaxed italic mb-3">"{item.reasoning}"</p>
@@ -560,7 +574,7 @@ export const AuditGrid: React.FC<AuditGridProps> = ({ title, data, isAntipattern
                 <div className="flex justify-between items-start mb-2">
                   <span className="font-mono text-xs font-bold opacity-50">{key}</span>
                   <div className="flex flex-col items-end gap-1">
-                    {!item.is_silent && <span className={`text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md ${labelColor}`}>{item.status}</span>}
+                    {(!item.is_silent || isAntipattern) && <span className={`text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md ${labelColor}`}>{isAntipattern ? antiPatternStatusLabel(item) : item.status}</span>}
                     {renderEvidenceCheckBadge(item)}
                   </div>
                 </div>

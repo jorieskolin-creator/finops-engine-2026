@@ -22,7 +22,7 @@ You must evaluate **ALL 3 criteria** for every item to determine the final score
 *   **Plans ≠ Practice:** "We plan to implement tagging" = Score 1 maximum.
 *   **Tool ≠ Usage:** "We use AWS Cost Explorer" without usage evidence = Score 1.
 *   **Maturity Stream:** High score (3) means the capability is mature and embedded. Low score (0) means it is missing.
-*   **Anti-Pattern Stream:** High score (3) means the harmful pattern is deeply present (BAD). Low score (0) means the pattern is absent (GOOD).
+*   **Anti-Pattern Stream:** High score (3) means the harmful pattern is deeply present (BAD). Low score (0) means no harmful-pattern evidence was found. Treat that as GOOD only when the source material has relevant coverage that would reveal the anti-pattern if present; otherwise it is UNKNOWN/NOT ASSESSED.
 *   **Financial Sensitivity:** Do NOT extract or repeat specific dollar amounts, account numbers, or pricing terms from the document.
 
 ### EVIDENCE QUOTES (CRITICAL)
@@ -161,7 +161,8 @@ For ONLY the listed criteria, re-evaluate all 3 sub-criteria and return correcte
 Rules:
 1. If evidence is not directly present in the source, lower the Count.
 2. For Count > 0, include at least one direct text quote or visible-image description in evidence_quotes.
-3. Do not return criteria that were not listed in <target_criteria>.
+3. For anti-pattern Count = 0, distinguish verified absence from unknown absence in the evidence/reasoning text. Verified absence requires relevant source coverage; silence or irrelevant source material is not positive evidence.
+4. Do not return criteria that were not listed in <target_criteria>.
 
 Required JSON shape:
 {

@@ -12,6 +12,10 @@ export const METRIC_DESCRIPTIONS: Record<string, string> = {
     'Share of the 25 anti-patterns scored as deeply entrenched (3 of 3 sub-criteria met). Higher = worse.',
   antipattern_burden:
     'Average severity across all 25 anti-patterns. Higher = more friction blocking current FinOps practice. Low values mean "low confirmed burden" only when source evidence is strong enough.',
+  antipattern_clearance:
+    'Share of anti-patterns that were meaningfully tested and not found. This is positive only when the source had relevant coverage.',
+  antipattern_coverage:
+    'Share of anti-pattern criteria that were meaningfully assessed, either as findings or verified absences. Low coverage means absence is unknown, not good.',
   delivery_integrity:
     'Did the audit pipeline complete? Share of 50 criteria the LLM returned valid data for. Below 100% means batches failed.',
   evidence_density:
@@ -135,9 +139,9 @@ ${STRATEGY_PERSONAS_BLOCK}
 2. **Draft Evidence Summaries (One per Persona — Three Total):**
    For EACH persona (finops_lead, cfo, engineering_lead), write a fact-only summary using exactly this 3-paragraph structure, adapted to that persona's vocabulary and emphasis:
 
-   **1. Current-State Snapshot:** State the evidence-gated classification, readiness score, maturity depth, anti-pattern burden, delivery integrity, and evidence density.
+   **1. Current-State Snapshot:** State the evidence-gated classification, readiness score, maturity depth, anti-pattern burden, anti-pattern clearance/coverage, delivery integrity, and evidence density.
 
-   **2. Evidence-Backed Findings:** Summarize confirmed FinOps maturity strengths, confirmed gaps, anti-patterns, and silent areas. Reference domains and scores only when present in Phase 2 or Phase 1. If source material has generic process facts but no FinOps evidence, describe them as source observations outside FinOps scope.
+   **2. Evidence-Backed Findings:** Summarize confirmed FinOps maturity strengths, confirmed gaps, confirmed anti-pattern findings, verified anti-pattern absences, anti-patterns not assessable from source, and silent areas. Reference domains and scores only when present in Phase 2 or Phase 1. If source material has generic process facts but no FinOps evidence, describe them as source observations outside FinOps scope.
 
    **3. Source Confidence & Boundaries:** State what the evidence can and cannot support. Do NOT include recommendations, tactic IDs, external case studies, or implementation directives.
 
@@ -238,8 +242,8 @@ ${STRATEGY_PERSONAS_BLOCK}
 
 <task>
 1. Draft persona evidence summaries using this 3-paragraph structure:
-   **1. Current-State Snapshot:** classification, evidence-gated readiness score, maturity depth, anti-pattern burden, delivery integrity, and evidence density.
-   **2. Evidence-Backed Findings:** confirmed FinOps strengths, confirmed gaps, anti-patterns, and silent areas with domain scores where present. If the source has generic process facts but no FinOps evidence, describe them as source observations outside FinOps scope.
+   **1. Current-State Snapshot:** classification, evidence-gated readiness score, maturity depth, anti-pattern burden, anti-pattern clearance/coverage, delivery integrity, and evidence density.
+   **2. Evidence-Backed Findings:** confirmed FinOps strengths, confirmed gaps, confirmed anti-pattern findings, verified anti-pattern absences, anti-patterns not assessable from source, and silent areas with domain scores where present. If the source has generic process facts but no FinOps evidence, describe them as source observations outside FinOps scope.
    **3. Source Confidence & Boundaries:** what the evidence can and cannot prove. No recommendations.
 2. Populate evidence_summary with concise fact-only bullets.
 3. Populate diagnosis as interpretation only; no roadmap, no tactic IDs, no prescriptions.
@@ -419,7 +423,7 @@ ${STRATEGY_PERSONAS_BLOCK}
 <task>
 1. **Executive summaries (one per persona)** with this 3-paragraph structure:
    **1. What the audit found:** Concise summary of the evidence-backed observations. Reference the Crawl/Walk/Run classification ONLY if Phase 2 metrics directly support it; otherwise say "classification is provisional pending more evidence".
-   **2. What is missing:** Explicit list of what the audit could NOT confirm — silent criteria, contradictions in the source, areas where evidence density is too low to score.
+   **2. What is missing:** Explicit list of what the audit could NOT confirm — silent criteria, anti-patterns that were not assessable from source coverage, contradictions in the source, areas where evidence density is too low to score.
    **3. What is needed before a directive roadmap can be written:** The validation plan — what specific source material the next assessment cycle should include.
 
 2. **Visual scorecard** — produce as usual; this is mechanical (Phase 2 numbers).

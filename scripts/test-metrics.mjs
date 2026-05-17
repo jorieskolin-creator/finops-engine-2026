@@ -4,9 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import ts from '../node_modules/typescript/lib/typescript.js';
 
-const sourcePath = new URL('../src/services/metricsService.ts', import.meta.url);
-const source = await readFile(sourcePath, 'utf8');
-const compiled = ts.transpileModule(source, {
+const compile = (source) => ts.transpileModule(source, {
   compilerOptions: {
     module: ts.ModuleKind.ES2022,
     target: ts.ScriptTarget.ES2020,
@@ -15,8 +13,12 @@ const compiled = ts.transpileModule(source, {
 }).outputText;
 
 const dir = await mkdtemp(join(tmpdir(), 'finops-metrics-'));
+const semanticsSource = await readFile(new URL('../src/services/antiPatternSemantics.ts', import.meta.url), 'utf8');
+await writeFile(join(dir, 'antiPatternSemantics.mjs'), compile(semanticsSource), 'utf8');
+const sourcePath = new URL('../src/services/metricsService.ts', import.meta.url);
+const source = await readFile(sourcePath, 'utf8');
 const modulePath = join(dir, 'metricsService.mjs');
-await writeFile(modulePath, compiled, 'utf8');
+await writeFile(modulePath, compile(source).replace('./antiPatternSemantics', './antiPatternSemantics.mjs'), 'utf8');
 
 const { calculateMetrics } = await import(`file://${modulePath}`);
 
@@ -31,13 +33,15 @@ const item = (count, withEvidence = false) => ({
   is_silent: count === 0
 });
 
-const anti = (count, withEvidence = false) => ({
+const anti = (count, withEvidence = false, absenceStatus = undefined) => ({
   count,
   status: count === 0 ? 'OK' : count === 3 ? 'NOK' : 'Partial',
   evidence: withEvidence ? 'Confirmed anti-pattern evidence.' : 'No confirmed anti-pattern evidence.',
   evidence_quotes: withEvidence ? [{ quote: 'Confirmed anti-pattern evidence', category: 'Operational', evidence_source: 'text' }] : [],
   reasoning: withEvidence ? 'Evidence found.' : 'Not found.',
-  is_silent: count === 0
+  is_silent: count === 0 && absenceStatus !== 'tested_absent',
+  antipattern_absence_status: absenceStatus,
+  coverage_reason: absenceStatus === 'tested_absent' ? 'Relevant source coverage reviewed; anti-pattern was not found.' : undefined
 });
 
 const logs = (maturityFactory, antiFactory) => ({
@@ -53,6 +57,9 @@ const logs = (maturityFactory, antiFactory) => ({
   assert.equal(result.crawl_walk_run, 'Insufficient evidence');
   assert.ok(result.metrics.finops_readiness < 30, `expected capped low readiness, got ${result.metrics.finops_readiness}`);
   assert.equal(result.metrics.antipattern_burden_confidence, 'unknown');
+  assert.equal(result.metrics.antipattern_clearance, 0);
+  assert.equal(result.metrics.antipattern_coverage, 0);
+  assert.equal(result.unknown_antipattern_absences.length, 25);
 }
 
 {
@@ -63,6 +70,9 @@ const logs = (maturityFactory, antiFactory) => ({
   assert.equal(result.crawl_walk_run, 'Run');
   assert.ok(result.metrics.finops_readiness >= 90, `expected high readiness, got ${result.metrics.finops_readiness}`);
   assert.equal(result.metrics.antipattern_burden_confidence, 'confirmed');
+  assert.equal(result.metrics.antipattern_clearance, 100);
+  assert.equal(result.metrics.antipattern_coverage, 100);
+  assert.equal(result.verified_antipattern_absences.length, 25);
 }
 
 {
@@ -72,6 +82,7 @@ const logs = (maturityFactory, antiFactory) => ({
   ));
   assert.ok(result.metrics.finops_readiness < result.metrics.maturity_depth, 'confirmed burden should reduce readiness');
   assert.ok(result.metrics.antipattern_burden > 50, 'fixture should contain high burden');
+  assert.equal(result.metrics.antipattern_coverage, 100);
 }
 
 {
@@ -81,6 +92,16 @@ const logs = (maturityFactory, antiFactory) => ({
   ));
   assert.equal(result.crawl_walk_run, 'Insufficient evidence');
   assert.ok(result.metrics.readiness_cap_reason, 'low evidence should explain readiness cap');
+}
+
+{
+  const result = calculateMetrics(logs(
+    () => item(3, true),
+    () => anti(0, false, 'tested_absent')
+  ));
+  assert.equal(result.metrics.evidence_density, 100, 'verified absence should count as evidence coverage even without finding quotes');
+  assert.equal(result.metrics.antipattern_clearance, 100);
+  assert.equal(result.metrics.antipattern_coverage, 100);
 }
 
 console.log('metrics unit tests passed');

@@ -378,10 +378,14 @@ Maturity Classification: ${validationData.crawl_walk_run}
 Maturity Depth Index: ${Math.round(validationData.metrics.maturity_depth)}%
 Anti-Pattern Burden: ${Math.round(validationData.metrics.antipattern_burden)}%
 Anti-Pattern Burden Confidence: ${validationData.metrics.antipattern_burden_confidence || 'unknown'}
+Anti-Pattern Clearance: ${Math.round(validationData.metrics.antipattern_clearance)}%
+Anti-Pattern Coverage: ${Math.round(validationData.metrics.antipattern_coverage)}%
 Delivery Integrity: ${validationData.metrics.delivery_integrity}% (criteria the audit returned data for)
 Evidence Density: ${validationData.metrics.evidence_density}% (criteria with quotable evidence from source)
 ${validationData.metrics.readiness_cap_reason ? `Readiness Cap: ${validationData.metrics.readiness_cap_reason}` : ''}
 Anti-Pattern Findings: ${validationData.antipattern_findings.length}
+Verified Anti-Pattern Absences: ${validationData.verified_antipattern_absences.length}
+Unknown / Not-Assessable Anti-Pattern Absences: ${validationData.unknown_antipattern_absences.length}
 Maturity Gaps: ${validationData.maturity_gaps.length}
 Silent Areas: ${validationData.silent_areas.length}
 
@@ -604,6 +608,8 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => `  ${cat}
         `Evidence-gated readiness: ${Math.round(validationData.metrics.finops_readiness)}/100`,
         `Maturity depth: ${Math.round(validationData.metrics.maturity_depth)}%`,
         `Anti-pattern burden: ${Math.round(validationData.metrics.antipattern_burden)}% (${validationData.metrics.antipattern_burden_confidence || 'unknown'} confidence)`,
+        `Anti-pattern clearance: ${Math.round(validationData.metrics.antipattern_clearance)}%`,
+        `Anti-pattern coverage: ${Math.round(validationData.metrics.antipattern_coverage)}%`,
         `Delivery integrity: ${Math.round(validationData.metrics.delivery_integrity)}%`,
         `Evidence density: ${Math.round(validationData.metrics.evidence_density)}%`,
         ...(validationData.metrics.readiness_cap_reason ? [validationData.metrics.readiness_cap_reason] : [])
@@ -613,7 +619,10 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => `  ${cat}
         .map(([cat, score]) => `Domain ${cat} shows relatively strong maturity signal (${score}/15).`),
       confirmed_gaps: validationData.maturity_gaps.slice(0, 8),
       confirmed_antipatterns: validationData.antipattern_findings.slice(0, 8),
-      silent_or_missing_evidence: validationData.silent_areas.slice(0, 8)
+      silent_or_missing_evidence: [
+        ...validationData.silent_areas,
+        ...validationData.unknown_antipattern_absences
+      ].slice(0, 8)
     });
 
     const buildFallbackDiagnosis = () => ({
@@ -645,12 +654,16 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => `  ${cat}
     const buildFallbackFindingsMode = () => ({
       evidence_backed_findings: [
         ...validationData.maturity_gaps.slice(0, 4),
-        ...validationData.antipattern_findings.slice(0, 4)
+        ...validationData.antipattern_findings.slice(0, 2),
+        ...validationData.verified_antipattern_absences.slice(0, 2)
       ].slice(0, 8),
       candidate_themes: validationData.silent_areas.length > 0
         ? validationData.silent_areas.slice(0, 6)
         : validationData.maturity_gaps.slice(0, 6),
-      missing_evidence: validationData.silent_areas.slice(0, 8),
+      missing_evidence: [
+        ...validationData.silent_areas,
+        ...validationData.unknown_antipattern_absences
+      ].slice(0, 8),
       validation_plan: [
         'Provide source material that documents current FinOps ownership, cadence, and decision rights.',
         'Attach evidence of tagging, allocation, budget, and forecasting practices.',
