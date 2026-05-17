@@ -14,7 +14,7 @@ const escapeHtml = (s: string): string =>
 
 const qualityGateStatusText = (gate: QualityGateResult): string => {
   if (gate.decision === 'GO') return gate.notes[0] || 'All checks passed.';
-  if (gate.decision === 'WARN') return 'Assessment is usable; detailed strategy hygiene notes are retained in the appendix.';
+  if (gate.decision === 'WARN') return 'Assessment score remains valid. WARN-level strategy hygiene notes are included in the appendix for traceability.';
   return 'Assessment is unsafe to act on until blocking issues are resolved.';
 };
 
