@@ -46,6 +46,7 @@ async function callGemini(profile: ModelProfile, prompt: NormalizedPrompt, stage
     thinkingConfig: profile.thinkingConfig,
     stage,
     runId: ctx.runId,
+    internalPipelineCall: true,
   });
 }
 
@@ -75,6 +76,7 @@ async function callAnthropic(profile: ModelProfile, prompt: NormalizedPrompt, st
     maxTokens: profile.maxTokens ?? 4096,
     stage,
     runId: ctx.runId,
+    internalPipelineCall: true,
   };
   if (profile.anthropicThinking) {
     body.thinking = profile.anthropicThinking;
@@ -110,6 +112,7 @@ async function callOpenAI(profile: ModelProfile, prompt: NormalizedPrompt, stage
     maxOutputTokens: profile.maxTokens ?? 4096,
     stage,
     runId: ctx.runId,
+    internalPipelineCall: true,
   });
 }
 

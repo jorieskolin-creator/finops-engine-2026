@@ -31,7 +31,8 @@ export default async function handler(req, res) {
   }
 
   const started = Date.now();
-  const { model, input, instructions, reasoning, maxOutputTokens, stage, runId } = req.body || {};
+  const { model, input, instructions, reasoning, maxOutputTokens, stage, runId, internalPipelineCall } = req.body || {};
+  const isInternalPipelineCall = internalPipelineCall === true;
   const tag = `[run=${runId || '?'}] provider=openai stage=${stage || '?'} model=${model || '?'}`;
 
   if (!model || !input) {
@@ -51,22 +52,34 @@ export default async function handler(req, res) {
 
   const upstreamController = new AbortController();
   let clientGone = false;
-  const onClientGone = () => {
+  let responseClosed = false;
+  const onRequestAborted = () => {
     if (clientGone) return;
-    if (res.writableFinished) return;
     clientGone = true;
-    console.warn(`${tag} status=client_disconnected duration_ms=${Date.now() - started}`);
+    console.warn(`${tag} status=client_disconnected close_source=req_aborted internal_pipeline_call=${isInternalPipelineCall} duration_ms=${Date.now() - started}`);
     upstreamController.abort();
   };
-  req.on('aborted', onClientGone);
-  res.on('close', onClientGone);
+  const onResponseClosed = () => {
+    if (res.writableFinished || clientGone || responseClosed) return;
+    responseClosed = true;
+    if (isInternalPipelineCall) {
+      console.warn(`${tag} status=response_closed close_source=response_closed internal_pipeline_call=true duration_ms=${Date.now() - started}`);
+      return;
+    }
+    clientGone = true;
+    console.warn(`${tag} status=client_disconnected close_source=response_closed internal_pipeline_call=false duration_ms=${Date.now() - started}`);
+    upstreamController.abort();
+  };
+  req.on('aborted', onRequestAborted);
+  res.on('close', onResponseClosed);
 
   const writeFrame = (obj) => {
-    if (res.writableEnded || clientGone) return false;
+    if (res.writableEnded || res.destroyed || clientGone || responseClosed) return false;
     try {
       res.write(JSON.stringify(obj) + '\n');
       return true;
     } catch {
+      responseClosed = true;
       return false;
     }
   };
@@ -102,7 +115,7 @@ export default async function handler(req, res) {
       console.error(`${tag} status=upstream_error http=${upstreamResp.status} duration_ms=${duration} msg="${errorText.replace(/"/g, "'").substring(0, 500)}"`);
       writeFrame({ type: 'error', message: `OpenAI API Error (${upstreamResp.status}): ${errorText.substring(0, 500)}` });
       clearInterval(keepalive);
-      if (!res.writableEnded) res.end();
+      if (!res.writableEnded && !res.destroyed) res.end();
       return;
     }
 
@@ -115,6 +128,8 @@ export default async function handler(req, res) {
       : '';
     if (clientGone) {
       console.warn(`${tag} status=aborted_before_write duration_ms=${duration} openai_status=${payload?.status || 'unknown'} incomplete_reason=${incompleteReason || 'none'} response_chars=${text.length} reasoning_tokens=${reasoningTokens}`);
+    } else if (responseClosed) {
+      console.warn(`${tag} status=completed_after_response_closed duration_ms=${duration} openai_status=${payload?.status || 'unknown'} incomplete_reason=${incompleteReason || 'none'} response_chars=${text.length} input_tokens=${usage?.input_tokens || 0} output_tokens=${usage?.output_tokens || 0} reasoning_tokens=${reasoningTokens} internal_pipeline_call=${isInternalPipelineCall}`);
     } else if (payload?.status === 'incomplete') {
       const msg = `OpenAI response incomplete: ${incompleteReason || 'unknown'}`;
       console.warn(`${tag} status=incomplete duration_ms=${duration} incomplete_reason=${incompleteReason || 'unknown'} response_chars=${text.length} input_tokens=${usage?.input_tokens || 0} output_tokens=${usage?.output_tokens || 0} reasoning_tokens=${reasoningTokens}`);
@@ -128,7 +143,7 @@ export default async function handler(req, res) {
       writeFrame({ type: 'done', text, usage });
     }
     clearInterval(keepalive);
-    if (!res.writableEnded) res.end();
+    if (!res.writableEnded && !res.destroyed) res.end();
   } catch (error) {
     clearInterval(keepalive);
     const duration = Date.now() - started;
@@ -139,6 +154,6 @@ export default async function handler(req, res) {
       console.error(`${tag} status=error duration_ms=${duration} msg="${msg}"`);
       writeFrame({ type: 'error', message: error?.message || 'Internal server error' });
     }
-    if (!res.writableEnded) res.end();
+    if (!res.writableEnded && !res.destroyed) res.end();
   }
 }
