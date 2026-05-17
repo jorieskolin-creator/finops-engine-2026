@@ -49,6 +49,35 @@ const statusFor = (raw: unknown): EvidenceCheckStatus => {
     : 'missing';
 };
 
+const antiPatternReasoningLabel = (status?: AntiPatternAbsenceStatus): string => {
+  if (status === 'confirmed_present') return 'Finding';
+  if (status === 'partially_present') return 'Partial finding';
+  if (status === 'tested_absent') return 'Tested absent';
+  return 'Not assessed';
+};
+
+const buildEvidenceCheckedReasoning = (input: {
+  stream: Stream;
+  status: EvidenceCheckStatus;
+  originalCount: number;
+  verifiedCount: number;
+  reason: string;
+  rescanAttempted: boolean;
+  antipatternAbsenceStatus?: AntiPatternAbsenceStatus;
+  coverageReason?: string;
+}): string => {
+  const prefix = input.stream === 'antipattern'
+    ? `Final anti-pattern assessment: ${antiPatternReasoningLabel(input.antipatternAbsenceStatus)}.`
+    : `Final maturity assessment: ${statusForScore(input.stream, input.verifiedCount)}.`;
+  const scoreLine = `Evidence-check resolved the scanner score from ${input.originalCount} to ${input.verifiedCount}${input.rescanAttempted ? ' after a targeted rescan' : ''}.`;
+  const verifierLine = `Verifier status: ${input.status}. ${input.reason}`;
+  const coverageLine = input.stream === 'antipattern' && input.coverageReason
+    ? `Coverage interpretation: ${input.coverageReason}`
+    : '';
+
+  return [prefix, scoreLine, verifierLine, coverageLine].filter(Boolean).join(' ');
+};
+
 const idsForBatch = (batchId: string): string[] => [1, 2, 3, 4, 5].map(n => `${batchId}${n}`);
 
 const flattenVerifierItems = (parsed: any): any[] => {
@@ -301,6 +330,11 @@ export const applyEvidenceCheckToBatch = (
     const antipatternAbsenceStatus = item.stream === 'antipattern'
       ? item.antipattern_absence_status || antiPatternStatusForItem(verified, undefined, existing, reason)
       : undefined;
+    const coverageReason = item.coverage_reason || existing.coverage_reason || (antipatternAbsenceStatus ? antiPatternStatusDescription(antipatternAbsenceStatus) : undefined);
+    const shouldRewriteReasoning = item.stream === 'antipattern'
+      || downgraded
+      || item.status !== 'supported'
+      || rescannedKeys.has(key);
 
     streamBucket[item.id] = {
       ...existing,
@@ -321,7 +355,19 @@ export const applyEvidenceCheckToBatch = (
       adjustment_reason: reason,
       rescan_attempted: rescannedKeys.has(key),
       antipattern_absence_status: antipatternAbsenceStatus,
-      coverage_reason: item.coverage_reason || existing.coverage_reason || (antipatternAbsenceStatus ? antiPatternStatusDescription(antipatternAbsenceStatus) : undefined)
+      coverage_reason: coverageReason,
+      reasoning: shouldRewriteReasoning
+        ? buildEvidenceCheckedReasoning({
+            stream: item.stream,
+            status: item.status,
+            originalCount: item.original_count,
+            verifiedCount: verified,
+            reason,
+            rescanAttempted: rescannedKeys.has(key),
+            antipatternAbsenceStatus,
+            coverageReason
+          })
+        : existing.reasoning
     };
 
     if (downgraded || item.status !== 'supported' || rescannedKeys.has(key)) {

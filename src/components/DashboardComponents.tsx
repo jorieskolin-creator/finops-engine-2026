@@ -3,6 +3,7 @@ import { ResponsiveContainer, RadarChart, PolarGrid, PolarAngleAxis, PolarRadius
 import { AuditCategory, AuditItem, QualityGateResult, RemediationStep } from '../types';
 import { BATCH_DEFINITIONS, MASTER_BINGO_FINOPS } from '../knowledge_base';
 import { antiPatternStatusLabel, inferAntiPatternAbsenceStatus } from '../services/antiPatternSemantics';
+import { displayQualityGateDiagnostic, scannerEvidenceCheckDisagreementTitle, splitQualityGateDiagnostics } from '../services/reportDiagnosticsService';
 
 interface GaugeProps {
   value: number;
@@ -322,11 +323,17 @@ export const QualityGateBanner: React.FC<{ gate: QualityGateResult }> = ({ gate 
   }
 
   const isBlock = gate.decision === 'BLOCK';
+  const { primaryWarnings, appendixDiagnostics } = splitQualityGateDiagnostics(gate);
   const palette = isBlock
     ? { border: 'border-l-rose-500', bg: 'bg-rose-950/10', dot: 'text-rose-400', label: 'text-rose-300', chip: 'bg-rose-900/40 text-rose-200 border-rose-500/30' }
     : { border: 'border-l-amber-500', bg: 'bg-amber-950/10', dot: 'text-amber-400', label: 'text-amber-300', chip: 'bg-amber-900/40 text-amber-200 border-amber-500/30' };
 
-  const totalIssues = gate.blocking_reasons.length + gate.warnings.length;
+  const totalIssues = gate.blocking_reasons.length + primaryWarnings.length + appendixDiagnostics.length;
+  const issueParts = [
+    gate.blocking_reasons.length > 0 ? `${gate.blocking_reasons.length} blocking` : '',
+    primaryWarnings.length > 0 ? `${primaryWarnings.length} warning${primaryWarnings.length === 1 ? '' : 's'}` : '',
+    appendixDiagnostics.length > 0 ? `${appendixDiagnostics.length} appendix` : ''
+  ].filter(Boolean);
 
   return (
     <div className={`glass-panel p-6 mb-8 border-l-4 ${palette.border} ${palette.bg} backdrop-blur-md`}>
@@ -342,9 +349,7 @@ export const QualityGateBanner: React.FC<{ gate: QualityGateResult }> = ({ gate 
               Quality Gate: {gate.decision}
             </h4>
             <span className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded-full border uppercase tracking-wide ${palette.chip}`}>
-              {gate.blocking_reasons.length > 0 && `${gate.blocking_reasons.length} blocking`}
-              {gate.blocking_reasons.length > 0 && gate.warnings.length > 0 && ' · '}
-              {gate.warnings.length > 0 && `${gate.warnings.length} warning${gate.warnings.length === 1 ? '' : 's'}`}
+              {issueParts.join(' · ')}
             </span>
           </div>
           <p className="text-sm text-slate-300 leading-relaxed mb-3">{gate.notes[0]}</p>
@@ -367,12 +372,22 @@ export const QualityGateBanner: React.FC<{ gate: QualityGateResult }> = ({ gate 
                   </ul>
                 </div>
               )}
-              {gate.warnings.length > 0 && (
+              {primaryWarnings.length > 0 && (
                 <div>
                   <p className="text-xs font-bold uppercase tracking-wider text-amber-400 mb-2">Warnings</p>
                   <ul className="space-y-1.5">
-                    {gate.warnings.map((w, i) => (
+                    {primaryWarnings.map((w, i) => (
                       <li key={i} className="text-slate-300 pl-3 border-l-2 border-amber-700/60">{w}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {appendixDiagnostics.length > 0 && (
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">{scannerEvidenceCheckDisagreementTitle}</p>
+                  <ul className="space-y-1.5">
+                    {appendixDiagnostics.map((w, i) => (
+                      <li key={i} className="text-slate-400 pl-3 border-l-2 border-slate-700/60">{displayQualityGateDiagnostic(w)}</li>
                     ))}
                   </ul>
                 </div>
