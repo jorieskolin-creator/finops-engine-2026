@@ -1,7 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { analyzeDocument } from './services/geminiService';
 import { scanInputText, sanitizeInput } from './services/preFlightService';
-import { extractTextFromPdf, extractPagesFromPdf, imageFileToInput } from './services/pdfService';
+import { extractPagesFromPdf, imageFileToInput } from './services/pdfService';
+import { renderDelimitedTableForAnalysis } from './services/tableService';
 import { downloadReport } from './services/exportService';
 import { forensicSanitizeImport } from './services/securityService';
 import { PerformanceMonitor } from './services/debugService';
@@ -51,9 +52,16 @@ interface UploadedFile {
   size: number;
   text: string;
   images?: ImageInput[];
-  kind?: 'pdf' | 'html' | 'image' | 'csv' | 'json';
+  kind?: 'pdf' | 'html' | 'image' | 'csv' | 'tsv' | 'json';
   status: 'parsed' | 'error';
   scan?: ScanResult;
+  parseMetadata?: {
+    totalPages?: number;
+    parsedTextPages?: number;
+    renderedImagePages?: number;
+    rowCount?: number;
+    warnings: string[];
+  };
 }
 
 const extractTextFromHtml = (html: string): string => {
@@ -123,9 +131,29 @@ const App: React.FC = () => {
   }, []);
 
   const MIN_FILES = 2;
-  const MAX_FILES = 12;
-  const MAX_FILE_SIZE_MB = 25;
+  const MAX_FILES = 20;
+  const MAX_TOTAL_UPLOAD_MB = 25;
   const MAX_IMAGE_FILES = 5;
+  const MAX_TOTAL_UPLOAD_BYTES = MAX_TOTAL_UPLOAD_MB * 1024 * 1024;
+
+  const makeLowRelevanceWarning = (scan: ScanResult, kind?: UploadedFile['kind']): ScanResult => ({
+    ...scan,
+    status: 'PassWithWarning',
+    message: kind === 'csv' || kind === 'tsv' ? 'Tabular input accepted' : 'Low relevance warning',
+    canRun: true,
+    confidence_warning: scan.confidence_warning || 'This file has weak FinOps keyword signal. The assessment will run, but unsupported areas should be treated as insufficient evidence.',
+    details: [
+      ...scan.details,
+      'Accepted as parseable source material; evidence gates will determine whether it supports FinOps findings.'
+    ]
+  });
+
+  const scanParseableFile = (text: string, kind?: UploadedFile['kind'], hasImages = false): ScanResult => {
+    const scan = scanInputText(text);
+    if (scan.canRun) return scan;
+    if (hasImages || text.trim().length > 0) return makeLowRelevanceWarning(scan, kind);
+    return scan;
+  };
 
   useEffect(() => {
     const combined = files
@@ -153,19 +181,25 @@ const App: React.FC = () => {
         globalScan.status = 'PassWithWarning';
         globalScan.message = globalScan.message || 'Image content present';
         globalScan.details = [...globalScan.details, `${aggregatedImages.length} image(s) attached; text keyword scan bypassed.`];
+      } else if (!globalScan.canRun && files.length > 0) {
+        globalScan.canRun = true;
+        globalScan.status = 'PassWithWarning';
+        globalScan.message = 'Low relevance warning';
+        globalScan.confidence_warning = globalScan.confidence_warning || 'Input appears weak or generic. The engine will run and evidence gates should classify unsupported areas as insufficient evidence.';
+        globalScan.details = [
+          ...globalScan.details,
+          'Parseable source material is accepted; low relevance is handled by Phase 1 evidence checks and Phase 2 quality gates.'
+        ];
       }
       const fileCountValid = files.length >= MIN_FILES && files.length <= MAX_FILES;
       if (!fileCountValid) {
         globalScan.canRun = false;
         globalScan.message = files.length < MIN_FILES ? "Need more files" : "Too many files";
       }
-      const hasJunkFile = files.some(f => f.kind !== 'image' && f.scan && f.scan.status === 'Insufficient');
-      if (hasJunkFile) {
-        globalScan.canRun = false;
-        globalScan.status = 'Insufficient';
-        globalScan.message = "Irrelevant File Detected";
-        globalScan.score = 20;
-        globalScan.details.push("One or more files appear to be non-FinOps content. Please remove them.");
+      const lowSignalFiles = files.filter(f => f.kind !== 'image' && f.scan && (f.scan.status === 'Insufficient' || f.scan.status === 'PassWithWarning'));
+      if (lowSignalFiles.length > 0) {
+        globalScan.status = globalScan.status === 'Ready' ? 'PassWithWarning' : globalScan.status;
+        globalScan.details.push(`${lowSignalFiles.length} file(s) have low FinOps keyword signal and will be assessed with evidence-gated confidence.`);
       }
       setScanResult(globalScan);
       PerformanceMonitor.end('GlobalScan');
@@ -212,6 +246,12 @@ const App: React.FC = () => {
       return;
     }
 
+    const totalUploadBytes = files.reduce((sum, file) => sum + file.size, 0) + newFiles.reduce((sum, file) => sum + file.size, 0);
+    if (totalUploadBytes > MAX_TOTAL_UPLOAD_BYTES) {
+      setError(`Maximum ${MAX_TOTAL_UPLOAD_MB} MB total upload set allowed.`);
+      return;
+    }
+
     // Reject composite drift fixtures. These describe three DIFFERENT
     // archetype organizations (Crawl / Walk / Run) and were never meant to
     // be assessed together — doing so produces a "consolidated audit across
@@ -239,26 +279,39 @@ const App: React.FC = () => {
     const processedFiles: UploadedFile[] = [];
     try {
       for (const file of newFiles) {
-        if (file.size > MAX_FILE_SIZE_MB * 1024 * 1024) throw new Error(`File ${file.name} exceeds the ${MAX_FILE_SIZE_MB} MB limit.`);
-
         let text = "";
         let images: ImageInput[] | undefined;
         let kind: UploadedFile['kind'] = undefined;
+        let parseMetadata: UploadedFile['parseMetadata'] | undefined;
         const lowerName = file.name.toLowerCase();
 
         if (file.type === 'application/pdf' || lowerName.endsWith('.pdf')) {
-          const { text: pdfText, images: pdfImages } = await extractPagesFromPdf(file);
+          const { text: pdfText, images: pdfImages, metadata } = await extractPagesFromPdf(file);
           text = pdfText;
           images = pdfImages;
           kind = 'pdf';
+          parseMetadata = {
+            totalPages: metadata.totalPages,
+            parsedTextPages: metadata.parsedTextPages,
+            renderedImagePages: metadata.renderedImagePages,
+            warnings: metadata.warnings
+          };
         } else if (file.type === 'text/html' || lowerName.endsWith('.html')) {
           const rawHtml = await file.text();
           text = extractTextFromHtml(rawHtml);
           kind = 'html';
         } else if (file.type === 'text/csv' || lowerName.endsWith('.csv')) {
           const raw = await file.text();
-          text = `Format: CSV (comma-separated values)\n\n${raw}`;
+          const rendered = renderDelimitedTableForAnalysis(raw, { fileName: file.name, delimiter: ',' });
+          text = rendered.text;
           kind = 'csv';
+          parseMetadata = { rowCount: Number(text.match(/^Rows: (\d+)/m)?.[1] || 0), warnings: rendered.warnings };
+        } else if (file.type === 'text/tab-separated-values' || lowerName.endsWith('.tsv')) {
+          const raw = await file.text();
+          const rendered = renderDelimitedTableForAnalysis(raw, { fileName: file.name, delimiter: '\t' });
+          text = rendered.text;
+          kind = 'tsv';
+          parseMetadata = { rowCount: Number(text.match(/^Rows: (\d+)/m)?.[1] || 0), warnings: rendered.warnings };
         } else if (file.type === 'application/json' || lowerName.endsWith('.json')) {
           const raw = await file.text();
           text = `Format: JSON\n\n${raw}`;
@@ -269,7 +322,7 @@ const App: React.FC = () => {
           text = `[Image input: ${file.name}]`;
           kind = 'image';
         } else {
-          throw new Error(`File ${file.name} is not a supported format (PDF, HTML, CSV, JSON, PNG, JPG).`);
+          throw new Error(`File ${file.name} is not a supported format (PDF, HTML, CSV, TSV, JSON, PNG, JPG).`);
         }
 
         processedFiles.push({
@@ -280,7 +333,8 @@ const App: React.FC = () => {
           images,
           kind,
           status: 'parsed',
-          scan: scanInputText(text)
+          scan: scanParseableFile(text, kind, Boolean(images?.length)),
+          parseMetadata
         });
       }
       setFiles(prev => [...prev, ...processedFiles]);
@@ -402,7 +456,7 @@ const App: React.FC = () => {
   };
 
   const handleAnalyze = async () => {
-    if (!aggregatedText || !scanResult.canRun) return;
+    if ((!aggregatedText && aggregatedImages.length === 0) || !scanResult.canRun) return;
     if (!authenticated) {
       pendingAnalyzeRef.current = true;
       setShowLogin(true);
@@ -577,9 +631,16 @@ const App: React.FC = () => {
                                 <div className="flex items-center gap-2 mt-0.5">
                                   <span className={`w-1.5 h-1.5 rounded-full ${file.scan?.status === 'Insufficient' ? 'bg-rose-500' : file.scan?.status === 'Weak' || file.scan?.status === 'PassWithWarning' ? 'bg-amber-500' : 'bg-emerald-500'}`}></span>
                                   <div className="text-[10px] text-slate-400 uppercase tracking-wide font-medium">
-                                    {file.scan?.status === 'Insufficient' ? 'Irrelevant Content' : file.scan?.status === 'PassWithWarning' ? 'Partial Relevance' : 'Ready'} &bull; {(file.size / 1024).toFixed(0)} KB
+                                    {file.scan?.status === 'Insufficient' ? 'Unreadable / Empty' : file.scan?.status === 'PassWithWarning' ? 'Low Relevance Warning' : file.scan?.status === 'Weak' ? 'Weak Signal' : 'Ready'} &bull; {(file.size / 1024).toFixed(0)} KB
                                   </div>
                                 </div>
+                                {file.parseMetadata && (
+                                  <div className="text-[10px] text-slate-500 mt-1 truncate max-w-[240px]">
+                                    {file.kind === 'pdf' && `${file.parseMetadata.parsedTextPages}/${file.parseMetadata.totalPages} pages parsed · ${file.parseMetadata.renderedImagePages} visual pages`}
+                                    {(file.kind === 'csv' || file.kind === 'tsv') && `${file.parseMetadata.rowCount} table rows parsed`}
+                                    {file.parseMetadata.warnings.length > 0 && ` · ${file.parseMetadata.warnings[0]}`}
+                                  </div>
+                                )}
                               </div>
                             </div>
                             <button onClick={() => removeFile(file.id)} className="p-2 text-slate-500 hover:text-rose-400 transition-colors rounded-full hover:bg-rose-950/30">&times;</button>
@@ -603,14 +664,14 @@ const App: React.FC = () => {
                           Upload Cloud Cost Reports, FinOps Policies, Optimization Plans, Governance Docs, Architecture Reviews.
                         </p>
                         <div className="z-10 mt-4 flex flex-wrap justify-center gap-1.5 max-w-md">
-                          {['PDF', 'HTML', 'CSV', 'JSON', 'PNG', 'JPG'].map(fmt => (
+                          {['PDF', 'HTML', 'CSV', 'TSV', 'JSON', 'PNG', 'JPG'].map(fmt => (
                             <span key={fmt} className="text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded-md bg-slate-800/80 border border-slate-700/60 text-slate-300">
                               {fmt}
                             </span>
                           ))}
                         </div>
                         <p className="z-10 text-xs text-slate-500 mt-3 text-center max-w-md">
-                          {MAX_FILE_SIZE_MB} MB max. per file · {MIN_FILES}–{MAX_FILES} artifacts · up to {MAX_IMAGE_FILES} PNG/JPG screenshots
+                          {MAX_TOTAL_UPLOAD_MB} MB total set · {MIN_FILES}–{MAX_FILES} artifacts · PDFs parsed up to 100 pages · up to {MAX_IMAGE_FILES} PNG/JPG screenshots
                         </p>
                       </div>
                     )}
@@ -620,7 +681,7 @@ const App: React.FC = () => {
                     <div className="flex items-center gap-4">
                       <button onClick={() => fileInputRef.current?.click()} disabled={files.length >= MAX_FILES} className="text-sm font-bold text-slate-400 hover:text-white transition-colors flex items-center gap-2 hover:bg-white/5 px-4 py-2 rounded-lg">
                         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 6v6m0 0v6m0-6h6m-6 0H6" /></svg>
-                        Add Files (PDF, HTML, CSV, JSON, PNG, JPG)
+                        Add Files (PDF, HTML, CSV, TSV, JSON, PNG, JPG)
                       </button>
                       <label
                         title="Forces synthesis to use Opus 4.7 (slower, more expensive, deeper roadmap reasoning). Auto-enabled for crawl-stage orgs with high anti-pattern burden."
@@ -635,7 +696,7 @@ const App: React.FC = () => {
                         <span className="font-bold">Deep analysis (Opus 4.7)</span>
                       </label>
                     </div>
-                    <input type="file" ref={fileInputRef} onChange={handleFileSelect} className="hidden" accept=".pdf,.html,.csv,.json,.png,.jpg,.jpeg,image/png,image/jpeg" multiple />
+                    <input type="file" ref={fileInputRef} onChange={handleFileSelect} className="hidden" accept=".pdf,.html,.csv,.tsv,.json,.png,.jpg,.jpeg,text/csv,text/tab-separated-values,image/png,image/jpeg" multiple />
                     <button onClick={handleAnalyze} disabled={!scanResult.canRun || files.length < MIN_FILES || files.length > MAX_FILES} className={`px-8 py-4 rounded-xl font-bold shadow-2xl transition-all transform active:scale-[0.98] flex items-center gap-3 border ${!scanResult.canRun || files.length < MIN_FILES || files.length > MAX_FILES ? 'bg-slate-800 text-slate-500 border-slate-700 cursor-not-allowed shadow-none' : 'text-slate-900 bg-white border-white hover:bg-emerald-400 hover:border-emerald-400 hover:shadow-[0_0_30px_rgba(16,185,129,0.4)]'}`}>
                       {!scanResult.canRun || files.length < MIN_FILES || files.length > MAX_FILES ? (
                         <span>{files.length < MIN_FILES ? `Add ${MIN_FILES - files.length} more files` : files.length > MAX_FILES ? "Limit Exceeded" : "Checks Failed"}</span>
