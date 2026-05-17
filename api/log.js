@@ -13,12 +13,13 @@ export default async function handler(req, res) {
   }
 
   const { runId, level, event, ...rest } = req.body || {};
+  const normalizedLevel = level === 'error' || level === 'warn' ? level : 'info';
   const ts = new Date().toISOString();
   const tag = `[${ts}] [run=${runId || '?'}]`;
-  const line = `${tag} event=${event || 'unknown'} ${formatFields(rest)}`;
+  const line = `${tag} level=${normalizedLevel} event=${event || 'unknown'} ${formatFields(rest)}`;
 
-  if (level === 'error') console.error(line);
-  else console.log(level === 'warn' ? `${line} level=warn` : line);
+  if (normalizedLevel === 'error') console.error(line);
+  else console.log(line);
 
   return res.status(204).end();
 }

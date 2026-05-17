@@ -13,7 +13,7 @@ const escapeHtml = (s: string): string =>
   s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
 const qualityGateStatusText = (gate: QualityGateResult): string => {
-  if (gate.decision === 'GO') return 'All checks passed.';
+  if (gate.decision === 'GO') return gate.notes[0] || 'All checks passed.';
   if (gate.decision === 'WARN') return 'Assessment is usable; detailed strategy hygiene notes are retained in the appendix.';
   return 'Assessment is unsafe to act on until blocking issues are resolved.';
 };
@@ -69,7 +69,13 @@ const renderQualityGateAppendix = (gate: QualityGateResult): string => {
     ${strategyDiagnostics.length > 0 ? `<div class="gate-label">Strategy hygiene notes</div>${renderDiagnosticList(strategyDiagnostics, llm?.warning_details)}` : ''}
     ${tacticDiagnostics.length > 0 ? `<div class="gate-label">Tactic grounding notes</div>${renderDiagnosticList(tacticDiagnostics, llm?.warning_details)}` : ''}
     ${remainingWarnings.length > 0 ? `<div class="gate-label">Remaining warnings</div>${renderDiagnosticList(remainingWarnings, llm?.warning_details)}` : ''}
-    ${hasTrajectory ? `<div class="gate-label">Fact-check trajectory</div><ul class="appendix-list">${gate.fact_check!.trajectory!.map(p => `<li><strong>pass ${p.attempt}</strong>: ${p.supported_count}/${p.total_claims} supported, ${p.unsupported_count} unsupported</li>`).join('')}</ul>` : ''}
+    ${hasTrajectory ? `<div class="gate-label">Fact-check trajectory</div><ul class="appendix-list">${gate.fact_check!.trajectory!.map((p, i, arr) => {
+      const prev = i > 0 ? arr[i - 1] : null;
+      const overlap = prev
+        ? p.unsupported_signatures.filter(s => prev.unsupported_signatures.some(ps => ps === s)).length
+        : 0;
+      return `<li><strong>pass ${p.attempt}</strong>: ${p.supported_count}/${p.total_claims} supported, ${p.unsupported_count} unsupported${prev && overlap > 0 ? `<span class="gate-rationale"> · ${overlap} claims unchanged</span>` : ''}</li>`;
+    }).join('')}</ul>` : ''}
     ${hasFactCheckNotes ? `<div class="gate-label">Remaining fact-check notes</div><ul class="appendix-list">${gate.fact_check!.unsupported_claims.map(c => `<li><strong>${escapeHtml(c.source_location || 'unknown')}</strong>: <em>&ldquo;${escapeHtml(c.claim)}&rdquo;</em>${c.rationale ? `<div class="gate-rationale">${escapeHtml(c.rationale)}</div>` : ''}</li>`).join('')}</ul>` : ''}
     ${llm?.failed ? `<p class="gate-llm-failed">Reviewer narrative unavailable: ${escapeHtml(llm.failure_reason || '')}</p>` : ''}
   </div>`;
