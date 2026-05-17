@@ -20,6 +20,10 @@ export const inferAntiPatternAbsenceStatus = (item: Partial<AuditItem> | undefin
   const explicit = normalizeAntiPatternAbsenceStatus(item?.antipattern_absence_status);
   if (explicit === 'tested_absent' || explicit === 'unknown_absent') return explicit;
 
+  const text = `${item?.coverage_reason || ''} ${item?.reasoning || ''}`.toLowerCase();
+  if (text.includes('tested absent')) return 'tested_absent';
+  if (text.includes('not assessed') || text.includes('insufficient to verify absence')) return 'unknown_absent';
+
   const hasCoverageEvidence = Array.isArray(item?.evidence_quotes) && item.evidence_quotes.length > 0;
   return hasCoverageEvidence ? 'tested_absent' : 'unknown_absent';
 };

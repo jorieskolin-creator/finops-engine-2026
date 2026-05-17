@@ -307,25 +307,27 @@ ${FINOPS_METHODOLOGY_CONTEXT}
 
 <strict_constraints>
 1. **LOCKED FINDINGS:** Do not change, reinterpret, or add factual claims to the evidence summary or diagnosis. The roadmap must answer: what actions logically follow from these findings?
-2. **GROUNDING RULE:** Every roadmap action must trace to at least one confirmed gap, confirmed anti-pattern, silent/missing evidence item, or diagnosis statement in LOCKED FINDINGS.
+2. **GROUNDING RULE:** Every roadmap action must trace to at least one confirmed gap, confirmed anti-pattern, silent/missing evidence item, or diagnosis statement in LOCKED FINDINGS. If the locked findings do not support a phase, return that phase with an empty actions array rather than inventing work.
 3. **TACTICS KB SCOPE:** Use the Verified Tactics Database only for prescriptions, mechanism names, case-study references, and tactic IDs. Never use it to alter current-state findings.
-4. **TACTIC ID RULE:** Every prescribed tactic action must include exactly one valid bracketed tactic ID from the database. Generic evidence-gathering actions should omit tactic IDs.
+4. **TACTIC ID RULE:** Every prescribed tactic action must include exactly one valid bracketed tactic ID from the database only when that tactic's problem_pattern semantically matches the locked finding. Generic evidence-gathering actions should omit tactic IDs. No tactic ID is better than a wrong tactic ID.
 5. **PLANNING DECISION:**
    - GO only when evidence is strong and no unresolved fact-check warnings are being regenerated.
    - CONDITIONAL_GO when action is useful but some source claims, assumptions, or confidence limitations remain.
    - NO_GO when the evidence supports validation only.
 6. **NO NEW CURRENT-STATE CLAIMS:** Roadmap and planning_decision may not introduce new assertions about the audited organization that are absent from LOCKED FINDINGS.
-7. **JSON STRING SAFETY:** No double quotes inside JSON values. Use single quotes or asterisks.
+7. **NO BASELINE OVERREACH:** Do not prescribe establishing a baseline for a value that is already quantified in the locked findings. Use the existing baseline as evidence and prescribe only the next grounded control.
+8. **NO CULTURE/GOVERNANCE OVERREACH:** Do not use culture or governance tactic IDs for generic improvement language. Culture tactics require a matching culture anti-pattern in LOCKED FINDINGS, and governance tactics require a matching governance gap in LOCKED FINDINGS.
+9. **JSON STRING SAFETY:** No double quotes inside JSON values. Use single quotes or asterisks.
 </strict_constraints>
 
 <task>
 1. Populate planning_decision from the locked findings and confidence signals.
-2. Create a 4-phase remediation_roadmap using Crawl-Walk-Run sequencing:
+2. Create a 4-phase remediation_roadmap using Crawl-Walk-Run sequencing. Keep all four phase headings, but actions arrays may be empty where the evidence does not support a grounded action:
    - 1. Crawl — Foundation (0-3 Months)
    - 2. Walk — Optimization (3-6 Months)
    - 3. Walk — Embedding (6-12 Months)
    - 4. Run — Continuous (12+ Months)
-3. If evidence is low or mixed, use validation/baseline actions first and mark assumptions/confidence when requested by the prompt appendix.
+3. If evidence is low or mixed, use validation actions first and mark assumptions/confidence when requested by the prompt appendix.
 </task>
 
 <output_format>

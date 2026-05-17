@@ -135,6 +135,25 @@ const renderEvidenceCheckSummary = (result: DiagnosticResult): string => {
   </div>`;
 };
 
+const renderFindingsMode = (result: DiagnosticResult): string => {
+  const findings = result.phase_3_strategy.findings_mode;
+  if (!findings) return '';
+  const section = (title: string, items?: string[]) => items && items.length > 0
+    ? `<div class="summary-sub"><h3>${escapeHtml(title)}</h3><ul>${items.map(i => `<li>${renderInlineMarkdownHtml(i)}</li>`).join('')}</ul></div>`
+    : '';
+  return `
+  <h2>Findings &amp; Validation Plan</h2>
+  <div class="summary findings-mode">
+    <p class="cg-lead">Evidence in the source did not support a directive roadmap. This section reports what the audit can confirm and what additional material is needed before a confident strategy can be written.</p>
+    <div class="summary-grid">
+      ${section('Evidence-backed findings', findings.evidence_backed_findings)}
+      ${section('Candidate remediation themes', findings.candidate_themes)}
+      ${section('Missing evidence', findings.missing_evidence)}
+      ${section('Validation plan', findings.validation_plan)}
+    </div>
+  </div>`;
+};
+
 const renderForensicCriterion = (cat: { id: string; title: string; desc: string }, item: AuditItem | undefined, stream: 'maturity' | 'antipattern'): string => `
     <div class="forensic-card">
       <div class="forensic-head">
@@ -211,6 +230,10 @@ const generateReportHtml = (result: DiagnosticResult): string => {
   const m = result.phase_2_validation.metrics;
   const cwrClass = result.phase_2_validation.crawl_walk_run;
   const isBlocked = result.quality_gate.decision === 'BLOCK';
+  const effectiveBracket = result.phase_3_strategy.effective_bracket ?? result.phase_3_strategy.confidence_bracket;
+  const hasFindingsMode = effectiveBracket === 'LOW' && !!result.phase_3_strategy.findings_mode;
+  const roadmap = result.phase_3_strategy.remediation_roadmap || [];
+  const canRenderRoadmap = effectiveBracket !== 'LOW' && !isBlocked && roadmap.length > 0;
   const isInsufficientEvidence = isBlocked || m.evidence_density < 30 || m.antipattern_coverage < 60;
   const cwrSlug = cwrClass.toLowerCase().includes('insufficient') || cwrClass.toLowerCase().includes('crawl') ? 'crawl' : cwrClass.toLowerCase().includes('run') ? 'run' : 'walk';
   const readinessDescription = m.readiness_cap_reason || METRIC_DESCRIPTIONS.finops_readiness;
@@ -531,13 +554,21 @@ const generateReportHtml = (result: DiagnosticResult): string => {
       </div>`;
   })()}
 
-  <h2>Remediation Roadmap</h2>
-  ${result.phase_3_strategy.remediation_roadmap.map(step => `
-    <div class="roadmap-phase">
-      <h3>${escapeHtml(step.phase)}</h3>
-      <ul>${step.actions.map(a => `<li><span>${escapeHtml(a)}</span></li>`).join('')}</ul>
+  ${hasFindingsMode ? renderFindingsMode(result) : ''}
+  ${canRenderRoadmap ? `
+    <h2>Remediation Roadmap</h2>
+    ${roadmap.map(step => `
+      <div class="roadmap-phase">
+        <h3>${escapeHtml(step.phase)}</h3>
+        <ul>${step.actions.map(a => `<li><span>${escapeHtml(a)}</span></li>`).join('')}</ul>
+      </div>
+    `).join('')}
+  ` : (effectiveBracket === 'LOW' || isBlocked) && !hasFindingsMode ? `
+    <h2>Remediation Roadmap</h2>
+    <div class="coverage-gaps">
+      <p class="cg-lead">Directive roadmap actions were withheld because the effective confidence bracket is LOW or the Quality Gate blocked the generated plan. Use the evidence summary, planning decision, and validation plan before acting.</p>
     </div>
-  `).join('')}
+  ` : ''}
 
   ${renderForensicSection('Forensic Audit: FinOps Maturity', 'maturity', result.phase_1_audit_logs.maturity)}
   ${renderForensicSection('Forensic Audit: Anti-Patterns', 'antipattern', result.phase_1_audit_logs.antipattern)}

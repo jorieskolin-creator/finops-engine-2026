@@ -789,6 +789,17 @@ export const ReportView: React.FC<ReportViewProps> = ({ result, onBack, onDownlo
           if (effective === 'LOW' && result.phase_3_strategy.findings_mode) {
             return <FindingsPanel findings={result.phase_3_strategy.findings_mode} />;
           }
+          if (effective === 'LOW' || result.quality_gate.decision === 'BLOCK') {
+            return (
+              <div className="mb-12 p-6 bg-rose-50/50 rounded-xl border border-rose-200">
+                <h2 className="text-2xl font-display font-bold text-slate-900 mb-2">Remediation Roadmap Withheld</h2>
+                <p className="text-sm text-slate-600">
+                  Directive roadmap actions were withheld because the effective confidence bracket is LOW or the Quality Gate blocked the generated plan.
+                  Use the evidence summary, planning decision, and validation plan before acting.
+                </p>
+              </div>
+            );
+          }
           // HIGH/MEDIUM: render the roadmap, with per-phase confidence + assumptions
           // surfaced when the synthesis populated them.
           if (result.phase_3_strategy.remediation_roadmap.length > 0) {
