@@ -117,6 +117,42 @@ assert.deepEqual(sanitized.strategyData.phase_3_strategy.remediation_roadmap[0].
   'Enforce object storage lifecycle tiering for product telemetry.'
 ]);
 
+const emptyClaim = sanitizeStrategyAfterFactCheck(strategyData, {
+  attempts: 1,
+  total_claims: 1,
+  supported_count: 0,
+  failed: false,
+  unsupported_claims: [{
+    claim: '   ',
+    classification: 'unsupported',
+    source_location: 'roadmap',
+    failure_type: 'unsupported_org_claim',
+    severity: 'BLOCKING_UNSUPPORTED_FACT',
+    rationale: 'Malformed fact-check claim.'
+  }]
+});
+assert.equal(emptyClaim.sanitized.length, 0);
+assert.deepEqual(emptyClaim.strategyData.phase_3_strategy.remediation_roadmap[0].actions, strategyData.phase_3_strategy.remediation_roadmap[0].actions);
+
+const caseMismatch = sanitizeStrategyAfterFactCheck(strategyData, {
+  attempts: 1,
+  total_claims: 1,
+  supported_count: 0,
+  failed: false,
+  unsupported_claims: [{
+    claim: 'implement finops outcome tracking to shift measurement from documented activities toward quantified optimization outcomes.',
+    classification: 'unsupported',
+    source_location: 'roadmap',
+    failure_type: 'unsupported_org_claim',
+    severity: 'BLOCKING_UNSUPPORTED_FACT',
+    rationale: 'The locked findings already include quantified optimization outcomes.'
+  }]
+});
+assert.equal(caseMismatch.sanitized.length, 1);
+assert.deepEqual(caseMismatch.strategyData.phase_3_strategy.remediation_roadmap[0].actions, [
+  'Enforce object storage lifecycle tiering for product telemetry.'
+]);
+
 const warnGate = runQualityGate(phase1, strongPhase2, validationOk, validationOk, undefined, sanitized.factCheck);
 assert.equal(warnGate.decision, 'WARN');
 assert.equal(warnGate.blocking_reasons.length, 0);

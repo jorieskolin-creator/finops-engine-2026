@@ -1,7 +1,10 @@
 import { FactCheckClaim, FactCheckResult, StrategySanitationItem } from '../types';
 import { isBlockingUnsupportedClaim } from './qualityGateService';
 
-const clone = <T>(value: T): T => JSON.parse(JSON.stringify(value));
+const clone = <T>(value: T): T =>
+  typeof structuredClone === 'function'
+    ? structuredClone(value)
+    : JSON.parse(JSON.stringify(value));
 
 const escapeRegExp = (value: string): string =>
   value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -104,12 +107,16 @@ const removeRoadmapAction = (strategy: any, claim: FactCheckClaim): boolean => {
   if (!Array.isArray(roadmap)) return false;
   let changed = false;
   const claimText = compact(claim.claim);
+  if (!claimText) return false;
+  const claimLower = claimText.toLowerCase();
   for (const phase of roadmap) {
     if (!Array.isArray(phase?.actions)) continue;
     const kept: string[] = [];
     for (const action of phase.actions) {
       const actionText = compact(String(action || ''));
-      const matches = actionText.includes(claimText) || claimText.includes(actionText);
+      if (!actionText) continue;
+      const actionLower = actionText.toLowerCase();
+      const matches = actionLower.includes(claimLower) || claimLower.includes(actionLower);
       if (matches) {
         changed = true;
       } else {
