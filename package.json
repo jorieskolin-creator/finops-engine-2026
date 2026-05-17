@@ -9,6 +9,7 @@
     "build": "tsc && vite build",
     "test:evidence-check": "node scripts/test-evidence-check.mjs",
     "test:metrics": "node scripts/test-metrics.mjs",
+    "test:input-parsing": "node scripts/test-input-parsing.mjs",
     "test:report-rendering": "node scripts/test-report-rendering.mjs",
     "preview": "vite preview",
     "start": "node server.js"

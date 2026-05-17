@@ -21,34 +21,57 @@ export const extractTextFromPdf = async (file: File): Promise<string> => {
 
 const DEFAULT_RENDER_SCALE = 1.6;
 const DEFAULT_JPEG_QUALITY = 0.78;
-const DEFAULT_MAX_PAGES = 20;
+const DEFAULT_MAX_TEXT_PAGES = 100;
+const DEFAULT_MAX_IMAGE_PAGES = 100;
+const DEFAULT_MAX_IMAGE_BYTES = 18 * 1024 * 1024;
+const MIN_VISUAL_CONTEXT_PAGES = 5;
+const SPARSE_TEXT_CHAR_THRESHOLD = 250;
 
 export interface PdfExtractionResult {
   text: string;
   images: ImageInput[];
+  metadata: {
+    totalPages: number;
+    parsedTextPages: number;
+    renderedImagePages: number;
+    warnings: string[];
+  };
 }
 
 export const extractPagesFromPdf = async (
   file: File,
-  opts?: { scale?: number; jpegQuality?: number; maxPages?: number }
+  opts?: { scale?: number; jpegQuality?: number; maxTextPages?: number; maxImagePages?: number; maxImageBytes?: number }
 ): Promise<PdfExtractionResult> => {
   const scale = opts?.scale ?? DEFAULT_RENDER_SCALE;
   const jpegQuality = opts?.jpegQuality ?? DEFAULT_JPEG_QUALITY;
-  const maxPages = opts?.maxPages ?? DEFAULT_MAX_PAGES;
+  const maxTextPages = opts?.maxTextPages ?? DEFAULT_MAX_TEXT_PAGES;
+  const maxImagePages = opts?.maxImagePages ?? DEFAULT_MAX_IMAGE_PAGES;
+  const maxImageBytes = opts?.maxImageBytes ?? DEFAULT_MAX_IMAGE_BYTES;
 
   const arrayBuffer = await file.arrayBuffer();
   const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
 
   const pageTexts: string[] = [];
   const images: ImageInput[] = [];
-  const pageCount = Math.min(pdf.numPages, maxPages);
+  const warnings: string[] = [];
+  const pageCount = Math.min(pdf.numPages, maxTextPages);
+  let encodedImageBytes = 0;
+  let imageBudgetWarningAdded = false;
 
   for (let i = 1; i <= pageCount; i++) {
     const page = await pdf.getPage(i);
 
     const content = await page.getTextContent();
     const text = content.items.map((item: any) => item.str).join(' ');
-    pageTexts.push(text);
+    pageTexts.push(`[PDF_PAGE source="${file.name}" page="${i}"]\n${text}\n[/PDF_PAGE]`);
+
+    const shouldRenderImage =
+      images.length < MIN_VISUAL_CONTEXT_PAGES ||
+      text.trim().length < SPARSE_TEXT_CHAR_THRESHOLD;
+
+    if (!shouldRenderImage || images.length >= maxImagePages || encodedImageBytes >= maxImageBytes) {
+      continue;
+    }
 
     try {
       const viewport = page.getViewport({ scale });
@@ -61,6 +84,15 @@ export const extractPagesFromPdf = async (
       const dataUrl = canvas.toDataURL('image/jpeg', jpegQuality);
       const base64 = dataUrl.split(',')[1];
       if (base64 && base64.length > 0) {
+        const nextEncodedImageBytes = encodedImageBytes + base64.length;
+        if (nextEncodedImageBytes > maxImageBytes) {
+          if (!imageBudgetWarningAdded) {
+            warnings.push(`Visual page extraction stopped after ${images.length} page image(s) because the encoded image budget was reached.`);
+            imageBudgetWarningAdded = true;
+          }
+          continue;
+        }
+        encodedImageBytes = nextEncodedImageBytes;
         images.push({
           mimeType: 'image/jpeg',
           data: base64,
@@ -73,11 +105,26 @@ export const extractPagesFromPdf = async (
     }
   }
 
-  if (pdf.numPages > maxPages) {
-    console.warn(`[pdfService] ${file.name} has ${pdf.numPages} pages; rendered first ${maxPages} as images. Text was extracted for the first ${maxPages} pages only.`);
+  if (pdf.numPages > maxTextPages) {
+    const warning = `${file.name} has ${pdf.numPages} pages; text extraction was capped at the first ${maxTextPages} pages.`;
+    warnings.push(warning);
+    console.warn(`[pdfService] ${warning}`);
   }
 
-  return { text: pageTexts.join('\n\n'), images };
+  if (images.length < pageCount) {
+    warnings.push(`Text was extracted for ${pageCount} page(s); ${images.length} page image(s) were included selectively for visual/OCR evidence.`);
+  }
+
+  return {
+    text: pageTexts.join('\n\n'),
+    images,
+    metadata: {
+      totalPages: pdf.numPages,
+      parsedTextPages: pageCount,
+      renderedImagePages: images.length,
+      warnings
+    }
+  };
 };
 
 export const imageFileToInput = async (file: File): Promise<ImageInput> => {
