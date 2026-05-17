@@ -5,6 +5,7 @@ import { BATCH_TITLES, MASTER_BINGO_FINOPS } from '../knowledge_base';
 import { METRIC_DESCRIPTIONS } from '../constants';
 import { SVG_CSS, svgGaugeCard, svgRadar, svgScatter } from '../services/svgChartService';
 import { isInsufficientEvidenceReport, renderInlineMarkdownHtml, strengthsSectionTitle } from '../services/reportTextService';
+import { antiPatternStatusLabel, inferAntiPatternAbsenceStatus } from '../services/antiPatternSemantics';
 
 const InlineSvg: React.FC<{ html: string; className?: string }> = ({ html, className }) => (
   <div className={className} dangerouslySetInnerHTML={{ __html: html }} />
@@ -228,20 +229,32 @@ const evidenceCheckBadgeClass = (status?: AuditItem['evidence_check_status']): s
   return 'bg-slate-100 text-slate-500';
 };
 
+const antiPatternBadgeClass = (item?: AuditItem): string => {
+  const status = inferAntiPatternAbsenceStatus(item);
+  if (status === 'confirmed_present') return 'bg-rose-100 text-rose-700';
+  if (status === 'partially_present') return 'bg-amber-100 text-amber-700';
+  if (status === 'tested_absent') return 'bg-emerald-100 text-emerald-700';
+  return 'bg-slate-100 text-slate-600';
+};
+
 const ForensicCriterion: React.FC<{
   catalog: { id: string; title: string; desc: string };
   item?: AuditItem;
-}> = ({ catalog, item }) => (
+  stream: 'maturity' | 'antipattern';
+}> = ({ catalog, item, stream }) => (
   <div className="p-5 bg-white rounded-xl border border-slate-200">
     <div className="flex items-start justify-between gap-4 mb-2">
       <div className="min-w-0">
         <span className="font-mono text-xs text-slate-400">{catalog.id}</span>
         <h4 className="font-bold text-slate-900 leading-snug">{catalog.title}</h4>
       </div>
-      <span className={`px-2 py-1 rounded text-xs font-bold uppercase tracking-wider shrink-0 ${statusBadgeClass(item?.status ?? '')}`}>
-        {item?.status ?? 'No Data'}
+      <span className={`px-2 py-1 rounded text-xs font-bold uppercase tracking-wider shrink-0 ${stream === 'antipattern' ? antiPatternBadgeClass(item) : statusBadgeClass(item?.status ?? '')}`}>
+        {stream === 'antipattern' ? antiPatternStatusLabel(item) : (item?.status ?? 'No Data')}
       </span>
     </div>
+    {stream === 'antipattern' && item?.coverage_reason && (
+      <p className="mb-3 text-xs text-slate-500">{item.coverage_reason}</p>
+    )}
     {item?.evidence_check_status && (
       <div className="mb-3 flex flex-wrap items-center gap-2">
         <span className={`px-2 py-1 rounded text-xs font-bold uppercase tracking-wider ${evidenceCheckBadgeClass(item.evidence_check_status)}`}>
@@ -315,7 +328,9 @@ const ForensicSection: React.FC<{
   const [mode, setMode] = useState<'all' | 'critical'>('all');
   const catalog = MASTER_BINGO_FINOPS[stream];
   const totalCount = catalog.length;
-  const isCritical = (item?: AuditItem): boolean => item?.status === 'NOK';
+  const isCritical = (item?: AuditItem): boolean => stream === 'antipattern'
+    ? (item?.count || 0) > 0
+    : item?.status === 'NOK';
   const criticalCount = catalog.filter(c => isCritical(logs[c.id])).length;
   const visibleCatalog = mode === 'critical' ? catalog.filter(c => isCritical(logs[c.id])) : catalog;
 
@@ -370,7 +385,7 @@ const ForensicSection: React.FC<{
                 </h3>
                 <div className="space-y-3">
                   {items.map(cat => (
-                    <ForensicCriterion key={cat.id} catalog={cat} item={logs[cat.id]} />
+          <ForensicCriterion key={cat.id} catalog={cat} item={logs[cat.id]} stream={stream} />
                   ))}
                 </div>
               </div>
@@ -431,7 +446,7 @@ export const ReportView: React.FC<ReportViewProps> = ({ result, onBack, onDownlo
   const m = result.phase_2_validation.metrics;
   const cwrClass = result.phase_2_validation.crawl_walk_run;
   const isBlocked = result.quality_gate.decision === 'BLOCK';
-  const isInsufficientEvidence = isBlocked || m.evidence_density < 30;
+  const isInsufficientEvidence = isBlocked || m.evidence_density < 30 || m.antipattern_coverage < 60;
   const readinessColor = isBlocked ? '#f43f5e' : '#10b981';
   const readinessDescription = m.readiness_cap_reason || METRIC_DESCRIPTIONS.finops_readiness;
 
@@ -441,6 +456,8 @@ export const ReportView: React.FC<ReportViewProps> = ({ result, onBack, onDownlo
     { value: m.maturity_depth, label: 'Maturity Depth', color: '#06b6d4', description: METRIC_DESCRIPTIONS.maturity_depth, trend: 'positive' as const },
     { value: m.antipattern_ratio, label: 'Anti-Pattern Level', color: '#f43f5e', description: METRIC_DESCRIPTIONS.antipattern_ratio, trend: 'negative' as const },
     { value: m.antipattern_burden, label: 'Anti-Pattern Burden', color: '#e11d48', description: METRIC_DESCRIPTIONS.antipattern_burden, trend: 'negative' as const },
+    { value: m.antipattern_clearance, label: 'Anti-Pattern Clearance', color: '#10b981', description: METRIC_DESCRIPTIONS.antipattern_clearance, trend: 'positive' as const },
+    { value: m.antipattern_coverage, label: 'Anti-Pattern Coverage', color: '#64748b', description: METRIC_DESCRIPTIONS.antipattern_coverage, trend: 'positive' as const },
     { value: m.delivery_integrity, label: 'Delivery Integrity', color: '#475569', description: METRIC_DESCRIPTIONS.delivery_integrity, trend: 'positive' as const },
     { value: m.evidence_density, label: 'Evidence Density', color: '#475569', description: METRIC_DESCRIPTIONS.evidence_density, trend: 'positive' as const }
   ];
@@ -501,6 +518,16 @@ export const ReportView: React.FC<ReportViewProps> = ({ result, onBack, onDownlo
               <p className="text-xs text-slate-500 mt-1 leading-snug">{METRIC_DESCRIPTIONS.antipattern_burden}</p>
             </div>
             <div>
+              <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Anti-Pattern Clearance</p>
+              <p className="text-3xl font-bold text-emerald-600">{Math.round(m.antipattern_clearance)}%</p>
+              <p className="text-xs text-slate-500 mt-1 leading-snug">{METRIC_DESCRIPTIONS.antipattern_clearance}</p>
+            </div>
+            <div>
+              <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Anti-Pattern Coverage</p>
+              <p className="text-3xl font-bold text-slate-600">{Math.round(m.antipattern_coverage)}%</p>
+              <p className="text-xs text-slate-500 mt-1 leading-snug">{METRIC_DESCRIPTIONS.antipattern_coverage}</p>
+            </div>
+            <div>
               <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Maturity Ratio</p>
               <p className="text-3xl font-bold text-violet-600">{Math.round(m.maturity_ratio)}%</p>
               <p className="text-xs text-slate-500 mt-1 leading-snug">{METRIC_DESCRIPTIONS.maturity_ratio}</p>
@@ -531,7 +558,7 @@ export const ReportView: React.FC<ReportViewProps> = ({ result, onBack, onDownlo
             </div>
             <div className="chart-card">
               <h3>Position vs. Quadrants</h3>
-              <p className="chart-desc">Validated maturity depth (x-axis) plotted against confirmed anti-pattern burden (y-axis). When evidence is insufficient, quadrant labels are suppressed.</p>
+              <p className="chart-desc">Validated maturity depth (x-axis) plotted against confirmed anti-pattern burden (y-axis). When evidence or anti-pattern coverage is insufficient, quadrant labels are suppressed.</p>
               <InlineSvg html={svgScatter(m.maturity_depth, m.antipattern_burden, isInsufficientEvidence)} />
             </div>
           </div>
@@ -579,6 +606,8 @@ export const ReportView: React.FC<ReportViewProps> = ({ result, onBack, onDownlo
                   {renderList(strengthsSectionTitle(useSourceObservationTitle), evidence.confirmed_strengths)}
                   {renderList('Confirmed gaps', evidence.confirmed_gaps)}
                   {renderList('Confirmed anti-patterns', evidence.confirmed_antipatterns)}
+                  {renderList('Verified anti-pattern absences', result.phase_2_validation.verified_antipattern_absences)}
+                  {renderList('Anti-patterns not assessable from source', result.phase_2_validation.unknown_antipattern_absences)}
                   {renderList('Silent / missing evidence', evidence.silent_or_missing_evidence)}
                 </div>
               </div>

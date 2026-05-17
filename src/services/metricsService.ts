@@ -1,4 +1,5 @@
 import type { AuditItem, EvidenceCategory, Phase1AuditLogs, Phase2Validation } from '../types';
+import { inferAntiPatternAbsenceStatus } from './antiPatternSemantics';
 
 export const EVIDENCE_DENSITY_BLOCK = 30;
 export const EVIDENCE_DENSITY_WARN = 60;
@@ -24,9 +25,12 @@ const evidenceCapForDensity = (density: number): { cap: number; reason?: string 
 export const calculateMetrics = (logs: Phase1AuditLogs): Phase2Validation => {
   let maturityCount = 0; let maturitySum = 0; const maturityGaps: string[] = [];
   let antipatternCount = 0; let antipatternSum = 0; const antipatternFindings: string[] = [];
+  let testedAbsentCount = 0;
+  let assessedAntipatternCount = 0;
+  const verifiedAntipatternAbsences: string[] = [];
+  const unknownAntipatternAbsences: string[] = [];
   let deliveredItems = 0;
   let itemsWithEvidence = 0;
-  let antipatternItemsWithEvidence = 0;
   const silentAreas: string[] = [];
   const categoryScores: Record<string, number> = { A: 0, B: 0, C: 0, D: 0, E: 0 };
   const evidenceCategoryTotals: Partial<Record<EvidenceCategory, number>> = {};
@@ -35,7 +39,6 @@ export const calculateMetrics = (logs: Phase1AuditLogs): Phase2Validation => {
     if (item.count !== -1) deliveredItems++;
     if (item.evidence_quotes && item.evidence_quotes.length > 0) {
       itemsWithEvidence++;
-      if (stream === 'antipattern') antipatternItemsWithEvidence++;
     }
     if (item.category_footprint) {
       for (const [cat, n] of Object.entries(item.category_footprint)) {
@@ -61,8 +64,18 @@ export const calculateMetrics = (logs: Phase1AuditLogs): Phase2Validation => {
   Object.entries(logs.antipattern).forEach(([key, rawItem]) => {
     const item = rawItem as AuditItem;
     tally(item, 'antipattern');
+    const absenceStatus = inferAntiPatternAbsenceStatus(item);
     antipatternSum += Math.max(item.count, 0);
-    if (item.status === 'NOK') antipatternCount++;
+    if (absenceStatus !== 'unknown_absent') assessedAntipatternCount++;
+    if (absenceStatus === 'tested_absent') {
+      testedAbsentCount++;
+      if (!item.evidence_quotes || item.evidence_quotes.length === 0) itemsWithEvidence++;
+      verifiedAntipatternAbsences.push(`[${key}] Tested absent: ${item.coverage_reason || item.reasoning || item.evidence}`);
+    }
+    if (absenceStatus === 'unknown_absent') {
+      unknownAntipatternAbsences.push(`[${key}] Not assessed: ${item.coverage_reason || item.reasoning || item.evidence || 'Source coverage was insufficient to verify absence.'}`);
+    }
+    if (absenceStatus === 'confirmed_present') antipatternCount++;
     if (item.count > 0) {
       antipatternFindings.push(`[${key}] Finding: ${item.evidence.substring(0, 100)}...`);
     }
@@ -75,13 +88,18 @@ export const calculateMetrics = (logs: Phase1AuditLogs): Phase2Validation => {
   const maturity_depth = (maturitySum / 75) * 100;
   const antipattern_ratio = (antipatternCount / 25) * 100;
   const antipattern_burden = (antipatternSum / 75) * 100;
+  const antipattern_clearance = Math.round((testedAbsentCount / 25) * 100);
+  const antipattern_coverage = Math.round((assessedAntipatternCount / 25) * 100);
   const antipattern_burden_confidence =
-    antipatternSum > 0 || (evidence_density >= EVIDENCE_DENSITY_WARN && antipatternItemsWithEvidence >= 8)
+    antipatternSum > 0 || antipattern_coverage >= EVIDENCE_DENSITY_WARN
       ? 'confirmed'
       : 'unknown';
 
   const burdenPenalty = antipattern_burden * 0.5;
-  const uncapped_readiness = clampPercent(maturity_depth - burdenPenalty);
+  const clearanceBonus = antipattern_coverage >= EVIDENCE_DENSITY_WARN
+    ? antipattern_clearance * 0.1
+    : 0;
+  const uncapped_readiness = clampPercent(maturity_depth - burdenPenalty + clearanceBonus);
   const evidenceCap = evidenceCapForDensity(evidence_density);
   const finops_readiness = clampPercent(Math.min(uncapped_readiness, evidenceCap.cap));
 
@@ -102,6 +120,8 @@ export const calculateMetrics = (logs: Phase1AuditLogs): Phase2Validation => {
       antipattern_ratio,
       maturity_depth,
       antipattern_burden,
+      antipattern_clearance,
+      antipattern_coverage,
       finops_readiness,
       uncapped_readiness,
       readiness_cap: evidenceCap.cap,
@@ -116,6 +136,8 @@ export const calculateMetrics = (logs: Phase1AuditLogs): Phase2Validation => {
     },
     maturity_gaps: maturityGaps,
     antipattern_findings: antipatternFindings,
+    verified_antipattern_absences: verifiedAntipatternAbsences,
+    unknown_antipattern_absences: unknownAntipatternAbsences,
     silent_areas: silentAreas,
     category_scores: categoryScores,
     evidence_category_totals: evidenceCategoryTotals,

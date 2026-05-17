@@ -49,6 +49,8 @@ export interface AuditItem {
   verified_count?: number;
   adjustment_reason?: string;
   rescan_attempted?: boolean;
+  antipattern_absence_status?: AntiPatternAbsenceStatus;
+  coverage_reason?: string;
 }
 
 export interface AuditCategory {
@@ -65,6 +67,8 @@ export interface Metrics {
   antipattern_ratio: number;
   maturity_depth: number;
   antipattern_burden: number;
+  antipattern_clearance: number;
+  antipattern_coverage: number;
   finops_readiness: number;
   uncapped_readiness?: number;
   readiness_cap?: number;
@@ -84,11 +88,19 @@ export interface Phase2Validation {
   raw_counts: RawCounts;
   maturity_gaps: string[];
   antipattern_findings: string[];
+  verified_antipattern_absences: string[];
+  unknown_antipattern_absences: string[];
   silent_areas: string[];
   category_scores: Record<string, number>;
   evidence_category_totals?: Partial<Record<EvidenceCategory, number>>;
   crawl_walk_run: 'Insufficient evidence' | 'Crawl' | 'Walk' | 'Walk with significant friction' | 'Run';
 }
+
+export type AntiPatternAbsenceStatus =
+  | 'confirmed_present'
+  | 'partially_present'
+  | 'tested_absent'
+  | 'unknown_absent';
 
 export type EvidenceCheckStatus = 'supported' | 'weak' | 'unsupported' | 'missing';
 
@@ -101,6 +113,8 @@ export interface EvidenceCheckItem {
   rationale: string;
   rescan_recommended?: boolean;
   quote_supported?: boolean;
+  antipattern_absence_status?: AntiPatternAbsenceStatus;
+  coverage_reason?: string;
 }
 
 export interface EvidenceCheckAdjustment {

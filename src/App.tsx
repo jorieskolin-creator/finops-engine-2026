@@ -851,6 +851,12 @@ const App: React.FC = () => {
                   <div className="md:col-span-1">
                     <GaugeCard value={result.phase_2_validation.metrics.antipattern_burden} label="Anti-Pattern Burden" color="#e11d48" trend="negative" description={METRIC_DESCRIPTIONS.antipattern_burden} />
                   </div>
+                  <div className="md:col-span-1">
+                    <GaugeCard value={result.phase_2_validation.metrics.antipattern_clearance} label="Anti-Pattern Clearance" color="#10b981" trend="positive" description={METRIC_DESCRIPTIONS.antipattern_clearance} />
+                  </div>
+                  <div className="md:col-span-1">
+                    <GaugeCard value={result.phase_2_validation.metrics.antipattern_coverage} label="Anti-Pattern Coverage" color="#64748b" trend="positive" description={METRIC_DESCRIPTIONS.antipattern_coverage} />
+                  </div>
                 </div>
 
                 <div className="grid grid-cols-1 lg:grid-cols-5 gap-6 h-full items-stretch">
@@ -859,6 +865,7 @@ const App: React.FC = () => {
                       x={result.phase_2_validation.metrics.maturity_depth}
                       y={result.phase_2_validation.metrics.antipattern_burden}
                       evidenceDensity={result.phase_2_validation.metrics.evidence_density}
+                      antipatternCoverage={result.phase_2_validation.metrics.antipattern_coverage}
                       qualityGateDecision={result.quality_gate.decision}
                     />
                   </div>

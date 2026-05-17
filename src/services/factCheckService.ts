@@ -69,6 +69,8 @@ const compactMetrics = (phase2: Phase2Validation): string => {
     `finops_readiness=${Math.round(m.finops_readiness)}%`,
     `maturity_depth=${Math.round(m.maturity_depth)}%`,
     `antipattern_burden=${Math.round(m.antipattern_burden)}%`,
+    `antipattern_clearance=${Math.round(m.antipattern_clearance)}%`,
+    `antipattern_coverage=${Math.round(m.antipattern_coverage)}%`,
     `maturity_ratio=${Math.round(m.maturity_ratio)}%`,
     `antipattern_ratio=${Math.round(m.antipattern_ratio)}%`,
     `delivery_integrity=${m.delivery_integrity}%`,
@@ -77,6 +79,8 @@ const compactMetrics = (phase2: Phase2Validation): string => {
     `silent_areas_count=${phase2.silent_areas.length}`,
     `maturity_gaps_count=${phase2.maturity_gaps.length}`,
     `antipattern_findings_count=${phase2.antipattern_findings.length}`,
+    `verified_antipattern_absences_count=${phase2.verified_antipattern_absences.length}`,
+    `unknown_antipattern_absences_count=${phase2.unknown_antipattern_absences.length}`,
   ].join(', ') + (categoryScoreLines ? `\n\nCATEGORY SCORES (these are the X/15 numbers the strategy may legitimately quote):\n${categoryScoreLines}` : '');
 };
 

@@ -107,6 +107,12 @@ export const runQualityGate = (
     );
   }
 
+  if (phase2.metrics.antipattern_coverage < EVIDENCE_DENSITY_WARN) {
+    warnings.push(
+      `Anti-pattern coverage ${Math.round(phase2.metrics.antipattern_coverage)}% < ${EVIDENCE_DENSITY_WARN}% — low burden mostly means not assessable, not proven absence.`
+    );
+  }
+
   if (phase2.silent_areas.length > SILENT_AREAS_WARN) {
     warnings.push(
       `${phase2.silent_areas.length} of 25 maturity criteria are silent — strategy may over-extrapolate from sparse signal.`
