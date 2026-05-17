@@ -6,7 +6,7 @@ import { METRIC_DESCRIPTIONS } from '../constants';
 import { SVG_CSS, svgGaugeCard, svgRadar, svgScatter } from '../services/svgChartService';
 import { isInsufficientEvidenceReport, renderInlineMarkdownHtml, strengthsSectionTitle } from '../services/reportTextService';
 import { antiPatternStatusLabel, inferAntiPatternAbsenceStatus } from '../services/antiPatternSemantics';
-import { displayQualityGateDiagnostic, scannerEvidenceCheckDisagreementTitle, splitQualityGateDiagnostics } from '../services/reportDiagnosticsService';
+import { displayQualityGateDiagnostic, splitQualityGateDiagnostics } from '../services/reportDiagnosticsService';
 
 const InlineSvg: React.FC<{ html: string; className?: string }> = ({ html, className }) => (
   <div className={className} dangerouslySetInnerHTML={{ __html: html }} />
@@ -228,10 +228,10 @@ const QualityGateAppendix: React.FC<{ gate: QualityGateResult }> = ({ gate }) =>
       </h2>
       <div className="p-5 bg-slate-50 rounded-xl border border-slate-200">
         <p className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">
-          {scannerEvidenceCheckDisagreementTitle}
+          Traceability Notes
         </p>
         <p className="text-sm text-slate-600 mb-4">
-          These diagnostic items were resolved before scoring. They are kept here for traceability, but they are not user-facing maturity findings.
+          These diagnostic and strategy-hygiene items are kept here for traceability. They are not user-facing maturity findings and do not automatically invalidate the assessment score.
         </p>
         <ul className="space-y-2.5 text-sm text-slate-700">
           {appendixDiagnostics.map((warning, i) => {

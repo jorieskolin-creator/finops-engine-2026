@@ -21,29 +21,37 @@ await writeFile(modulePath, compiled, 'utf8');
 const {
   displayQualityGateDiagnostic,
   isScannerEvidenceCheckDisagreement,
+  isStrategyHygieneDiagnostic,
   scannerEvidenceCheckDisagreementTitle,
+  strategyHygieneNotesTitle,
   splitQualityGateDiagnostics,
 } = await import(`file://${modulePath}`);
 
 const disagreement = 'Phase 1: maturity.A1: Score 0 but evidence does not indicate silence';
 const normalWarning = 'Anti-pattern coverage 24% < 60% — low burden mostly means not assessable, not proven absence.';
+const hygieneWarning = 'Strategy hygiene: 7 non-material wording or taxonomy issue(s) remain after fact-check. These do not invalidate the assessment score.';
 
 assert.equal(isScannerEvidenceCheckDisagreement(disagreement), true);
 assert.equal(isScannerEvidenceCheckDisagreement(normalWarning), false);
+assert.equal(isStrategyHygieneDiagnostic(hygieneWarning), true);
 assert.equal(
   displayQualityGateDiagnostic(disagreement),
   `${scannerEvidenceCheckDisagreementTitle}: maturity.A1: Score 0 but evidence does not indicate silence`
+);
+assert.equal(
+  displayQualityGateDiagnostic(hygieneWarning),
+  `${strategyHygieneNotesTitle}: 7 non-material wording or taxonomy issue(s) remain after fact-check. These do not invalidate the assessment score.`
 );
 
 const split = splitQualityGateDiagnostics({
   decision: 'BLOCK',
   blocking_reasons: ['Evidence density 24% < 30% floor.'],
-  warnings: [normalWarning, disagreement],
+  warnings: [normalWarning, disagreement, hygieneWarning],
   notes: [],
   thresholds: {},
 });
 
 assert.deepEqual(split.primaryWarnings, [normalWarning]);
-assert.deepEqual(split.appendixDiagnostics, [disagreement]);
+assert.deepEqual(split.appendixDiagnostics, [disagreement, hygieneWarning]);
 
 console.log('report diagnostics unit tests passed');

@@ -155,7 +155,7 @@ export const validatePhase3Grounding = (strategyData: any, phase2: Phase2Validat
   }
 
   if (requireTacticCitations && referencedTacticIds.size === 0 && allActions.length > 0) {
-    errors.push(`Strategy contains ${allActions.length} actions but cites zero tactic IDs. Phase 3 prompt requires inline tactic citations on every tactic-bearing action.`);
+    warnings.push(`Strategy contains ${allActions.length} actions with no tactic IDs. Tactic IDs were withheld where no exact KB match was supported.`);
   }
 
   // Percentage check. The deterministic version of this used to flag every

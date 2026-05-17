@@ -21,6 +21,12 @@ interface TacticSemanticRule {
   replacementWhenActionMatches?: Array<{ keywords: string[]; id: string }>;
 }
 
+interface UnsupportedActionRule {
+  actionKeywords: string[];
+  requiredFindingKeywords: string[];
+  reason: string;
+}
+
 const TACTIC_RULES: Record<string, TacticSemanticRule> = {
   'TAC-VIS-001': {
     requiredFindingKeywords: ['tag', 'allocation', 'showback', 'chargeback', 'owner tag', 'cost center']
@@ -92,10 +98,26 @@ const TACTIC_RULES: Record<string, TacticSemanticRule> = {
 
 const TACTIC_RX = /\[(TAC-[A-Z]+-\d+(?:-[A-Z]+)?)\]/g;
 
+const UNSUPPORTED_ACTION_RULES: UnsupportedActionRule[] = [
+  {
+    actionKeywords: ['activity-based', 'outcome-based'],
+    requiredFindingKeywords: ['activity-based', 'vanity metric', 'theater', 'theatre', 'no operational outcome', 'no measurable outcome'],
+    reason: 'Removed outcome-tracking action because the locked findings do not say current measurement is activity-based or performative.'
+  },
+  {
+    actionKeywords: ['product team growth'],
+    requiredFindingKeywords: ['product team growth', 'team growth', 'scaling pressure', 'operating model strain'],
+    reason: 'Removed operating-model growth action because the locked findings do not say product-team growth is stressing the FinOps cadence.'
+  }
+];
+
 const lower = (value: unknown): string => typeof value === 'string' ? value.toLowerCase() : '';
 
 const includesAny = (haystack: string, needles: string[] | undefined): boolean =>
   !!needles?.some((needle) => haystack.includes(needle.toLowerCase()));
+
+const includesAll = (haystack: string, needles: string[]): boolean =>
+  needles.every((needle) => haystack.includes(needle.toLowerCase()));
 
 const buildFindingCorpus = (phase2: Phase2Validation): string => [
   ...phase2.maturity_gaps,
@@ -129,6 +151,26 @@ const applyReplacementOrRemoval = (
   return after;
 };
 
+const removeUnsupportedActionIfNeeded = (
+  action: string,
+  findingCorpus: string,
+  adjustments: TacticGroundingAdjustment[]
+): string | undefined => {
+  const actionText = lower(action);
+  const rule = UNSUPPORTED_ACTION_RULES.find(candidate =>
+    includesAll(actionText, candidate.actionKeywords) &&
+    !includesAny(findingCorpus, candidate.requiredFindingKeywords)
+  );
+  if (!rule) return action;
+  adjustments.push({
+    action_before: action,
+    action_after: '',
+    tactic_id: 'ACTION',
+    reason: rule.reason
+  });
+  return undefined;
+};
+
 export const sanitizeRoadmapTacticGrounding = (
   strategyData: any,
   phase2: Phase2Validation
@@ -148,6 +190,9 @@ export const sanitizeRoadmapTacticGrounding = (
     if (!Array.isArray(phase.actions)) continue;
     phase.actions = phase.actions.map((rawAction: unknown) => {
       let action = typeof rawAction === 'string' ? rawAction : String(rawAction ?? '');
+      const groundedAction = removeUnsupportedActionIfNeeded(action, findingCorpus, adjustments);
+      if (groundedAction === undefined) return '';
+      action = groundedAction;
       const actionText = lower(action);
       const ids = Array.from(action.matchAll(TACTIC_RX)).map(m => m[1]);
       for (const id of ids) {
@@ -185,7 +230,9 @@ export const sanitizeRoadmapTacticGrounding = (
   }
 
   const warnings = adjustments.map(a =>
-    a.replacement_id
+    a.tactic_id === 'ACTION'
+      ? `Roadmap grounding removed unsupported action: ${a.reason}`
+      : a.replacement_id
       ? `Roadmap tactic grounding adjusted ${a.tactic_id} → ${a.replacement_id}: ${a.reason}`
       : `Roadmap tactic grounding removed ${a.tactic_id}: ${a.reason}`
   );

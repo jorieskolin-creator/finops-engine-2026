@@ -1,8 +1,15 @@
 import type { QualityGateResult } from '../types';
 
 export const scannerEvidenceCheckDisagreementTitle = 'Scanner/evidence-check disagreement resolved by downgrade';
+export const strategyHygieneNotesTitle = 'Strategy Hygiene Notes';
 
 const phase1ScannerDisagreementPattern = /^Phase 1: (maturity|antipattern)\.[A-E][1-5]: Score 0 but evidence does not indicate silence$/;
+const strategyHygienePatterns = [
+  /^Strategy hygiene:/,
+  /^Roadmap tactic grounding /,
+  /^Roadmap grounding removed /,
+  /^Strategy contains \d+ actions with no tactic IDs\./
+];
 
 export interface QualityGateDiagnosticsSplit {
   primaryWarnings: string[];
@@ -12,9 +19,14 @@ export interface QualityGateDiagnosticsSplit {
 export const isScannerEvidenceCheckDisagreement = (warning: string): boolean =>
   phase1ScannerDisagreementPattern.test(warning);
 
+export const isStrategyHygieneDiagnostic = (warning: string): boolean =>
+  strategyHygienePatterns.some(pattern => pattern.test(warning));
+
 export const displayQualityGateDiagnostic = (warning: string): string =>
   isScannerEvidenceCheckDisagreement(warning)
     ? `${scannerEvidenceCheckDisagreementTitle}: ${warning.replace(/^Phase 1: /, '')}`
+    : isStrategyHygieneDiagnostic(warning)
+      ? `${strategyHygieneNotesTitle}: ${warning.replace(/^Strategy hygiene:\s*/, '')}`
     : warning;
 
 export const splitQualityGateDiagnostics = (gate: QualityGateResult): QualityGateDiagnosticsSplit => {
@@ -22,7 +34,7 @@ export const splitQualityGateDiagnostics = (gate: QualityGateResult): QualityGat
   const appendixDiagnostics: string[] = [];
 
   for (const warning of gate.warnings) {
-    if (isScannerEvidenceCheckDisagreement(warning)) appendixDiagnostics.push(warning);
+    if (isScannerEvidenceCheckDisagreement(warning) || isStrategyHygieneDiagnostic(warning)) appendixDiagnostics.push(warning);
     else primaryWarnings.push(warning);
   }
 
