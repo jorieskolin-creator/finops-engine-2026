@@ -33,11 +33,55 @@ export const isDomainTaxonomyHygieneClaim = (claim: FactCheckClaim): boolean => 
   ].some(term => blob.includes(term));
 };
 
+export const isMisclassifiedButRealClaim = (claim: FactCheckClaim): boolean => {
+  if (claim.severity === 'WARN_MISCLASSIFIED_BUT_REAL') return true;
+  const blob = claimBlob(claim);
+  return [
+    'while this gap exists',
+    'while this issue exists',
+    'underlying fact',
+    'real gap',
+    'wrong label',
+    'wrong category',
+    'wrong domain',
+    'misclassified',
+    'incorrectly listed',
+    'incorrectly classified',
+    'not classify it as',
+    'not classified as',
+    'does not classify it as',
+    'does not classify this as',
+    'not an antipattern',
+    'not an anti-pattern',
+    'not a confirmed antipattern',
+    'not a confirmed anti-pattern'
+  ].some(term => blob.includes(term));
+};
+
+export const isTacticHygieneClaim = (claim: FactCheckClaim): boolean => {
+  if (claim.severity === 'WARN_TACTIC_HYGIENE') return true;
+  const blob = claimBlob(claim);
+  const planningTacticId = claim.source_location === 'planning_decision' && /\btac-[a-z]+-\d{3}\b/i.test(claim.claim || '');
+  return planningTacticId || [
+    'tactic ids are strictly allowed only in roadmap actions',
+    'tactic ids are allowed only in roadmap actions',
+    'tactic id is allowed only in roadmap',
+    'no tactic ids',
+    'zero tactic ids',
+    'tactic ids were withheld',
+    'tactic omitted',
+    'citation hygiene'
+  ].some(term => blob.includes(term));
+};
+
 export const isBlockingUnsupportedClaim = (claim: FactCheckClaim): boolean => {
+  if (claim.severity === 'WARN_MISCLASSIFIED_BUT_REAL' || claim.severity === 'WARN_TACTIC_HYGIENE') return false;
+  if (claim.severity === 'BLOCKING_UNSUPPORTED_FACT' || claim.severity === 'BLOCKING_UNSAFE_ROADMAP') return true;
+  if (isMisclassifiedButRealClaim(claim) || isTacticHygieneClaim(claim)) return false;
   if (isDomainTaxonomyHygieneClaim(claim)) return false;
   if (claim.failure_type === 'fabricated_number') return true;
   if (claim.source_location === 'roadmap') return true;
-  if (claim.source_location === 'planning_decision') return true;
+  if (claim.source_location === 'planning_decision') return claim.failure_type !== 'other';
   if (claim.failure_type === 'unsupported_org_claim') return true;
   return false;
 };
@@ -112,7 +156,7 @@ export const runQualityGate = (
     const blockingUnsupported = factCheck.unsupported_claims.filter(isBlockingUnsupportedClaim);
     const hygieneUnsupported = factCheck.unsupported_claims.filter(c => !isBlockingUnsupportedClaim(c));
     const highRiskUnsupported = blockingUnsupported.filter(c =>
-      c.failure_type === 'fabricated_number' || c.source_location === 'roadmap'
+      c.failure_type === 'fabricated_number' || c.severity === 'BLOCKING_UNSAFE_ROADMAP'
     );
     if (highRiskUnsupported.length > 0 || blockingUnsupported.length >= UNSUPPORTED_CLAIMS_BLOCK) {
       blocking_reasons.push(
@@ -184,7 +228,7 @@ export const runQualityGate = (
 };
 
 // LLM-augmented reasoning. Only runs when the deterministic gate decided
-// WARN or BLOCK — we use the model (default Gemini 3.1 Pro, see STAGE_MODELS)
+// WARN or BLOCK — we use the configured quality_gate model (see STAGE_MODELS)
 // to write a plain-language explanation that grounds each reason in source
 // quotes. This does NOT change the decision; it only annotates it.
 

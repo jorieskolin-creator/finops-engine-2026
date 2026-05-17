@@ -9,12 +9,13 @@
 // Gemini 2.5 (flash/pro): thinkingConfig.thinkingBudget: number
 //                         (-1 dynamic, 0 disables on Flash only, positive = budget)
 // Anthropic (Sonnet/Opus/Haiku): maxTokens, optional extended thinking budget
+// OpenAI (GPT-5.x): reasoning.effort, maxTokens
 //
 // Model IDs may need adjustment as providers rename previews → GA. The router
 // reads `id` verbatim and forwards it to the provider, so a typo here is the
 // only thing that breaks a swap.
 
-export type Provider = 'gemini' | 'anthropic';
+export type Provider = 'gemini' | 'anthropic' | 'openai';
 
 export type GeminiThinkingConfig =
   | { thinkingLevel: 'low' | 'medium' | 'high' }
@@ -25,11 +26,16 @@ export interface AnthropicThinkingConfig {
   budget_tokens: number;
 }
 
+export interface OpenAIReasoningConfig {
+  effort: 'none' | 'low' | 'medium' | 'high' | 'xhigh';
+}
+
 export interface ModelProfile {
   id: string;
   provider: Provider;
   thinkingConfig?: GeminiThinkingConfig;
   anthropicThinking?: AnthropicThinkingConfig;
+  openaiReasoning?: OpenAIReasoningConfig;
   maxTokens?: number;
 }
 
@@ -97,6 +103,14 @@ export const PROFILES = {
     provider: 'anthropic',
     maxTokens: 4096,
   } satisfies ModelProfile,
+
+  // OpenAI family
+  GPT_55_FACT_CHECK: {
+    id: 'gpt-5.5',
+    provider: 'openai',
+    openaiReasoning: { effort: 'medium' },
+    maxTokens: 4096,
+  } satisfies ModelProfile,
 } as const;
 
 // ============================================================================
@@ -109,16 +123,17 @@ export const STAGE_MODELS: Record<StageId, ModelProfile> = {
   evidence_check:       PROFILES.GEMINI_31_PRO,
   synthesis:            PROFILES.SONNET_46,
   synthesis_escalation: PROFILES.OPUS_47,
-  fact_check:           PROFILES.GEMINI_31_PRO,
-  quality_gate:         PROFILES.GEMINI_31_PRO,
+  fact_check:           PROFILES.GPT_55_FACT_CHECK,
+  quality_gate:         PROFILES.GPT_55_FACT_CHECK,
 };
 
 // ============================================================================
 // Fallback chains — tried in order if primary fails
 //
 // Tiering rule: in-family next-tier-down first, cross-provider last.
-// For quality_gate / fact_check, the cross-provider fallback breaks
-// independence — that's a known tradeoff (better degraded check than none).
+// For quality_gate / fact_check, keep the fallback non-Gemini during the
+// GPT-5.5 trial so Gemini streaming instability cannot dominate Phase 3
+// validation outcomes.
 // ============================================================================
 
 export const FALLBACK_CHAIN: Record<StageId, ModelProfile[]> = {
@@ -127,8 +142,8 @@ export const FALLBACK_CHAIN: Record<StageId, ModelProfile[]> = {
   evidence_check:       [PROFILES.GEMINI_25_PRO, PROFILES.SONNET_46],
   synthesis:            [PROFILES.HAIKU_45, PROFILES.GEMINI_25_PRO],
   synthesis_escalation: [PROFILES.SONNET_46, PROFILES.GEMINI_25_PRO],
-  fact_check:           [PROFILES.GEMINI_25_PRO, PROFILES.SONNET_46],
-  quality_gate:         [PROFILES.GEMINI_25_PRO, PROFILES.SONNET_46],
+  fact_check:           [PROFILES.SONNET_46],
+  quality_gate:         [PROFILES.SONNET_46],
 };
 
 export function modelsFor(stage: StageId): ModelProfile[] {

@@ -1,7 +1,8 @@
 
-import { AuditItem, FactCheckClaim, FactCheckResult, Phase1AuditLogs, Phase2Validation, ClaimFailureType, ClaimSourceLocation, StrategicTactic } from '../types';
+import { AuditItem, FactCheckClaim, FactCheckResult, Phase1AuditLogs, Phase2Validation, ClaimFailureType, ClaimSeverity, ClaimSourceLocation, StrategicTactic } from '../types';
 
 const VALID_FAILURE_TYPES: ClaimFailureType[] = ['fabricated_number', 'unverifiable_entity', 'unsupported_org_claim', 'out_of_scope', 'other'];
+const VALID_SEVERITIES: ClaimSeverity[] = ['BLOCKING_UNSUPPORTED_FACT', 'BLOCKING_UNSAFE_ROADMAP', 'WARN_MISCLASSIFIED_BUT_REAL', 'WARN_TACTIC_HYGIENE', 'SUPPORTED'];
 const VALID_SOURCE_LOCATIONS: ClaimSourceLocation[] = ['finops_lead', 'cfo', 'engineering_lead', 'diagnosis', 'planning_decision', 'roadmap'];
 
 export interface FactCheckInputs {
@@ -119,6 +120,13 @@ ${(inputs.imageCount ?? 0) > 0
 - The strategy output below is divided into persona evidence summaries (with [Persona: ...] headers), [Diagnosis], [Planning Decision], and REMEDIATION ROADMAP ACTIONS. For every claim you flag, tag "source_location" as the persona id, "diagnosis", "planning_decision", or "roadmap" based on where it was found.
 - For every claim classified "unsupported", you MUST additionally emit:
   - "failure_type": one of "fabricated_number" (invented %, $, count), "unverifiable_entity" (named tool / company / team / product that is NOT in the source AND NOT in the VERIFIED_TACTICS_DB; legitimate KB-sanctioned references must be classified "supported_by_tactics_db" instead), "unsupported_org_claim" (assertion about org structure or behavior not in source), "out_of_scope" (claim about something the inputs simply do not address), or "other".
+  - "severity": one of:
+    - "BLOCKING_UNSUPPORTED_FACT" for fabricated numbers, invented current-state facts, unsupported org facts, or unverifiable entities.
+    - "BLOCKING_UNSAFE_ROADMAP" for roadmap prescriptions that do not follow from locked findings, use invalid/mismatched tactic IDs, or introduce unsafe implementation claims.
+    - "WARN_MISCLASSIFIED_BUT_REAL" when the underlying fact/gap is real but the output uses the wrong category, domain, anti-pattern label, or wording.
+    - "WARN_TACTIC_HYGIENE" when the only problem is tactic citation placement/omission/removal while the action itself is grounded.
+  - If a planning_decision contains tactic IDs but the action itself is grounded, classify as unsupported with severity "WARN_TACTIC_HYGIENE", not blocking.
+  - If a roadmap action is grounded in locked findings but has no tactic ID, do NOT flag it; no tactic ID is better than a wrong tactic ID.
   - "missing_material": one short sentence describing what specific evidence in a future source document would make this claim supportable (e.g., "a tagging policy document", "a monthly cost review meeting note", "a named FinOps team headcount").
 - Output JSON ONLY, no prose.
 </rules>
@@ -132,6 +140,7 @@ ${(inputs.imageCount ?? 0) > 0
       "rationale": "one short sentence",
       "source_location": "finops_lead | cfo | engineering_lead | diagnosis | planning_decision | roadmap",
       "failure_type": "fabricated_number | unverifiable_entity | unsupported_org_claim | out_of_scope | other (REQUIRED when classification is unsupported, otherwise omit)",
+      "severity": "BLOCKING_UNSUPPORTED_FACT | BLOCKING_UNSAFE_ROADMAP | WARN_MISCLASSIFIED_BUT_REAL | WARN_TACTIC_HYGIENE | SUPPORTED",
       "missing_material": "what additional source content would make this claim supportable (REQUIRED when classification is unsupported, otherwise omit)"
     }
   ]
@@ -197,9 +206,14 @@ export const parseFactCheckResponse = (text: string, attempts: number): FactChec
           if (typeof c.failure_type === 'string' && VALID_FAILURE_TYPES.includes(c.failure_type)) {
             claim.failure_type = c.failure_type;
           }
+          if (typeof c.severity === 'string' && VALID_SEVERITIES.includes(c.severity)) {
+            claim.severity = c.severity;
+          }
           if (typeof c.missing_material === 'string' && c.missing_material.length > 0) {
             claim.missing_material = c.missing_material;
           }
+        } else {
+          claim.severity = 'SUPPORTED';
         }
         return claim;
       });
@@ -288,8 +302,9 @@ Your job: verify ONLY the evidence summaries and diagnosis. The tactics database
 - Check only current-state and diagnostic claims in the evidence summaries and diagnosis.
 - Be especially skeptical of claims about organizational ownership, executive sponsorship, culture, tooling adoption, team behavior, savings, and root causes.
 - If the source appears to be a best-practices or case-study document rather than evidence about the audited organization, flag claims that treat document coverage as proven operational adoption.
+- If the underlying source fact is real but the output assigns the wrong category/domain/anti-pattern label, classify unsupported with severity "WARN_MISCLASSIFIED_BUT_REAL" rather than a blocking fact.
 - Maximum 15 claims per pass — focus on consequential claims.
-- For every unsupported claim, emit failure_type and missing_material.
+- For every unsupported claim, emit failure_type, severity, and missing_material.
 - Output JSON ONLY, no prose.
 </rules>
 
@@ -302,6 +317,7 @@ Your job: verify ONLY the evidence summaries and diagnosis. The tactics database
       "rationale": "one short sentence",
       "source_location": "finops_lead | cfo | engineering_lead | diagnosis",
       "failure_type": "fabricated_number | unverifiable_entity | unsupported_org_claim | out_of_scope | other (REQUIRED when unsupported)",
+      "severity": "BLOCKING_UNSUPPORTED_FACT | WARN_MISCLASSIFIED_BUT_REAL | WARN_TACTIC_HYGIENE | SUPPORTED",
       "missing_material": "what evidence would make this claim supportable (REQUIRED when unsupported)"
     }
   ]
@@ -344,8 +360,11 @@ ROADMAP GROUNDING:
 - Ask: does this roadmap answer the findings? If an action does not address a confirmed gap, anti-pattern, missing-evidence item, or diagnosis statement, classify it as unsupported.
 - Planning decision must be proportionate to confidence. If the plan says GO while locked findings contain major uncertainty, unsupported claims, or evidence gaps, flag the GO rationale as unsupported or overconfident.
 - Tactic IDs are allowed only in roadmap actions and must exist in the tactics DB.
+- If tactic IDs appear in the planning decision but the underlying action is grounded, classify the issue as unsupported with severity "WARN_TACTIC_HYGIENE" instead of a blocking roadmap failure.
+- A grounded roadmap action may have zero tactic IDs when no exact tactics DB match exists. Do not flag zero tactic IDs by itself.
+- If the action is grounded but the output uses a wrong label/category for the finding, classify unsupported with severity "WARN_MISCLASSIFIED_BUT_REAL".
 - Maximum 15 claims per pass — focus on consequential grounding errors.
-- For every unsupported claim, emit failure_type and missing_material.
+- For every unsupported claim, emit failure_type, severity, and missing_material.
 - Output JSON ONLY, no prose.
 </rules>
 
@@ -358,6 +377,7 @@ ROADMAP GROUNDING:
       "rationale": "one short sentence",
       "source_location": "planning_decision | roadmap",
       "failure_type": "fabricated_number | unverifiable_entity | unsupported_org_claim | out_of_scope | other (REQUIRED when unsupported)",
+      "severity": "BLOCKING_UNSUPPORTED_FACT | BLOCKING_UNSAFE_ROADMAP | WARN_MISCLASSIFIED_BUT_REAL | WARN_TACTIC_HYGIENE | SUPPORTED",
       "missing_material": "what evidence or locked finding would make this supportable (REQUIRED when unsupported)"
     }
   ]
