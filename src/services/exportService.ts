@@ -5,6 +5,7 @@ import { METRIC_DESCRIPTIONS } from '../constants';
 import { SVG_CSS, svgGaugeCard, svgRadar, svgScatter } from './svgChartService';
 import { isInsufficientEvidenceReport, renderInlineMarkdownHtml, renderMarkdownSummaryHtml, strengthsSectionTitle } from './reportTextService';
 import { antiPatternStatusLabel, inferAntiPatternAbsenceStatus } from './antiPatternSemantics';
+import { displayQualityGateDiagnostic, scannerEvidenceCheckDisagreementTitle, splitQualityGateDiagnostics } from './reportDiagnosticsService';
 
 const BATCHES: Array<'A' | 'B' | 'C' | 'D' | 'E'> = ['A', 'B', 'C', 'D', 'E'];
 
@@ -17,6 +18,7 @@ const renderQualityGate = (gate: QualityGateResult): string => {
   }
   const cls = gate.decision === 'BLOCK' ? 'gate-block' : 'gate-warn';
   const llm = gate.llm_explanation;
+  const { primaryWarnings } = splitQualityGateDiagnostics(gate);
   const findExplanation = (reason: string, items?: { reason: string; explanation: string; quote?: string; source_location?: string }[]) =>
     items?.find((it) => it.reason === reason);
   const renderItem = (text: string, ex?: { explanation: string; quote?: string; source_location?: string }) => {
@@ -41,10 +43,10 @@ const renderQualityGate = (gate: QualityGateResult): string => {
       <div class="gate-label">Blocking</div>
       <ul>${gate.blocking_reasons.map(r => renderItem(r, findExplanation(r, llm?.blocking_details))).join('')}</ul>
     </div>` : ''}
-    ${gate.warnings.length > 0 ? `
+    ${primaryWarnings.length > 0 ? `
     <div class="gate-warn-section">
       <div class="gate-label">Warnings</div>
-      <ul>${gate.warnings.map(w => renderItem(w, findExplanation(w, llm?.warning_details))).join('')}</ul>
+      <ul>${primaryWarnings.map(w => renderItem(w, findExplanation(w, llm?.warning_details))).join('')}</ul>
     </div>` : ''}
     ${gate.fact_check && !gate.fact_check.failed && gate.fact_check.unsupported_claims.length > 0 ? `
     <div class="gate-factcheck">
@@ -52,6 +54,30 @@ const renderQualityGate = (gate: QualityGateResult): string => {
       <ul>${gate.fact_check.unsupported_claims.map(c => `<li><em>&ldquo;${escapeHtml(c.claim)}&rdquo;</em>${c.rationale ? `<span class="gate-rationale"> — ${escapeHtml(c.rationale)}</span>` : ''}</li>`).join('')}</ul>
     </div>` : ''}
     ${llm?.failed ? `<p class="gate-llm-failed">Reviewer narrative unavailable: ${escapeHtml(llm.failure_reason || '')}</p>` : ''}
+  </div>`;
+};
+
+const renderQualityGateAppendix = (gate: QualityGateResult): string => {
+  const { appendixDiagnostics } = splitQualityGateDiagnostics(gate);
+  if (appendixDiagnostics.length === 0) return '';
+  const llm = gate.llm_explanation;
+  const findExplanation = (reason: string) =>
+    llm?.warning_details?.find((it) => it.reason === reason);
+
+  return `
+  <h2>Quality Check Appendix</h2>
+  <div class="appendix-card">
+    <div class="gate-label">${escapeHtml(scannerEvidenceCheckDisagreementTitle)}</div>
+    <p class="appendix-note">These diagnostic items were resolved before scoring. They are kept here for traceability, but they are not user-facing maturity findings.</p>
+    <ul class="appendix-list">
+      ${appendixDiagnostics.map(w => {
+        const ex = findExplanation(w);
+        return `<li>
+          <strong>${escapeHtml(displayQualityGateDiagnostic(w))}</strong>
+          ${ex?.explanation ? `<div class="gate-explanation">${escapeHtml(ex.explanation)}</div>` : ''}
+        </li>`;
+      }).join('')}
+    </ul>
   </div>`;
 };
 
@@ -296,6 +322,10 @@ const generateReportHtml = (result: DiagnosticResult): string => {
     .forensic-quotes li.forensic-quote-image { border-left-color: #c4b5fd; color: #4c1d95; background: #faf5ff; }
     .forensic-section { font-size: 0.75rem; color: #94a3b8; font-style: normal; }
     .forensic-img-marker { display: inline-block; font-size: 0.65rem; font-weight: 700; font-style: normal; padding: 0.05rem 0.35rem; border-radius: 0.25rem; background: #ede9fe; color: #6d28d9; margin-right: 0.4rem; vertical-align: middle; }
+    .appendix-card { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 1rem; padding: 1.25rem; }
+    .appendix-note { font-size: 0.875rem; color: #64748b; margin: 0.4rem 0 1rem; }
+    .appendix-list { padding-left: 1.25rem; color: #334155; }
+    .appendix-list li { margin: 0.6rem 0; font-size: 0.875rem; }
     .gate { padding: 1.25rem 1.5rem; border-radius: 0.875rem; margin: 1rem 0 2rem; border-left: 4px solid; }
     .gate.gate-go { background: #ecfdf5; border-color: #10b981; color: #065f46; font-size: 0.875rem; }
     .gate.gate-warn { background: #fffbeb; border-color: #f59e0b; color: #92400e; }
@@ -511,6 +541,7 @@ const generateReportHtml = (result: DiagnosticResult): string => {
 
   ${renderForensicSection('Forensic Audit: FinOps Maturity', 'maturity', result.phase_1_audit_logs.maturity)}
   ${renderForensicSection('Forensic Audit: Anti-Patterns', 'antipattern', result.phase_1_audit_logs.antipattern)}
+  ${renderQualityGateAppendix(result.quality_gate)}
 
   <div class="footer">
     <p>FinOps Assessment Engine v${escapeHtml(result.meta.engine_version)}</p>

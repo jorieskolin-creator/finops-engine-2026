@@ -6,6 +6,7 @@ import { METRIC_DESCRIPTIONS } from '../constants';
 import { SVG_CSS, svgGaugeCard, svgRadar, svgScatter } from '../services/svgChartService';
 import { isInsufficientEvidenceReport, renderInlineMarkdownHtml, strengthsSectionTitle } from '../services/reportTextService';
 import { antiPatternStatusLabel, inferAntiPatternAbsenceStatus } from '../services/antiPatternSemantics';
+import { displayQualityGateDiagnostic, scannerEvidenceCheckDisagreementTitle, splitQualityGateDiagnostics } from '../services/reportDiagnosticsService';
 
 const InlineSvg: React.FC<{ html: string; className?: string }> = ({ html, className }) => (
   <div className={className} dangerouslySetInnerHTML={{ __html: html }} />
@@ -111,6 +112,7 @@ const QualityGateBlock: React.FC<{ gate: QualityGateResult }> = ({ gate }) => {
   }
   const isBlock = gate.decision === 'BLOCK';
   const llm = gate.llm_explanation;
+  const { primaryWarnings } = splitQualityGateDiagnostics(gate);
   const findExplanation = (reason: string, items?: { reason: string; explanation: string; quote?: string; source_location?: string }[]) =>
     items?.find((it) => it.reason === reason);
   return (
@@ -146,11 +148,11 @@ const QualityGateBlock: React.FC<{ gate: QualityGateResult }> = ({ gate }) => {
           </ul>
         </div>
       )}
-      {gate.warnings.length > 0 && (
+      {primaryWarnings.length > 0 && (
         <div>
           <p className="text-xs font-bold uppercase tracking-wider text-amber-700 mb-2">Warnings</p>
           <ul className="space-y-2.5 text-sm text-slate-700">
-            {gate.warnings.map((w, i) => {
+            {primaryWarnings.map((w, i) => {
               const ex = findExplanation(w, llm?.warning_details);
               return (
                 <li key={i} className="pl-3 border-l-2 border-amber-400">
@@ -208,6 +210,41 @@ const QualityGateBlock: React.FC<{ gate: QualityGateResult }> = ({ gate }) => {
           </ul>
         </div>
       )}
+    </div>
+  );
+};
+
+const QualityGateAppendix: React.FC<{ gate: QualityGateResult }> = ({ gate }) => {
+  const { appendixDiagnostics } = splitQualityGateDiagnostics(gate);
+  if (appendixDiagnostics.length === 0) return null;
+
+  const findExplanation = (reason: string) =>
+    gate.llm_explanation?.warning_details?.find((it) => it.reason === reason);
+
+  return (
+    <div className="mb-12">
+      <h2 className="text-2xl font-display font-bold text-slate-900 mb-6 pb-3 border-b border-slate-200">
+        Quality Check Appendix
+      </h2>
+      <div className="p-5 bg-slate-50 rounded-xl border border-slate-200">
+        <p className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">
+          {scannerEvidenceCheckDisagreementTitle}
+        </p>
+        <p className="text-sm text-slate-600 mb-4">
+          These diagnostic items were resolved before scoring. They are kept here for traceability, but they are not user-facing maturity findings.
+        </p>
+        <ul className="space-y-2.5 text-sm text-slate-700">
+          {appendixDiagnostics.map((warning, i) => {
+            const ex = findExplanation(warning);
+            return (
+              <li key={i} className="pl-3 border-l-2 border-slate-300">
+                <p className="font-medium">{displayQualityGateDiagnostic(warning)}</p>
+                {ex?.explanation && <p className="text-xs text-slate-500 mt-1">{ex.explanation}</p>}
+              </li>
+            );
+          })}
+        </ul>
+      </div>
     </div>
   );
 };
@@ -784,6 +821,8 @@ export const ReportView: React.FC<ReportViewProps> = ({ result, onBack, onDownlo
           criticalLabel="Red flags only"
           criticalHint="red flags"
         />
+
+        <QualityGateAppendix gate={result.quality_gate} />
 
         <div className="text-center py-8 border-t border-slate-200 text-sm text-slate-400">
           <p>FinOps Assessment Engine v{result.meta.engine_version}</p>
