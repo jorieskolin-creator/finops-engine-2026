@@ -205,6 +205,7 @@ Rules:
 - Echo each reason VERBATIM in the matching "reason" field. Do not paraphrase or merge.
 - "quote" must be a literal substring of the source document; omit it if no relevant evidence exists. Never invent quotes.
 - Keep "explanation" terse. No marketing language, no apologies, no recommendations to "consider X".
+- For WARN decisions, make the summary calm and non-alarming. Prefer: "Strategy hygiene notes were retained for traceability; they do not invalidate the score." Do not tell the reader to manually map unassigned actions to tactics.
 - If a reason is purely structural (e.g. "scored 4 but no evidence captured"), omit "quote" and explain what the audit was unable to ground.
 - Output JSON only. No prose before or after.`;
 

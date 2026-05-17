@@ -12,72 +12,66 @@ const BATCHES: Array<'A' | 'B' | 'C' | 'D' | 'E'> = ['A', 'B', 'C', 'D', 'E'];
 const escapeHtml = (s: string): string =>
   s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
-const renderQualityGate = (gate: QualityGateResult): string => {
-  if (gate.decision === 'GO') {
-    return `<div class="gate gate-go"><strong>Quality Gate: GO</strong> — ${escapeHtml(gate.notes[0] ?? '')}</div>`;
-  }
-  const cls = gate.decision === 'BLOCK' ? 'gate-block' : 'gate-warn';
-  const llm = gate.llm_explanation;
-  const { primaryWarnings } = splitQualityGateDiagnostics(gate);
-  const findExplanation = (reason: string, items?: { reason: string; explanation: string; quote?: string; source_location?: string }[]) =>
-    items?.find((it) => it.reason === reason);
-  const renderItem = (text: string, ex?: { explanation: string; quote?: string; source_location?: string }) => {
-    if (!ex) return `<li>${escapeHtml(text)}</li>`;
-    const explanation = ex.explanation ? `<div class="gate-explanation">${escapeHtml(ex.explanation)}</div>` : '';
-    const quote = ex.quote
-      ? `<div class="gate-quote"><em>&ldquo;${escapeHtml(ex.quote)}&rdquo;</em>${ex.source_location ? ` — ${escapeHtml(ex.source_location)}` : ''}</div>`
-      : '';
-    return `<li>${escapeHtml(text)}${explanation}${quote}</li>`;
-  };
+const qualityGateStatusText = (gate: QualityGateResult): string => {
+  if (gate.decision === 'GO') return 'All checks passed.';
+  if (gate.decision === 'WARN') return 'Assessment is usable; detailed strategy hygiene notes are retained in the appendix.';
+  return 'Assessment is unsafe to act on until blocking issues are resolved.';
+};
+
+const renderQualityGateStatus = (gate: QualityGateResult): string => {
+  const supported = gate.fact_check && !gate.fact_check.failed
+    ? `${gate.fact_check.supported_count}/${gate.fact_check.total_claims} claims supported`
+    : 'fact-check unavailable';
+  const cls = gate.decision === 'GO' ? 'qg-status-go' : gate.decision === 'BLOCK' ? 'qg-status-block' : 'qg-status-warn';
   return `
-  <div class="gate ${cls}">
-    <h2 class="gate-title">Quality Gate: ${gate.decision}</h2>
-    <p class="gate-note">${escapeHtml(gate.notes[0] ?? '')}</p>
-    ${llm?.summary ? `
-    <div class="gate-summary">
-      <div class="gate-label">Reviewer Summary${llm.model_used ? ` · ${escapeHtml(llm.model_used)}` : ''}</div>
-      <p>${escapeHtml(llm.summary)}</p>
-    </div>` : ''}
-    ${gate.blocking_reasons.length > 0 ? `
-    <div class="gate-block-section">
-      <div class="gate-label">Blocking</div>
-      <ul>${gate.blocking_reasons.map(r => renderItem(r, findExplanation(r, llm?.blocking_details))).join('')}</ul>
-    </div>` : ''}
-    ${primaryWarnings.length > 0 ? `
-    <div class="gate-warn-section">
-      <div class="gate-label">Warnings</div>
-      <ul>${primaryWarnings.map(w => renderItem(w, findExplanation(w, llm?.warning_details))).join('')}</ul>
-    </div>` : ''}
-    ${gate.fact_check && !gate.fact_check.failed && gate.fact_check.unsupported_claims.length > 0 ? `
-    <div class="gate-factcheck">
-      <div class="gate-label">Unverified claims (${gate.fact_check.unsupported_claims.length} survived ${gate.fact_check.attempts} pass${gate.fact_check.attempts === 1 ? '' : 'es'})</div>
-      <ul>${gate.fact_check.unsupported_claims.map(c => `<li><em>&ldquo;${escapeHtml(c.claim)}&rdquo;</em>${c.rationale ? `<span class="gate-rationale"> — ${escapeHtml(c.rationale)}</span>` : ''}</li>`).join('')}</ul>
-    </div>` : ''}
-    ${llm?.failed ? `<p class="gate-llm-failed">Reviewer narrative unavailable: ${escapeHtml(llm.failure_reason || '')}</p>` : ''}
-  </div>`;
+    <div class="qg-status ${cls}">
+      <div>
+        <span class="qg-status-label">Quality Gate Status: ${escapeHtml(gate.decision)}</span>
+        <p>${escapeHtml(qualityGateStatusText(gate))}</p>
+      </div>
+      <span class="qg-status-meta">${escapeHtml(supported)}</span>
+    </div>`;
+};
+
+const renderDiagnosticList = (
+  items: string[],
+  explanations?: { reason: string; explanation: string; quote?: string; source_location?: string }[]
+): string => {
+  if (items.length === 0) return '';
+  return `<ul class="appendix-list">${items.map(item => {
+    const ex = explanations?.find((it) => it.reason === item);
+    return `<li>
+      <strong>${escapeHtml(displayQualityGateDiagnostic(item))}</strong>
+      ${ex?.explanation ? `<div class="gate-explanation">${escapeHtml(ex.explanation)}</div>` : ''}
+      ${ex?.quote ? `<div class="gate-quote"><em>&ldquo;${escapeHtml(ex.quote)}&rdquo;</em>${ex.source_location ? ` — ${escapeHtml(ex.source_location)}` : ''}</div>` : ''}
+    </li>`;
+  }).join('')}</ul>`;
 };
 
 const renderQualityGateAppendix = (gate: QualityGateResult): string => {
-  const { appendixDiagnostics } = splitQualityGateDiagnostics(gate);
-  if (appendixDiagnostics.length === 0) return '';
+  const { primaryWarnings, appendixDiagnostics } = splitQualityGateDiagnostics(gate);
+  const hasFactCheckNotes = !!gate.fact_check && !gate.fact_check.failed && gate.fact_check.unsupported_claims.length > 0;
+  const hasTrajectory = !!gate.fact_check?.trajectory && gate.fact_check.trajectory.length > 1;
+  if (gate.decision === 'GO' && appendixDiagnostics.length === 0 && primaryWarnings.length === 0 && !hasFactCheckNotes) return '';
   const llm = gate.llm_explanation;
-  const findExplanation = (reason: string) =>
-    llm?.warning_details?.find((it) => it.reason === reason);
+  const evidenceWarnings = primaryWarnings.filter(w => w.startsWith('Evidence-check'));
+  const remainingWarnings = primaryWarnings.filter(w => !w.startsWith('Evidence-check'));
+  const tacticDiagnostics = appendixDiagnostics.filter(w => w.includes('tactic grounding') || w.includes('no tactic IDs'));
+  const strategyDiagnostics = appendixDiagnostics.filter(w => !tacticDiagnostics.includes(w));
 
   return `
-  <h2>Quality Check Appendix</h2>
+  <h2>Quality &amp; Strategy Hygiene Appendix</h2>
   <div class="appendix-card">
-    <div class="gate-label">Traceability Notes</div>
-    <p class="appendix-note">These diagnostic and strategy-hygiene items are kept here for traceability. They are not user-facing maturity findings and do not automatically invalidate the assessment score.</p>
-    <ul class="appendix-list">
-      ${appendixDiagnostics.map(w => {
-        const ex = findExplanation(w);
-        return `<li>
-          <strong>${escapeHtml(displayQualityGateDiagnostic(w))}</strong>
-          ${ex?.explanation ? `<div class="gate-explanation">${escapeHtml(ex.explanation)}</div>` : ''}
-        </li>`;
-      }).join('')}
-    </ul>
+    <p class="appendix-note">Quality Gate detail is retained here for traceability. WARN-level strategy hygiene notes do not invalidate the assessment score.</p>
+    ${llm?.summary ? `<div class="gate-summary"><div class="gate-label">Reviewer Summary${llm.model_used ? ` · ${escapeHtml(llm.model_used)}` : ''}</div><p>${escapeHtml(llm.summary)}</p></div>` : ''}
+    ${gate.blocking_reasons.length > 0 ? `<div class="gate-label">Blocking</div>${renderDiagnosticList(gate.blocking_reasons, llm?.blocking_details)}` : ''}
+    ${evidenceWarnings.length > 0 ? `<div class="gate-label">Evidence-check adjustments</div>${renderDiagnosticList(evidenceWarnings, llm?.warning_details)}` : ''}
+    ${strategyDiagnostics.length > 0 ? `<div class="gate-label">Strategy hygiene notes</div>${renderDiagnosticList(strategyDiagnostics, llm?.warning_details)}` : ''}
+    ${tacticDiagnostics.length > 0 ? `<div class="gate-label">Tactic grounding notes</div>${renderDiagnosticList(tacticDiagnostics, llm?.warning_details)}` : ''}
+    ${remainingWarnings.length > 0 ? `<div class="gate-label">Remaining warnings</div>${renderDiagnosticList(remainingWarnings, llm?.warning_details)}` : ''}
+    ${hasTrajectory ? `<div class="gate-label">Fact-check trajectory</div><ul class="appendix-list">${gate.fact_check!.trajectory!.map(p => `<li><strong>pass ${p.attempt}</strong>: ${p.supported_count}/${p.total_claims} supported, ${p.unsupported_count} unsupported</li>`).join('')}</ul>` : ''}
+    ${hasFactCheckNotes ? `<div class="gate-label">Remaining fact-check notes</div><ul class="appendix-list">${gate.fact_check!.unsupported_claims.map(c => `<li><strong>${escapeHtml(c.source_location || 'unknown')}</strong>: <em>&ldquo;${escapeHtml(c.claim)}&rdquo;</em>${c.rationale ? `<div class="gate-rationale">${escapeHtml(c.rationale)}</div>` : ''}</li>`).join('')}</ul>` : ''}
+    ${llm?.failed ? `<p class="gate-llm-failed">Reviewer narrative unavailable: ${escapeHtml(llm.failure_reason || '')}</p>` : ''}
   </div>`;
 };
 
@@ -118,6 +112,7 @@ const renderEvidenceCheckSummary = (result: DiagnosticResult): string => {
   return `
   <h2>Evidence Check</h2>
   <div class="evidence-check-summary">
+    ${renderQualityGateStatus(result.quality_gate)}
     <p>Phase 1 findings were verified against the raw material before Phase 2 metrics were calculated.</p>
     <div class="evidence-check-grid">
       ${stats.map(([label, value]) => `<div class="evidence-check-stat"><span>${escapeHtml(label)}</span><strong>${value}</strong></div>`).join('')}
@@ -326,6 +321,13 @@ const generateReportHtml = (result: DiagnosticResult): string => {
     .badge-nok { background: #ffe4e6; color: #be123c; }
     .badge-none { background: #f1f5f9; color: #64748b; }
     .evidence-check-summary { background: #fff; border: 1px solid #e2e8f0; border-radius: 1rem; padding: 1.5rem; margin: 1.5rem 0 2rem; }
+    .qg-status { display: flex; justify-content: space-between; align-items: center; gap: 1rem; border-radius: 0.75rem; padding: 1rem; margin-bottom: 1rem; border: 1px solid; }
+    .qg-status p { margin: 0.2rem 0 0 0; font-size: 0.85rem; }
+    .qg-status-label { display: block; font-size: 0.75rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.1em; }
+    .qg-status-meta { font-size: 0.75rem; font-weight: 700; white-space: nowrap; }
+    .qg-status-go { background: #ecfdf5; border-color: #a7f3d0; color: #065f46; }
+    .qg-status-warn { background: #fffbeb; border-color: #fde68a; color: #92400e; }
+    .qg-status-block { background: #fef2f2; border-color: #fecdd3; color: #991b1b; }
     .evidence-check-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 0.75rem; margin: 1rem 0; }
     .evidence-check-stat { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 0.75rem; padding: 0.8rem; }
     .evidence-check-stat span { display: block; font-size: 0.68rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: #64748b; }
@@ -381,7 +383,6 @@ const generateReportHtml = (result: DiagnosticResult): string => {
     <p>Models: ${escapeHtml(result.meta.model_config.preflight)} (Pre-Flight) · ${escapeHtml(result.meta.model_config.forensic_audit)} (Audit) · ${escapeHtml(result.meta.model_config.evidence_check)} (Evidence Check) · ${escapeHtml(result.meta.model_config.synthesis)} (Strategy) · ${escapeHtml(result.meta.model_config.fact_check)} (Fact-Check)</p>
   </div>
 
-  ${renderQualityGate(result.quality_gate)}
   ${renderEvidenceCheckSummary(result)}
 
   <div class="classification-panel">
