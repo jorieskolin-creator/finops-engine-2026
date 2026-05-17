@@ -18,8 +18,7 @@ export default async function handler(req, res) {
   const line = `${tag} event=${event || 'unknown'} ${formatFields(rest)}`;
 
   if (level === 'error') console.error(line);
-  else if (level === 'warn') console.warn(line);
-  else console.log(line);
+  else console.log(level === 'warn' ? `${line} level=warn` : line);
 
   return res.status(204).end();
 }

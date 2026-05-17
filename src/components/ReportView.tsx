@@ -103,147 +103,118 @@ const RemediationStepBlock: React.FC<{ step: RemediationStep; index: number }> =
 };
 
 const QualityGateBlock: React.FC<{ gate: QualityGateResult }> = ({ gate }) => {
-  if (gate.decision === 'GO') {
-    return (
-      <div className="mb-8 p-4 rounded-xl border border-emerald-300 bg-emerald-50 text-emerald-800 text-sm">
-        <span className="font-bold">Quality Gate: GO</span> — {gate.notes[0]}
-      </div>
-    );
-  }
-  const isBlock = gate.decision === 'BLOCK';
-  const llm = gate.llm_explanation;
-  const { primaryWarnings } = splitQualityGateDiagnostics(gate);
-  const findExplanation = (reason: string, items?: { reason: string; explanation: string; quote?: string; source_location?: string }[]) =>
-    items?.find((it) => it.reason === reason);
+  const palette = gate.decision === 'GO'
+    ? 'border-emerald-200 bg-emerald-50 text-emerald-900'
+    : gate.decision === 'BLOCK'
+      ? 'border-rose-200 bg-rose-50 text-rose-900'
+      : 'border-amber-200 bg-amber-50 text-amber-900';
+  const supported = gate.fact_check && !gate.fact_check.failed
+    ? `${gate.fact_check.supported_count}/${gate.fact_check.total_claims} claims supported`
+    : 'fact-check unavailable';
+  const statusText = gate.decision === 'GO'
+    ? 'All checks passed.'
+    : gate.decision === 'WARN'
+      ? 'Assessment is usable; detailed strategy hygiene notes are retained in the appendix.'
+      : 'Assessment is unsafe to act on until blocking issues are resolved.';
   return (
-    <div className={`mb-8 p-6 rounded-xl border-l-4 ${isBlock ? 'border-l-rose-600 bg-rose-50' : 'border-l-amber-600 bg-amber-50'}`}>
-      <h2 className={`text-xl font-bold mb-2 ${isBlock ? 'text-rose-800' : 'text-amber-800'}`}>
-        Quality Gate: {gate.decision}
-      </h2>
-      <p className="text-sm text-slate-700 mb-4">{gate.notes[0]}</p>
-      {llm?.summary && (
-        <div className="mb-4 p-3 bg-white/60 rounded border border-slate-200">
-          <p className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">Reviewer Summary{llm.model_used ? ` · ${llm.model_used}` : ''}</p>
-          <p className="text-sm text-slate-700">{llm.summary}</p>
-        </div>
-      )}
-      {gate.blocking_reasons.length > 0 && (
-        <div className="mb-4">
-          <p className="text-xs font-bold uppercase tracking-wider text-rose-700 mb-2">Blocking</p>
-          <ul className="space-y-2.5 text-sm text-slate-700">
-            {gate.blocking_reasons.map((r, i) => {
-              const ex = findExplanation(r, llm?.blocking_details);
-              return (
-                <li key={i} className="pl-3 border-l-2 border-rose-400">
-                  <p>{r}</p>
-                  {ex?.explanation && <p className="text-xs text-slate-600 mt-1">{ex.explanation}</p>}
-                  {ex?.quote && (
-                    <p className="text-xs text-slate-600 italic mt-1">
-                      &ldquo;{ex.quote}&rdquo;{ex.source_location ? ` — ${ex.source_location}` : ''}
-                    </p>
-                  )}
-                </li>
-              );
-            })}
-          </ul>
-        </div>
-      )}
-      {primaryWarnings.length > 0 && (
-        <div>
-          <p className="text-xs font-bold uppercase tracking-wider text-amber-700 mb-2">Warnings</p>
-          <ul className="space-y-2.5 text-sm text-slate-700">
-            {primaryWarnings.map((w, i) => {
-              const ex = findExplanation(w, llm?.warning_details);
-              return (
-                <li key={i} className="pl-3 border-l-2 border-amber-400">
-                  <p>{w}</p>
-                  {ex?.explanation && <p className="text-xs text-slate-600 mt-1">{ex.explanation}</p>}
-                  {ex?.quote && (
-                    <p className="text-xs text-slate-600 italic mt-1">
-                      &ldquo;{ex.quote}&rdquo;{ex.source_location ? ` — ${ex.source_location}` : ''}
-                    </p>
-                  )}
-                </li>
-              );
-            })}
-          </ul>
-        </div>
-      )}
-      {llm?.failed && (
-        <p className="text-xs text-slate-500 italic mt-3">Reviewer narrative unavailable: {llm.failure_reason}</p>
-      )}
-      {gate.fact_check && !gate.fact_check.failed && (gate.fact_check.trajectory?.length ?? 0) > 1 && (
-        <div className="mt-4 pt-4 border-t border-slate-300">
-          <p className="text-xs font-bold uppercase tracking-wider text-slate-600 mb-2">
-            Fact-check trajectory ({gate.fact_check.trajectory!.length} pass{gate.fact_check.trajectory!.length === 1 ? '' : 'es'})
-          </p>
-          <ul className="space-y-1 text-xs text-slate-700 font-mono">
-            {gate.fact_check.trajectory!.map((p, i) => {
-              const prev = i > 0 ? gate.fact_check!.trajectory![i - 1] : null;
-              const overlap = prev
-                ? p.unsupported_signatures.filter(s => prev.unsupported_signatures.some(ps => ps === s)).length
-                : 0;
-              return (
-                <li key={i} className="pl-3 border-l-2 border-slate-400">
-                  pass {p.attempt}: {p.supported_count}/{p.total_claims} supported, {p.unsupported_count} unsupported
-                  {prev && overlap > 0 && (
-                    <span className="text-rose-600"> · {overlap} claims unchanged from previous pass</span>
-                  )}
-                </li>
-              );
-            })}
-          </ul>
-        </div>
-      )}
-      {gate.fact_check && !gate.fact_check.failed && gate.fact_check.unsupported_claims.length > 0 && (
-        <div className="mt-4 pt-4 border-t border-slate-300">
-          <p className="text-xs font-bold uppercase tracking-wider text-slate-600 mb-2">
-            Unverified claims ({gate.fact_check.unsupported_claims.length} survived {gate.fact_check.attempts} pass{gate.fact_check.attempts === 1 ? '' : 'es'})
-          </p>
-          <ul className="space-y-2 text-sm text-slate-700">
-            {gate.fact_check.unsupported_claims.map((c, i) => (
-              <li key={i} className="pl-3 border-l-2 border-slate-400">
-                <span className="italic">&ldquo;{c.claim}&rdquo;</span>
-                {c.rationale && <span className="block text-xs text-slate-500 mt-0.5">{c.rationale}</span>}
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
+    <div className={`mb-5 p-4 rounded-xl border ${palette} flex flex-col md:flex-row md:items-center md:justify-between gap-3`}>
+      <div>
+        <p className="text-xs font-bold uppercase tracking-wider">Quality Gate Status: {gate.decision}</p>
+        <p className="text-sm mt-1">{statusText}</p>
+      </div>
+      <span className="text-xs font-bold uppercase tracking-wider">{supported}</span>
     </div>
   );
 };
 
 const QualityGateAppendix: React.FC<{ gate: QualityGateResult }> = ({ gate }) => {
-  const { appendixDiagnostics } = splitQualityGateDiagnostics(gate);
-  if (appendixDiagnostics.length === 0) return null;
+  const { primaryWarnings, appendixDiagnostics } = splitQualityGateDiagnostics(gate);
+  const hasFactCheckNotes = !!gate.fact_check && !gate.fact_check.failed && gate.fact_check.unsupported_claims.length > 0;
+  if (gate.decision === 'GO' && primaryWarnings.length === 0 && appendixDiagnostics.length === 0 && !hasFactCheckNotes) return null;
 
-  const findExplanation = (reason: string) =>
-    gate.llm_explanation?.warning_details?.find((it) => it.reason === reason);
+  const llm = gate.llm_explanation;
+  const evidenceWarnings = primaryWarnings.filter(w => w.startsWith('Evidence-check'));
+  const remainingWarnings = primaryWarnings.filter(w => !w.startsWith('Evidence-check'));
+  const tacticDiagnostics = appendixDiagnostics.filter(w => w.includes('tactic grounding') || w.includes('no tactic IDs'));
+  const strategyDiagnostics = appendixDiagnostics.filter(w => !tacticDiagnostics.includes(w));
 
-  return (
-    <div className="mb-12">
-      <h2 className="text-2xl font-display font-bold text-slate-900 mb-6 pb-3 border-b border-slate-200">
-        Quality Check Appendix
-      </h2>
-      <div className="p-5 bg-slate-50 rounded-xl border border-slate-200">
-        <p className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">
-          Traceability Notes
-        </p>
-        <p className="text-sm text-slate-600 mb-4">
-          These diagnostic and strategy-hygiene items are kept here for traceability. They are not user-facing maturity findings and do not automatically invalidate the assessment score.
-        </p>
+  const renderList = (
+    title: string,
+    items: string[],
+    explanations?: { reason: string; explanation: string; quote?: string; source_location?: string }[]
+  ) => {
+    if (items.length === 0) return null;
+    return (
+      <div className="mb-5">
+        <p className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">{title}</p>
         <ul className="space-y-2.5 text-sm text-slate-700">
-          {appendixDiagnostics.map((warning, i) => {
-            const ex = findExplanation(warning);
+          {items.map((item, i) => {
+            const ex = explanations?.find((it) => it.reason === item);
             return (
               <li key={i} className="pl-3 border-l-2 border-slate-300">
-                <p className="font-medium">{displayQualityGateDiagnostic(warning)}</p>
+                <p className="font-medium">{displayQualityGateDiagnostic(item)}</p>
                 {ex?.explanation && <p className="text-xs text-slate-500 mt-1">{ex.explanation}</p>}
+                {ex?.quote && (
+                  <p className="text-xs text-slate-500 italic mt-1">
+                    &ldquo;{ex.quote}&rdquo;{ex.source_location ? ` — ${ex.source_location}` : ''}
+                  </p>
+                )}
               </li>
             );
           })}
         </ul>
+      </div>
+    );
+  };
+
+  return (
+    <div className="mb-12">
+      <h2 className="text-2xl font-display font-bold text-slate-900 mb-6 pb-3 border-b border-slate-200">
+        Quality &amp; Strategy Hygiene Appendix
+      </h2>
+      <div className="p-5 bg-slate-50 rounded-xl border border-slate-200">
+        <p className="text-sm text-slate-600 mb-5">
+          Quality Gate detail is retained here for traceability. WARN-level strategy hygiene notes do not invalidate the assessment score.
+        </p>
+        {llm?.summary && (
+          <div className="mb-5 p-3 bg-white rounded border border-slate-200">
+            <p className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">Reviewer Summary{llm.model_used ? ` · ${llm.model_used}` : ''}</p>
+            <p className="text-sm text-slate-700">{llm.summary}</p>
+          </div>
+        )}
+        {renderList('Blocking', gate.blocking_reasons, llm?.blocking_details)}
+        {renderList('Evidence-check adjustments', evidenceWarnings, llm?.warning_details)}
+        {renderList('Strategy hygiene notes', strategyDiagnostics, llm?.warning_details)}
+        {renderList('Tactic grounding notes', tacticDiagnostics, llm?.warning_details)}
+        {renderList('Remaining warnings', remainingWarnings, llm?.warning_details)}
+        {gate.fact_check && !gate.fact_check.failed && (gate.fact_check.trajectory?.length ?? 0) > 1 && (
+          <div className="mb-5">
+            <p className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">Fact-check trajectory</p>
+            <ul className="space-y-1 text-xs text-slate-700 font-mono">
+              {gate.fact_check.trajectory!.map((p) => (
+                <li key={p.attempt} className="pl-3 border-l-2 border-slate-300">
+                  pass {p.attempt}: {p.supported_count}/{p.total_claims} supported, {p.unsupported_count} unsupported
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+        {hasFactCheckNotes && (
+          <div>
+            <p className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">Remaining fact-check notes</p>
+            <ul className="space-y-2 text-sm text-slate-700">
+              {gate.fact_check!.unsupported_claims.map((c, i) => (
+                <li key={i} className="pl-3 border-l-2 border-slate-300">
+                  <span className="font-medium">{c.source_location || 'unknown'}:</span> <span className="italic">&ldquo;{c.claim}&rdquo;</span>
+                  {c.rationale && <span className="block text-xs text-slate-500 mt-0.5">{c.rationale}</span>}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+        {llm?.failed && (
+          <p className="text-xs text-slate-500 italic mt-5">Reviewer narrative unavailable: {llm.failure_reason}</p>
+        )}
       </div>
     </div>
   );
@@ -434,19 +405,21 @@ const ForensicSection: React.FC<{
   );
 };
 
-const EvidenceCheckSummaryBlock: React.FC<{ result: DiagnosticResult['evidence_check'] }> = ({ result }) => {
-  if (!result || result.total_items === 0) return null;
+const EvidenceCheckSummaryBlock: React.FC<{ result: DiagnosticResult }> = ({ result }) => {
+  const evidenceCheck = result.evidence_check;
+  if (!evidenceCheck || evidenceCheck.total_items === 0) return null;
   const stats = [
-    ['Supported', result.supported_count, 'text-emerald-700'],
-    ['Weak', result.weak_count, 'text-amber-700'],
-    ['Unsupported', result.unsupported_count, 'text-rose-700'],
-    ['Missing', result.missing_count, 'text-slate-600'],
-    ['Downgraded', result.downgraded_count, 'text-rose-700'],
-    ['Rescanned', result.rescan_count, 'text-slate-700'],
+    ['Supported', evidenceCheck.supported_count, 'text-emerald-700'],
+    ['Weak', evidenceCheck.weak_count, 'text-amber-700'],
+    ['Unsupported', evidenceCheck.unsupported_count, 'text-rose-700'],
+    ['Missing', evidenceCheck.missing_count, 'text-slate-600'],
+    ['Downgraded', evidenceCheck.downgraded_count, 'text-rose-700'],
+    ['Rescanned', evidenceCheck.rescan_count, 'text-slate-700'],
   ] as const;
   return (
     <div className="mb-8 p-6 rounded-xl border border-slate-200 bg-white">
       <h2 className="text-xl font-display font-bold text-slate-900 mb-2">Evidence Check</h2>
+      <QualityGateBlock gate={result.quality_gate} />
       <p className="text-sm text-slate-600 mb-4">
         Phase 1 findings were verified against the raw material before Phase 2 metrics were calculated.
       </p>
@@ -458,9 +431,9 @@ const EvidenceCheckSummaryBlock: React.FC<{ result: DiagnosticResult['evidence_c
           </div>
         ))}
       </div>
-      {result.adjustments.length > 0 && (
+      {evidenceCheck.adjustments.length > 0 && (
         <ul className="space-y-2 text-sm text-slate-700">
-          {result.adjustments.slice(0, 10).map((a, i) => (
+          {evidenceCheck.adjustments.slice(0, 10).map((a, i) => (
             <li key={i} className="pl-3 border-l-2 border-slate-300">
               <span className="font-mono text-xs">{a.stream}.{a.id}</span>
               <span className="text-slate-500"> · {a.original_count}→{a.verified_count} · {a.status}{a.rescan_attempted ? ' · rescanned' : ''}</span>
@@ -524,8 +497,7 @@ export const ReportView: React.FC<ReportViewProps> = ({ result, onBack, onDownlo
           synthesis={result.phase_3_strategy.confidence_bracket}
           effective={result.phase_3_strategy.effective_bracket ?? result.phase_3_strategy.confidence_bracket}
         />
-        <QualityGateBlock gate={result.quality_gate} />
-        <EvidenceCheckSummaryBlock result={result.evidence_check} />
+        <EvidenceCheckSummaryBlock result={result} />
 
         <div className="mb-12 p-8 bg-slate-50 rounded-2xl border border-slate-200">
           <div className="flex items-center gap-4 mb-6">
