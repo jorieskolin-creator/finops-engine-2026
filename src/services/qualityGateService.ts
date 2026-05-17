@@ -1,5 +1,5 @@
 
-import { AuditItem, EvidenceCheckResult, FactCheckResult, Phase1AuditLogs, Phase2Validation, QualityGateResult, QualityGateLlmExplanation, ValidationResult } from '../types';
+import { AuditItem, EvidenceCheckResult, FactCheckClaim, FactCheckResult, Phase1AuditLogs, Phase2Validation, QualityGateResult, QualityGateLlmExplanation, ValidationResult } from '../types';
 import { runStage, RunContext } from './modelRouter';
 
 export const EVIDENCE_DENSITY_BLOCK = 30;
@@ -12,6 +12,34 @@ const THRESHOLDS = {
   evidence_density_warn: EVIDENCE_DENSITY_WARN,
   silent_areas_warn: SILENT_AREAS_WARN,
   unsupported_claims_block: UNSUPPORTED_CLAIMS_BLOCK
+};
+
+const claimBlob = (claim: FactCheckClaim): string =>
+  `${claim.claim || ''}\n${claim.rationale || ''}\n${claim.missing_material || ''}`.toLowerCase();
+
+export const isDomainTaxonomyHygieneClaim = (claim: FactCheckClaim): boolean => {
+  const blob = claimBlob(claim);
+  const mentionsDomain = /\bdomain\s+[a-e]\b/.test(blob) || /\b[a-e]\s*\(\s*\d+\s*\/\s*15\s*\)/.test(blob);
+  if (!mentionsDomain) return false;
+  return [
+    'thematic names',
+    'domain letters',
+    'phase 1 evidence maps',
+    'categorizes',
+    'category scores',
+    'framework',
+    'criteria',
+    'mapping'
+  ].some(term => blob.includes(term));
+};
+
+export const isBlockingUnsupportedClaim = (claim: FactCheckClaim): boolean => {
+  if (isDomainTaxonomyHygieneClaim(claim)) return false;
+  if (claim.failure_type === 'fabricated_number') return true;
+  if (claim.source_location === 'roadmap') return true;
+  if (claim.source_location === 'planning_decision') return true;
+  if (claim.failure_type === 'unsupported_org_claim') return true;
+  return false;
 };
 
 export const buildEvidenceDensityBlock = (density: number): QualityGateResult => ({
@@ -81,13 +109,23 @@ export const runQualityGate = (
   }
 
   if (factCheck && !factCheck.failed) {
-    if (factCheck.unsupported_claims.length >= UNSUPPORTED_CLAIMS_BLOCK) {
+    const blockingUnsupported = factCheck.unsupported_claims.filter(isBlockingUnsupportedClaim);
+    const hygieneUnsupported = factCheck.unsupported_claims.filter(c => !isBlockingUnsupportedClaim(c));
+    const highRiskUnsupported = blockingUnsupported.filter(c =>
+      c.failure_type === 'fabricated_number' || c.source_location === 'roadmap'
+    );
+    if (highRiskUnsupported.length > 0 || blockingUnsupported.length >= UNSUPPORTED_CLAIMS_BLOCK) {
       blocking_reasons.push(
-        `Fact-check: ${factCheck.unsupported_claims.length} unsupported claims survived ${factCheck.attempts} regenerate pass(es) (block threshold: ${UNSUPPORTED_CLAIMS_BLOCK}). Strategy is too disconnected from the source.`
+        `Fact-check: ${blockingUnsupported.length} material unsupported claim(s) survived ${factCheck.attempts} regenerate pass(es). Strategy is too disconnected from the source.`
       );
-    } else if (factCheck.unsupported_claims.length > 0) {
+    } else if (blockingUnsupported.length > 0) {
       warnings.push(
-        `Fact-check: ${factCheck.unsupported_claims.length} unsupported claim(s) remain after ${factCheck.attempts} pass(es). See Fact-Check Report for details.`
+        `Fact-check: ${blockingUnsupported.length} material unsupported claim(s) remain after ${factCheck.attempts} pass(es). Review before acting.`
+      );
+    }
+    if (hygieneUnsupported.length > 0) {
+      warnings.push(
+        `Strategy hygiene: ${hygieneUnsupported.length} non-material wording or taxonomy issue(s) remain after fact-check. These do not invalidate the assessment score.`
       );
     }
   }

@@ -57,7 +57,9 @@ const strategyData = {
           'Pilot spot fallback rules for batch workloads [TAC-OPT-001]',
           'Add Infracost checks to Terraform pull requests [TAC-GOV-001]',
           'Create outcome tracking KPIs for the FinOps team [TAC-GOV-004]',
-          'Run blameless cost reviews [TAC-CULT-004]'
+          'Run blameless cost reviews [TAC-CULT-004]',
+          'Move measurement from activity-based to outcome-based FinOps reporting',
+          'Evaluate embedded finance partner coverage to sustain product team growth'
         ]
       }
     ]
@@ -67,10 +69,12 @@ const strategyData = {
 const result = sanitizeRoadmapTacticGrounding(strategyData, phase2);
 const actions = result.strategyData.phase_3_strategy.remediation_roadmap[0].actions;
 
-assert.equal(result.adjustments.length, 4);
+assert.equal(result.adjustments.length, 6);
 assert.ok(actions[0].includes('[TAC-OPT-004]'), 'spot action should use the spot tactic');
 assert.ok(actions[1].includes('[TAC-ARCH-002]'), 'Infracost action should use architecture cost-estimation tactic');
 assert.ok(!actions[2].includes('[TAC-GOV-004]'), 'outcome tactic should be removed without theater/no-outcome finding');
 assert.ok(!actions[3].includes('[TAC-CULT-004]'), 'culture tactic should be removed without blame-culture finding');
+assert.ok(actions.every(action => !action.includes('activity-based')), 'activity-to-outcome action should be removed without a matching finding');
+assert.ok(actions.every(action => !action.includes('product team growth')), 'product-growth action should be removed without a matching finding');
 
 console.log('tactic grounding unit tests passed');

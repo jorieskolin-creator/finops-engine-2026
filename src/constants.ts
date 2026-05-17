@@ -235,9 +235,16 @@ ${STRATEGY_PERSONAS_BLOCK}
 1. **NO KNOWLEDGE-BASE INJECTION:** Do not mention tactic IDs, external case studies, benchmark companies, or remediation mechanisms. If the text is not in Phase 1/2 findings or the source, it does not belong here.
 2. **FINDINGS ONLY:** executive_summaries and evidence_summary must contain only Phase 2 metrics, Phase 1 supported findings, and explicitly silent/missing evidence.
 3. **DIAGNOSIS IS CAUTIOUS:** diagnosis may interpret score patterns, but root causes must be directly supported by evidence. If a cause is plausible but not evidenced, phrase it as an evidence gap, not a fact.
-4. **NO IMPLEMENTATION LANGUAGE:** Do not use directive verbs such as Implement, Enforce, Automate, Launch, Establish, Deploy, or Optimize except when quoting source evidence.
-5. **SOURCE-TYPE SAFETY:** If the source appears to describe best practices, case studies, or methodology rather than the audited organization's operations, say the audit can assess document coverage but cannot prove operational adoption.
-6. **JSON STRING SAFETY:** No double quotes inside JSON values. Use single quotes or asterisks.
+4. **CANONICAL DOMAIN LABELS:** Use these exact A-E labels and do not invent thematic names:
+   - A = Cost Visibility & Allocation
+   - B = Rate & Usage Optimization
+   - C = Governance & Policy
+   - D = Architecture & Engineering
+   - E = Culture & Organization
+5. **NO DOMAIN REASSIGNMENT:** Do not attribute B findings to D, D findings to E, or governance/culture findings to A merely because they sound related. Domain diagnosis must follow the criterion IDs in Phase 1/2.
+6. **NO IMPLEMENTATION LANGUAGE:** Do not use directive verbs such as Implement, Enforce, Automate, Launch, Establish, Deploy, or Optimize except when quoting source evidence.
+7. **SOURCE-TYPE SAFETY:** If the source appears to describe best practices, case studies, or methodology rather than the audited organization's operations, say the audit can assess document coverage but cannot prove operational adoption.
+8. **JSON STRING SAFETY:** No double quotes inside JSON values. Use single quotes or asterisks.
 </strict_constraints>
 
 <task>
@@ -246,7 +253,7 @@ ${STRATEGY_PERSONAS_BLOCK}
    **2. Evidence-Backed Findings:** confirmed FinOps strengths, confirmed gaps, confirmed anti-pattern findings, verified anti-pattern absences, anti-patterns not assessable from source, and silent areas with domain scores where present. If the source has generic process facts but no FinOps evidence, describe them as source observations outside FinOps scope.
    **3. Source Confidence & Boundaries:** what the evidence can and cannot prove. No recommendations.
 2. Populate evidence_summary with concise fact-only bullets.
-3. Populate diagnosis as interpretation only; no roadmap, no tactic IDs, no prescriptions.
+3. Populate diagnosis as interpretation only; no roadmap, no tactic IDs, no prescriptions. The domain_diagnosis keys A-E must use the canonical labels above and summarize only findings from the matching A-E criteria family.
 4. Populate visual_scorecard from Phase 2 metrics.
 </task>
 

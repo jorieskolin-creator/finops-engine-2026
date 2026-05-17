@@ -705,6 +705,7 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => `  ${cat}
     // sometimes misses, and avoids burning fact-check tokens on output with
     // obvious tactic-ID errors.
     const validIds = validTacticIdSet();
+    let tacticGroundingWarnings: string[] = [];
     const callPhase3Validated = async (correctionAppendix?: string): Promise<any> => {
       let data = normalizeStrategy(await callPhase3(correctionAppendix));
       let invalid = findInvalidTacticIds(data, validIds);
@@ -728,6 +729,7 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => `  ${cat}
         });
       }
       const grounding = sanitizeRoadmapTacticGrounding(data, validationData);
+      tacticGroundingWarnings = grounding.warnings;
       if (grounding.adjustments.length > 0) {
         console.warn(`[FinOps] [${runId}] Roadmap tactic grounding adjusted ${grounding.adjustments.length} tactic reference(s) before fact-check.`);
         serverLog(runId, 'warn', 'roadmap_tactic_grounding_adjusted', {
@@ -783,6 +785,7 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => `  ${cat}
     onProgress('strategy', 90);
 
     const groundingValidation = validatePhase3Grounding(strategyData, validationData, text);
+    groundingValidation.warnings.push(...tacticGroundingWarnings);
     if (groundingValidation.errors.length > 0) {
       console.error("[FinOps] Phase 3 grounding errors:", groundingValidation.errors);
     }

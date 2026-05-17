@@ -5,7 +5,7 @@ import { METRIC_DESCRIPTIONS } from '../constants';
 import { SVG_CSS, svgGaugeCard, svgRadar, svgScatter } from './svgChartService';
 import { isInsufficientEvidenceReport, renderInlineMarkdownHtml, renderMarkdownSummaryHtml, strengthsSectionTitle } from './reportTextService';
 import { antiPatternStatusLabel, inferAntiPatternAbsenceStatus } from './antiPatternSemantics';
-import { displayQualityGateDiagnostic, scannerEvidenceCheckDisagreementTitle, splitQualityGateDiagnostics } from './reportDiagnosticsService';
+import { displayQualityGateDiagnostic, splitQualityGateDiagnostics } from './reportDiagnosticsService';
 
 const BATCHES: Array<'A' | 'B' | 'C' | 'D' | 'E'> = ['A', 'B', 'C', 'D', 'E'];
 
@@ -67,8 +67,8 @@ const renderQualityGateAppendix = (gate: QualityGateResult): string => {
   return `
   <h2>Quality Check Appendix</h2>
   <div class="appendix-card">
-    <div class="gate-label">${escapeHtml(scannerEvidenceCheckDisagreementTitle)}</div>
-    <p class="appendix-note">These diagnostic items were resolved before scoring. They are kept here for traceability, but they are not user-facing maturity findings.</p>
+    <div class="gate-label">Traceability Notes</div>
+    <p class="appendix-note">These diagnostic and strategy-hygiene items are kept here for traceability. They are not user-facing maturity findings and do not automatically invalidate the assessment score.</p>
     <ul class="appendix-list">
       ${appendixDiagnostics.map(w => {
         const ex = findExplanation(w);
