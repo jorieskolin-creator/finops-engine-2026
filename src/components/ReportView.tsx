@@ -120,7 +120,9 @@ const QualityGateBlock: React.FC<{ gate: QualityGateResult }> = ({ gate }) => {
   const statusText = gate.decision === 'GO'
     ? gate.notes[0] || 'All checks passed.'
     : gate.decision === 'WARN'
-      ? 'Assessment score remains valid. WARN-level strategy hygiene notes are included in the appendix for traceability.'
+      ? gate.fact_check?.sanitized_claims?.length
+        ? 'Assessment score remains valid. Unsupported strategy wording or actions were removed or retained only in the appendix.'
+        : 'Assessment score remains valid. WARN-level strategy hygiene notes are included in the appendix for traceability.'
       : 'Assessment is unsafe to act on until blocking issues are resolved.';
   return (
     <div className={`mb-5 p-4 rounded-xl border ${palette} flex flex-col md:flex-row md:items-center md:justify-between gap-3`}>
@@ -136,6 +138,7 @@ const QualityGateBlock: React.FC<{ gate: QualityGateResult }> = ({ gate }) => {
 const QualityGateAppendix: React.FC<{ gate: QualityGateResult }> = ({ gate }) => {
   const { primaryWarnings, appendixDiagnostics } = splitQualityGateDiagnostics(gate);
   const hasFactCheckNotes = !!gate.fact_check && !gate.fact_check.failed && gate.fact_check.unsupported_claims.length > 0;
+  const hasSanitizedNotes = !!gate.fact_check?.sanitized_claims?.length;
   const hasPartialFactCheck = !!gate.fact_check?.partial_failure_reason;
   if (gate.decision === 'GO' && primaryWarnings.length === 0 && appendixDiagnostics.length === 0 && !hasFactCheckNotes) return null;
 
@@ -190,6 +193,21 @@ const QualityGateAppendix: React.FC<{ gate: QualityGateResult }> = ({ gate }) =>
           </div>
         )}
         {renderList('Blocking', gate.blocking_reasons, llm?.blocking_details)}
+        {hasSanitizedNotes && (
+          <div className="mb-5">
+            <p className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">Sanitized strategy items</p>
+            <ul className="space-y-2 text-sm text-slate-700">
+              {gate.fact_check!.sanitized_claims!.map((c, i) => (
+                <li key={i} className="pl-3 border-l-2 border-slate-300">
+                  <span className="font-medium capitalize">{c.action}</span>
+                  <span>{c.source_location ? ` · ${c.source_location}` : ''}: </span>
+                  <span className="italic">&ldquo;{c.claim}&rdquo;</span>
+                  {c.rationale && <span className="block text-xs text-slate-500 mt-0.5">{c.rationale}</span>}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
         {renderList('Evidence-check adjustments', evidenceWarnings, llm?.warning_details)}
         {renderList('Strategy hygiene notes', strategyDiagnostics, llm?.warning_details)}
         {renderList('Tactic grounding notes', tacticDiagnostics, llm?.warning_details)}

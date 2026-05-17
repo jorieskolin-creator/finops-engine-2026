@@ -153,11 +153,17 @@ export const runQualityGate = (
   }
 
   if (factCheck && !factCheck.failed) {
+    const sanitizedCount = factCheck.sanitized_claims?.length || 0;
     const blockingUnsupported = factCheck.unsupported_claims.filter(isBlockingUnsupportedClaim);
     const hygieneUnsupported = factCheck.unsupported_claims.filter(c => !isBlockingUnsupportedClaim(c));
     const highRiskUnsupported = blockingUnsupported.filter(c =>
       c.failure_type === 'fabricated_number' || c.severity === 'BLOCKING_UNSAFE_ROADMAP'
     );
+    if (sanitizedCount > 0) {
+      warnings.push(
+        `Strategy sanitation removed, rewrote, or quarantined ${sanitizedCount} unsupported Phase 3 item(s) before report display. These are retained in the appendix for traceability.`
+      );
+    }
     if (highRiskUnsupported.length > 0 || blockingUnsupported.length >= UNSUPPORTED_CLAIMS_BLOCK) {
       blocking_reasons.push(
         `Fact-check: ${blockingUnsupported.length} material unsupported claim(s) survived ${factCheck.attempts} regenerate pass(es). Strategy is too disconnected from the source.`
@@ -223,7 +229,7 @@ export const runQualityGate = (
         : 'All quality checks passed. Strategy is grounded in validated findings.'
     );
   } else if (decision === 'WARN') {
-    notes.push('Strategy can be used but the listed warnings reduce confidence in specific claims. Review affected items in the Forensic Audit section before acting.');
+    notes.push('Assessment score remains valid. Unsupported strategy wording or actions were removed, rewritten, or retained only in the appendix where applicable.');
   } else {
     notes.push('Strategy is unsafe to act on. Re-run with stronger source material or after the listed issues are resolved.');
   }

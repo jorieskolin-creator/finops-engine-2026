@@ -14,7 +14,11 @@ const escapeHtml = (s: string): string =>
 
 const qualityGateStatusText = (gate: QualityGateResult): string => {
   if (gate.decision === 'GO') return gate.notes[0] || 'All checks passed.';
-  if (gate.decision === 'WARN') return 'Assessment score remains valid. WARN-level strategy hygiene notes are included in the appendix for traceability.';
+  if (gate.decision === 'WARN') {
+    return gate.fact_check?.sanitized_claims?.length
+      ? 'Assessment score remains valid. Unsupported strategy wording or actions were removed or retained only in the appendix.'
+      : 'Assessment score remains valid. WARN-level strategy hygiene notes are included in the appendix for traceability.';
+  }
   return 'Assessment is unsafe to act on until blocking issues are resolved.';
 };
 
@@ -59,6 +63,7 @@ const renderDiagnosticList = (
 const renderQualityGateAppendix = (gate: QualityGateResult): string => {
   const { primaryWarnings, appendixDiagnostics } = splitQualityGateDiagnostics(gate);
   const hasFactCheckNotes = !!gate.fact_check && !gate.fact_check.failed && gate.fact_check.unsupported_claims.length > 0;
+  const hasSanitizedNotes = !!gate.fact_check?.sanitized_claims?.length;
   const hasPartialFactCheck = !!gate.fact_check?.partial_failure_reason;
   const hasTrajectory = !!gate.fact_check?.trajectory && gate.fact_check.trajectory.length > 1;
   if (gate.decision === 'GO' && appendixDiagnostics.length === 0 && primaryWarnings.length === 0 && !hasFactCheckNotes) return '';
@@ -74,6 +79,7 @@ const renderQualityGateAppendix = (gate: QualityGateResult): string => {
     <p class="appendix-note">Quality Gate detail is retained here for traceability. WARN-level strategy hygiene notes do not invalidate the assessment score.</p>
     ${llm?.summary ? `<div class="gate-summary"><div class="gate-label">Reviewer Summary${llm.model_used ? ` · ${escapeHtml(llm.model_used)}` : ''}</div><p>${escapeHtml(llm.summary)}</p></div>` : ''}
     ${gate.blocking_reasons.length > 0 ? `<div class="gate-label">Blocking</div>${renderDiagnosticList(gate.blocking_reasons, llm?.blocking_details)}` : ''}
+    ${hasSanitizedNotes ? `<div class="gate-label">Sanitized strategy items</div><ul class="appendix-list">${gate.fact_check!.sanitized_claims!.map(c => `<li><strong>${escapeHtml(c.action)}${c.source_location ? ` · ${escapeHtml(c.source_location)}` : ''}</strong>: <em>&ldquo;${escapeHtml(c.claim)}&rdquo;</em>${c.rationale ? `<div class="gate-rationale">${escapeHtml(c.rationale)}</div>` : ''}</li>`).join('')}</ul>` : ''}
     ${evidenceWarnings.length > 0 ? `<div class="gate-label">Evidence-check adjustments</div>${renderDiagnosticList(evidenceWarnings, llm?.warning_details)}` : ''}
     ${strategyDiagnostics.length > 0 ? `<div class="gate-label">Strategy hygiene notes</div>${renderDiagnosticList(strategyDiagnostics, llm?.warning_details)}` : ''}
     ${tacticDiagnostics.length > 0 ? `<div class="gate-label">Tactic grounding notes</div>${renderDiagnosticList(tacticDiagnostics, llm?.warning_details)}` : ''}

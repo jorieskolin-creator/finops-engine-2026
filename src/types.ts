@@ -288,11 +288,23 @@ export interface FactCheckPassSnapshot {
   unsupported_signatures: string[];
 }
 
+export type StrategySanitationAction = 'removed' | 'rewritten' | 'quarantined';
+
+export interface StrategySanitationItem {
+  action: StrategySanitationAction;
+  claim: string;
+  rationale: string;
+  source_location?: ClaimSourceLocation;
+  failure_type?: ClaimFailureType;
+  severity?: ClaimSeverity;
+}
+
 export interface FactCheckResult {
   attempts: number;
   total_claims: number;
   supported_count: number;
   unsupported_claims: FactCheckClaim[];
+  sanitized_claims?: StrategySanitationItem[];
   failed: boolean;
   failure_reason?: string;
   partial_failure_reason?: string;

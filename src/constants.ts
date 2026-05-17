@@ -101,6 +101,7 @@ ${STRATEGY_PERSONAS_BLOCK}
 - They must NOT include tactic IDs, external case studies, implementation directives, or roadmap actions. Those belong only in planning_decision and remediation_roadmap.
 - The CFO summary must NOT invent dollar amounts. Reference impact in business terms (e.g., "material risk exposure", "investment justification") but never fabricate numbers not present in Phase 2.
 - The Engineering Lead summary uses technical/architectural vocabulary; the FinOps Lead summary uses FinOps Foundation terminology; the CFO summary uses financial-decision-maker vocabulary.
+- Phase 2 percentages are metric/index values unless the metric name explicitly says spend. Never describe anti-pattern_burden as a share of cloud spend; call it the confirmed anti-pattern burden index.
 </personas>
 
 <strict_constraints>
@@ -158,6 +159,7 @@ ${STRATEGY_PERSONAS_BLOCK}
    - **Phase 4: Run — Continuous (12+ Months):** Automation and benchmarking.
    - **CRITICAL:** Use the case studies to suggest specific *mechanisms*.
    - **TONE:** Use active verbs ("Implement", "Automate", "Eliminate"). No passive voice.
+   - **GROUNDING:** Every action must answer a confirmed gap, confirmed anti-pattern, missing-evidence need, or diagnosis statement. Do not add broad activity-to-outcome, product-cadence, growth, scale, or baseline actions unless those exact problems appear in the locked findings.
 </task>
 
 <output_format>
@@ -324,7 +326,8 @@ ${FINOPS_METHODOLOGY_CONTEXT}
 6. **NO NEW CURRENT-STATE CLAIMS:** Roadmap and planning_decision may not introduce new assertions about the audited organization that are absent from LOCKED FINDINGS.
 7. **NO BASELINE OVERREACH:** Do not prescribe establishing a baseline for a value that is already quantified in the locked findings. Use the existing baseline as evidence and prescribe only the next grounded control.
 8. **NO CULTURE/GOVERNANCE OVERREACH:** Do not use culture or governance tactic IDs for generic improvement language. Culture tactics require a matching culture anti-pattern in LOCKED FINDINGS, and governance tactics require a matching governance gap in LOCKED FINDINGS.
-9. **JSON STRING SAFETY:** No double quotes inside JSON values. Use single quotes or asterisks.
+9. **NO VAGUE MATURITY ACTIONS:** Do not prescribe shifting from activity tracking to outcome tracking, product-level cadence embedding, growth/scale operating model work, or access-pattern baselines unless that exact gap appears in LOCKED FINDINGS.
+10. **JSON STRING SAFETY:** No double quotes inside JSON values. Use single quotes or asterisks.
 </strict_constraints>
 
 <task>
