@@ -1,0 +1,75 @@
+<DOCUMENT name="demo-cloud-financial-governance-policy.txt">
+Fictional demo company: Northstar Retail Cloud Platform.
+Document type: Cloud Financial Governance Policy, approved 2026-Q1.
+
+The FinOps Council owns cloud financial governance with named representatives from Finance, Platform Engineering, Security, and Product Operations. The council meets monthly, reviews cloud budget variance, and reports unresolved cost risks to the CTO and CFO steering group.
+
+Tagging policy:
+All production cloud resources must carry business_unit, product, environment, owner_team, cost_center, and data_classification tags. Untagged or mis-tagged resources are reported daily in the FinOps dashboard. Platform Engineering must remediate critical tag defects within five business days. Exceptions require FinOps Council approval and expire after 30 days.
+
+Showback model:
+Cloud costs are allocated weekly to product teams using tags, account hierarchy, and shared platform allocation rules. Team leads receive showback views for product, environment, and owner_team. Chargeback is not yet active; Finance plans to pilot chargeback for shared analytics workloads in 2026-Q3.
+
+Budget and forecast:
+Each product team has a monthly cloud budget. Finance compares budget to actuals every month and flags variance above 10%. The forecasting model uses historical spend, planned product launches, reserved commitment expiries, and expected traffic growth. Corrective actions are captured in the monthly FinOps action log.
+
+Policy gaps:
+Unit economics are defined only for checkout transactions and loyalty API calls. Cost per customer and cost per order are not yet used as formal engineering targets. Storage retention rules exist for logs, but lifecycle tiering is not yet enforced across all buckets.
+</DOCUMENT>
+
+<DOCUMENT name="demo-finops-dashboard-and-anomaly-runbook.txt">
+Document type: FinOps Dashboard Inventory and Anomaly Runbook, updated 2026-04-15.
+
+Dashboards:
+The FinOps dashboard refreshes every 12 hours and integrates AWS, Azure, and GCP billing exports. It contains executive trend views, finance budget views, and engineering resource-level views. Engineering teams can drill from business_unit to product, environment, service, and owner_team. The dashboard tracks month-to-date spend, forecasted month-end spend, previous-period comparison, and committed-discount utilization.
+
+Anomaly detection:
+Automated anomaly detection runs daily against account, product, service, and environment dimensions. Alerts include affected service, account, owner_team, amount, percentage variance, and a link to the dashboard. Alerts route to the owning team Slack channel and to the FinOps on-call analyst. High-severity anomalies require acknowledgement within one business day.
+
+Recent anomaly example:
+On 2026-03-18, checkout-api compute spend increased 31% after a misconfigured autoscaling threshold. The alert was routed to Platform Checkout and FinOps. The team corrected the scaling policy, created a follow-up architecture review, and recorded estimated monthly avoided cost of EUR 18,400.
+
+Known limitation:
+The anomaly runbook does not yet define escalation timing for low-severity anomalies. Several development accounts are monitored daily but do not yet have team-level Slack routing.
+</DOCUMENT>
+
+<DOCUMENT name="demo-commitment-and-optimization-review.txt">
+Document type: Quarterly Commitment and Optimization Review, 2026-Q1.
+
+Commitment management:
+Northstar Retail manages Reserved Instances, Savings Plans, and committed-use discounts across AWS, Azure, and GCP. Target commitment coverage is 72% for stable compute and database workloads. Current coverage is 68%. Utilization is reviewed monthly; unused commitments above EUR 5,000 monthly amortized value are escalated to Finance and Platform Engineering.
+
+Optimization actions:
+During 2026-Q1, engineering accepted 22 right-sizing recommendations and deferred 7 due to release freeze risk. Accepted actions reduced monthly run-rate by EUR 46,000. Recommendations are generated weekly from CPU, memory, and storage utilization. Product teams must approve or reject recommendations in the cost optimization backlog.
+
+Waste controls:
+Non-production environments shut down outside business hours unless tagged always_on=true with owner approval. Idle load balancers, unattached disks, and orphaned snapshots are detected weekly. The waste report shows idle resource waste at 4.8% of monthly cloud spend, against a 2026 target of below 3%.
+
+Spot and preemptible usage:
+Spot instances are approved for batch analytics, CI test runners, and image-processing jobs. Interruption handling exists for analytics batch jobs, but CI runner fallback is still manual. Spot savings are tracked, but expansion targets are not yet approved.
+
+Storage:
+Log retention is defined for security, audit, and application logs. Archive tiering exists for audit logs older than 180 days. Object storage lifecycle tiering for product telemetry is planned but not yet enforced.
+</DOCUMENT>
+
+<DOCUMENT name="demo-finops-operating-model-and-engineering-standards.txt">
+Document type: FinOps Operating Model and Engineering Standards, version 2026-Q2 draft.
+
+Operating model:
+The FinOps operating model is federated. The central FinOps team has one FinOps lead, one cloud economist, and one platform analyst. Each product domain appoints an engineering cost owner. The RACI states that Finance owns budgets, FinOps owns allocation and optimization process, Platform Engineering owns guardrails, and product teams own cost decisions for their services.
+
+Cadence:
+Daily: anomaly triage for high-severity alerts.
+Weekly: optimization backlog review with product cost owners.
+Monthly: budget variance review with Finance and engineering leads.
+Quarterly: commitment strategy and architecture cost review with CTO/CFO steering group.
+
+Architecture standards:
+Architecture review templates require estimated monthly cost, scaling cost curve, data-retention cost impact, and a cost-performance tradeoff section. Engineering teams can view service cost before and after releases. Autoscaling policies must define maximum capacity, target utilization, and cost ceiling guardrails.
+
+Infrastructure as Code:
+Terraform is the standard for production cloud infrastructure. New Terraform modules include mandatory tags and policy-as-code checks. Infracost estimates are visible in pull requests for the platform account, but not yet enforced for all product repositories. Legacy manually provisioned resources still exist in two older analytics accounts.
+
+Compliance and vendor management:
+Data residency requirements are reviewed during architecture design. Compliance-driven cost increases such as dedicated logging, encryption, and regional replication are tracked separately in the Finance view. Vendor pricing is benchmarked during annual renewal, but exit-cost analysis for proprietary managed services is only performed for tier-1 systems.
+</DOCUMENT>

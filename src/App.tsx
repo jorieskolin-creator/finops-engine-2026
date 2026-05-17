@@ -22,6 +22,7 @@ import tier1CoeCharter from '../test/tier1-coe-charter.txt?raw';
 import tier1CloudStrategy from '../test/tier1-cloud-strategy.txt?raw';
 import tier1RiSpStrategy from '../test/tier1-ri-sp-strategy.txt?raw';
 import tier1CostOptReview from '../test/tier1-cost-optimization-review.txt?raw';
+import demoSimulation from '../test/demo-simulation.txt?raw';
 
 const DRIFT_FIXTURES = [
   { name: 'golden-crawl.txt', text: goldenCrawl },
@@ -29,6 +30,7 @@ const DRIFT_FIXTURES = [
   { name: 'golden-run.txt', text: goldenRun },
 ];
 const DRIFT_LABEL = 'Drift Test — Combined Golden Fixtures';
+const DEMO_SIMULATION_LABEL = 'Engine Simulation — Northstar Retail Demo Pack';
 
 const TIER1_FIXTURES: Array<{ pack_id: string; name: string; label: string; text: string }> = [
   { pack_id: 'tier1-governance-policy', name: 'tier1-governance-policy.txt', label: 'Cloud Governance / FinOps Policy', text: tier1GovernancePolicy },
@@ -124,6 +126,7 @@ const App: React.FC = () => {
   const pendingAnalyzeRef = useRef(false);
   const pendingDriftRef = useRef(false);
   const pendingPerPackRef = useRef(false);
+  const pendingSimulationRef = useRef(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -475,6 +478,24 @@ const App: React.FC = () => {
     startDriftTest();
   };
 
+  const startEngineSimulation = () => {
+    runAnalyze({
+      textOverride: sanitizeInput(demoSimulation),
+      imagesOverride: [],
+      label: DEMO_SIMULATION_LABEL
+    });
+  };
+
+  const handleEngineSimulation = () => {
+    if (loading) return;
+    if (!authenticated) {
+      pendingSimulationRef.current = true;
+      setShowLogin(true);
+      return;
+    }
+    startEngineSimulation();
+  };
+
   const reset = () => {
     setResult(null);
     setFiles([]);
@@ -599,8 +620,7 @@ const App: React.FC = () => {
                   <p className="text-lg md:text-xl text-slate-300 font-light max-w-3xl mx-auto leading-relaxed">
                     Your cloud spend is either a strategic asset or a hidden liability. This <strong>forensic assessment tool</strong> interrogates your FinOps documentation against <strong>25 maturity vectors and 25 anti-pattern indicators</strong> to determine your Crawl-Walk-Run classification.
                   </p>
-                  {authenticated && (
-                    <div className="mt-8 flex justify-center">
+                  <div className="mt-8 flex flex-col sm:flex-row justify-center items-center gap-3">
                       <a
                         href="https://honourable-peacock.static2.website/finops-engine-structure-thinking-14052026"
                         target="_blank"
@@ -612,8 +632,19 @@ const App: React.FC = () => {
                           <path strokeLinecap="round" strokeLinejoin="round" d="M14 5l7 7m0 0l-7 7m7-7H3" />
                         </svg>
                       </a>
+                      <button
+                        type="button"
+                        onClick={handleEngineSimulation}
+                        disabled={loading}
+                        className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-[0.2em] text-cyan-300 hover:text-white bg-cyan-950/30 hover:bg-cyan-700/40 border border-cyan-700/40 hover:border-cyan-400 transition-colors px-5 py-2.5 rounded-full disabled:opacity-50 disabled:cursor-not-allowed"
+                        title="Run the real engine against a bundled synthetic FinOps demo pack"
+                      >
+                        <span>Engine - Simulation</span>
+                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                        </svg>
+                      </button>
                     </div>
-                  )}
                 </div>
 
                 <div className={`glass-panel rounded-[3rem] shadow-[0_0_50px_rgba(0,0,0,0.3)] border relative overflow-hidden group transition-all duration-500 ${files.length >= MIN_FILES ? 'border-emerald-500/50 ring-2 ring-emerald-500/20 shadow-[0_0_50px_rgba(16,185,129,0.1)]' : 'border-white/10'}`}>
@@ -1104,6 +1135,7 @@ const App: React.FC = () => {
           pendingAnalyzeRef.current = false;
           pendingDriftRef.current = false;
           pendingPerPackRef.current = false;
+          pendingSimulationRef.current = false;
         }}
         onSuccess={() => {
           setShowLogin(false);
@@ -1117,6 +1149,9 @@ const App: React.FC = () => {
           } else if (pendingPerPackRef.current) {
             pendingPerPackRef.current = false;
             startPerPackDrift();
+          } else if (pendingSimulationRef.current) {
+            pendingSimulationRef.current = false;
+            startEngineSimulation();
           }
         }}
       />
