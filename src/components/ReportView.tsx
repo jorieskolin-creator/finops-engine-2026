@@ -114,7 +114,7 @@ const QualityGateBlock: React.FC<{ gate: QualityGateResult }> = ({ gate }) => {
   const statusText = gate.decision === 'GO'
     ? gate.notes[0] || 'All checks passed.'
     : gate.decision === 'WARN'
-      ? 'Assessment is usable; detailed strategy hygiene notes are retained in the appendix.'
+      ? 'Assessment score remains valid. WARN-level strategy hygiene notes are included in the appendix for traceability.'
       : 'Assessment is unsafe to act on until blocking issues are resolved.';
   return (
     <div className={`mb-5 p-4 rounded-xl border ${palette} flex flex-col md:flex-row md:items-center md:justify-between gap-3`}>
