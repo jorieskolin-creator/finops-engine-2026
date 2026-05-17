@@ -12,9 +12,10 @@ import { requireSession } from "../lib/auth.js";
 // Two infrastructure benefits over the previous buffered implementation:
 //   1. The TCP connection between browser ↔ Railway ↔ Express has data
 //      flowing every <=15s, so edge idle-timeouts can't kill it mid-call.
-//   2. If the client disconnects (browser close, network drop), we abort
-//      the upstream Anthropic call instead of paying for a response no
-//      one is waiting for.
+//   2. If the request is aborted (browser close, network drop), we abort
+//      the upstream Anthropic call. Internal pipeline calls additionally
+//      tolerate response-close events so proxy stream churn does not cascade
+//      into upstream model aborts.
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -25,7 +26,8 @@ export default async function handler(req, res) {
   }
 
   const started = Date.now();
-  const { model, messages, systemPrompt, maxTokens, thinking, stage, runId } = req.body || {};
+  const { model, messages, systemPrompt, maxTokens, thinking, stage, runId, internalPipelineCall } = req.body || {};
+  const isInternalPipelineCall = internalPipelineCall === true;
   const tag = `[run=${runId || '?'}] provider=anthropic stage=${stage || '?'} model=${model || '?'}`;
 
   if (!model || !messages) {
@@ -46,28 +48,41 @@ export default async function handler(req, res) {
 
   const upstreamController = new AbortController();
   let clientGone = false;
-  const onClientGone = () => {
+  let responseClosed = false;
+  const onRequestAborted = () => {
     if (clientGone) return;
-    if (res.writableFinished) return;
     clientGone = true;
-    console.warn(`${tag} status=client_disconnected duration_ms=${Date.now() - started}`);
+    console.warn(`${tag} status=client_disconnected close_source=req_aborted internal_pipeline_call=${isInternalPipelineCall} duration_ms=${Date.now() - started}`);
+    upstreamController.abort();
+  };
+  const onResponseClosed = () => {
+    if (res.writableFinished || clientGone || responseClosed) return;
+    responseClosed = true;
+    if (isInternalPipelineCall) {
+      console.warn(`${tag} status=response_closed close_source=response_closed internal_pipeline_call=true duration_ms=${Date.now() - started}`);
+      return;
+    }
+    clientGone = true;
+    console.warn(`${tag} status=client_disconnected close_source=response_closed internal_pipeline_call=false duration_ms=${Date.now() - started}`);
     upstreamController.abort();
   };
   // NOTE: do NOT listen on req.on('close'). Express's body parser fully consumes
   // the request stream before our handler runs, and req emits 'close' on the
   // next tick — which would fire ~1ms after the handler starts and falsely
   // abort every call. The 'aborted' event on req only fires when the client
-  // actually aborts (TCP reset / fetch abort). res.on('close') with the
-  // writableFinished filter handles the normal-end case correctly.
-  req.on('aborted', onClientGone);
-  res.on('close', onClientGone);
+  // actually aborts (TCP reset / fetch abort). For marked internal pipeline
+  // calls, res.on('close') is logged but does not abort the server-to-server
+  // model request; this avoids false abort cascades from proxy response closes.
+  req.on('aborted', onRequestAborted);
+  res.on('close', onResponseClosed);
 
   const writeFrame = (obj) => {
-    if (res.writableEnded || clientGone) return false;
+    if (res.writableEnded || res.destroyed || clientGone || responseClosed) return false;
     try {
       res.write(JSON.stringify(obj) + '\n');
       return true;
     } catch {
+      responseClosed = true;
       return false;
     }
   };
@@ -103,7 +118,7 @@ export default async function handler(req, res) {
       console.error(`${tag} status=upstream_error http=${upstreamResp.status} duration_ms=${duration} msg="${errorText.replace(/"/g, "'").substring(0, 500)}"`);
       writeFrame({ type: 'error', message: `Anthropic API Error (${upstreamResp.status}): ${errorText.substring(0, 500)}` });
       clearInterval(keepalive);
-      if (!res.writableEnded) res.end();
+      if (!res.writableEnded && !res.destroyed) res.end();
       return;
     }
 
@@ -136,7 +151,7 @@ export default async function handler(req, res) {
             const delta = parsed.delta.text || '';
             if (delta) {
               accumulatedText += delta;
-              if (!writeFrame({ type: 'text', delta })) break;
+              if (!writeFrame({ type: 'text', delta }) && !isInternalPipelineCall) break;
             }
           } else if (parsed.type === 'message_delta' && parsed.usage) {
             usage = { ...(usage || {}), ...parsed.usage };
@@ -145,7 +160,7 @@ export default async function handler(req, res) {
             console.error(`${tag} status=stream_error duration_ms=${Date.now() - started} msg="${msg.replace(/"/g, "'")}"`);
             writeFrame({ type: 'error', message: msg });
             clearInterval(keepalive);
-            if (!res.writableEnded) res.end();
+            if (!res.writableEnded && !res.destroyed) res.end();
             return;
           }
         }
@@ -155,12 +170,14 @@ export default async function handler(req, res) {
     const duration = Date.now() - started;
     if (clientGone) {
       console.warn(`${tag} status=aborted_mid_stream duration_ms=${duration} chars_read=${accumulatedText.length}`);
+    } else if (responseClosed) {
+      console.warn(`${tag} status=completed_after_response_closed duration_ms=${duration} response_chars=${accumulatedText.length} input_tokens=${usage?.input_tokens || 0} output_tokens=${usage?.output_tokens || 0} internal_pipeline_call=${isInternalPipelineCall}`);
     } else {
       console.log(`${tag} status=ok duration_ms=${duration} response_chars=${accumulatedText.length} input_tokens=${usage?.input_tokens || 0} output_tokens=${usage?.output_tokens || 0}`);
       writeFrame({ type: 'done', text: accumulatedText, usage });
     }
     clearInterval(keepalive);
-    if (!res.writableEnded) res.end();
+    if (!res.writableEnded && !res.destroyed) res.end();
   } catch (error) {
     clearInterval(keepalive);
     const duration = Date.now() - started;
@@ -171,6 +188,6 @@ export default async function handler(req, res) {
       console.error(`${tag} status=error duration_ms=${duration} msg="${msg}"`);
       writeFrame({ type: 'error', message: error?.message || 'Internal server error' });
     }
-    if (!res.writableEnded) res.end();
+    if (!res.writableEnded && !res.destroyed) res.end();
   }
 }

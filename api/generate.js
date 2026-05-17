@@ -9,9 +9,9 @@ import { requireSession } from "../lib/auth.js";
 //
 // The @google/genai SDK's generateContentStream() returns an AsyncIterable of
 // chunks; each chunk has a .text accessor with the new text. We forward those
-// as 'text' frames and accumulate for the terminal 'done' frame. On client
-// disconnect we break the read loop — the SDK doesn't expose an upstream
-// AbortSignal we can plumb in, but at least we stop holding the connection.
+// as 'text' frames and accumulate for the terminal 'done' frame. On request
+// abort we break the read loop — the SDK doesn't expose an upstream AbortSignal
+// we can plumb in, but at least we stop holding the connection.
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -22,7 +22,8 @@ export default async function handler(req, res) {
   }
 
   const started = Date.now();
-  const { model, contents, systemInstruction, thinkingConfig, stage, runId } = req.body || {};
+  const { model, contents, systemInstruction, thinkingConfig, stage, runId, internalPipelineCall } = req.body || {};
+  const isInternalPipelineCall = internalPipelineCall === true;
   const tag = `[run=${runId || '?'}] provider=gemini stage=${stage || '?'} model=${model || '?'}`;
 
   if (!model || !contents) {
@@ -41,23 +42,34 @@ export default async function handler(req, res) {
   res.flushHeaders?.();
 
   let clientGone = false;
-  const onClientGone = () => {
+  let responseClosed = false;
+  const onRequestAborted = () => {
     if (clientGone) return;
-    if (res.writableFinished) return;
     clientGone = true;
-    console.warn(`${tag} status=client_disconnected duration_ms=${Date.now() - started}`);
+    console.warn(`${tag} status=client_disconnected close_source=req_aborted internal_pipeline_call=${isInternalPipelineCall} duration_ms=${Date.now() - started}`);
+  };
+  const onResponseClosed = () => {
+    if (res.writableFinished || clientGone || responseClosed) return;
+    responseClosed = true;
+    if (isInternalPipelineCall) {
+      console.warn(`${tag} status=response_closed close_source=response_closed internal_pipeline_call=true duration_ms=${Date.now() - started}`);
+      return;
+    }
+    clientGone = true;
+    console.warn(`${tag} status=client_disconnected close_source=response_closed internal_pipeline_call=false duration_ms=${Date.now() - started}`);
   };
   // See api/anthropic-generate.js for why req.on('close') is NOT used here.
   // body-parser closes req on the next tick and would fire a false positive.
-  req.on('aborted', onClientGone);
-  res.on('close', onClientGone);
+  req.on('aborted', onRequestAborted);
+  res.on('close', onResponseClosed);
 
   const writeFrame = (obj) => {
-    if (res.writableEnded || clientGone) return false;
+    if (res.writableEnded || res.destroyed || clientGone || responseClosed) return false;
     try {
       res.write(JSON.stringify(obj) + '\n');
       return true;
     } catch {
+      responseClosed = true;
       return false;
     }
   };
@@ -82,19 +94,21 @@ export default async function handler(req, res) {
       const delta = chunk?.text || '';
       if (delta) {
         accumulatedText += delta;
-        if (!writeFrame({ type: 'text', delta })) break;
+        if (!writeFrame({ type: 'text', delta }) && !isInternalPipelineCall) break;
       }
     }
 
     const duration = Date.now() - started;
     if (clientGone) {
       console.warn(`${tag} status=aborted_mid_stream duration_ms=${duration} chars_read=${accumulatedText.length}`);
+    } else if (responseClosed) {
+      console.warn(`${tag} status=completed_after_response_closed duration_ms=${duration} response_chars=${accumulatedText.length} internal_pipeline_call=${isInternalPipelineCall}`);
     } else {
       console.log(`${tag} status=ok duration_ms=${duration} response_chars=${accumulatedText.length}`);
       writeFrame({ type: 'done', text: accumulatedText });
     }
     clearInterval(keepalive);
-    if (!res.writableEnded) res.end();
+    if (!res.writableEnded && !res.destroyed) res.end();
   } catch (error) {
     clearInterval(keepalive);
     const duration = Date.now() - started;
@@ -105,6 +119,6 @@ export default async function handler(req, res) {
       console.error(`${tag} status=error duration_ms=${duration} msg="${msg}"`);
       writeFrame({ type: 'error', message: error?.message || 'Internal server error' });
     }
-    if (!res.writableEnded) res.end();
+    if (!res.writableEnded && !res.destroyed) res.end();
   }
 }
