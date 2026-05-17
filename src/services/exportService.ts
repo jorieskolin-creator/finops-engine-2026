@@ -18,10 +18,18 @@ const qualityGateStatusText = (gate: QualityGateResult): string => {
   return 'Assessment is unsafe to act on until blocking issues are resolved.';
 };
 
+const factCheckStatusText = (gate: QualityGateResult): string => {
+  const fc = gate.fact_check;
+  if (!fc) return 'fact-check unavailable';
+  if (fc.total_claims > 0) {
+    const base = `${fc.supported_count}/${fc.total_claims} claims supported`;
+    return fc.partial_failure_reason ? `${base} · partial check` : base;
+  }
+  return fc.failed ? 'fact-check unavailable' : '0 claims checked';
+};
+
 const renderQualityGateStatus = (gate: QualityGateResult): string => {
-  const supported = gate.fact_check && !gate.fact_check.failed
-    ? `${gate.fact_check.supported_count}/${gate.fact_check.total_claims} claims supported`
-    : 'fact-check unavailable';
+  const supported = factCheckStatusText(gate);
   const cls = gate.decision === 'GO' ? 'qg-status-go' : gate.decision === 'BLOCK' ? 'qg-status-block' : 'qg-status-warn';
   return `
     <div class="qg-status ${cls}">
@@ -51,6 +59,7 @@ const renderDiagnosticList = (
 const renderQualityGateAppendix = (gate: QualityGateResult): string => {
   const { primaryWarnings, appendixDiagnostics } = splitQualityGateDiagnostics(gate);
   const hasFactCheckNotes = !!gate.fact_check && !gate.fact_check.failed && gate.fact_check.unsupported_claims.length > 0;
+  const hasPartialFactCheck = !!gate.fact_check?.partial_failure_reason;
   const hasTrajectory = !!gate.fact_check?.trajectory && gate.fact_check.trajectory.length > 1;
   if (gate.decision === 'GO' && appendixDiagnostics.length === 0 && primaryWarnings.length === 0 && !hasFactCheckNotes) return '';
   const llm = gate.llm_explanation;
@@ -69,6 +78,7 @@ const renderQualityGateAppendix = (gate: QualityGateResult): string => {
     ${strategyDiagnostics.length > 0 ? `<div class="gate-label">Strategy hygiene notes</div>${renderDiagnosticList(strategyDiagnostics, llm?.warning_details)}` : ''}
     ${tacticDiagnostics.length > 0 ? `<div class="gate-label">Tactic grounding notes</div>${renderDiagnosticList(tacticDiagnostics, llm?.warning_details)}` : ''}
     ${remainingWarnings.length > 0 ? `<div class="gate-label">Remaining warnings</div>${renderDiagnosticList(remainingWarnings, llm?.warning_details)}` : ''}
+    ${hasPartialFactCheck ? `<div class="gate-label">Partial fact-check status</div><ul class="appendix-list"><li><strong>${escapeHtml(gate.fact_check!.partial_failure_reason || '')}</strong></li></ul>` : ''}
     ${hasTrajectory ? `<div class="gate-label">Fact-check trajectory</div><ul class="appendix-list">${gate.fact_check!.trajectory!.map((p, i, arr) => {
       const prev = i > 0 ? arr[i - 1] : null;
       const overlap = prev

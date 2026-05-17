@@ -19,6 +19,9 @@ const extractOutputText = (payload) => {
   return parts.join('');
 };
 
+const compactReason = (value) =>
+  typeof value === 'string' && value.length > 0 ? value : 'unknown';
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
@@ -106,10 +109,22 @@ export default async function handler(req, res) {
     const payload = await upstreamResp.json();
     const text = extractOutputText(payload);
     const usage = payload?.usage || null;
+    const reasoningTokens = usage?.output_tokens_details?.reasoning_tokens || 0;
+    const incompleteReason = payload?.status === 'incomplete'
+      ? compactReason(payload?.incomplete_details?.reason)
+      : '';
     if (clientGone) {
-      console.warn(`${tag} status=aborted_before_write duration_ms=${duration} response_chars=${text.length}`);
+      console.warn(`${tag} status=aborted_before_write duration_ms=${duration} openai_status=${payload?.status || 'unknown'} incomplete_reason=${incompleteReason || 'none'} response_chars=${text.length} reasoning_tokens=${reasoningTokens}`);
+    } else if (payload?.status === 'incomplete') {
+      const msg = `OpenAI response incomplete: ${incompleteReason || 'unknown'}`;
+      console.warn(`${tag} status=incomplete duration_ms=${duration} incomplete_reason=${incompleteReason || 'unknown'} response_chars=${text.length} input_tokens=${usage?.input_tokens || 0} output_tokens=${usage?.output_tokens || 0} reasoning_tokens=${reasoningTokens}`);
+      writeFrame({ type: 'error', message: msg });
+    } else if (text.trim().length === 0) {
+      const msg = 'OpenAI response contained no visible output text';
+      console.warn(`${tag} status=empty_output duration_ms=${duration} openai_status=${payload?.status || 'unknown'} input_tokens=${usage?.input_tokens || 0} output_tokens=${usage?.output_tokens || 0} reasoning_tokens=${reasoningTokens}`);
+      writeFrame({ type: 'error', message: msg });
     } else {
-      console.log(`${tag} status=ok duration_ms=${duration} response_chars=${text.length} input_tokens=${usage?.input_tokens || 0} output_tokens=${usage?.output_tokens || 0}`);
+      console.log(`${tag} status=ok duration_ms=${duration} openai_status=${payload?.status || 'unknown'} response_chars=${text.length} input_tokens=${usage?.input_tokens || 0} output_tokens=${usage?.output_tokens || 0} reasoning_tokens=${reasoningTokens}`);
       writeFrame({ type: 'done', text, usage });
     }
     clearInterval(keepalive);

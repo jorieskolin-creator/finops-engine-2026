@@ -518,14 +518,18 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => `  ${cat}
     };
 
     const mergeFactChecks = (summary: FactCheckResult, roadmap: FactCheckResult, attemptNumber: number): FactCheckResult => {
-      if (summary.failed || roadmap.failed) {
+      const partialFailureReason = [summary.failed ? `summary: ${summary.failure_reason}` : '', roadmap.failed ? `roadmap: ${roadmap.failure_reason}` : '']
+        .filter(Boolean)
+        .join(' | ');
+      const hasUsablePartial = summary.total_claims + roadmap.total_claims > 0;
+      if ((summary.failed || roadmap.failed) && !hasUsablePartial) {
         return {
           attempts: attemptNumber,
-          total_claims: summary.total_claims + roadmap.total_claims,
-          supported_count: summary.supported_count + roadmap.supported_count,
-          unsupported_claims: [...summary.unsupported_claims, ...roadmap.unsupported_claims],
+          total_claims: 0,
+          supported_count: 0,
+          unsupported_claims: [],
           failed: true,
-          failure_reason: [summary.failed ? summary.failure_reason : '', roadmap.failed ? roadmap.failure_reason : ''].filter(Boolean).join(' | ')
+          failure_reason: partialFailureReason
         };
       }
       return {
@@ -533,7 +537,8 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => `  ${cat}
         total_claims: summary.total_claims + roadmap.total_claims,
         supported_count: summary.supported_count + roadmap.supported_count,
         unsupported_claims: [...summary.unsupported_claims, ...roadmap.unsupported_claims],
-        failed: false
+        failed: false,
+        partial_failure_reason: partialFailureReason || undefined
       };
     };
 
