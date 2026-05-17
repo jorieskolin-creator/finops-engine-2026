@@ -295,6 +295,7 @@ export interface FactCheckResult {
   unsupported_claims: FactCheckClaim[];
   failed: boolean;
   failure_reason?: string;
+  partial_failure_reason?: string;
   // Per-pass trajectory accumulated across the fact-check + regen loop.
   // Populated by the orchestrator (geminiService), not by parseFactCheckResponse.
   trajectory?: FactCheckPassSnapshot[];

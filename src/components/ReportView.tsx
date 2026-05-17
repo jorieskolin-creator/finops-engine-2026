@@ -108,9 +108,15 @@ const QualityGateBlock: React.FC<{ gate: QualityGateResult }> = ({ gate }) => {
     : gate.decision === 'BLOCK'
       ? 'border-rose-200 bg-rose-50 text-rose-900'
       : 'border-amber-200 bg-amber-50 text-amber-900';
-  const supported = gate.fact_check && !gate.fact_check.failed
-    ? `${gate.fact_check.supported_count}/${gate.fact_check.total_claims} claims supported`
-    : 'fact-check unavailable';
+  const supported = (() => {
+    const fc = gate.fact_check;
+    if (!fc) return 'fact-check unavailable';
+    if (fc.total_claims > 0) {
+      const base = `${fc.supported_count}/${fc.total_claims} claims supported`;
+      return fc.partial_failure_reason ? `${base} · partial check` : base;
+    }
+    return fc.failed ? 'fact-check unavailable' : '0 claims checked';
+  })();
   const statusText = gate.decision === 'GO'
     ? gate.notes[0] || 'All checks passed.'
     : gate.decision === 'WARN'
@@ -130,6 +136,7 @@ const QualityGateBlock: React.FC<{ gate: QualityGateResult }> = ({ gate }) => {
 const QualityGateAppendix: React.FC<{ gate: QualityGateResult }> = ({ gate }) => {
   const { primaryWarnings, appendixDiagnostics } = splitQualityGateDiagnostics(gate);
   const hasFactCheckNotes = !!gate.fact_check && !gate.fact_check.failed && gate.fact_check.unsupported_claims.length > 0;
+  const hasPartialFactCheck = !!gate.fact_check?.partial_failure_reason;
   if (gate.decision === 'GO' && primaryWarnings.length === 0 && appendixDiagnostics.length === 0 && !hasFactCheckNotes) return null;
 
   const llm = gate.llm_explanation;
@@ -187,6 +194,14 @@ const QualityGateAppendix: React.FC<{ gate: QualityGateResult }> = ({ gate }) =>
         {renderList('Strategy hygiene notes', strategyDiagnostics, llm?.warning_details)}
         {renderList('Tactic grounding notes', tacticDiagnostics, llm?.warning_details)}
         {renderList('Remaining warnings', remainingWarnings, llm?.warning_details)}
+        {hasPartialFactCheck && (
+          <div className="mb-5">
+            <p className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">Partial fact-check status</p>
+            <p className="text-sm text-slate-700 pl-3 border-l-2 border-slate-300">
+              {gate.fact_check!.partial_failure_reason}
+            </p>
+          </div>
+        )}
         {gate.fact_check && !gate.fact_check.failed && (gate.fact_check.trajectory?.length ?? 0) > 1 && (
           <div className="mb-5">
             <p className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">Fact-check trajectory</p>

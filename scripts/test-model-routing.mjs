@@ -22,6 +22,10 @@ const { STAGE_MODELS, modelsFor } = await import(`file://${modulePath}`);
 assert.equal(STAGE_MODELS.fact_check.provider, 'openai');
 assert.equal(STAGE_MODELS.fact_check.id, 'gpt-5.5');
 assert.deepEqual(STAGE_MODELS.fact_check.openaiReasoning, { effort: 'medium' });
+assert.equal(STAGE_MODELS.fact_check.maxTokens, 12000);
+assert.equal(STAGE_MODELS.quality_gate.provider, 'openai');
+assert.equal(STAGE_MODELS.quality_gate.id, 'gpt-5.5');
+assert.equal(STAGE_MODELS.quality_gate.maxTokens, 8192);
 
 const factCheckChain = modelsFor('fact_check');
 assert.equal(factCheckChain[0].provider, 'openai');

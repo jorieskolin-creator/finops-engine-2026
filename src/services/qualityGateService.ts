@@ -178,6 +178,10 @@ export const runQualityGate = (
     warnings.push(
       `Fact-check pass did not complete (${factCheck.failure_reason}). Strategy was not deeply verified — treat specific claims with caution.`
     );
+  } else if (factCheck?.partial_failure_reason) {
+    warnings.push(
+      `Fact-check partially completed (${factCheck.partial_failure_reason}). Completed subchecks still contributed ${factCheck.supported_count}/${factCheck.total_claims} claim verdicts.`
+    );
   }
 
   if (

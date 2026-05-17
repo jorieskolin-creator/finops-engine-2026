@@ -109,7 +109,14 @@ export const PROFILES = {
     id: 'gpt-5.5',
     provider: 'openai',
     openaiReasoning: { effort: 'medium' },
-    maxTokens: 4096,
+    maxTokens: 12000,
+  } satisfies ModelProfile,
+
+  GPT_55_QUALITY_GATE: {
+    id: 'gpt-5.5',
+    provider: 'openai',
+    openaiReasoning: { effort: 'medium' },
+    maxTokens: 8192,
   } satisfies ModelProfile,
 } as const;
 
@@ -124,7 +131,7 @@ export const STAGE_MODELS: Record<StageId, ModelProfile> = {
   synthesis:            PROFILES.SONNET_46,
   synthesis_escalation: PROFILES.OPUS_47,
   fact_check:           PROFILES.GPT_55_FACT_CHECK,
-  quality_gate:         PROFILES.GPT_55_FACT_CHECK,
+  quality_gate:         PROFILES.GPT_55_QUALITY_GATE,
 };
 
 // ============================================================================
