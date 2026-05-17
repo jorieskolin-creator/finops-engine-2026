@@ -112,7 +112,7 @@ const QualityGateBlock: React.FC<{ gate: QualityGateResult }> = ({ gate }) => {
     ? `${gate.fact_check.supported_count}/${gate.fact_check.total_claims} claims supported`
     : 'fact-check unavailable';
   const statusText = gate.decision === 'GO'
-    ? 'All checks passed.'
+    ? gate.notes[0] || 'All checks passed.'
     : gate.decision === 'WARN'
       ? 'Assessment is usable; detailed strategy hygiene notes are retained in the appendix.'
       : 'Assessment is unsafe to act on until blocking issues are resolved.';
@@ -191,11 +191,20 @@ const QualityGateAppendix: React.FC<{ gate: QualityGateResult }> = ({ gate }) =>
           <div className="mb-5">
             <p className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">Fact-check trajectory</p>
             <ul className="space-y-1 text-xs text-slate-700 font-mono">
-              {gate.fact_check.trajectory!.map((p) => (
-                <li key={p.attempt} className="pl-3 border-l-2 border-slate-300">
-                  pass {p.attempt}: {p.supported_count}/{p.total_claims} supported, {p.unsupported_count} unsupported
-                </li>
-              ))}
+              {gate.fact_check.trajectory!.map((p, i) => {
+                const prev = i > 0 ? gate.fact_check!.trajectory![i - 1] : null;
+                const overlap = prev
+                  ? p.unsupported_signatures.filter(s => prev.unsupported_signatures.some(ps => ps === s)).length
+                  : 0;
+                return (
+                  <li key={p.attempt} className="pl-3 border-l-2 border-slate-300">
+                    pass {p.attempt}: {p.supported_count}/{p.total_claims} supported, {p.unsupported_count} unsupported
+                    {prev && overlap > 0 && (
+                      <span className="text-rose-600"> · {overlap} claims unchanged</span>
+                    )}
+                  </li>
+                );
+              })}
             </ul>
           </div>
         )}
