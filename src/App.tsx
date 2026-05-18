@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { analyzeDocument } from './services/geminiService';
 import { scanInputText, sanitizeInput } from './services/preFlightService';
 import { extractPagesFromPdf, imageFileToInput } from './services/pdfService';
+import type { PdfParseQuality } from './services/pdfService';
 import { renderDelimitedTableForAnalysis } from './services/tableService';
 import { downloadReport } from './services/exportService';
 import { forensicSanitizeImport } from './services/securityService';
@@ -62,6 +63,7 @@ interface UploadedFile {
     parsedTextPages?: number;
     renderedImagePages?: number;
     rowCount?: number;
+    parseQuality?: PdfParseQuality;
     warnings: string[];
   };
 }
@@ -158,10 +160,51 @@ const App: React.FC = () => {
     return scan;
   };
 
+  const parseQualityLabel = (quality?: PdfParseQuality['quality']): string | null => {
+    if (quality === 'good') return 'Good text extraction';
+    if (quality === 'mixed') return 'Mixed extraction: some visual/scanned pages included';
+    if (quality === 'poor') return 'Poor extraction: likely scanned/image-heavy PDF';
+    return null;
+  };
+
+  const buildParseQualitySourceNote = (file: UploadedFile): string => {
+    const parseQuality = file.parseMetadata?.parseQuality;
+    if (!parseQuality || parseQuality.quality === 'good') return '';
+    const warnings = parseQuality.warnings.length > 0
+      ? parseQuality.warnings.join(' ')
+      : 'PDF text extraction may be incomplete.';
+    return [
+      '[SOURCE_PARSE_QUALITY]',
+      `PDF parse quality: ${parseQuality.quality}.`,
+      `Text coverage ratio: ${Math.round(parseQuality.textCoverageRatio * 100)}%.`,
+      `Sparse text pages: ${parseQuality.sparseTextPages}.`,
+      `Visual pages included: ${parseQuality.visualPagesIncluded}; visual candidates skipped: ${parseQuality.visualPagesSkipped}.`,
+      `Likely scanned PDF: ${parseQuality.likelyScannedPdf ? 'yes' : 'no'}.`,
+      `Warning: ${warnings}`,
+      'Use source evidence cautiously where PDF text extraction may be incomplete; do not treat this parse-quality note as a FinOps maturity finding.',
+      '[/SOURCE_PARSE_QUALITY]'
+    ].join('\n');
+  };
+
+  const sourceParseWarningsForFiles = (sourceFiles: UploadedFile[]): string[] => {
+    return sourceFiles
+      .filter(file => file.parseMetadata?.parseQuality && file.parseMetadata.parseQuality.quality !== 'good')
+      .flatMap(file => {
+        const parseQuality = file.parseMetadata!.parseQuality!;
+        const warnings = parseQuality.warnings.length > 0
+          ? parseQuality.warnings
+          : ['PDF text extraction may be incomplete.'];
+        return warnings.map(warning => `${file.name}: ${warning}`);
+      });
+  };
+
   useEffect(() => {
     const combined = files
       .filter(f => f.text && f.text.length > 0)
-      .map(f => `\n<DOCUMENT name="${f.name}">\n${f.text}\n</DOCUMENT>\n`)
+      .map(f => {
+        const parseQualityNote = buildParseQualitySourceNote(f);
+        return `\n<DOCUMENT name="${f.name}">\n${parseQualityNote ? `${parseQualityNote}\n\n` : ''}${f.text}\n</DOCUMENT>\n`;
+      })
       .join('\n');
     setAggregatedText(combined);
     const images = files.flatMap(f => f.images || []);
@@ -297,6 +340,7 @@ const App: React.FC = () => {
             totalPages: metadata.totalPages,
             parsedTextPages: metadata.parsedTextPages,
             renderedImagePages: metadata.renderedImagePages,
+            parseQuality: metadata.parseQuality,
             warnings: metadata.warnings
           };
         } else if (file.type === 'text/html' || lowerName.endsWith('.html')) {
@@ -367,6 +411,10 @@ const App: React.FC = () => {
       if (!data.phase_2_validation?.metrics) throw new Error("Analysis returned incomplete data.");
       if (opts?.label) {
         data.meta = { ...data.meta, document_analyzed: opts.label };
+      }
+      const source_parse_warnings = sourceParseWarningsForFiles(files);
+      if (source_parse_warnings.length > 0) {
+        data.meta = { ...data.meta, source_parse_warnings };
       }
       setResult(data);
     } catch (e: any) {
@@ -670,6 +718,17 @@ const App: React.FC = () => {
                                     {file.kind === 'pdf' && `${file.parseMetadata.parsedTextPages}/${file.parseMetadata.totalPages} pages parsed · ${file.parseMetadata.renderedImagePages} visual pages`}
                                     {(file.kind === 'csv' || file.kind === 'tsv') && `${file.parseMetadata.rowCount} table rows parsed`}
                                     {file.parseMetadata.warnings.length > 0 && ` · ${file.parseMetadata.warnings[0]}`}
+                                  </div>
+                                )}
+                                {file.parseMetadata?.parseQuality && (
+                                  <div className={`text-[10px] mt-1 font-bold uppercase tracking-wide ${
+                                    file.parseMetadata.parseQuality.quality === 'poor'
+                                      ? 'text-rose-300'
+                                      : file.parseMetadata.parseQuality.quality === 'mixed'
+                                        ? 'text-amber-300'
+                                        : 'text-emerald-300'
+                                  }`}>
+                                    {parseQualityLabel(file.parseMetadata.parseQuality.quality)}
                                   </div>
                                 )}
                               </div>

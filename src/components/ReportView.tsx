@@ -533,6 +533,12 @@ export const ReportView: React.FC<ReportViewProps> = ({ result, onBack, onDownlo
         <div className="mb-8">
           <h1 className="text-4xl font-display font-bold text-slate-900 mb-2">FinOps Maturity Assessment</h1>
           <p className="text-slate-500">Generated: {result.meta.timestamp} | Engine: {result.meta.engine_version}</p>
+          {(result.meta.source_parse_warnings?.length ?? 0) > 0 && (
+            <p className="text-xs text-amber-700 mt-2">
+              Source parse note: {result.meta.source_parse_warnings![0]}
+              {result.meta.source_parse_warnings!.length > 1 ? ` (+${result.meta.source_parse_warnings!.length - 1} more)` : ''}
+            </p>
+          )}
         </div>
 
         <BracketBadge
