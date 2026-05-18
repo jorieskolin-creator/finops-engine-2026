@@ -14,6 +14,8 @@
     "test:report-diagnostics": "node scripts/test-report-diagnostics.mjs",
     "test:quality-gate": "node scripts/test-quality-gate-severity.mjs",
     "test:model-routing": "node scripts/test-model-routing.mjs",
+    "test:internal-call-protection": "node scripts/test-internal-call-protection.mjs",
+    "test:internal-result-store": "node scripts/test-internal-result-store.mjs",
     "test:tactic-grounding": "node scripts/test-tactic-grounding.mjs",
     "preview": "vite preview",
     "start": "node server.js"

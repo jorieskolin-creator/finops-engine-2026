@@ -1,4 +1,9 @@
 import { requireSession } from "../lib/auth.js";
+import {
+  completeInternalModelResult,
+  failInternalModelResult,
+  registerInternalModelResult
+} from "../lib/internalModelResults.js";
 
 // Non-streaming OpenAI Responses proxy.
 //
@@ -31,9 +36,11 @@ export default async function handler(req, res) {
   }
 
   const started = Date.now();
-  const { model, input, instructions, reasoning, maxOutputTokens, stage, runId, internalPipelineCall } = req.body || {};
+  const { model, input, instructions, reasoning, maxOutputTokens, stage, runId, internalPipelineCall, internalCallId } = req.body || {};
   const isInternalPipelineCall = internalPipelineCall === true;
   const tag = `[run=${runId || '?'}] provider=openai stage=${stage || '?'} model=${model || '?'}`;
+  const metadata = { runId, provider: 'openai', stage, model };
+  const callIdLog = internalCallId ? ` internal_call_id=${internalCallId}` : '';
 
   if (!model || !input) {
     console.warn(`${tag} status=bad_request msg="missing model or input"`);
@@ -43,6 +50,9 @@ export default async function handler(req, res) {
   if (!apiKey) {
     console.error(`${tag} status=misconfigured msg="GPT_API_KEY or OPENAI_API_KEY not set"`);
     return res.status(500).json({ error: 'GPT_API_KEY or OPENAI_API_KEY not configured on server' });
+  }
+  if (isInternalPipelineCall && internalCallId) {
+    registerInternalModelResult(internalCallId, metadata);
   }
 
   res.setHeader('Content-Type', 'application/x-ndjson; charset=utf-8');
@@ -63,7 +73,7 @@ export default async function handler(req, res) {
     if (res.writableFinished || clientGone || responseClosed) return;
     responseClosed = true;
     if (isInternalPipelineCall) {
-      console.warn(`${tag} status=response_closed close_source=response_closed internal_pipeline_call=true duration_ms=${Date.now() - started}`);
+      console.warn(`${tag} status=response_closed close_source=response_closed internal_pipeline_call=true duration_ms=${Date.now() - started}${callIdLog}`);
       return;
     }
     clientGone = true;
@@ -113,6 +123,8 @@ export default async function handler(req, res) {
     if (!upstreamResp.ok) {
       const errorText = await upstreamResp.text().catch(() => '');
       console.error(`${tag} status=upstream_error http=${upstreamResp.status} duration_ms=${duration} msg="${errorText.replace(/"/g, "'").substring(0, 500)}"`);
+      failInternalModelResult(internalCallId, `OpenAI API Error (${upstreamResp.status}): ${errorText.substring(0, 500)}`, metadata);
+      console.error(`${tag} event=internal_result_error message="OpenAI API Error (${upstreamResp.status})"${callIdLog}`);
       writeFrame({ type: 'error', message: `OpenAI API Error (${upstreamResp.status}): ${errorText.substring(0, 500)}` });
       clearInterval(keepalive);
       if (!res.writableEnded && !res.destroyed) res.end();
@@ -128,17 +140,24 @@ export default async function handler(req, res) {
       : '';
     if (clientGone) {
       console.warn(`${tag} status=aborted_before_write duration_ms=${duration} openai_status=${payload?.status || 'unknown'} incomplete_reason=${incompleteReason || 'none'} response_chars=${text.length} reasoning_tokens=${reasoningTokens}`);
-    } else if (responseClosed) {
-      console.warn(`${tag} status=completed_after_response_closed duration_ms=${duration} openai_status=${payload?.status || 'unknown'} incomplete_reason=${incompleteReason || 'none'} response_chars=${text.length} input_tokens=${usage?.input_tokens || 0} output_tokens=${usage?.output_tokens || 0} reasoning_tokens=${reasoningTokens} internal_pipeline_call=${isInternalPipelineCall}`);
     } else if (payload?.status === 'incomplete') {
       const msg = `OpenAI response incomplete: ${incompleteReason || 'unknown'}`;
       console.warn(`${tag} status=incomplete duration_ms=${duration} incomplete_reason=${incompleteReason || 'unknown'} response_chars=${text.length} input_tokens=${usage?.input_tokens || 0} output_tokens=${usage?.output_tokens || 0} reasoning_tokens=${reasoningTokens}`);
+      failInternalModelResult(internalCallId, msg, metadata);
+      console.error(`${tag} event=internal_result_error message="${msg}"${callIdLog}`);
       writeFrame({ type: 'error', message: msg });
     } else if (text.trim().length === 0) {
       const msg = 'OpenAI response contained no visible output text';
       console.warn(`${tag} status=empty_output duration_ms=${duration} openai_status=${payload?.status || 'unknown'} input_tokens=${usage?.input_tokens || 0} output_tokens=${usage?.output_tokens || 0} reasoning_tokens=${reasoningTokens}`);
+      failInternalModelResult(internalCallId, msg, metadata);
+      console.error(`${tag} event=internal_result_error message="${msg}"${callIdLog}`);
       writeFrame({ type: 'error', message: msg });
+    } else if (responseClosed) {
+      completeInternalModelResult(internalCallId, text, usage, metadata);
+      console.warn(`${tag} status=completed_after_response_closed duration_ms=${duration} openai_status=${payload?.status || 'unknown'} incomplete_reason=${incompleteReason || 'none'} response_chars=${text.length} input_tokens=${usage?.input_tokens || 0} output_tokens=${usage?.output_tokens || 0} reasoning_tokens=${reasoningTokens} internal_pipeline_call=${isInternalPipelineCall}${callIdLog}`);
+      console.log(`${tag} level=info event=internal_result_stored status=done response_chars=${text.length}${callIdLog}`);
     } else {
+      completeInternalModelResult(internalCallId, text, usage, metadata);
       console.log(`${tag} status=ok duration_ms=${duration} openai_status=${payload?.status || 'unknown'} response_chars=${text.length} input_tokens=${usage?.input_tokens || 0} output_tokens=${usage?.output_tokens || 0} reasoning_tokens=${reasoningTokens}`);
       writeFrame({ type: 'done', text, usage });
     }
@@ -152,6 +171,8 @@ export default async function handler(req, res) {
     } else {
       const msg = (error?.message || '').replace(/"/g, "'");
       console.error(`${tag} status=error duration_ms=${duration} msg="${msg}"`);
+      failInternalModelResult(internalCallId, error?.message || 'Internal server error', metadata);
+      console.error(`${tag} event=internal_result_error message="${msg}"${callIdLog}`);
       writeFrame({ type: 'error', message: error?.message || 'Internal server error' });
     }
     if (!res.writableEnded && !res.destroyed) res.end();
