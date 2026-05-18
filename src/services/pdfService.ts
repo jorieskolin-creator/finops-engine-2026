@@ -162,7 +162,7 @@ export const extractPagesFromPdf = async (
   });
   warnings.push(...parseQuality.warnings);
 
-  if (pageTexts.join('').trim().length === 0 && images.length === 0) {
+  if (pageStats.every(stats => stats.charCount === 0) && images.length === 0) {
     throw new Error(`File ${file.name} could not be read: no extractable text or renderable pages were found.`);
   }
 
