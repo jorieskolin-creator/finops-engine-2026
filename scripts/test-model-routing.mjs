@@ -48,4 +48,16 @@ assert.equal(roadmapChain[1].id, 'gpt-5.5');
 assert.equal(roadmapChain[2].provider, 'gemini');
 assert.equal(roadmapChain[2].id, 'gemini-3.1-pro-preview');
 
+const geminiServiceSource = await readFile(new URL('../src/services/geminiService.ts', import.meta.url), 'utf8');
+assert.match(
+  geminiServiceSource,
+  /substage: 'evidence_summary'[\s\S]*?actuals\.synthesis = resp\.modelUsed\.id|actuals\.synthesis = resp\.modelUsed\.id[\s\S]*?substage: 'evidence_summary'/,
+  'evidence summary model should be recorded as synthesis metadata'
+);
+assert.match(
+  geminiServiceSource,
+  /runStage\('roadmap_synthesis'[\s\S]*?actuals\.roadmap_synthesis = resp\.modelUsed\.id/,
+  'roadmap model should be recorded as roadmap_synthesis metadata'
+);
+
 console.log('model routing unit tests passed');
