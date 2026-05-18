@@ -201,6 +201,7 @@ export const analyzeDocument = async (
     forensic_audit: STAGE_MODELS.forensic_audit.id,
     evidence_check: STAGE_MODELS.evidence_check.id,
     synthesis: STAGE_MODELS.synthesis.id,
+    roadmap_synthesis: STAGE_MODELS.roadmap_synthesis.id,
     fact_check: STAGE_MODELS.fact_check.id,
   };
 
@@ -214,6 +215,7 @@ export const analyzeDocument = async (
     forensic_audit: STAGE_MODELS.forensic_audit.id,
     evidence_check: STAGE_MODELS.evidence_check.id,
     synthesis: STAGE_MODELS.synthesis.id,
+    roadmap_synthesis: STAGE_MODELS.roadmap_synthesis.id,
     fact_check: STAGE_MODELS.fact_check.id,
   });
 
@@ -423,6 +425,16 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => `  ${cat}
       return planningText.trim();
     };
 
+    const buildRoadmapGroundingText = (roadmap: any[]): string => roadmap.map((phase: any) => {
+      const actions = Array.isArray(phase?.actions) ? phase.actions : [];
+      return [
+        `[Phase] ${phase?.phase || 'Unnamed phase'}`,
+        phase?.why ? `[WHY]\n${phase.why}` : '',
+        phase?.what ? `[WHAT]\n${phase.what}` : '',
+        actions.length > 0 ? `[HOW]\n${actions.map((action: string) => `- ${action}`).join('\n')}` : '[HOW]\n(no actions)'
+      ].filter(Boolean).join('\n');
+    }).join('\n\n---\n\n');
+
     const callEvidenceSynthesis = async (correctionAppendix?: string): Promise<any> => {
       const textParts: string[] = [EVIDENCE_SYNTHESIS_USER_PROMPT];
       textParts.push(`\n\n### DIAGNOSTIC FINDINGS (Phase 1 & 2)\nUse only these findings and the source document for summary and diagnosis:\n${handoffSummary}`);
@@ -436,7 +448,7 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => `  ${cat}
         userText: textParts.join(''),
         systemInstruction: EVIDENCE_SYNTHESIS_SYSTEM_INSTRUCTION,
       }, { runId });
-      actuals.synthesis = resp.modelUsed.id;
+      actuals.roadmap_synthesis = resp.modelUsed.id;
       serverLog(runId, 'info', 'stage_complete', {
         stage: synthesisStage,
         model: resp.modelUsed.id,
@@ -458,13 +470,13 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => `  ${cat}
       textParts.push(`\n\n### DIAGNOSTIC FINDINGS (Phase 1 & 2)\n${handoffSummary}`);
       if (correctionAppendix) textParts.push(correctionAppendix);
       const synthStarted = Date.now();
-      const resp = await runStage(synthesisStage, {
+      const resp = await runStage('roadmap_synthesis', {
         userText: textParts.join(''),
         systemInstruction: ROADMAP_SYNTHESIS_SYSTEM_INSTRUCTION,
       }, { runId });
       actuals.synthesis = resp.modelUsed.id;
       serverLog(runId, 'info', 'stage_complete', {
-        stage: synthesisStage,
+        stage: 'roadmap_synthesis',
         model: resp.modelUsed.id,
         substage: 'roadmap',
         bracket: confidenceBracket,
@@ -546,7 +558,7 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => `  ${cat}
     const runFactCheck = async (data: any, attemptNumber: number): Promise<FactCheckResult> => {
       const strategy = data?.phase_3_strategy || {};
       const roadmap = strategy.remediation_roadmap || [];
-      const roadmapText = roadmap.flatMap((p: any) => Array.isArray(p.actions) ? p.actions : []).join('\n');
+      const roadmapText = buildRoadmapGroundingText(roadmap);
       try {
         const summaryPrompt = buildSummaryFactCheckPrompt({
           contentToCheck: buildSummaryCheckText(strategy),
@@ -877,6 +889,7 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => `  ${cat}
           forensic_audit: actuals.forensic_audit,
           evidence_check: actuals.evidence_check,
           synthesis: actuals.synthesis,
+          roadmap_synthesis: actuals.roadmap_synthesis,
           fact_check: actuals.fact_check,
           validators: "deterministic"
         }

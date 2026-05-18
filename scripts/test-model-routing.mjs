@@ -26,6 +26,8 @@ assert.equal(STAGE_MODELS.fact_check.maxTokens, 12000);
 assert.equal(STAGE_MODELS.quality_gate.provider, 'openai');
 assert.equal(STAGE_MODELS.quality_gate.id, 'gpt-5.5');
 assert.equal(STAGE_MODELS.quality_gate.maxTokens, 8192);
+assert.equal(STAGE_MODELS.roadmap_synthesis.provider, 'anthropic');
+assert.equal(STAGE_MODELS.roadmap_synthesis.id, 'claude-opus-4-7');
 
 const factCheckChain = modelsFor('fact_check');
 assert.equal(factCheckChain[0].provider, 'openai');
@@ -37,5 +39,13 @@ assert.equal(factCheckChain.some((profile) => profile.provider === 'gemini'), fa
 const qualityGateChain = modelsFor('quality_gate');
 assert.equal(qualityGateChain[0].provider, 'openai');
 assert.equal(qualityGateChain[1].id, 'claude-sonnet-4-6');
+
+const roadmapChain = modelsFor('roadmap_synthesis');
+assert.equal(roadmapChain[0].provider, 'anthropic');
+assert.equal(roadmapChain[0].id, 'claude-opus-4-7');
+assert.equal(roadmapChain[1].provider, 'openai');
+assert.equal(roadmapChain[1].id, 'gpt-5.5');
+assert.equal(roadmapChain[2].provider, 'gemini');
+assert.equal(roadmapChain[2].id, 'gemini-3.1-pro-preview');
 
 console.log('model routing unit tests passed');

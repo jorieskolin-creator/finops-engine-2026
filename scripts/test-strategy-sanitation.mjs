@@ -66,6 +66,8 @@ const strategyData = {
     remediation_roadmap: [
       {
         phase: '1. Crawl',
+        why: 'Implement FinOps outcome tracking to shift measurement from documented activities toward quantified optimization outcomes.',
+        what: 'Enforce object storage lifecycle tiering for product telemetry while preserving validated operational controls.',
         actions: [
           'Implement FinOps outcome tracking to shift measurement from documented activities toward quantified optimization outcomes.',
           'Enforce object storage lifecycle tiering for product telemetry.'
@@ -116,6 +118,8 @@ assert.doesNotMatch(sanitized.strategyData.phase_3_strategy.executive_summaries.
 assert.deepEqual(sanitized.strategyData.phase_3_strategy.remediation_roadmap[0].actions, [
   'Enforce object storage lifecycle tiering for product telemetry.'
 ]);
+assert.equal(sanitized.strategyData.phase_3_strategy.remediation_roadmap[0].why, '');
+assert.match(sanitized.strategyData.phase_3_strategy.remediation_roadmap[0].what, /object storage lifecycle/);
 
 const emptyClaim = sanitizeStrategyAfterFactCheck(strategyData, {
   attempts: 1,

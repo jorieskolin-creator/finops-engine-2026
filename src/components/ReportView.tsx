@@ -80,6 +80,23 @@ const RemediationStepBlock: React.FC<{ step: RemediationStep; index: number }> =
           </span>
         )}
       </div>
+      {(step.why || step.what) && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+          {step.why && (
+            <div className="bg-white border border-slate-200 rounded-lg p-4">
+              <p className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-1.5">Why</p>
+              <p className="text-sm text-slate-700 leading-relaxed">{step.why}</p>
+            </div>
+          )}
+          {step.what && (
+            <div className="bg-white border border-slate-200 rounded-lg p-4">
+              <p className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-1.5">What</p>
+              <p className="text-sm text-slate-700 leading-relaxed">{step.what}</p>
+            </div>
+          )}
+        </div>
+      )}
+      <p className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">How</p>
       <ul className="space-y-3 mb-4">
         {step.actions.map((action, i) => (
           <li key={i} className="flex items-start gap-3 text-sm text-slate-700">
@@ -857,7 +874,10 @@ export const ReportView: React.FC<ReportViewProps> = ({ result, onBack, onDownlo
 
         <div className="text-center py-8 border-t border-slate-200 text-sm text-slate-400">
           <p>FinOps Assessment Engine v{result.meta.engine_version}</p>
-          <p>Models: {result.meta.model_config.preflight} (Pre-Flight) | {result.meta.model_config.forensic_audit} (Audit) | {result.meta.model_config.evidence_check} (Evidence Check) | {result.meta.model_config.synthesis} (Strategy) | {result.meta.model_config.fact_check} (Fact-Check)</p>
+          <p>
+            Models: {result.meta.model_config.preflight} (Pre-Flight) | {result.meta.model_config.forensic_audit} (Audit) | {result.meta.model_config.evidence_check} (Evidence Check) | {result.meta.model_config.synthesis} (Summary/Diagnosis)
+            {result.meta.model_config.roadmap_synthesis ? ` | ${result.meta.model_config.roadmap_synthesis} (Roadmap)` : ''} | {result.meta.model_config.fact_check} (Fact-Check)
+          </p>
         </div>
       </div>
     </div>

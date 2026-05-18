@@ -637,6 +637,23 @@ export const StrategicRoadmap: React.FC<RoadmapProps> = ({ steps }) => (
         </div>
         <div className="w-[calc(100%-4rem)] md:w-[calc(50%-2.5rem)] bg-slate-900/50 backdrop-blur-md p-6 rounded-2xl border border-white/10 shadow-sm hover:shadow-md hover:border-emerald-500/30 transition-all">
           <h4 className="font-display font-bold text-lg text-slate-100 mb-4 flex items-center gap-2">{step.phase}</h4>
+          {(step.why || step.what) && (
+            <div className="space-y-4 mb-5">
+              {step.why && (
+                <div>
+                  <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-emerald-300 mb-1">Why</p>
+                  <p className="text-sm text-slate-300 leading-relaxed">{step.why}</p>
+                </div>
+              )}
+              {step.what && (
+                <div>
+                  <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-cyan-300 mb-1">What</p>
+                  <p className="text-sm text-slate-300 leading-relaxed">{step.what}</p>
+                </div>
+              )}
+            </div>
+          )}
+          <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-400 mb-3">How</p>
           <ul className="space-y-3">
             {step.actions.map((action, i) => (
               <li key={i} className="flex items-start gap-3 text-sm text-slate-300 leading-relaxed">
