@@ -694,6 +694,7 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => `  ${cat}
       if (!raw?.phase_3_strategy) return raw;
       const normalized = normalizePersonaSummaries(raw.phase_3_strategy);
       const incomingPlanningDecision = raw.phase_3_strategy.planning_decision;
+      const incomingDiagnosis = raw.phase_3_strategy.diagnosis;
       const normalizedPlanningDecision = confidenceBracket === 'LOW'
         ? incomingPlanningDecision?.decision === 'NO_GO'
           ? incomingPlanningDecision
@@ -705,7 +706,9 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => `  ${cat}
         executive_summary: normalized.executive_summary,
         active_persona: normalized.active_persona,
         evidence_summary: raw.phase_3_strategy.evidence_summary?.headline ? raw.phase_3_strategy.evidence_summary : buildFallbackEvidenceSummary(),
-        diagnosis: raw.phase_3_strategy.diagnosis?.primary_bottleneck ? raw.phase_3_strategy.diagnosis : buildFallbackDiagnosis(),
+        diagnosis: typeof incomingDiagnosis?.primary_bottleneck === 'string' && incomingDiagnosis.primary_bottleneck.trim().length > 0
+          ? { ...incomingDiagnosis, primary_bottleneck: incomingDiagnosis.primary_bottleneck.trim() }
+          : buildFallbackDiagnosis(),
         planning_decision: normalizedPlanningDecision,
         remediation_roadmap: confidenceBracket === 'LOW' ? [] : (raw.phase_3_strategy.remediation_roadmap || []),
         confidence_bracket: confidenceBracket,

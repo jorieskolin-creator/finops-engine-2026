@@ -5,7 +5,7 @@ import { METRIC_DESCRIPTIONS } from '../constants';
 import { SVG_CSS, svgGaugeCard, svgRadar, svgScatter } from './svgChartService';
 import { isInsufficientEvidenceReport, renderInlineMarkdownHtml, renderMarkdownSummaryHtml, strengthsSectionTitle } from './reportTextService';
 import { antiPatternStatusLabel, inferAntiPatternAbsenceStatus } from './antiPatternSemantics';
-import { displayQualityGateDiagnostic, splitQualityGateDiagnostics } from './reportDiagnosticsService';
+import { displayQualityGateDiagnostic, isReportableSourceCoverageGap, splitQualityGateDiagnostics } from './reportDiagnosticsService';
 
 const BATCHES: Array<'A' | 'B' | 'C' | 'D' | 'E'> = ['A', 'B', 'C', 'D', 'E'];
 
@@ -533,12 +533,12 @@ const generateReportHtml = (result: DiagnosticResult): string => {
   ${(() => {
     const diagnosis = result.phase_3_strategy.diagnosis;
     if (!diagnosis) return '';
+    const primaryBottleneck = diagnosis.primary_bottleneck?.trim();
     return `
       <h2>Diagnosis</h2>
       <div class="summary diagnosis">
         <p class="persona-heading">Interpretation of evidence — not the implementation plan</p>
-        <h3>Primary bottleneck</h3>
-        <p>${escapeHtml(diagnosis.primary_bottleneck)}</p>
+        ${primaryBottleneck ? `<h3>Primary bottleneck</h3><p>${escapeHtml(primaryBottleneck)}</p>` : ''}
         <div class="summary-grid">
           <div class="summary-sub"><h3>Root causes</h3><ul>${(diagnosis.root_causes || []).map(i => `<li>${escapeHtml(i)}</li>`).join('')}</ul></div>
           <div class="summary-sub"><h3>Domain diagnosis</h3><ul>${Object.entries(diagnosis.domain_diagnosis || {}).map(([d, text]) => `<li><strong>${escapeHtml(d)}:</strong> ${escapeHtml(text)}</li>`).join('')}</ul></div>
@@ -563,7 +563,7 @@ const generateReportHtml = (result: DiagnosticResult): string => {
 
   ${(() => {
     const claims = result.quality_gate?.fact_check?.unsupported_claims || [];
-    const withMaterial = claims.filter(c => c.missing_material);
+    const withMaterial = claims.filter(isReportableSourceCoverageGap);
     if (withMaterial.length === 0) return '';
     const byType: Record<string, string[]> = {};
     for (const c of withMaterial) {

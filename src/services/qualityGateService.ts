@@ -70,7 +70,16 @@ export const isTacticHygieneClaim = (claim: FactCheckClaim): boolean => {
     'zero tactic ids',
     'tactic ids were withheld',
     'tactic omitted',
-    'citation hygiene'
+    'citation hygiene',
+    'verified tactic',
+    'verified tactics',
+    'tactics database',
+    'tactics db',
+    'kb match',
+    'exact kb',
+    'exact verified',
+    'maps to verified tactic',
+    'map to verified tactic'
   ].some(term => blob.includes(term));
 };
 

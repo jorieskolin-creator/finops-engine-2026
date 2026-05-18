@@ -939,7 +939,7 @@
     <div class="eyebrow">Vivicta · Engine Architecture · Internal Document</div>
     <h1>FinOps Maturity Assessment Engine — <em>Evidence-Gated Scanner Architecture</em></h1>
     <p class="lede">
-      The FinOps Engine is not a chatbot with instructions. It is a <strong>structured analytical pipeline</strong> where local parsing, forensic scanning, independent evidence-checking, deterministic scoring, synthesis, and quality gates each constrain the next step. AI can propose findings, but it cannot make them true. Evidence is verified before mathematics scores it; strategy is written only inside the confidence envelope the evidence allows.
+      The FinOps Engine is not a chatbot with instructions. It is a <strong>structured analytical pipeline</strong> where local parsing, parse-quality checks, forensic scanning, independent evidence-checking, deterministic scoring, synthesis, strategy sanitation, and quality gates each constrain the next step. AI can propose findings, but it cannot make them true. Evidence is verified before mathematics scores it; summary, diagnosis, and strategy are written only inside the confidence levels the evidence allows.
     </p>
   </div>
 </section>
@@ -952,7 +952,7 @@
     <div class="section-tag"><span class="num">01</span><span>How the Engine Thinks</span></div>
     <h2>The Forensic Analysis Pipeline</h2>
     <p style="max-width: 760px; color: var(--ink-2); font-size: 16px;">
-      Local deterministic parsing, four primary analytical phases, one evidence-check stage, and multiple verification layers. Each one is constrained by what came before. The chain-of-thinking is deliberate: AI cannot decide alone, mathematics cannot strategize, and strategy cannot rewrite the evidence. Every claim is fact-checked, every survivor is surfaced, every gap is named.
+      Local deterministic parsing, four primary analytical phases, one evidence-check stage, and multiple verification layers. Each one is constrained by what came before. The chain-of-thinking is deliberate: AI cannot decide alone, mathematics cannot strategize, and strategy cannot rewrite the evidence. Every claim is fact-checked, every unsafe survivor is removed, quarantined, or surfaced, and every material gap is named.
     </p>
 
     <div class="pipeline">
@@ -967,7 +967,7 @@
           <div class="stage-meta">Local parsing · DLP Officer · gemini-3-flash-preview · deterministic redaction</div>
         </div>
         <div class="stage-body">
-          Client-side parsers extract source material before model analysis: PDFs are parsed to text up to 100 pages, CSV/TSV files become table summaries, HTML is sanitized, and selected PDF/image pages are attached as visual evidence under an image budget. A DLP LLM pass plus deterministic regex redaction scans for PII, secrets, and risky input. Low FinOps keyword signal is now a warning, not a hard rejection, when the material is technically parseable.
+          Client-side parsers extract source material before model analysis: PDF.js extracts embedded PDF text up to 100 pages with page markers, CSV/TSV files become table summaries, HTML is sanitized, JSON is normalized, and selected PDF/image pages are attached as visual evidence under an image budget. A deterministic parse-quality check marks PDFs as good, mixed, or poor extraction, prioritizing sparse/scanned pages for visual inclusion. A DLP LLM pass plus deterministic regex redaction scans for PII, secrets, and risky input. Low FinOps keyword signal is now a warning, not a hard rejection, when the material is technically parseable.
         </div>
       </div>
 
@@ -1026,7 +1026,7 @@
       <div class="stage" data-phase="3">
         <div class="stage-header">
           <div class="stage-title">Phase 3 — Strategy Synthesis</div>
-          <div class="stage-meta">Confidence-bracketed · claude-sonnet-4-6 standard · claude-opus-4-7 escalation</div>
+          <div class="stage-meta">Confidence-bracketed · synthesis + roadmap_synthesis · Sonnet summaries · Opus roadmap</div>
         </div>
         <div class="stage-body">
           <p>Inputs:</p>
@@ -1037,7 +1037,7 @@
             <li>Crawl-Walk-Run methodology framework</li>
             <li>Three persona definitions: FinOps Lead, CFO, Engineering Lead</li>
           </ol>
-          <p>Outputs depend on confidence. HIGH confidence can produce evidence summary, diagnosis, planning decision, visual scorecard, and a 4-phase roadmap with tactic citations. MEDIUM produces cautious planning with assumptions. LOW produces findings mode only: evidence-backed findings, missing evidence, validation plan, <strong>NO_GO</strong>, and an empty roadmap.</p>
+          <p>Outputs depend on confidence. Evidence summary and diagnosis are generated separately from roadmap synthesis. The roadmap/planning substage uses <code style="font-family: var(--mono); font-size: 12px;">claude-opus-4-7</code> first, then <code style="font-family: var(--mono); font-size: 12px;">gpt-5.5</code>, then <code style="font-family: var(--mono); font-size: 12px;">gemini-3.1-pro-preview</code>. HIGH confidence can produce planning, scorecard, and a 4-phase roadmap with WHY, WHAT, and HOW layers. MEDIUM produces cautious planning with assumptions. LOW produces findings mode only: evidence-backed findings, missing evidence, validation plan, <strong>NO_GO</strong>, and an empty roadmap.</p>
         </div>
       </div>
 
@@ -1047,10 +1047,10 @@
       <div class="stage" data-phase="3" style="border-style: dashed;">
         <div class="stage-header">
           <div class="stage-title">Split Fact-Check Pass</div>
-          <div class="stage-meta">gemini-3.1-pro-preview · summary/diagnosis separate from roadmap</div>
+          <div class="stage-meta">gpt-5.5 primary · claude-sonnet-4-6 fallback · summary/diagnosis separate from roadmap</div>
         </div>
         <div class="stage-body">
-          Evidence summaries and diagnosis are checked only against the source document, Phase 1 evidence, and Phase 2 metrics. Planning decisions and roadmap actions are checked against locked findings plus the verified tactics database. Unsupported claims are tagged with failure type, source location, and missing material so the regeneration loop can repair the right kind of error.
+          Evidence summaries and diagnosis are checked only against the source document, Phase 1 evidence, and Phase 2 metrics. Planning decisions and roadmap WHY/WHAT/HOW are checked against locked findings plus the verified tactics database. Unsupported claims are tagged with failure type, severity, source location, and missing material so the regeneration loop or sanitation layer can repair the right kind of error.
         </div>
       </div>
 
@@ -1066,16 +1066,28 @@
         </div>
       </div>
 
+      <div class="connector">If isolated strategy wording remains ▼</div>
+
+      <div class="stage" data-phase="3" style="border-style: dashed;">
+        <div class="stage-header">
+          <div class="stage-title">Strategy Sanitation</div>
+          <div class="stage-meta">Remove · rewrite · quarantine · before final display</div>
+        </div>
+        <div class="stage-body">
+          Unsupported roadmap actions, mismatched tactic IDs, and unsupported WHY/WHAT phrases are removed, rewritten, or retained only in the appendix before the final Quality Gate. Strong metrics and supported diagnosis are preserved; a localized strategy hygiene issue does not automatically collapse the whole assessment to BLOCK.
+        </div>
+      </div>
+
       <div class="connector">Validated strategy ·&nbsp; verified or flagged</div>
 
       <!-- QUALITY GATE -->
       <div class="stage" data-phase="2">
         <div class="stage-header">
           <div class="stage-title">Quality Gate Aggregation</div>
-          <div class="stage-meta">Deterministic · GO / WARN / BLOCK · optional LLM explanation</div>
+          <div class="stage-meta">Deterministic · GO / WARN / BLOCK · gpt-5.5 explanation</div>
         </div>
         <div class="stage-body">
-          A final deterministic aggregation reads evidence density, Phase 1 completeness, evidence-check downgrades, anti-pattern coverage, Phase 3 grounding, invalid tactic IDs, and fact-check survivors. It returns <strong>GO</strong>, <strong>WARN</strong>, or <strong>BLOCK</strong>. WARN/BLOCK results can receive a Gemini quality-gate explanation, and BLOCK downgrades the rendered strategy confidence so directive roadmap content is hidden when confidence collapses.
+          A final deterministic aggregation reads evidence density, Phase 1 completeness, evidence-check downgrades, anti-pattern coverage, Phase 3 grounding, invalid tactic IDs, strategy sanitation, and fact-check survivors. It returns <strong>GO</strong>, <strong>WARN</strong>, or <strong>BLOCK</strong>. WARN means the score remains usable while strategy hygiene notes are retained in the appendix. BLOCK is reserved for unsafe visible output, low evidence, failed evidence validation, or unsupported facts that cannot be isolated.
         </div>
       </div>
 
@@ -1131,7 +1143,12 @@
       <div class="why-card">
         <div class="why-num">05</div>
         <h4>The fact-check is independent.</h4>
-        <p>A second LLM call reads the strategy and asks "can this claim be traced?" — the same model that wrote the strategy never grades its own work. Survivors after the regenerate loop are surfaced in the report, not hidden.</p>
+        <p>A separate GPT-5.5 validation path reads the strategy and asks "can this claim be traced?" — the model that wrote the roadmap never grades its own work. Survivors after retries are either sanitized before display or retained as appendix traceability.</p>
+      </div>
+      <div class="why-card">
+        <div class="why-num">06</div>
+        <h4>Sanitation is surgical.</h4>
+        <p>When evidence and metrics are strong, isolated roadmap wording or tactic citation issues are removed, rewritten, or quarantined. BLOCK means the visible report is unsafe, not merely that a strategy sentence needed cleanup.</p>
       </div>
     </div>
 
@@ -1163,7 +1180,7 @@
           <dt>Behaviour</dt>
           <dd>Paranoid about safety, conservative about relevance. Scans input documents for PII, secrets, and risky content, while local parsers preserve usable low-signal material for evidence-gated assessment instead of rejecting it too early.</dd>
           <dt>Model</dt>
-          <dd><code style="font-family: var(--mono); font-size: 12px;">gemini-3-flash-preview</code> with deterministic redaction and local PDF / CSV / HTML parsers.</dd>
+          <dd><code style="font-family: var(--mono); font-size: 12px;">gemini-3-flash-preview</code> with deterministic redaction, PDF.js extraction, parse-quality checks, CSV/TSV parsing, and local HTML/JSON handling.</dd>
           <dt>Decision</dt>
           <dd>Hard blocks are reserved for unsafe, unreadable, unsupported, over-limit, or corrupt files. Generic but parseable material becomes a low-relevance warning, then the evidence pipeline decides whether it supports FinOps findings.</dd>
         </dl>
@@ -1263,10 +1280,10 @@ metrics, vendor management, VP+ engagement</code></pre>
           </dd>
           <dt>What It Produces</dt>
           <dd>
-            Evidence-only persona summaries, an evidence summary object, diagnosis, planning decision, visual scorecard, and — only when confidence allows — a 4-phase remediation roadmap. LOW-confidence assessments produce findings mode, <strong>NO_GO</strong>, missing-evidence guidance, and an empty roadmap.
+            Evidence-only persona summaries, an evidence summary object, diagnosis, planning decision, visual scorecard, and — only when confidence allows — a 4-phase remediation roadmap with WHY, WHAT, and HOW layers. LOW-confidence assessments produce findings mode, <strong>NO_GO</strong>, missing-evidence guidance, and an empty roadmap.
           </dd>
           <dt>Model</dt>
-          <dd><code style="font-family: var(--mono); font-size: 12px;">claude-sonnet-4-6</code> standard synthesis. <code style="font-family: var(--mono); font-size: 12px;">claude-opus-4-7</code> is used for Deep analysis or automatic escalation when the validated evidence shows a complex or high-friction case.</dd>
+          <dd><code style="font-family: var(--mono); font-size: 12px;">claude-sonnet-4-6</code> writes evidence summaries and diagnosis. The roadmap/planning substage uses <code style="font-family: var(--mono); font-size: 12px;">claude-opus-4-7</code> first, with <code style="font-family: var(--mono); font-size: 12px;">gpt-5.5</code> and <code style="font-family: var(--mono); font-size: 12px;">gemini-3.1-pro-preview</code> as fallbacks.</dd>
         </dl>
         <div class="persona-rules">
           <h4>Behavioural Rules (STRATEGY_GUARDRAILS)</h4>
@@ -1276,10 +1293,10 @@ metrics, vendor management, VP+ engagement</code></pre>
             <li>Knowledge Base boundary: tactic IDs, external case studies, and remediation mechanisms are allowed only in roadmap planning, never as source evidence for summaries or diagnosis.</li>
             <li>LOW confidence means findings mode: no directive roadmap, no case studies, no tactic prescriptions, and planning decision <strong>NO_GO</strong>.</li>
             <li>No weasel words: do not use 'consider', 'suggest', 'might', 'could potentially', 'perhaps', 'it may be worth'. Use active verbs: Implement, Eliminate, Establish, Automate, Enforce.</li>
-            <li>Every actionable recommendation MUST cite at least one tactic ID from the VERIFIED_TACTICS_DATABASE in the form <code style="font-family: var(--mono); font-size: 12px;">[TAC-XXX-NNN]</code>. IDs are copied verbatim — do not invent or paraphrase them.</li>
+            <li>Every prescribed tactic action must cite exactly one valid tactic ID only when the Knowledge Base problem pattern matches the locked finding. Generic evidence-gathering or operational actions may omit tactic IDs; no tactic ID is better than a wrong tactic ID.</li>
             <li>No fabricated numbers: any percentage in prose must correspond to a value present in Phase 2 metrics. No invented dollar amounts, headcounts, or account numbers.</li>
             <li>The three persona summaries must AGREE on facts; they differ only in lens, vocabulary, and emphasis.</li>
-            <li>Forensic tone, not consultative: describe findings and prescribed actions; do not offer opinions or editorialize.</li>
+            <li>Roadmap phases use WHY, WHAT, and HOW: WHY explains the evidence-grounded reason, WHAT names the intended change, and HOW lists concrete actions. All three layers are fact-checked.</li>
           </ul>
         </div>
       </div>
@@ -2249,13 +2266,19 @@ OUTPUT RULES:
       <div class="metric-item">
         <div class="metric-name">Local Parsing<span>not model parsing</span></div>
         <div>
-          <div class="metric-interp">PDF, HTML, CSV/TSV, JSON, and image inputs are parsed or encoded locally before analysis. Gemini and Claude analyze the extracted material; they are not the primary parsers.</div>
+          <div class="metric-interp">PDF, HTML, CSV/TSV, JSON, and image inputs are parsed or encoded locally before analysis. Gemini, Claude, and GPT analyze the extracted material; they are not the primary parsers.</div>
         </div>
       </div>
       <div class="metric-item">
         <div class="metric-name">PDF Coverage<span>up to 100 pages</span></div>
         <div>
-          <div class="metric-interp">Text is extracted from every PDF page up to the 100-page cap with page markers preserved. PDF-derived visual pages are included selectively under an image budget, especially for sparse-text dashboard pages.</div>
+          <div class="metric-interp">PDF.js extracts text from every PDF page up to the 100-page cap with page markers preserved. PDF-derived visual pages are included selectively under an image budget, especially for sparse-text dashboard pages and first-page context.</div>
+        </div>
+      </div>
+      <div class="metric-item">
+        <div class="metric-name">PDF Parse Quality<span>good / mixed / poor</span></div>
+        <div>
+          <div class="metric-interp">Immediately after extraction, deterministic page statistics check text coverage, sparse pages, visual pages included or skipped, likely scanned PDFs, and image-budget limits. Mixed or poor extraction becomes source-coverage metadata for the UI, report, Phase 1, and evidence-check — not a maturity finding by itself.</div>
         </div>
       </div>
       <div class="metric-item">
@@ -2311,6 +2334,7 @@ OUTPUT RULES:
     <ol class="checklist">
       <li><strong>Safety</strong> — no PII, credentials, or API keys in submitted documents.</li>
       <li><strong>Parseability</strong> — supported format, readable content, and source set within file-count and total-size limits.</li>
+      <li><strong>Parse Quality</strong> — PDFs with sparse or scanned pages receive good / mixed / poor extraction status and visual-page warnings before model analysis.</li>
       <li><strong>Relevance Warning</strong> — FinOps keyword signal estimates expected evidence quality, but generic safe material can still run.</li>
       <li><strong>Signal Score</strong> — 0–100 indicating expected signal quality based on keyword density and structural markers; low scores become confidence warnings rather than automatic rejection.</li>
     </ol>
@@ -2507,23 +2531,30 @@ else: "Run"</div>
     "remediation_roadmap": [
       {
         "phase": "1. Crawl — Foundation (0-3 Months)",
+        "why": "75-125 words explaining why this phase is needed, grounded in confirmed gaps, anti-pattern findings, missing evidence, or diagnosis.",
+        "what": "75-125 words explaining the intended change or operating-state shift, grounded in locked findings and valid Knowledge Base mechanisms.",
         "actions": [
           "Implement the Tag Governance Framework [TAC-VIS-002] across all
            production accounts.",
-          "Deploy automated rightsizing [TAC-OPT-001] for non-prod workloads."
+          "Collect missing commitment-utilization evidence before prescribing
+           discount portfolio changes."
         ]
       },
       {
         "phase": "2. Walk — Optimization (3-6 Months)",
+        "why": "Evidence-grounded rationale for the optimization phase.",
+        "what": "Evidence-grounded description of the change this phase should create.",
         "actions": [
           "Implement commitment-based discount portfolio [TAC-OPT-003] with
-           70% coverage target.",
+           a coverage target anchored to measured stable workload baseline.",
           "Stand up the FinOps operating cadence [TAC-GOV-002] with monthly
            cross-functional review."
         ]
       },
       {
         "phase": "3. Walk — Embedding (6-12 Months)",
+        "why": "Evidence-grounded rationale for embedding cost controls into engineering workflows.",
+        "what": "Evidence-grounded description of the target operating behavior.",
         "actions": [
           "Embed cost guardrails in CI/CD [TAC-ARCH-002] via policy-as-code.",
           "Instrument unit economics [TAC-VIS-005] aligned to product P&amp;L."
@@ -2531,6 +2562,8 @@ else: "Run"</div>
       },
       {
         "phase": "4. Run — Continuous (12+ Months)",
+        "why": "Evidence-grounded rationale for continuous improvement.",
+        "what": "Evidence-grounded description of how the Run-state operating model should behave.",
         "actions": [
           "Automate policy enforcement [TAC-GOV-004] replacing manual review.",
           "Establish industry benchmarking [TAC-CULT-005] against peer cohort."
@@ -2549,11 +2582,12 @@ else: "Run"</div>
       <li>The <strong>visual_scorecard and remediation phases come from Phase 2</strong> — the AI cannot change Maturity, Burden, or classification.</li>
       <li>The <strong>three persona summaries must agree on facts</strong>; they differ only in lens, vocabulary, and emphasis.</li>
       <li><strong>Evidence summary and diagnosis are separate from roadmap synthesis</strong>; the Knowledge Base is absent from evidence-only summary prompts.</li>
-      <li>Every <strong>remediation action must cite a tactic</strong> from the verified database verbatim (<code style="font-family: var(--mono); font-size: 13px;">[TAC-XXX-NNN]</code>). Invalid tactic IDs trigger a deterministic regeneration before fact-check spend.</li>
+      <li><strong>Roadmap synthesis is its own model stage</strong>; Opus 4.7 writes planning first, GPT-5.5 and Gemini 3.1 Pro are fallbacks, and the output must explain WHY, WHAT, and HOW for each phase.</li>
+      <li><strong>Tactic IDs are optional but exact</strong>: prescribed tactic actions cite a verified database ID only when the KB problem pattern matches the locked finding. Invalid or mismatched tactic IDs are removed before fact-check spend.</li>
       <li>The <strong>roadmap structure is fixed</strong> (4 Crawl-Walk-Run phases) when a roadmap is allowed. LOW-confidence assessments return findings mode and an empty roadmap.</li>
       <li><strong>No weasel words allowed</strong> — the STRATEGY_GUARDRAILS enforce active, prescriptive language; the validator scans for forbidden phrases post-hoc.</li>
       <li><strong>No fabricated numbers</strong> — any percentage in prose must correspond to a value in Phase 2 metrics. Cross-checked by the validator.</li>
-      <li>A <strong>split independent fact-check pass</strong> verifies summary/diagnosis against source evidence and roadmap/planning against locked findings plus the tactics database. Survivors after the regenerate loop appear inline as Confidence Notes — they cannot hide.</li>
+      <li>A <strong>split independent fact-check pass</strong> verifies summary/diagnosis against source evidence and roadmap/planning against locked findings plus the tactics database. Unsupported roadmap wording can be removed, rewritten, or quarantined before display.</li>
     </ol>
   </div>
 </section>
@@ -2575,7 +2609,7 @@ else: "Run"</div>
         <div class="metric-name">Split Fact-Check Pass<span>independent LLM</span></div>
         <div>
           <div class="metric-interp">
-            Gemini verifies evidence summaries and diagnosis separately from roadmap/planning. Summary claims must trace to the source document, Phase 1 evidence, or Phase 2 metrics. Roadmap claims may also trace to locked findings and the verified tactics database. Unsupported claims receive a failure_type, source_location, and missing_material hint.
+            GPT-5.5 verifies evidence summaries and diagnosis separately from roadmap/planning, with Sonnet 4.6 as fallback. Summary claims must trace to the source document, Phase 1 evidence, or Phase 2 metrics. Roadmap WHY, WHAT, HOW, and planning claims may also trace to locked findings and the verified tactics database. Unsupported claims receive severity, failure_type, source_location, and missing_material hints.
           </div>
         </div>
       </div>
@@ -2584,7 +2618,7 @@ else: "Run"</div>
         <div class="metric-name">Regenerate Loop<span>up to 2 retries</span></div>
         <div>
           <div class="metric-interp">
-            If any claims are unsupported, the strategy is regenerated. The correction appendix is <em>grouped by failure mode</em> with type-specific guidance — the model is told <em>why</em> a claim failed, not just that it failed. "You invented a number. Do not replace it with another invented number; reference the metric generically or omit." Up to two retries. After that, surviving unsupported claims pass through to the output — they are never silently kept.
+            If unsupported claims are repairable, the strategy is regenerated. The correction appendix is <em>grouped by failure mode</em> with type-specific guidance — the model is told <em>why</em> a claim failed, not just that it failed. "You invented a number. Do not replace it with another invented number; reference the metric generically or omit." Up to two retries. After that, unsafe visible survivors are blocked; isolated hygiene issues can move to sanitation.
           </div>
         </div>
       </div>
@@ -2593,7 +2627,16 @@ else: "Run"</div>
         <div class="metric-name">Tactic-ID + Grounding Validator<span>deterministic</span></div>
         <div>
           <div class="metric-interp">
-            Before fact-check spend, every <code style="font-family: var(--mono); font-size: 12px;">[TAC-XXX-NNN]</code> citation is verified against the canonical tactics database. Unknown IDs trigger targeted regeneration with the valid-ID list. The grounding validator also scans forbidden phrases, checks percentage claims against Phase 2 metrics, and enforces required citations when roadmap actions exist.
+            Before fact-check spend, every <code style="font-family: var(--mono); font-size: 12px;">[TAC-XXX-NNN]</code> citation is verified against the canonical tactics database and matched to the locked finding. Unknown IDs trigger targeted regeneration with the valid-ID list. Mismatched IDs are removed. Grounded operational actions may carry no tactic ID when no exact KB tactic fits.
+          </div>
+        </div>
+      </div>
+
+      <div class="metric-item">
+        <div class="metric-name">Strategy Sanitation<span>remove / rewrite / quarantine</span></div>
+        <div>
+          <div class="metric-interp">
+            After fact-check, unsupported roadmap actions, unsupported WHY/WHAT phrases, mismatched tactic IDs, or non-material taxonomy wording can be removed, rewritten, or retained only in the Quality &amp; Strategy Hygiene Appendix. The visible report is preserved when the evidence, metrics, and grounded roadmap remain usable.
           </div>
         </div>
       </div>
@@ -2602,7 +2645,7 @@ else: "Run"</div>
         <div class="metric-name">Quality Gate Aggregation<span>GO / WARN / BLOCK</span></div>
         <div>
           <div class="metric-interp">
-            A final deterministic aggregator reads evidence density, Phase 1 completeness, evidence-check downgrades, anti-pattern coverage, Phase 3 grounding errors, and fact-check survivors. Returns an explicit decision with named blocking reasons or warnings. WARN/BLOCK can receive a Gemini-written explanation that annotates the deterministic decision without changing it.
+            A final deterministic aggregator reads evidence density, Phase 1 completeness, evidence-check downgrades, anti-pattern coverage, strategy sanitation, Phase 3 grounding errors, and fact-check survivors. Returns an explicit GO / WARN / BLOCK decision. WARN/BLOCK receive a GPT-5.5-written explanation that annotates the deterministic decision without changing it.
           </div>
         </div>
       </div>
@@ -2611,16 +2654,16 @@ else: "Run"</div>
         <div class="metric-name">Confidence Bracket Downgrade<span>display safety</span></div>
         <div>
           <div class="metric-interp">
-            If Quality Gate returns BLOCK after synthesis, the rendered strategy is downgraded to LOW confidence. Directive language, case-study content, and roadmap actions are hidden behind findings-mode semantics so users do not act on an unsafe plan.
+            If Quality Gate returns BLOCK after synthesis, the rendered strategy is downgraded to LOW confidence. Directive language, case-study content, and roadmap actions are hidden behind findings-mode semantics so users do not act on an unsafe plan. WARN keeps usable score and roadmap content visible while sending hygiene details to the appendix.
           </div>
         </div>
       </div>
 
       <div class="metric-item">
-        <div class="metric-name">Confidence Notes<span>inline, per persona</span></div>
+        <div class="metric-name">Quality &amp; Strategy Hygiene Appendix<span>traceability</span></div>
         <div>
           <div class="metric-interp">
-            When unsupported claims survive both retries, each affected persona summary in the dashboard and report carries a labeled callout listing the unverified statements found in that summary, with the rationale and failure type. Readers see them adjacent to the prose — not buried in a status banner. The product pitch is Traceable Evidence; the artifact admits its own failures.
+            Detailed evidence-check adjustments, tactic grounding notes, strategy sanitation records, fact-check trajectories, and warning explanations move to the end of the report. The top report shows compact status — for example, Quality Gate Status: WARN — while the appendix preserves the audit trail without making hygiene notes look like maturity findings.
           </div>
         </div>
       </div>
@@ -2646,7 +2689,7 @@ else: "Run"</div>
     </div>
 
     <p class="pullquote" style="margin-top: 48px;">
-      Every layer above is independently visible in the artifact. A reader scrolling the report sees not just the strategy but the system's <em>confidence in its own strategy</em> — the Quality Gate banner, Evidence Check section, Confidence Notes, Source Coverage Gaps, anti-pattern assessment labels, and validator output. The engine ships with its own audit trail attached.
+      Every layer above is independently visible in the artifact. A reader scrolling the report sees not just the strategy but the system's <em>confidence in its own strategy</em> — compact Quality Gate status, Evidence Check section, Source Coverage Gaps, anti-pattern assessment labels, and the Quality &amp; Strategy Hygiene Appendix. The engine ships with its own audit trail attached.
     </p>
   </div>
 </section>
@@ -2678,7 +2721,7 @@ else: "Run"</div>
       <div class="metric-item">
         <div class="metric-name">Pre-Flight + Parsing<span>local + model stages</span></div>
         <div>
-          <p style="font-size: 14px; color: var(--ink-2); margin: 0;">Local PDF / HTML / CSV / TSV parsing · PDF text to 100 pages · selective visual page extraction · DLP scan for PII / secrets · Deterministic regex redaction · FinOps keyword density warning across three vocabulary tiers</p>
+          <p style="font-size: 14px; color: var(--ink-2); margin: 0;">Local PDF.js / HTML / CSV / TSV / JSON parsing · PDF text to 100 pages · parse-quality check · sparse-page visual prioritization · DLP scan for PII / secrets · Deterministic regex redaction · FinOps keyword density warning across three vocabulary tiers</p>
         </div>
       </div>
 
@@ -2706,42 +2749,56 @@ else: "Run"</div>
       <div class="metric-item">
         <div class="metric-name">Strategy Synthesis (Phase 3)<span>bracketed outputs</span></div>
         <div>
-          <p style="font-size: 14px; color: var(--ink-2); margin: 0;">Three persona-tailored summaries from locked findings · Evidence summary separate from diagnosis · Planning decision GO / CONDITIONAL_GO / NO_GO · HIGH/MEDIUM can produce roadmap actions with verified tactic IDs · LOW produces findings mode and empty roadmap</p>
+          <p style="font-size: 14px; color: var(--ink-2); margin: 0;">Three persona-tailored summaries from locked findings · Evidence summary separate from diagnosis · Dedicated Opus roadmap synthesis with GPT/Gemini fallbacks · Planning decision GO / CONDITIONAL_GO / NO_GO · Roadmap phases render WHY / WHAT / HOW · LOW produces findings mode and empty roadmap</p>
         </div>
       </div>
 
       <div class="metric-item">
         <div class="metric-name">Split Fact-Check Pass<span>independent verification</span></div>
         <div>
-          <p style="font-size: 14px; color: var(--ink-2); margin: 0;">Summary/diagnosis checked against source + Phase 1/2 · Roadmap/planning checked against locked findings + tactics database · Unsupported claims classified by failure_type + source_location + missing_material · Independent from the model that wrote the strategy</p>
+          <p style="font-size: 14px; color: var(--ink-2); margin: 0;">GPT-5.5 primary fact-check · Summary/diagnosis checked against source + Phase 1/2 · Roadmap WHY/WHAT/HOW checked against locked findings + tactics database · Unsupported claims classified by severity + failure_type + source_location + missing_material · Independent from the model that wrote the strategy</p>
         </div>
       </div>
 
       <div class="metric-item">
         <div class="metric-name">Regenerate Loop<span>failure-type-aware</span></div>
         <div>
-          <p style="font-size: 14px; color: var(--ink-2); margin: 0;">Up to 2 retries · Corrections grouped by failure mode · Type-specific repair guidance fed back to the model · Survivors surfaced, never silently kept</p>
+          <p style="font-size: 14px; color: var(--ink-2); margin: 0;">Up to 2 retries · Corrections grouped by failure mode · Type-specific repair guidance fed back to the model · Unsafe survivors block · hygiene survivors move to sanitation or appendix</p>
         </div>
       </div>
 
       <div class="metric-item">
         <div class="metric-name">Tactic-ID + Grounding Validator<span>deterministic checks</span></div>
         <div>
-          <p style="font-size: 14px; color: var(--ink-2); margin: 0;">Invalid tactic IDs trigger targeted regeneration before fact-check · Weasel-word scan across summaries and roadmap · Percentage cross-check against Phase 2 metrics · Required citation count when actions exist · Rules driven by <code style="font-family: var(--mono); font-size: 12px;">finops_validation_rules.json</code></p>
+          <p style="font-size: 14px; color: var(--ink-2); margin: 0;">Invalid tactic IDs trigger targeted regeneration before fact-check · Mismatched tactic IDs are removed · Grounded actions may omit IDs when no exact tactic fits · Weasel-word scan · Percentage cross-check against Phase 2 metrics · Rules driven by <code style="font-family: var(--mono); font-size: 12px;">finops_validation_rules.json</code></p>
+        </div>
+      </div>
+
+      <div class="metric-item">
+        <div class="metric-name">Strategy Sanitation<span>surgical remediation</span></div>
+        <div>
+          <p style="font-size: 14px; color: var(--ink-2); margin: 0;">Unsupported roadmap actions removed · unsupported WHY/WHAT wording rewritten or quarantined · removed tactic references retained as traceability · strong evidence plus local hygiene issues yields WARN rather than global BLOCK</p>
         </div>
       </div>
 
       <div class="metric-item">
         <div class="metric-name">Quality Gate<span>explicit decision</span></div>
         <div>
-          <p style="font-size: 14px; color: var(--ink-2); margin: 0;">GO / WARN / BLOCK with named blocking reasons or warnings · Aggregates evidence density, evidence-check results, anti-pattern coverage, Phase 3 grounding, fact-check survivors · WARN/BLOCK explanation added when needed · Surfaced in the artifact, not behind it</p>
+          <p style="font-size: 14px; color: var(--ink-2); margin: 0;">GO / WARN / BLOCK with named blocking reasons or warnings · Aggregates evidence density, evidence-check results, anti-pattern coverage, strategy sanitation, Phase 3 grounding, fact-check survivors · GPT-5.5 explanation added when needed · Compact status near Evidence Check and detail in appendix</p>
+        </div>
+      </div>
+
+      <div class="metric-item">
+        <div class="metric-name">Model Routing + Runtime Reliability<span>centralized</span></div>
+        <div>
+          <p style="font-size: 14px; color: var(--ink-2); margin: 0;">Stage-to-model routing lives in <code style="font-family: var(--mono); font-size: 12px;">src/models.ts</code> · provider fallbacks are stage-specific · internal Railway model proxy calls are marked as pipeline calls so response-stream closes do not abort upstream model work · true request aborts and provider failures still fail or fall back normally</p>
         </div>
       </div>
 
       <div class="metric-item">
         <div class="metric-name">Rendered Artifact<span>self-documenting</span></div>
         <div>
-          <p style="font-size: 14px; color: var(--ink-2); margin: 0;">Persona switcher (3 lenses on the same facts) · Findings mode for LOW confidence · Evidence Check section · Anti-pattern labels: Finding / Partial finding / Tested absent / Not assessed · Source Coverage Gaps panel · 50 Forensic Audit cards with evidence quotes and category chips · Downloadable HTML with all of the above</p>
+          <p style="font-size: 14px; color: var(--ink-2); margin: 0;">Persona switcher (3 lenses on the same facts) · Findings mode for LOW confidence · WHY/WHAT/HOW roadmap when allowed · Evidence Check section · Anti-pattern labels: Finding / Partial finding / Tested absent / Not assessed · Source Coverage Gaps panel · 50 Forensic Audit cards with evidence quotes and category chips · Quality &amp; Strategy Hygiene Appendix · Downloadable HTML with all of the above</p>
         </div>
       </div>
 
@@ -2756,7 +2813,7 @@ else: "Run"</div>
 
     <h3 style="margin-top: 56px;">What the User Saves</h3>
     <p style="max-width: 820px; color: var(--ink-2);">
-      Expressed as discrete acts a human would otherwise perform to produce the same artifact: <strong>~150 sub-criterion judgments</strong>, evidence extraction from text and visual pages, <strong>~50 evidence-check judgments</strong>, targeted rescans, anti-pattern absence classification, evidence-gated metric calculation, three persona-tailored writeups, tactic-ID validation, split fact-check verification, quality-gate explanation, plus the visualization labor. Conservatively, <strong>300+ discrete decisions and lookups per assessment</strong> — 1 to 2 person-days of senior FinOps practitioner time, every time. The Engine turns that work into an auditable artifact so humans can focus on validating, deciding, designing solutions, and delivering outcomes.
+      Expressed as discrete acts a human would otherwise perform to produce the same artifact: <strong>~150 sub-criterion judgments</strong>, evidence extraction from text and visual pages, parse-quality review, <strong>~50 evidence-check judgments</strong>, targeted rescans, anti-pattern absence classification, evidence-gated metric calculation, three persona-tailored writeups, WHY/WHAT/HOW roadmap synthesis, tactic-ID validation, split fact-check verification, strategy sanitation, quality-gate explanation, plus the visualization labor. Conservatively, <strong>300+ discrete decisions and lookups per assessment</strong> — 1 to 2 person-days of senior FinOps practitioner time, every time. The Engine turns that work into an auditable artifact so humans can focus on validating, deciding, designing solutions, and delivering outcomes.
     </p>
 
     <h3 style="margin-top: 56px;">Where the 70%-vs-99% Gap Actually Lives</h3>
@@ -2772,6 +2829,7 @@ else: "Run"</div>
           <li>No fact-check pass — fabrications survive.</li>
           <li>No persona separation — one voice for everyone.</li>
           <li>No tactic citations — "best practices" handwave.</li>
+          <li>No sanitation layer — one bad sentence can either hide or poison the whole output.</li>
           <li>No regression suite — model drift invisible.</li>
           <li>No quality gate — output ships unlabeled.</li>
         </ul>
@@ -2785,9 +2843,10 @@ else: "Run"</div>
           <li>Evidence-check downgrades unsupported scanner scores before math.</li>
           <li>Fact-check pass independently verifies every claim.</li>
           <li>Three persona summaries from one diagnostic dataset.</li>
-          <li>Tactic citations verified against canonical database.</li>
+          <li>Roadmap WHY/WHAT/HOW verified against findings and tactics.</li>
+          <li>Strategy sanitation removes unsupported visible wording before display.</li>
           <li>Per-pack drift suite catches model behavior shifts.</li>
-          <li>Quality Gate banner ships inside the artifact.</li>
+          <li>Quality Gate status and appendix ship inside the artifact.</li>
         </ul>
       </div>
     </div>
@@ -2804,7 +2863,7 @@ else: "Run"</div>
 <footer>
   <div class="container">
     <p class="footer-note">
-      This document describes the intellectual architecture of the FinOps Maturity Assessment Engine. The knowledge base criteria, guardrails, taxonomy registry, tactics database, evidence-check stage, validation rules, quality gates, and golden baselines defined here represent the domain-specific content layer that sits on top of the Engine's reusable technical infrastructure (React UI, local parsing, Gemini and Anthropic model routing, parallel batch processing, fact-check pipeline, Quality Gate, drift detection suite, export system, Railway deployment).
+      This document describes the intellectual architecture of the FinOps Maturity Assessment Engine. The knowledge base criteria, guardrails, taxonomy registry, tactics database, evidence-check stage, validation rules, quality gates, and golden baselines defined here represent the domain-specific content layer that sits on top of the Engine's reusable technical infrastructure (React UI, local parsing and parse-quality checks, Gemini / Anthropic / OpenAI model routing, internal-call protected model proxies, parallel batch processing, dedicated roadmap synthesis, fact-check pipeline, strategy sanitation, Quality Gate, drift detection suite, export system, and Railway deployment).
     </p>
     <p class="footer-note" style="margin-top: 24px;">
       <a href="https://finops-engine.vercel.app/" target="_blank" rel="noopener noreferrer">FinOps Assessment Engine - DEMO</a>

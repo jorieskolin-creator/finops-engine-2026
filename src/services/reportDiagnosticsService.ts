@@ -1,4 +1,4 @@
-import type { QualityGateResult } from '../types';
+import type { FactCheckClaim, QualityGateResult } from '../types';
 
 export const scannerEvidenceCheckDisagreementTitle = 'Scanner/evidence-check disagreement resolved by downgrade';
 export const strategyHygieneNotesTitle = 'Strategy Hygiene Notes';
@@ -39,4 +39,30 @@ export const splitQualityGateDiagnostics = (gate: QualityGateResult): QualityGat
   }
 
   return { primaryWarnings, appendixDiagnostics };
+};
+
+const hygieneMissingMaterialTerms = [
+  'revised wording',
+  'rewording',
+  'source attribution',
+  'criterion mapping',
+  'confirmed anti-pattern finding',
+  'valid tactic',
+  'tactic id',
+  'tactic ids',
+  'verified tactic',
+  'tactics db',
+  'kb-mapping',
+  'kb mapping',
+  'mechanism match',
+  'removal of',
+  'assigning it to domain'
+];
+
+export const isReportableSourceCoverageGap = (claim: FactCheckClaim): boolean => {
+  if (!claim.missing_material) return false;
+  if (claim.severity === 'WARN_MISCLASSIFIED_BUT_REAL' || claim.severity === 'WARN_TACTIC_HYGIENE') return false;
+  if (claim.source_location === 'planning_decision' || claim.source_location === 'roadmap') return false;
+  const material = claim.missing_material.toLowerCase();
+  return !hygieneMissingMaterialTerms.some(term => material.includes(term));
 };
