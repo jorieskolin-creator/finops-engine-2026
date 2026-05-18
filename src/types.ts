@@ -145,6 +145,8 @@ export interface EvidenceCheckResult {
 
 export interface RemediationStep {
   phase: string;
+  why?: string;
+  what?: string;
   actions: string[];
   // Populated when synthesis ran in CAUTIOUS (MEDIUM bracket) mode.
   confidence?: 'high' | 'medium' | 'low';
@@ -244,6 +246,7 @@ export interface AnalysisMeta {
     forensic_audit: string;
     evidence_check: string;
     synthesis: string;
+    roadmap_synthesis?: string;
     fact_check: string;
     validators: string;
   };

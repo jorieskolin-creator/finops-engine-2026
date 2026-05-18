@@ -327,7 +327,8 @@ ${FINOPS_METHODOLOGY_CONTEXT}
 7. **NO BASELINE OVERREACH:** Do not prescribe establishing a baseline for a value that is already quantified in the locked findings. Use the existing baseline as evidence and prescribe only the next grounded control.
 8. **NO CULTURE/GOVERNANCE OVERREACH:** Do not use culture or governance tactic IDs for generic improvement language. Culture tactics require a matching culture anti-pattern in LOCKED FINDINGS, and governance tactics require a matching governance gap in LOCKED FINDINGS.
 9. **NO VAGUE MATURITY ACTIONS:** Do not prescribe shifting from activity tracking to outcome tracking, product-level cadence embedding, growth/scale operating model work, or access-pattern baselines unless that exact gap appears in LOCKED FINDINGS.
-10. **JSON STRING SAFETY:** No double quotes inside JSON values. Use single quotes or asterisks.
+10. **WHY / WHAT GROUNDING:** Each roadmap phase must include "why" and "what" paragraphs. They are roadmap claims and must be grounded exactly like actions. Do not introduce new current-state facts, unsupported financial impact, or "closes the gap" language unless the locked findings include explicit acceptance criteria proving closure.
+11. **JSON STRING SAFETY:** No double quotes inside JSON values. Use single quotes or asterisks.
 </strict_constraints>
 
 <task>
@@ -337,7 +338,11 @@ ${FINOPS_METHODOLOGY_CONTEXT}
    - 2. Walk — Optimization (3-6 Months)
    - 3. Walk — Embedding (6-12 Months)
    - 4. Run — Continuous (12+ Months)
-3. If evidence is low or mixed, use validation actions first and mark assumptions/confidence when requested by the prompt appendix.
+3. For every phase:
+   - "why": 75-125 words explaining why this phase exists, referencing only locked findings, confirmed gaps, confirmed anti-patterns, missing-evidence needs, diagnosis statements, and matching KB mechanisms.
+   - "what": 75-125 words describing the intended change/outcome without inventing unproven benefits or claiming a gap is fully closed unless the locked findings prove the acceptance criteria.
+   - "actions": the HOW layer — concrete bullets grounded in locked findings. Include tactic IDs only where the KB problem pattern exactly matches.
+4. If evidence is low or mixed, use validation actions first and mark assumptions/confidence when requested by the prompt appendix.
 </task>
 
 <output_format>
@@ -351,10 +356,10 @@ STRICTLY return JSON:
       "evidence_needed_before_action": ["String bullets"]
     },
     "remediation_roadmap": [
-      { "phase": "1. Crawl — Foundation (0-3 Months)", "actions": ["Action grounded in locked findings with [TAC-XXX-000] when prescribing a tactic"] },
-      { "phase": "2. Walk — Optimization (3-6 Months)", "actions": ["..."] },
-      { "phase": "3. Walk — Embedding (6-12 Months)", "actions": ["..."] },
-      { "phase": "4. Run — Continuous (12+ Months)", "actions": ["..."] }
+      { "phase": "1. Crawl — Foundation (0-3 Months)", "why": "75-125 grounded words", "what": "75-125 grounded words", "actions": ["Action grounded in locked findings with [TAC-XXX-000] when prescribing a tactic"] },
+      { "phase": "2. Walk — Optimization (3-6 Months)", "why": "75-125 grounded words", "what": "75-125 grounded words", "actions": ["..."] },
+      { "phase": "3. Walk — Embedding (6-12 Months)", "why": "75-125 grounded words", "what": "75-125 grounded words", "actions": ["..."] },
+      { "phase": "4. Run — Continuous (12+ Months)", "why": "75-125 grounded words", "what": "75-125 grounded words", "actions": ["..."] }
     ]
   }
 }
@@ -395,7 +400,7 @@ This run produced MEDIUM-confidence evidence (mixed density, some silent areas, 
 4. **Persona summaries.** In the 3rd paragraph ("Source Confidence & Boundaries"), include a one-sentence confidence statement that mirrors the strongest phase confidence (e.g., "Evidence confidence is medium overall; the Crawl phase is high-confidence, later phases rest on assumptions about org readiness."). Do not place directives in the summary.
 
 5. **Output schema additions.** The remediation_roadmap items now look like:
-   { "phase": "1. Crawl — Foundation (0-3 Months)", "actions": [...], "confidence": "high|medium|low", "assumptions": ["...", "..."] }
+   { "phase": "1. Crawl — Foundation (0-3 Months)", "why": "75-125 grounded words", "what": "75-125 grounded words", "actions": [...], "confidence": "high|medium|low", "assumptions": ["...", "..."] }
    Keep evidence_summary, diagnosis, planning_decision, executive_summaries, and visual_scorecard in the output shape.
 </cautious_mode_overrides>
 `;

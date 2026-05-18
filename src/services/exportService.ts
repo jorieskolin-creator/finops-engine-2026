@@ -328,6 +328,11 @@ const generateReportHtml = (result: DiagnosticResult): string => {
     .coverage-gaps li { font-size: 0.875rem; color: #334155; margin-bottom: 0.25rem; }
     .roadmap-phase { background: #ffffff; border: 1px solid #e2e8f0; border-left: 3px solid #10b981; padding: 1.25rem 1.5rem; margin: 1rem 0; border-radius: 0 0.75rem 0.75rem 0; }
     .roadmap-phase h3 { color: #0f172a; margin-bottom: 0.75rem; font-size: 1rem; }
+    .roadmap-context { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 0.75rem; margin-bottom: 1rem; }
+    .roadmap-context-block { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 0.65rem; padding: 0.8rem; }
+    .roadmap-context-label { font-size: 0.65rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.1em; color: #64748b; margin-bottom: 0.35rem; }
+    .roadmap-context-block p { font-size: 0.85rem; color: #334155; margin: 0; }
+    .roadmap-how-label { font-size: 0.65rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.1em; color: #64748b; margin: 0.75rem 0 0.4rem; }
     .roadmap-phase ul { list-style: none; padding: 0; margin: 0; }
     .roadmap-phase li { display: flex; gap: 0.6rem; padding: 0.35rem 0; font-size: 0.9rem; color: #334155; }
     .roadmap-phase li:before { content: ""; flex-shrink: 0; width: 6px; height: 6px; border-radius: 50%; background: #10b981; margin-top: 0.55rem; }
@@ -402,7 +407,7 @@ const generateReportHtml = (result: DiagnosticResult): string => {
   <h1>FinOps Maturity Assessment</h1>
   <div class="meta">
     <p>Generated ${escapeHtml(result.meta.timestamp)} · Engine ${escapeHtml(result.meta.engine_version)}</p>
-    <p>Models: ${escapeHtml(result.meta.model_config.preflight)} (Pre-Flight) · ${escapeHtml(result.meta.model_config.forensic_audit)} (Audit) · ${escapeHtml(result.meta.model_config.evidence_check)} (Evidence Check) · ${escapeHtml(result.meta.model_config.synthesis)} (Strategy) · ${escapeHtml(result.meta.model_config.fact_check)} (Fact-Check)</p>
+    <p>Models: ${escapeHtml(result.meta.model_config.preflight)} (Pre-Flight) · ${escapeHtml(result.meta.model_config.forensic_audit)} (Audit) · ${escapeHtml(result.meta.model_config.evidence_check)} (Evidence Check) · ${escapeHtml(result.meta.model_config.synthesis)} (Summary/Diagnosis)${result.meta.model_config.roadmap_synthesis ? ` · ${escapeHtml(result.meta.model_config.roadmap_synthesis)} (Roadmap)` : ''} · ${escapeHtml(result.meta.model_config.fact_check)} (Fact-Check)</p>
     ${(result.meta.source_parse_warnings?.length ?? 0) > 0 ? `<p>Source parse note: ${escapeHtml(result.meta.source_parse_warnings![0])}${result.meta.source_parse_warnings!.length > 1 ? ` (+${result.meta.source_parse_warnings!.length - 1} more)` : ''}</p>` : ''}
   </div>
 
@@ -584,6 +589,11 @@ const generateReportHtml = (result: DiagnosticResult): string => {
     ${roadmap.map(step => `
       <div class="roadmap-phase">
         <h3>${escapeHtml(step.phase)}</h3>
+        ${step.why || step.what ? `<div class="roadmap-context">
+          ${step.why ? `<div class="roadmap-context-block"><div class="roadmap-context-label">Why</div><p>${escapeHtml(step.why)}</p></div>` : ''}
+          ${step.what ? `<div class="roadmap-context-block"><div class="roadmap-context-label">What</div><p>${escapeHtml(step.what)}</p></div>` : ''}
+        </div>` : ''}
+        <div class="roadmap-how-label">How</div>
         <ul>${step.actions.map(a => `<li><span>${escapeHtml(a)}</span></li>`).join('')}</ul>
       </div>
     `).join('')}

@@ -357,12 +357,13 @@ ROADMAP GROUNDING:
 
 <rules>
 - Do NOT re-score the evidence summary. Treat LOCKED_FINDINGS as the current-state baseline.
-- Ask: does this roadmap answer the findings? If an action does not address a confirmed gap, anti-pattern, missing-evidence item, or diagnosis statement, classify it as unsupported.
+- Ask: do the WHY, WHAT, and HOW sections answer the findings? If a phase rationale, intended outcome, or action does not address a confirmed gap, anti-pattern, missing-evidence item, or diagnosis statement, classify it as unsupported.
 - Planning decision must be proportionate to confidence. If the plan says GO while locked findings contain major uncertainty, unsupported claims, or evidence gaps, flag the GO rationale as unsupported or overconfident.
 - Tactic IDs are allowed only in roadmap actions and must exist in the tactics DB.
 - If tactic IDs appear in the planning decision but the underlying action is grounded, classify the issue as unsupported with severity "WARN_TACTIC_HYGIENE" instead of a blocking roadmap failure.
 - A grounded roadmap action may have zero tactic IDs when no exact tactics DB match exists. Do not flag zero tactic IDs by itself.
 - If the action is grounded but the output uses a wrong label/category for the finding, classify unsupported with severity "WARN_MISCLASSIFIED_BUT_REAL".
+- WHY and WHAT may summarize context and intended change, but they may not invent new current-state claims, unsupported financial impacts, or claim that a gap is fully closed unless LOCKED_FINDINGS provide acceptance criteria proving closure.
 - Maximum 15 claims per pass — focus on consequential grounding errors.
 - For every unsupported claim, emit failure_type, severity, and missing_material.
 - Output JSON ONLY, no prose.

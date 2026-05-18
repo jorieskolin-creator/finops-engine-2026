@@ -157,6 +157,10 @@ export const sanitizeStrategyAfterFactCheck = (
 
     if (claim.source_location === 'roadmap') {
       if (removeRoadmapAction(data, claim)) {
+        const result = sanitizeStringsDeep(data.phase_3_strategy, claim, 'remove');
+        if (result.changed) {
+          data.phase_3_strategy = result.value;
+        }
         sanitized.push(makeItem(claim, 'removed'));
         continue;
       }

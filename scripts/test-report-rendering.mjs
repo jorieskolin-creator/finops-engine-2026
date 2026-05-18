@@ -45,4 +45,19 @@ assert.ok(html.includes('class="summary-paragraph"'), 'summary should render as 
 assert.equal(html.includes('**'), false, 'raw bold markdown should not leak into exported HTML');
 assert.equal(html.includes('*project cost*'), false, 'raw italic markdown should not leak into exported HTML');
 
+const reportViewSource = await readFile(new URL('../src/components/ReportView.tsx', import.meta.url), 'utf8');
+assert.match(reportViewSource, />Why</, 'React report should render roadmap WHY context');
+assert.match(reportViewSource, />What</, 'React report should render roadmap WHAT context');
+assert.match(reportViewSource, />How</, 'React report should preserve action bullets as HOW');
+
+const dashboardSource = await readFile(new URL('../src/components/DashboardComponents.tsx', import.meta.url), 'utf8');
+assert.match(dashboardSource, />Why</, 'Dashboard roadmap should render WHY context');
+assert.match(dashboardSource, />What</, 'Dashboard roadmap should render WHAT context');
+assert.match(dashboardSource, />How</, 'Dashboard roadmap should preserve HOW action list');
+
+const exportSource = await readFile(new URL('../src/services/exportService.ts', import.meta.url), 'utf8');
+assert.match(exportSource, /roadmap-context-label">Why/, 'HTML export should render roadmap WHY context');
+assert.match(exportSource, /roadmap-context-label">What/, 'HTML export should render roadmap WHAT context');
+assert.match(exportSource, /roadmap-how-label">How/, 'HTML export should label action bullets as HOW');
+
 console.log('report rendering unit tests passed');

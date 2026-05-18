@@ -45,6 +45,7 @@ export type StageId =
   | 'forensic_audit'      // Phase 1: 5 parallel batch audits
   | 'evidence_check'      // Phase 1.5: verify batch evidence before scoring
   | 'synthesis'           // Phase 3: strategy + roadmap (default)
+  | 'roadmap_synthesis'   // Phase 3: deeper planning/roadmap substage
   | 'synthesis_escalation'// Phase 3: high-stakes / complex orgs
   | 'fact_check'          // Phase 3.5: claim verification
   | 'quality_gate';       // Phase 2.5: reserved for future LLM-driven QG
@@ -118,6 +119,13 @@ export const PROFILES = {
     openaiReasoning: { effort: 'medium' },
     maxTokens: 8192,
   } satisfies ModelProfile,
+
+  GPT_55_ROADMAP: {
+    id: 'gpt-5.5',
+    provider: 'openai',
+    openaiReasoning: { effort: 'medium' },
+    maxTokens: 12000,
+  } satisfies ModelProfile,
 } as const;
 
 // ============================================================================
@@ -129,6 +137,7 @@ export const STAGE_MODELS: Record<StageId, ModelProfile> = {
   forensic_audit:       PROFILES.SONNET_46,
   evidence_check:       PROFILES.GEMINI_31_PRO,
   synthesis:            PROFILES.SONNET_46,
+  roadmap_synthesis:    PROFILES.OPUS_47,
   synthesis_escalation: PROFILES.OPUS_47,
   fact_check:           PROFILES.GPT_55_FACT_CHECK,
   quality_gate:         PROFILES.GPT_55_QUALITY_GATE,
@@ -148,6 +157,7 @@ export const FALLBACK_CHAIN: Record<StageId, ModelProfile[]> = {
   forensic_audit:       [PROFILES.HAIKU_45, PROFILES.GEMINI_25_PRO],
   evidence_check:       [PROFILES.GEMINI_25_PRO, PROFILES.SONNET_46],
   synthesis:            [PROFILES.HAIKU_45, PROFILES.GEMINI_25_PRO],
+  roadmap_synthesis:    [PROFILES.GPT_55_ROADMAP, PROFILES.GEMINI_31_PRO],
   synthesis_escalation: [PROFILES.SONNET_46, PROFILES.GEMINI_25_PRO],
   fact_check:           [PROFILES.SONNET_46],
   quality_gate:         [PROFILES.SONNET_46],
