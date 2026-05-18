@@ -238,6 +238,7 @@ export interface AnalysisMeta {
   document_analyzed: string;
   timestamp: string;
   engine_version: string;
+  source_parse_warnings?: string[];
   model_config: {
     preflight: string;
     forensic_audit: string;

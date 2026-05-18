@@ -403,6 +403,7 @@ const generateReportHtml = (result: DiagnosticResult): string => {
   <div class="meta">
     <p>Generated ${escapeHtml(result.meta.timestamp)} · Engine ${escapeHtml(result.meta.engine_version)}</p>
     <p>Models: ${escapeHtml(result.meta.model_config.preflight)} (Pre-Flight) · ${escapeHtml(result.meta.model_config.forensic_audit)} (Audit) · ${escapeHtml(result.meta.model_config.evidence_check)} (Evidence Check) · ${escapeHtml(result.meta.model_config.synthesis)} (Strategy) · ${escapeHtml(result.meta.model_config.fact_check)} (Fact-Check)</p>
+    ${(result.meta.source_parse_warnings?.length ?? 0) > 0 ? `<p>Source parse note: ${escapeHtml(result.meta.source_parse_warnings![0])}${result.meta.source_parse_warnings!.length > 1 ? ` (+${result.meta.source_parse_warnings!.length - 1} more)` : ''}</p>` : ''}
   </div>
 
   ${renderEvidenceCheckSummary(result)}
