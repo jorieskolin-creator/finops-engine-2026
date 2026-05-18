@@ -1,5 +1,10 @@
 import { GoogleGenAI } from "@google/genai";
 import { requireSession } from "../lib/auth.js";
+import {
+  completeInternalModelResult,
+  failInternalModelResult,
+  registerInternalModelResult
+} from "../lib/internalModelResults.js";
 
 // Streaming Gemini proxy. Same NDJSON wire format as anthropic-generate.js:
 //   {"type":"text","delta":"..."}
@@ -22,9 +27,11 @@ export default async function handler(req, res) {
   }
 
   const started = Date.now();
-  const { model, contents, systemInstruction, thinkingConfig, stage, runId, internalPipelineCall } = req.body || {};
+  const { model, contents, systemInstruction, thinkingConfig, stage, runId, internalPipelineCall, internalCallId } = req.body || {};
   const isInternalPipelineCall = internalPipelineCall === true;
   const tag = `[run=${runId || '?'}] provider=gemini stage=${stage || '?'} model=${model || '?'}`;
+  const metadata = { runId, provider: 'gemini', stage, model };
+  const callIdLog = internalCallId ? ` internal_call_id=${internalCallId}` : '';
 
   if (!model || !contents) {
     console.warn(`${tag} status=bad_request msg="missing model or contents"`);
@@ -34,6 +41,9 @@ export default async function handler(req, res) {
   if (!apiKey) {
     console.error(`${tag} status=misconfigured msg="GEMINI_API_KEY not set"`);
     return res.status(500).json({ error: 'GEMINI_API_KEY not configured on server' });
+  }
+  if (isInternalPipelineCall && internalCallId) {
+    registerInternalModelResult(internalCallId, metadata);
   }
 
   res.setHeader('Content-Type', 'application/x-ndjson; charset=utf-8');
@@ -52,7 +62,7 @@ export default async function handler(req, res) {
     if (res.writableFinished || clientGone || responseClosed) return;
     responseClosed = true;
     if (isInternalPipelineCall) {
-      console.warn(`${tag} status=response_closed close_source=response_closed internal_pipeline_call=true duration_ms=${Date.now() - started}`);
+      console.warn(`${tag} status=response_closed close_source=response_closed internal_pipeline_call=true duration_ms=${Date.now() - started}${callIdLog}`);
       return;
     }
     clientGone = true;
@@ -102,8 +112,11 @@ export default async function handler(req, res) {
     if (clientGone) {
       console.warn(`${tag} status=aborted_mid_stream duration_ms=${duration} chars_read=${accumulatedText.length}`);
     } else if (responseClosed) {
-      console.warn(`${tag} status=completed_after_response_closed duration_ms=${duration} response_chars=${accumulatedText.length} internal_pipeline_call=${isInternalPipelineCall}`);
+      completeInternalModelResult(internalCallId, accumulatedText, null, metadata);
+      console.warn(`${tag} status=completed_after_response_closed duration_ms=${duration} response_chars=${accumulatedText.length} internal_pipeline_call=${isInternalPipelineCall}${callIdLog}`);
+      console.log(`${tag} level=info event=internal_result_stored status=done response_chars=${accumulatedText.length}${callIdLog}`);
     } else {
+      completeInternalModelResult(internalCallId, accumulatedText, null, metadata);
       console.log(`${tag} status=ok duration_ms=${duration} response_chars=${accumulatedText.length}`);
       writeFrame({ type: 'done', text: accumulatedText });
     }
@@ -117,6 +130,8 @@ export default async function handler(req, res) {
     } else {
       const msg = (error?.message || '').replace(/"/g, "'");
       console.error(`${tag} status=error duration_ms=${duration} msg="${msg}"`);
+      failInternalModelResult(internalCallId, error?.message || 'Internal server error', metadata);
+      console.error(`${tag} event=internal_result_error message="${msg}"${callIdLog}`);
       writeFrame({ type: 'error', message: error?.message || 'Internal server error' });
     }
     if (!res.writableEnded && !res.destroyed) res.end();

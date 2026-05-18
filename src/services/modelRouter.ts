@@ -23,6 +23,17 @@ export interface RunContext {
 }
 
 const REQUEST_TIMEOUT_MS = 595_000;
+const INTERNAL_RESULT_POLL_MS = 120_000;
+const INTERNAL_RESULT_POLL_INTERVAL_MS = 2_000;
+const INTERNAL_RESULT_MISSING_GRACE_MS = 10_000;
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const newInternalCallId = (): string => {
+  const random = globalThis.crypto?.randomUUID?.();
+  if (random) return random;
+  return `internal-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`;
+};
 
 async function callGemini(profile: ModelProfile, prompt: NormalizedPrompt, stage: StageId, ctx: RunContext): Promise<{ text: string }> {
   const parts: any[] = [{ text: prompt.userText }];
@@ -128,7 +139,80 @@ async function callOpenAI(profile: ModelProfile, prompt: NormalizedPrompt, stage
 // crashed), we throw — the router catches it and falls forward to the
 // next model in the chain. Returning partial text would corrupt downstream
 // JSON.parse, which is worse than retrying.
+async function pollInternalResult(body: any, cause: unknown): Promise<{ text: string } | null> {
+  const internalCallId = body?.internalCallId;
+  if (!body?.internalPipelineCall || !internalCallId) return null;
+
+  const started = Date.now();
+  const stage = body.stage || 'unknown';
+  const model = body.model || 'unknown';
+  const causeMessage = cause instanceof Error ? cause.message : String(cause || 'unknown');
+  let firstMissingAt: number | null = null;
+  while (Date.now() - started < INTERNAL_RESULT_POLL_MS) {
+    try {
+      const res = await fetch('/api/model-result', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ internalCallId }),
+      });
+      if (res.status === 404) {
+        if (firstMissingAt === null) firstMissingAt = Date.now();
+        if (Date.now() - firstMissingAt > INTERNAL_RESULT_MISSING_GRACE_MS) {
+          return null;
+        }
+        await sleep(INTERNAL_RESULT_POLL_INTERVAL_MS);
+        continue;
+      }
+      if (!res.ok) {
+        throw new Error(`/api/model-result → ${res.status}`);
+      }
+      const data = await res.json();
+      if (data?.status === 'pending') {
+        await sleep(INTERNAL_RESULT_POLL_INTERVAL_MS);
+        continue;
+      }
+      if (data?.status === 'done') {
+        await serverLog(body.runId, 'info', 'internal_result_recovered', {
+          stage,
+          model,
+          internal_call_id: internalCallId,
+          duration_ms: Date.now() - started,
+          response_chars: typeof data.text === 'string' ? data.text.length : 0,
+        });
+        return { text: typeof data.text === 'string' ? data.text : '' };
+      }
+      if (data?.status === 'error') {
+        await serverLog(body.runId, 'error', 'internal_result_error', {
+          stage,
+          model,
+          internal_call_id: internalCallId,
+          message: data.message || 'model call failed',
+          cause: causeMessage,
+        });
+        return null;
+      }
+    } catch (err: any) {
+      if (err?.message && err.message !== causeMessage) {
+        cause = err;
+      }
+      await sleep(INTERNAL_RESULT_POLL_INTERVAL_MS);
+    }
+  }
+
+  await serverLog(body.runId, 'warn', 'internal_result_timeout', {
+    stage,
+    model,
+    internal_call_id: internalCallId,
+    duration_ms: Date.now() - started,
+    cause: causeMessage,
+  });
+  return null;
+}
+
 async function postWithTimeout(url: string, body: any): Promise<{ text: string }> {
+  if (body?.internalPipelineCall && !body.internalCallId) {
+    body.internalCallId = newInternalCallId();
+  }
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
   try {
@@ -178,6 +262,10 @@ async function postWithTimeout(url: string, body: any): Promise<{ text: string }
       throw new Error(`${url} → stream ended without 'done' frame`);
     }
     return { text: finalText };
+  } catch (err) {
+    const recovered = await pollInternalResult(body, err);
+    if (recovered) return recovered;
+    throw err;
   } finally {
     clearTimeout(timer);
   }
