@@ -6,7 +6,7 @@ import { METRIC_DESCRIPTIONS } from '../constants';
 import { SVG_CSS, svgGaugeCard, svgRadar, svgScatter } from '../services/svgChartService';
 import { isInsufficientEvidenceReport, renderInlineMarkdownHtml, strengthsSectionTitle } from '../services/reportTextService';
 import { antiPatternStatusLabel, inferAntiPatternAbsenceStatus } from '../services/antiPatternSemantics';
-import { displayQualityGateDiagnostic, splitQualityGateDiagnostics } from '../services/reportDiagnosticsService';
+import { displayQualityGateDiagnostic, isReportableSourceCoverageGap, splitQualityGateDiagnostics } from '../services/reportDiagnosticsService';
 
 const InlineSvg: React.FC<{ html: string; className?: string }> = ({ html, className }) => (
   <div className={className} dangerouslySetInnerHTML={{ __html: html }} />
@@ -728,14 +728,17 @@ export const ReportView: React.FC<ReportViewProps> = ({ result, onBack, onDownlo
         {(() => {
           const diagnosis = result.phase_3_strategy.diagnosis;
           if (!diagnosis) return null;
+          const primaryBottleneck = diagnosis.primary_bottleneck?.trim();
           return (
             <div className="mb-12 p-6 rounded-xl bg-slate-50 border border-slate-200">
               <h2 className="text-2xl font-display font-bold text-slate-900 mb-2">Diagnosis</h2>
               <p className="text-sm text-slate-600 mb-5">Interpretation of the evidence. This section explains causes and bottlenecks, but does not prescribe the implementation plan.</p>
-              <div className="mb-5">
-                <p className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-1">Primary bottleneck</p>
-                <p className="text-slate-800">{diagnosis.primary_bottleneck}</p>
-              </div>
+              {primaryBottleneck && (
+                <div className="mb-5">
+                  <p className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-1">Primary bottleneck</p>
+                  <p className="text-slate-800">{primaryBottleneck}</p>
+                </div>
+              )}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
                   <p className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-2">Root causes</p>
@@ -760,7 +763,7 @@ export const ReportView: React.FC<ReportViewProps> = ({ result, onBack, onDownlo
 
         {(() => {
           const claims = result.quality_gate?.fact_check?.unsupported_claims || [];
-          const withMaterial = claims.filter(c => c.missing_material);
+          const withMaterial = claims.filter(isReportableSourceCoverageGap);
           if (withMaterial.length === 0) return null;
           const byType: Record<string, string[]> = {};
           for (const c of withMaterial) {

@@ -1,5 +1,10 @@
 import { FactCheckClaim, FactCheckResult, StrategySanitationItem } from '../types';
-import { isBlockingUnsupportedClaim } from './qualityGateService';
+import {
+  isBlockingUnsupportedClaim,
+  isDomainTaxonomyHygieneClaim,
+  isMisclassifiedButRealClaim,
+  isTacticHygieneClaim
+} from './qualityGateService';
 
 const clone = <T>(value: T): T =>
   typeof structuredClone === 'function'
@@ -24,6 +29,15 @@ const makeItem = (claim: FactCheckClaim, action: StrategySanitationItem['action'
 const isAntipatternBurdenSpendMisuse = (claim: FactCheckClaim): boolean => {
   const blob = `${claim.claim}\n${claim.rationale}`.toLowerCase();
   return blob.includes('anti-pattern burden') && blob.includes('share of cloud spend');
+};
+
+const isSanitizableHygieneClaim = (claim: FactCheckClaim): boolean => {
+  if (!claim.claim || !claim.source_location) return false;
+  return claim.severity === 'WARN_MISCLASSIFIED_BUT_REAL'
+    || claim.severity === 'WARN_TACTIC_HYGIENE'
+    || isMisclassifiedButRealClaim(claim)
+    || isTacticHygieneClaim(claim)
+    || isDomainTaxonomyHygieneClaim(claim);
 };
 
 const rewriteMetricMisuse = (value: string): { value: string; changed: boolean } => {
@@ -142,6 +156,14 @@ export const sanitizeStrategyAfterFactCheck = (
 
   for (const claim of factCheck.unsupported_claims) {
     if (!isBlockingUnsupportedClaim(claim)) {
+      if (isSanitizableHygieneClaim(claim)) {
+        const result = sanitizeStringsDeep(data.phase_3_strategy, claim, 'remove');
+        if (result.changed) {
+          data.phase_3_strategy = result.value;
+          sanitized.push(makeItem(claim, 'quarantined'));
+          continue;
+        }
+      }
       remaining.push(claim);
       continue;
     }

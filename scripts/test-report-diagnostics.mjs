@@ -21,6 +21,7 @@ await writeFile(modulePath, compiled, 'utf8');
 const {
   displayQualityGateDiagnostic,
   isScannerEvidenceCheckDisagreement,
+  isReportableSourceCoverageGap,
   isStrategyHygieneDiagnostic,
   scannerEvidenceCheckDisagreementTitle,
   strategyHygieneNotesTitle,
@@ -53,5 +54,31 @@ const split = splitQualityGateDiagnostics({
 
 assert.deepEqual(split.primaryWarnings, [normalWarning]);
 assert.deepEqual(split.appendixDiagnostics, [disagreement, hygieneWarning]);
+
+assert.equal(isReportableSourceCoverageGap({
+  claim: 'Cloud invoice data is missing.',
+  classification: 'unsupported',
+  source_location: 'cfo',
+  failure_type: 'unsupported_org_claim',
+  missing_material: 'Cloud invoices by provider and business unit.'
+}), true);
+
+assert.equal(isReportableSourceCoverageGap({
+  claim: 'The roadmap action has no exact verified tactic match.',
+  classification: 'unsupported',
+  source_location: 'roadmap',
+  failure_type: 'other',
+  severity: 'WARN_TACTIC_HYGIENE',
+  missing_material: 'Valid tactic ID from the tactics DB.'
+}), false);
+
+assert.equal(isReportableSourceCoverageGap({
+  claim: 'The confirmed anti-pattern is mapped to the wrong domain.',
+  classification: 'unsupported',
+  source_location: 'diagnosis',
+  failure_type: 'unsupported_org_claim',
+  severity: 'WARN_MISCLASSIFIED_BUT_REAL',
+  missing_material: 'Revised wording assigning it to Domain B.'
+}), false);
 
 console.log('report diagnostics unit tests passed');

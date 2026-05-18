@@ -110,6 +110,52 @@ const factCheck = {
   ]
 };
 
+const hygieneStrategyData = {
+  phase_3_strategy: {
+    executive_summaries: {
+      cfo: 'The confirmed anti-pattern is low-severity anomaly escalation, and every confirmed gap maps to exact verified tactics database patterns.'
+    },
+    diagnosis: {
+      primary_bottleneck: 'The confirmed anti-pattern is low-severity anomaly escalation.',
+      root_causes: ['Every confirmed gap maps to exact verified tactics database patterns.'],
+      domain_diagnosis: {},
+      confidence: 'medium',
+      confidence_rationale: 'Supported.'
+    },
+    planning_decision: { decision: 'CONDITIONAL_GO', rationale: 'Proceed carefully.', safe_to_act_on: [], evidence_needed_before_action: [] },
+    remediation_roadmap: []
+  }
+};
+
+const hygieneSanitized = sanitizeStrategyAfterFactCheck(hygieneStrategyData, {
+  attempts: 1,
+  total_claims: 2,
+  supported_count: 0,
+  failed: false,
+  unsupported_claims: [
+    {
+      claim: 'The confirmed anti-pattern is low-severity anomaly escalation.',
+      classification: 'unsupported',
+      source_location: 'diagnosis',
+      failure_type: 'unsupported_org_claim',
+      severity: 'WARN_MISCLASSIFIED_BUT_REAL',
+      rationale: 'The underlying finding is real, but the anti-pattern label is not supported.'
+    },
+    {
+      claim: 'Every confirmed gap maps to exact verified tactics database patterns.',
+      classification: 'unsupported',
+      source_location: 'diagnosis',
+      failure_type: 'unsupported_org_claim',
+      severity: 'WARN_TACTIC_HYGIENE',
+      rationale: 'The findings do not prove an exact KB tactic match for every gap.'
+    }
+  ]
+});
+assert.equal(hygieneSanitized.sanitized.length, 2);
+assert.equal(hygieneSanitized.factCheck.unsupported_claims.length, 0);
+assert.doesNotMatch(JSON.stringify(hygieneSanitized.strategyData), /low-severity anomaly escalation/);
+assert.doesNotMatch(JSON.stringify(hygieneSanitized.strategyData), /exact verified tactics database patterns/);
+
 const sanitized = sanitizeStrategyAfterFactCheck(strategyData, factCheck);
 assert.equal(sanitized.sanitized.length, 2);
 assert.equal(sanitized.factCheck.unsupported_claims.length, 1);

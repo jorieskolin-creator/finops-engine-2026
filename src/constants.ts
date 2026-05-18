@@ -316,7 +316,7 @@ ${FINOPS_METHODOLOGY_CONTEXT}
 
 <strict_constraints>
 1. **LOCKED FINDINGS:** Do not change, reinterpret, or add factual claims to the evidence summary or diagnosis. The roadmap must answer: what actions logically follow from these findings?
-2. **GROUNDING RULE:** Every roadmap action must trace to at least one confirmed gap, confirmed anti-pattern, silent/missing evidence item, or diagnosis statement in LOCKED FINDINGS. If the locked findings do not support a phase, return that phase with an empty actions array rather than inventing work.
+2. **GROUNDING RULE:** Every roadmap action must trace to at least one confirmed gap, confirmed anti-pattern, silent/missing evidence item, or diagnosis statement in LOCKED FINDINGS. Prefer 3-5 actions per phase when the locked findings support them. If a phase has fewer than 3 genuinely grounded actions, return fewer actions rather than inventing filler.
 3. **TACTICS KB SCOPE:** Use the Verified Tactics Database only for prescriptions, mechanism names, case-study references, and tactic IDs. Never use it to alter current-state findings.
 4. **TACTIC ID RULE:** Every prescribed tactic action must include exactly one valid bracketed tactic ID from the database only when that tactic's problem_pattern semantically matches the locked finding. Generic evidence-gathering actions should omit tactic IDs. No tactic ID is better than a wrong tactic ID.
 5. **PLANNING DECISION:**
@@ -341,7 +341,8 @@ ${FINOPS_METHODOLOGY_CONTEXT}
 3. For every phase:
    - "why": 75-125 words explaining why this phase exists, referencing only locked findings, confirmed gaps, confirmed anti-patterns, missing-evidence needs, diagnosis statements, and matching KB mechanisms.
    - "what": 75-125 words describing the intended change/outcome without inventing unproven benefits or claiming a gap is fully closed unless the locked findings prove the acceptance criteria.
-   - "actions": the HOW layer — concrete bullets grounded in locked findings. Include tactic IDs only where the KB problem pattern exactly matches.
+   - "actions": the HOW layer — 3-5 concrete bullets grounded in locked findings where possible. Include tactic IDs only where the KB problem pattern exactly matches. If fewer than 3 grounded HOW actions exist for a phase, use fewer and do not pad with generic work.
+   - Do not write blanket claims that every gap maps to a verified KB tactic. Use narrower wording: source-confirmed gaps drive the roadmap; tactic IDs are used only where an exact KB match is supported.
 4. If evidence is low or mixed, use validation actions first and mark assumptions/confidence when requested by the prompt appendix.
 </task>
 
@@ -356,10 +357,10 @@ STRICTLY return JSON:
       "evidence_needed_before_action": ["String bullets"]
     },
     "remediation_roadmap": [
-      { "phase": "1. Crawl — Foundation (0-3 Months)", "why": "75-125 grounded words", "what": "75-125 grounded words", "actions": ["Action grounded in locked findings with [TAC-XXX-000] when prescribing a tactic"] },
-      { "phase": "2. Walk — Optimization (3-6 Months)", "why": "75-125 grounded words", "what": "75-125 grounded words", "actions": ["..."] },
-      { "phase": "3. Walk — Embedding (6-12 Months)", "why": "75-125 grounded words", "what": "75-125 grounded words", "actions": ["..."] },
-      { "phase": "4. Run — Continuous (12+ Months)", "why": "75-125 grounded words", "what": "75-125 grounded words", "actions": ["..."] }
+      { "phase": "1. Crawl — Foundation (0-3 Months)", "why": "75-125 grounded words", "what": "75-125 grounded words", "actions": ["3-5 grounded HOW actions where evidence supports them"] },
+      { "phase": "2. Walk — Optimization (3-6 Months)", "why": "75-125 grounded words", "what": "75-125 grounded words", "actions": ["3-5 grounded HOW actions where evidence supports them"] },
+      { "phase": "3. Walk — Embedding (6-12 Months)", "why": "75-125 grounded words", "what": "75-125 grounded words", "actions": ["3-5 grounded HOW actions where evidence supports them"] },
+      { "phase": "4. Run — Continuous (12+ Months)", "why": "75-125 grounded words", "what": "75-125 grounded words", "actions": ["3-5 grounded HOW actions where evidence supports them"] }
     ]
   }
 }

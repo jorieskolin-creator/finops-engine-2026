@@ -84,6 +84,17 @@ const planningTacticHygieneClaim = {
 assert.equal(isTacticHygieneClaim(planningTacticHygieneClaim), true);
 assert.equal(isBlockingUnsupportedClaim(planningTacticHygieneClaim), false);
 
+const verifiedTacticsHygieneClaim = {
+  claim: 'Every confirmed gap maps to exact verified tactics database patterns.',
+  classification: 'unsupported',
+  source_location: 'diagnosis',
+  failure_type: 'unsupported_org_claim',
+  rationale: 'The findings support operational gaps, but not that every gap has an exact KB tactic match.',
+  missing_material: 'Exact KB mechanism match for every gap.'
+};
+assert.equal(isTacticHygieneClaim(verifiedTacticsHygieneClaim), true);
+assert.equal(isBlockingUnsupportedClaim(verifiedTacticsHygieneClaim), false);
+
 {
   const gate = runQualityGate(
     phase1,
