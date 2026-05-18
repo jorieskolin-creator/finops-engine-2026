@@ -448,7 +448,7 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => `  ${cat}
         userText: textParts.join(''),
         systemInstruction: EVIDENCE_SYNTHESIS_SYSTEM_INSTRUCTION,
       }, { runId });
-      actuals.roadmap_synthesis = resp.modelUsed.id;
+      actuals.synthesis = resp.modelUsed.id;
       serverLog(runId, 'info', 'stage_complete', {
         stage: synthesisStage,
         model: resp.modelUsed.id,
@@ -474,7 +474,7 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => `  ${cat}
         userText: textParts.join(''),
         systemInstruction: ROADMAP_SYNTHESIS_SYSTEM_INSTRUCTION,
       }, { runId });
-      actuals.synthesis = resp.modelUsed.id;
+      actuals.roadmap_synthesis = resp.modelUsed.id;
       serverLog(runId, 'info', 'stage_complete', {
         stage: 'roadmap_synthesis',
         model: resp.modelUsed.id,
