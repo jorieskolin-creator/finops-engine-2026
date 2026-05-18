@@ -50,6 +50,8 @@ assert.match(pdfSource, /PDF_PAGE source=/, 'PDF extraction should preserve page
 assert.match(pdfSource, /Visual page extraction stopped/, 'PDF visual extraction should include an image budget warning');
 assert.match(pdfSource, /assessPdfParseQuality/, 'PDF extraction should calculate deterministic parse quality');
 assert.match(pdfSource, /sparsePages/, 'PDF visual page selection should prioritize sparse pages');
+assert.match(pdfSource, /pageStats\.every\(stats => stats\.charCount === 0\) && images\.length === 0/, 'unreadable PDFs should be detected from extracted text stats, not page markers');
+assert.doesNotMatch(pdfSource, /pageTexts\.join\(''\)\.trim\(\)\.length === 0/, 'page markers must not be used as the unreadable-PDF test');
 
 const goodParse = assessPdfParseQuality({
   pages: Array.from({ length: 10 }, (_, idx) => ({ pageNumber: idx + 1, charCount: 1500, wordCount: 220, textItemCount: 80 })),

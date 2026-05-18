@@ -22,6 +22,7 @@ const SPARSE_WORD_THRESHOLD = 35;
 const SPARSE_ITEM_THRESHOLD = 8;
 const NEAR_ZERO_CHAR_THRESHOLD = 40;
 const NEAR_ZERO_WORD_THRESHOLD = 5;
+const NEAR_ZERO_ITEM_THRESHOLD = 3;
 const SCANNED_PAGE_RATIO = 0.6;
 const MIXED_SPARSE_RATIO = 0.2;
 const POOR_SPARSE_RATIO = 0.5;
@@ -35,7 +36,7 @@ export const isSparsePdfPage = (stats: PdfPageParseStats): boolean => {
 export const isNearZeroPdfPage = (stats: PdfPageParseStats): boolean => {
   return stats.charCount < NEAR_ZERO_CHAR_THRESHOLD
     && stats.wordCount < NEAR_ZERO_WORD_THRESHOLD
-    && stats.textItemCount < 3;
+    && stats.textItemCount < NEAR_ZERO_ITEM_THRESHOLD;
 };
 
 export const assessPdfParseQuality = (input: {
