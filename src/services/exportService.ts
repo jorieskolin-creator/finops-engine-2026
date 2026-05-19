@@ -263,13 +263,6 @@ export const downloadSummaryReport = (result: DiagnosticResult) => {
 
 export const downloadReport = downloadMasterDataReport;
 
-const summaryMetricCard = (label: string, value: string, note: string, tone = 'slate'): string => `
-  <div class="summary-metric summary-metric-${tone}">
-    <span>${escapeHtml(label)}</span>
-    <strong>${escapeHtml(value)}</strong>
-    <p>${escapeHtml(note)}</p>
-  </div>`;
-
 const renderSummaryExecutiveSummary = (result: DiagnosticResult): string => {
   const summaries = result.phase_3_strategy.executive_summaries;
   if (!summaries) {
@@ -444,31 +437,6 @@ const renderAssessmentHeatmapSummary = (result: DiagnosticResult): string => `
     </div>
   </section>`;
 
-const renderSummaryHeatmap = (result: DiagnosticResult): string => {
-  const renderStream = (stream: 'maturity' | 'antipattern', title: string): string => {
-    const logs = stream === 'maturity' ? result.phase_1_audit_logs.maturity : result.phase_1_audit_logs.antipattern;
-    return `
-      <div class="heatmap-panel">
-        <h3>${escapeHtml(title)}</h3>
-        ${renderHeatmapCells(stream, logs)}
-      </div>`;
-  };
-  return `
-    <section class="summary-section">
-      <h2>Heatmap</h2>
-      <p class="section-lead">A fast view of where evidence supports maturity, where anti-patterns are present, and where the source material was not assessable.</p>
-      <div class="heatmap-legend">
-        <span><i class="heat-good"></i> OK / strong maturity</span>
-        <span><i class="heat-partial"></i> Partial / weak</span>
-        <span><i class="heat-gap"></i> Gap / finding</span>
-        <span><i class="heat-tested-absent"></i> Tested absent</span>
-        <span><i class="heat-silent"></i> Silent / not assessed</span>
-      </div>
-      ${renderStream('maturity', 'Maturity coverage')}
-      ${renderStream('antipattern', 'Anti-pattern semantics')}
-    </section>`;
-};
-
 const generateSummaryReportHtml = (result: DiagnosticResult): string => {
   const m = result.phase_2_validation.metrics;
   const cwrClass = result.phase_2_validation.crawl_walk_run;
@@ -524,14 +492,6 @@ const generateSummaryReportHtml = (result: DiagnosticResult): string => {
     .summary-prose p:last-child, .summary-paragraph:last-child { margin-bottom: 0; }
     .summary-prose strong { color: #0f172a; }
     .summary-prose em { color: #047857; font-style: normal; font-weight: 700; }
-    .summary-metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 14px; margin: 22px 0; }
-    .summary-metric { background: #fff; border: 1px solid #e2e8f0; border-radius: 16px; padding: 18px; }
-    .summary-metric span { display: block; color: #64748b; text-transform: uppercase; letter-spacing: 0.1em; font-size: 0.68rem; font-weight: 800; }
-    .summary-metric strong { display: block; font-size: 2rem; line-height: 1.05; margin: 7px 0; }
-    .summary-metric p { color: #64748b; font-size: 0.82rem; margin: 0; }
-    .summary-metric-rose strong { color: #e11d48; }
-    .summary-metric-emerald strong { color: #059669; }
-    .summary-metric-amber strong { color: #b45309; }
     .gauge-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1.25rem; align-items: stretch; }
     .gauge-grid > .gauge-large { grid-column: span 2; }
     .chart-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 18px; }
@@ -625,18 +585,10 @@ const generateSummaryReportHtml = (result: DiagnosticResult): string => {
 
     <section class="summary-section">
       <h2>Maturity Gauges</h2>
-      <div class="summary-metrics">
-        ${summaryMetricCard('Evidence-Gated Readiness', `${Math.round(m.finops_readiness)}%`, readinessDescription, isBlocked ? 'rose' : 'emerald')}
-        ${summaryMetricCard('Maturity Depth', `${Math.round(m.maturity_depth)}%`, METRIC_DESCRIPTIONS.maturity_depth)}
-        ${summaryMetricCard('Evidence Density', `${Math.round(m.evidence_density)}%`, METRIC_DESCRIPTIONS.evidence_density, m.evidence_density < 60 ? 'amber' : 'emerald')}
-        ${summaryMetricCard('Anti-Pattern Burden', `${Math.round(m.antipattern_burden)}%`, METRIC_DESCRIPTIONS.antipattern_burden, 'rose')}
-      </div>
       <div class="gauge-grid">
         ${gauges.map(g => svgGaugeCard(g)).join('')}
       </div>
     </section>
-
-    ${renderAssessmentHeatmapSummary(result)}
 
     <section class="summary-section">
       <h2>Visual Diagnosis</h2>
@@ -655,9 +607,9 @@ const generateSummaryReportHtml = (result: DiagnosticResult): string => {
     </section>
 
     ${renderSummaryDiagnosis(result)}
+    ${renderAssessmentHeatmapSummary(result)}
     ${renderSummaryPlanningDecision(result)}
     ${renderSummaryRoadmap(result)}
-    ${renderSummaryHeatmap(result)}
 
     <footer class="footer">
       <p>FinOps Assessment Engine v${escapeHtml(result.meta.engine_version)} · Summary Report</p>
