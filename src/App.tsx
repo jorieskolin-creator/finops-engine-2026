@@ -4,7 +4,7 @@ import { scanInputText, sanitizeInput } from './services/preFlightService';
 import { extractPagesFromPdf, imageFileToInput } from './services/pdfService';
 import type { PdfParseQuality } from './services/pdfService';
 import { renderDelimitedTableForAnalysis } from './services/tableService';
-import { downloadReport } from './services/exportService';
+import { downloadMasterDataReport, downloadSummaryReport } from './services/exportService';
 import { forensicSanitizeImport } from './services/securityService';
 import { PerformanceMonitor } from './services/debugService';
 import { runFullDriftSuite } from './services/driftDetectionService';
@@ -557,7 +557,14 @@ const App: React.FC = () => {
   const showReference = !result && activeTab === 'reference';
 
   if (result && viewMode === 'report') {
-    return <ReportView result={result} onBack={() => setViewMode('dashboard')} onDownload={() => downloadReport(result)} />;
+    return (
+      <ReportView
+        result={result}
+        onBack={() => setViewMode('dashboard')}
+        onDownloadSummary={() => downloadSummaryReport(result)}
+        onDownloadMaster={() => downloadMasterDataReport(result)}
+      />
+    );
   }
 
   return (
