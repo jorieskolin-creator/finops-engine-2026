@@ -379,14 +379,70 @@ const maturityHeatClass = (item: AuditItem | undefined): string => {
   return 'heat-gap';
 };
 
+const maturityHeatLabel = (item: AuditItem | undefined): string => {
+  if (!item || item.is_silent) return 'Silent';
+  const status = (item.status || '').toUpperCase();
+  if (status === 'OK') return 'OK';
+  if (status === 'PARTIAL') return 'Partial';
+  return 'Gap';
+};
+
 const antiPatternHeatClass = (item: AuditItem | undefined): string => {
   if (!item || item.is_silent) return 'heat-silent';
   const status = inferAntiPatternAbsenceStatus(item);
   if (status === 'confirmed_present') return 'heat-gap';
   if (status === 'partially_present') return 'heat-partial';
-  if (status === 'tested_absent') return 'heat-good';
+  if (status === 'tested_absent') return 'heat-tested-absent';
   return 'heat-silent';
 };
+
+const renderHeatmapCells = (
+  stream: 'maturity' | 'antipattern',
+  logs: Record<string, AuditItem>,
+  compact = false
+): string => BATCHES.map(batch => {
+  const items = MASTER_BINGO_FINOPS[stream].filter(c => c.batch === batch);
+  return `
+    <div class="${compact ? 'compact-heatmap-row' : 'heatmap-row'}">
+      <div class="${compact ? 'compact-heatmap-batch' : 'heatmap-batch'}"><strong>${batch}</strong><span>${escapeHtml(BATCH_TITLES[batch])}</span></div>
+      <div class="${compact ? 'compact-heatmap-cells' : 'heatmap-cells'}">
+        ${items.map(cat => {
+          const item = logs[cat.id];
+          const klass = stream === 'maturity' ? maturityHeatClass(item) : antiPatternHeatClass(item);
+          const label = stream === 'maturity' ? maturityHeatLabel(item) : antiPatternStatusLabel(item);
+          const score = item?.count ?? 0;
+          return `<div class="${compact ? 'compact-heat-cell' : 'heat-cell'} ${klass}" title="${escapeHtml(`${cat.id} · ${cat.title} · ${label} · score ${score}`)}"><strong>${escapeHtml(cat.id)}</strong><span>${escapeHtml(label)}</span></div>`;
+        }).join('')}
+      </div>
+    </div>`;
+}).join('');
+
+const renderAssessmentHeatmapSummary = (result: DiagnosticResult): string => `
+  <section class="summary-section">
+    <h2>Assessment Heatmap Summary</h2>
+    <p class="section-lead">Criterion-level view of what the source material supported, partially supported, contradicted, or could not assess.</p>
+    <div class="heatmap-explainer">
+      <div><strong>Tested absent</strong><span>Relevant evidence was reviewed and the anti-pattern was not found.</span></div>
+      <div><strong>Not assessed</strong><span>Source coverage was too weak or irrelevant, so absence is not positive evidence.</span></div>
+    </div>
+    <div class="heatmap-legend heatmap-legend-split">
+      <span><i class="heat-good"></i> OK</span>
+      <span><i class="heat-partial"></i> Partial / partial finding</span>
+      <span><i class="heat-gap"></i> Gap / finding</span>
+      <span><i class="heat-tested-absent"></i> Tested absent</span>
+      <span><i class="heat-silent"></i> Silent / not assessed</span>
+    </div>
+    <div class="compact-heatmap-grid">
+      <div class="compact-heatmap-panel">
+        <h3>Maturity coverage</h3>
+        ${renderHeatmapCells('maturity', result.phase_1_audit_logs.maturity, true)}
+      </div>
+      <div class="compact-heatmap-panel">
+        <h3>Anti-pattern semantics</h3>
+        ${renderHeatmapCells('antipattern', result.phase_1_audit_logs.antipattern, true)}
+      </div>
+    </div>
+  </section>`;
 
 const renderSummaryHeatmap = (result: DiagnosticResult): string => {
   const renderStream = (stream: 'maturity' | 'antipattern', title: string): string => {
@@ -394,22 +450,7 @@ const renderSummaryHeatmap = (result: DiagnosticResult): string => {
     return `
       <div class="heatmap-panel">
         <h3>${escapeHtml(title)}</h3>
-        ${BATCHES.map(batch => {
-          const items = MASTER_BINGO_FINOPS[stream].filter(c => c.batch === batch);
-          return `
-            <div class="heatmap-row">
-              <div class="heatmap-batch"><strong>${batch}</strong><span>${escapeHtml(BATCH_TITLES[batch])}</span></div>
-              <div class="heatmap-cells">
-                ${items.map(cat => {
-                  const item = logs[cat.id];
-                  const klass = stream === 'maturity' ? maturityHeatClass(item) : antiPatternHeatClass(item);
-                  const label = stream === 'maturity' ? (item?.is_silent ? 'Silent' : item?.status || 'No Data') : antiPatternStatusLabel(item);
-                  const score = item?.count ?? 0;
-                  return `<div class="heat-cell ${klass}" title="${escapeHtml(`${cat.id} · ${cat.title} · ${label} · score ${score}`)}"><strong>${escapeHtml(cat.id)}</strong><span>${escapeHtml(label)}</span></div>`;
-                }).join('')}
-              </div>
-            </div>`;
-        }).join('')}
+        ${renderHeatmapCells(stream, logs)}
       </div>`;
   };
   return `
@@ -417,9 +458,10 @@ const renderSummaryHeatmap = (result: DiagnosticResult): string => {
       <h2>Heatmap</h2>
       <p class="section-lead">A fast view of where evidence supports maturity, where anti-patterns are present, and where the source material was not assessable.</p>
       <div class="heatmap-legend">
-        <span><i class="heat-good"></i> Strong / tested absent</span>
+        <span><i class="heat-good"></i> OK / strong maturity</span>
         <span><i class="heat-partial"></i> Partial / weak</span>
         <span><i class="heat-gap"></i> Gap / finding</span>
+        <span><i class="heat-tested-absent"></i> Tested absent</span>
         <span><i class="heat-silent"></i> Silent / not assessed</span>
       </div>
       ${renderStream('maturity', 'Maturity coverage')}
@@ -512,8 +554,24 @@ const generateSummaryReportHtml = (result: DiagnosticResult): string => {
     .how-list { margin-top: 12px; }
     .withheld-card { border-left: 4px solid #f43f5e; }
     .withheld-card p { color: #475569; margin-bottom: 0; }
+    .heatmap-explainer { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; margin: 14px 0 16px; }
+    .heatmap-explainer div { background: #fff; border: 1px solid #e2e8f0; border-radius: 14px; padding: 14px; }
+    .heatmap-explainer strong { display: block; color: #0f172a; }
+    .heatmap-explainer span { display: block; color: #64748b; font-size: 0.86rem; margin-top: 3px; }
     .heatmap-legend { display: flex; flex-wrap: wrap; gap: 12px; margin: 0 0 16px; color: #475569; font-size: 0.82rem; }
+    .heatmap-legend-split { margin-bottom: 18px; }
     .heatmap-legend i { display: inline-block; width: 12px; height: 12px; border-radius: 4px; margin-right: 5px; vertical-align: -1px; }
+    .compact-heatmap-grid { display: grid; grid-template-columns: 1fr; gap: 16px; }
+    .compact-heatmap-panel { background: #fff; border: 1px solid #e2e8f0; border-radius: 16px; padding: 18px; box-shadow: 0 12px 35px rgba(15,23,42,0.05); }
+    .compact-heatmap-panel h3 { margin-bottom: 12px; }
+    .compact-heatmap-row { display: grid; grid-template-columns: 150px 1fr; gap: 10px; align-items: stretch; padding: 8px 0; border-top: 1px solid #eef2f7; }
+    .compact-heatmap-row:first-of-type { border-top: 0; }
+    .compact-heatmap-batch strong { display: block; font-size: 1rem; }
+    .compact-heatmap-batch span { color: #64748b; font-size: 0.74rem; }
+    .compact-heatmap-cells { display: grid; grid-template-columns: repeat(5, minmax(84px, 1fr)); gap: 7px; }
+    .compact-heat-cell { min-height: 58px; border-radius: 10px; padding: 9px; border: 1px solid; }
+    .compact-heat-cell strong { display: block; font-family: ui-monospace, SFMono-Regular, monospace; font-size: 0.76rem; }
+    .compact-heat-cell span { display: block; margin-top: 6px; font-size: 0.7rem; font-weight: 800; }
     .heatmap-panel { margin: 16px 0; }
     .heatmap-row { display: grid; grid-template-columns: 170px 1fr; gap: 12px; align-items: stretch; padding: 10px 0; border-top: 1px solid #eef2f7; }
     .heatmap-row:first-of-type { border-top: 0; }
@@ -524,6 +582,7 @@ const generateSummaryReportHtml = (result: DiagnosticResult): string => {
     .heat-cell strong { display: block; font-family: ui-monospace, SFMono-Regular, monospace; font-size: 0.78rem; }
     .heat-cell span { display: block; margin-top: 8px; font-size: 0.72rem; font-weight: 700; }
     .heat-good { background: #d1fae5; border-color: #a7f3d0; color: #065f46; }
+    .heat-tested-absent { background: #ecfdf5; border-color: #86efac; color: #166534; }
     .heat-partial { background: #fef3c7; border-color: #fde68a; color: #92400e; }
     .heat-gap { background: #ffe4e6; border-color: #fecdd3; color: #9f1239; }
     .heat-silent { background: #f1f5f9; border-color: #e2e8f0; color: #64748b; }
@@ -533,6 +592,8 @@ const generateSummaryReportHtml = (result: DiagnosticResult): string => {
       .page { padding: 24px 16px 44px; }
       .hero { padding: 26px; border-radius: 18px; }
       .gauge-grid > .gauge-large { grid-column: span 1; }
+      .compact-heatmap-row { grid-template-columns: 1fr; }
+      .compact-heatmap-cells { grid-template-columns: repeat(2, minmax(120px, 1fr)); }
       .heatmap-row { grid-template-columns: 1fr; }
       .heatmap-cells { grid-template-columns: repeat(2, minmax(120px, 1fr)); }
     }
@@ -574,6 +635,8 @@ const generateSummaryReportHtml = (result: DiagnosticResult): string => {
         ${gauges.map(g => svgGaugeCard(g)).join('')}
       </div>
     </section>
+
+    ${renderAssessmentHeatmapSummary(result)}
 
     <section class="summary-section">
       <h2>Visual Diagnosis</h2>
