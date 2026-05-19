@@ -508,10 +508,11 @@ const EvidenceCheckSummaryBlock: React.FC<{ result: DiagnosticResult }> = ({ res
 interface ReportViewProps {
   result: DiagnosticResult;
   onBack: () => void;
-  onDownload: () => void;
+  onDownloadSummary: () => void;
+  onDownloadMaster: () => void;
 }
 
-export const ReportView: React.FC<ReportViewProps> = ({ result, onBack, onDownload }) => {
+export const ReportView: React.FC<ReportViewProps> = ({ result, onBack, onDownloadSummary, onDownloadMaster }) => {
   const m = result.phase_2_validation.metrics;
   const cwrClass = result.phase_2_validation.crawl_walk_run;
   const isBlocked = result.quality_gate.decision === 'BLOCK';
@@ -540,9 +541,14 @@ export const ReportView: React.FC<ReportViewProps> = ({ result, onBack, onDownlo
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
             Back to Dashboard
           </button>
-          <button onClick={onDownload} className="px-6 py-2 bg-slate-900 text-white rounded-lg font-bold text-sm hover:bg-emerald-600 transition-colors">
-            Download Report
-          </button>
+          <div className="flex items-center gap-2">
+            <button onClick={onDownloadSummary} className="px-4 py-2 bg-emerald-600 text-white rounded-lg font-bold text-sm hover:bg-emerald-700 transition-colors">
+              Download Summary Report
+            </button>
+            <button onClick={onDownloadMaster} className="px-4 py-2 bg-slate-900 text-white rounded-lg font-bold text-sm hover:bg-slate-700 transition-colors">
+              Download Master Data
+            </button>
+          </div>
         </div>
       </div>
 

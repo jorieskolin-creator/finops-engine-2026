@@ -8,6 +8,11 @@ import { antiPatternStatusLabel, inferAntiPatternAbsenceStatus } from './antiPat
 import { displayQualityGateDiagnostic, isReportableSourceCoverageGap, splitQualityGateDiagnostics } from './reportDiagnosticsService';
 
 const BATCHES: Array<'A' | 'B' | 'C' | 'D' | 'E'> = ['A', 'B', 'C', 'D', 'E'];
+const PERSONA_SUMMARY_LABELS = {
+  finops_lead: 'FinOps Lead',
+  cfo: 'CFO',
+  engineering_lead: 'Engineering Lead'
+} as const;
 
 const escapeHtml = (s: string): string =>
   s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -232,15 +237,373 @@ const renderForensicSection = (
   ${body}`;
 };
 
-export const downloadReport = (result: DiagnosticResult) => {
-  const html = generateReportHtml(result);
+const downloadHtml = (html: string, filename: string) => {
   const blob = new Blob([html], { type: 'text/html' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = `FinOps_Assessment_${new Date().toISOString().split('T')[0]}.html`;
+  a.download = filename;
   a.click();
   URL.revokeObjectURL(url);
+};
+
+export const downloadMasterDataReport = (result: DiagnosticResult) => {
+  downloadHtml(
+    generateReportHtml(result),
+    `FinOps_Master_Data_${new Date().toISOString().split('T')[0]}.html`
+  );
+};
+
+export const downloadSummaryReport = (result: DiagnosticResult) => {
+  downloadHtml(
+    generateSummaryReportHtml(result),
+    `FinOps_Summary_Report_${new Date().toISOString().split('T')[0]}.html`
+  );
+};
+
+export const downloadReport = downloadMasterDataReport;
+
+const summaryMetricCard = (label: string, value: string, note: string, tone = 'slate'): string => `
+  <div class="summary-metric summary-metric-${tone}">
+    <span>${escapeHtml(label)}</span>
+    <strong>${escapeHtml(value)}</strong>
+    <p>${escapeHtml(note)}</p>
+  </div>`;
+
+const renderSummaryExecutiveSummary = (result: DiagnosticResult): string => {
+  const summaries = result.phase_3_strategy.executive_summaries;
+  if (!summaries) {
+    return `<div class="summary-card summary-prose">${renderMarkdownSummaryHtml(result.phase_3_strategy.executive_summary || '')}</div>`;
+  }
+  const blocks = (Object.entries(PERSONA_SUMMARY_LABELS) as Array<[keyof typeof PERSONA_SUMMARY_LABELS, string]>)
+    .filter(([id]) => !!summaries[id])
+    .map(([id, label]) => `
+      <section class="exec-lens">
+        <h3>${escapeHtml(label)} lens</h3>
+        <div class="summary-prose">${renderMarkdownSummaryHtml(summaries[id] || '')}</div>
+      </section>`)
+    .join('');
+  return `<div class="exec-grid">${blocks}</div>`;
+};
+
+const renderSummaryDiagnosis = (result: DiagnosticResult): string => {
+  const diagnosis = result.phase_3_strategy.diagnosis;
+  if (!diagnosis) return '';
+  return `
+    <section class="summary-section">
+      <h2>Diagnosis</h2>
+      <div class="summary-card">
+        ${diagnosis.primary_bottleneck ? `<div class="diagnosis-lead"><span>Primary bottleneck</span><p>${escapeHtml(diagnosis.primary_bottleneck)}</p></div>` : ''}
+        <div class="two-col">
+          <div>
+            <h3>Root causes</h3>
+            <ul>${(diagnosis.root_causes || []).map(i => `<li>${escapeHtml(i)}</li>`).join('')}</ul>
+          </div>
+          <div>
+            <h3>Domain diagnosis</h3>
+            <ul>${Object.entries(diagnosis.domain_diagnosis || {}).map(([domain, text]) => `<li><strong>${escapeHtml(domain)}:</strong> ${escapeHtml(text)}</li>`).join('')}</ul>
+          </div>
+        </div>
+        <div class="confidence-line"><strong>Diagnostic confidence: ${escapeHtml(diagnosis.confidence || 'unknown')}</strong>${diagnosis.confidence_rationale ? ` · ${escapeHtml(diagnosis.confidence_rationale)}` : ''}</div>
+      </div>
+    </section>`;
+};
+
+const renderSummaryPlanningDecision = (result: DiagnosticResult): string => {
+  const decision = result.phase_3_strategy.planning_decision;
+  if (!decision) return '';
+  return `
+    <section class="summary-section">
+      <h2>Planning Decision</h2>
+      <div class="decision-card decision-${String(decision.decision || '').toLowerCase()}">
+        <div>
+          <span>Decision</span>
+          <strong>${escapeHtml(String(decision.decision || '').replace('_', ' '))}</strong>
+        </div>
+        <p>${escapeHtml(decision.rationale || '')}</p>
+        <div class="two-col">
+          <div>
+            <h3>Safe to act on</h3>
+            <ul>${(decision.safe_to_act_on || []).map(i => `<li>${escapeHtml(i)}</li>`).join('')}</ul>
+          </div>
+          <div>
+            <h3>Evidence needed before action</h3>
+            <ul>${(decision.evidence_needed_before_action || []).map(i => `<li>${escapeHtml(i)}</li>`).join('')}</ul>
+          </div>
+        </div>
+      </div>
+    </section>`;
+};
+
+const renderSummaryRoadmap = (result: DiagnosticResult): string => {
+  const effectiveBracket = result.phase_3_strategy.effective_bracket ?? result.phase_3_strategy.confidence_bracket;
+  const isBlocked = result.quality_gate.decision === 'BLOCK';
+  const roadmap = result.phase_3_strategy.remediation_roadmap || [];
+  if (effectiveBracket === 'LOW' && result.phase_3_strategy.findings_mode) return renderFindingsMode(result);
+  if (effectiveBracket === 'LOW' || isBlocked || roadmap.length === 0) {
+    return `
+      <section class="summary-section">
+        <h2>Remediation Roadmap</h2>
+        <div class="withheld-card">
+          <strong>Directive roadmap withheld</strong>
+          <p>Use the evidence summary, diagnosis, planning decision, and validation plan before acting. The engine withheld implementation actions because the effective confidence level or Quality Gate does not support a directive roadmap.</p>
+        </div>
+      </section>`;
+  }
+  return `
+    <section class="summary-section">
+      <h2>Remediation Roadmap</h2>
+      <div class="roadmap-list">
+        ${roadmap.map((step, index) => `
+          <article class="roadmap-phase summary-roadmap-phase">
+            <div class="phase-kicker">Phase ${index + 1}</div>
+            <h3>${escapeHtml(step.phase)}</h3>
+            <div class="roadmap-context">
+              ${step.why ? `<div><span>Why</span><p>${escapeHtml(step.why)}</p></div>` : ''}
+              ${step.what ? `<div><span>What</span><p>${escapeHtml(step.what)}</p></div>` : ''}
+            </div>
+            <div class="how-list">
+              <span>How</span>
+              <ul>${step.actions.map(a => `<li>${escapeHtml(a)}</li>`).join('')}</ul>
+            </div>
+          </article>`).join('')}
+      </div>
+    </section>`;
+};
+
+const maturityHeatClass = (item: AuditItem | undefined): string => {
+  if (!item || item.is_silent) return 'heat-silent';
+  const status = (item.status || '').toUpperCase();
+  if (status === 'OK') return 'heat-good';
+  if (status === 'PARTIAL') return 'heat-partial';
+  return 'heat-gap';
+};
+
+const antiPatternHeatClass = (item: AuditItem | undefined): string => {
+  if (!item || item.is_silent) return 'heat-silent';
+  const status = inferAntiPatternAbsenceStatus(item);
+  if (status === 'confirmed_present') return 'heat-gap';
+  if (status === 'partially_present') return 'heat-partial';
+  if (status === 'tested_absent') return 'heat-good';
+  return 'heat-silent';
+};
+
+const renderSummaryHeatmap = (result: DiagnosticResult): string => {
+  const renderStream = (stream: 'maturity' | 'antipattern', title: string): string => {
+    const logs = stream === 'maturity' ? result.phase_1_audit_logs.maturity : result.phase_1_audit_logs.antipattern;
+    return `
+      <div class="heatmap-panel">
+        <h3>${escapeHtml(title)}</h3>
+        ${BATCHES.map(batch => {
+          const items = MASTER_BINGO_FINOPS[stream].filter(c => c.batch === batch);
+          return `
+            <div class="heatmap-row">
+              <div class="heatmap-batch"><strong>${batch}</strong><span>${escapeHtml(BATCH_TITLES[batch])}</span></div>
+              <div class="heatmap-cells">
+                ${items.map(cat => {
+                  const item = logs[cat.id];
+                  const klass = stream === 'maturity' ? maturityHeatClass(item) : antiPatternHeatClass(item);
+                  const label = stream === 'maturity' ? (item?.is_silent ? 'Silent' : item?.status || 'No Data') : antiPatternStatusLabel(item);
+                  const score = item?.count ?? 0;
+                  return `<div class="heat-cell ${klass}" title="${escapeHtml(`${cat.id} · ${cat.title} · ${label} · score ${score}`)}"><strong>${escapeHtml(cat.id)}</strong><span>${escapeHtml(label)}</span></div>`;
+                }).join('')}
+              </div>
+            </div>`;
+        }).join('')}
+      </div>`;
+  };
+  return `
+    <section class="summary-section">
+      <h2>Heatmap</h2>
+      <p class="section-lead">A fast view of where evidence supports maturity, where anti-patterns are present, and where the source material was not assessable.</p>
+      <div class="heatmap-legend">
+        <span><i class="heat-good"></i> Strong / tested absent</span>
+        <span><i class="heat-partial"></i> Partial / weak</span>
+        <span><i class="heat-gap"></i> Gap / finding</span>
+        <span><i class="heat-silent"></i> Silent / not assessed</span>
+      </div>
+      ${renderStream('maturity', 'Maturity coverage')}
+      ${renderStream('antipattern', 'Anti-pattern semantics')}
+    </section>`;
+};
+
+const generateSummaryReportHtml = (result: DiagnosticResult): string => {
+  const m = result.phase_2_validation.metrics;
+  const cwrClass = result.phase_2_validation.crawl_walk_run;
+  const isBlocked = result.quality_gate.decision === 'BLOCK';
+  const isInsufficientEvidence = isBlocked || m.evidence_density < 30 || m.antipattern_coverage < 60;
+  const readinessDescription = m.readiness_cap_reason || METRIC_DESCRIPTIONS.finops_readiness;
+  const gauges = [
+    { value: m.finops_readiness, label: 'Evidence-Gated Readiness', color: isBlocked ? '#f43f5e' : '#10b981', description: readinessDescription, trend: 'positive' as const, size: 'large' as const },
+    { value: m.maturity_depth, label: 'Maturity Depth', color: '#06b6d4', description: METRIC_DESCRIPTIONS.maturity_depth, trend: 'positive' as const },
+    { value: m.evidence_density, label: 'Evidence Density', color: '#475569', description: METRIC_DESCRIPTIONS.evidence_density, trend: 'positive' as const },
+    { value: m.antipattern_burden, label: 'Anti-Pattern Burden', color: '#e11d48', description: METRIC_DESCRIPTIONS.antipattern_burden, trend: 'negative' as const },
+    { value: m.antipattern_coverage, label: 'Anti-Pattern Coverage', color: '#64748b', description: METRIC_DESCRIPTIONS.antipattern_coverage, trend: 'positive' as const },
+    { value: m.antipattern_clearance, label: 'Anti-Pattern Clearance', color: '#10b981', description: METRIC_DESCRIPTIONS.antipattern_clearance, trend: 'positive' as const }
+  ];
+  const qgTone = result.quality_gate.decision === 'GO' ? 'go' : result.quality_gate.decision === 'WARN' ? 'warn' : 'block';
+  const sourceNote = (result.meta.source_parse_warnings?.length ?? 0) > 0
+    ? `<p class="source-note">Source parse note: ${escapeHtml(result.meta.source_parse_warnings![0])}${result.meta.source_parse_warnings!.length > 1 ? ` (+${result.meta.source_parse_warnings!.length - 1} more)` : ''}</p>`
+    : '';
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FinOps Summary Report</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: system-ui, -apple-system, "Segoe UI", sans-serif; background: #f8fafc; color: #0f172a; line-height: 1.55; }
+    .page { max-width: 1120px; margin: 0 auto; padding: 48px 28px 64px; }
+    .hero { background: #0f172a; color: #fff; border-radius: 24px; padding: 36px; margin-bottom: 28px; }
+    .hero h1 { margin: 0 0 10px; font-size: clamp(2rem, 5vw, 4.25rem); letter-spacing: -0.04em; line-height: 0.95; }
+    .hero p { color: #cbd5e1; margin: 0; max-width: 760px; }
+    .hero-meta { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 24px; }
+    .pill { display: inline-flex; align-items: center; gap: 8px; padding: 8px 12px; border-radius: 999px; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.12); font-size: 0.82rem; font-weight: 700; color: #e2e8f0; }
+    .pill-block { color: #fecdd3; }
+    .pill-warn { color: #fde68a; }
+    .pill-go { color: #bbf7d0; }
+    h2 { font-size: 1.55rem; margin: 2.5rem 0 1rem; letter-spacing: -0.02em; }
+    h3 { margin: 0 0 0.55rem; font-size: 1rem; }
+    ul { margin: 0; padding-left: 1.2rem; }
+    li { margin: 0.35rem 0; }
+    .summary-section { margin: 28px 0; }
+    .section-lead { margin-top: -0.5rem; color: #64748b; }
+    .source-note { margin: 16px 0 0; color: #fcd34d; font-size: 0.85rem; }
+    .summary-card, .exec-lens, .decision-card, .withheld-card, .heatmap-panel, .chart-card, .summary-roadmap-phase { background: #fff; border: 1px solid #e2e8f0; border-radius: 16px; padding: 22px; box-shadow: 0 12px 35px rgba(15,23,42,0.05); }
+    .summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 18px; }
+    .summary-sub h3 { color: #047857; text-transform: uppercase; letter-spacing: 0.1em; font-size: 0.72rem; margin-bottom: 0.5rem; }
+    .summary-sub li { color: #334155; }
+    .cg-lead { color: #64748b; margin-top: 0; }
+    .exec-grid { display: grid; grid-template-columns: 1fr; gap: 18px; }
+    .exec-lens h3 { color: #047857; text-transform: uppercase; letter-spacing: 0.1em; font-size: 0.78rem; }
+    .summary-prose p, .summary-paragraph { margin: 0 0 1rem; color: #334155; text-align: left; }
+    .summary-prose p:last-child, .summary-paragraph:last-child { margin-bottom: 0; }
+    .summary-prose strong { color: #0f172a; }
+    .summary-prose em { color: #047857; font-style: normal; font-weight: 700; }
+    .summary-metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 14px; margin: 22px 0; }
+    .summary-metric { background: #fff; border: 1px solid #e2e8f0; border-radius: 16px; padding: 18px; }
+    .summary-metric span { display: block; color: #64748b; text-transform: uppercase; letter-spacing: 0.1em; font-size: 0.68rem; font-weight: 800; }
+    .summary-metric strong { display: block; font-size: 2rem; line-height: 1.05; margin: 7px 0; }
+    .summary-metric p { color: #64748b; font-size: 0.82rem; margin: 0; }
+    .summary-metric-rose strong { color: #e11d48; }
+    .summary-metric-emerald strong { color: #059669; }
+    .summary-metric-amber strong { color: #b45309; }
+    .gauge-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1.25rem; align-items: stretch; }
+    .gauge-grid > .gauge-large { grid-column: span 2; }
+    .chart-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 18px; }
+    .chart-desc { color: #64748b; font-size: 0.88rem; margin: 0 0 12px; }
+    .two-col { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 18px; }
+    .diagnosis-lead { border-left: 3px solid #10b981; padding-left: 14px; margin-bottom: 18px; }
+    .diagnosis-lead span, .decision-card span, .roadmap-context span, .how-list span, .phase-kicker { display: block; color: #64748b; text-transform: uppercase; letter-spacing: 0.1em; font-size: 0.68rem; font-weight: 800; }
+    .diagnosis-lead p { margin: 4px 0 0; color: #334155; }
+    .confidence-line { margin-top: 18px; padding-top: 14px; border-top: 1px solid #e2e8f0; color: #475569; font-size: 0.9rem; }
+    .decision-card { border-left: 4px solid #94a3b8; }
+    .decision-go, .decision-conditional_go { border-left-color: #10b981; }
+    .decision-no_go { border-left-color: #f43f5e; }
+    .decision-card > div:first-child strong { display: block; font-size: 1.8rem; letter-spacing: -0.03em; }
+    .roadmap-list { display: grid; gap: 18px; }
+    .summary-roadmap-phase { border-left: 4px solid #10b981; }
+    .summary-roadmap-phase h3 { font-size: 1.2rem; }
+    .roadmap-context { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; margin: 14px 0; }
+    .roadmap-context div { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 14px; }
+    .roadmap-context p, .how-list p { margin: 4px 0 0; color: #334155; }
+    .how-list { margin-top: 12px; }
+    .withheld-card { border-left: 4px solid #f43f5e; }
+    .withheld-card p { color: #475569; margin-bottom: 0; }
+    .heatmap-legend { display: flex; flex-wrap: wrap; gap: 12px; margin: 0 0 16px; color: #475569; font-size: 0.82rem; }
+    .heatmap-legend i { display: inline-block; width: 12px; height: 12px; border-radius: 4px; margin-right: 5px; vertical-align: -1px; }
+    .heatmap-panel { margin: 16px 0; }
+    .heatmap-row { display: grid; grid-template-columns: 170px 1fr; gap: 12px; align-items: stretch; padding: 10px 0; border-top: 1px solid #eef2f7; }
+    .heatmap-row:first-of-type { border-top: 0; }
+    .heatmap-batch strong { display: block; font-size: 1.1rem; }
+    .heatmap-batch span { color: #64748b; font-size: 0.78rem; }
+    .heatmap-cells { display: grid; grid-template-columns: repeat(5, minmax(90px, 1fr)); gap: 8px; }
+    .heat-cell { min-height: 72px; border-radius: 10px; padding: 10px; border: 1px solid; }
+    .heat-cell strong { display: block; font-family: ui-monospace, SFMono-Regular, monospace; font-size: 0.78rem; }
+    .heat-cell span { display: block; margin-top: 8px; font-size: 0.72rem; font-weight: 700; }
+    .heat-good { background: #d1fae5; border-color: #a7f3d0; color: #065f46; }
+    .heat-partial { background: #fef3c7; border-color: #fde68a; color: #92400e; }
+    .heat-gap { background: #ffe4e6; border-color: #fecdd3; color: #9f1239; }
+    .heat-silent { background: #f1f5f9; border-color: #e2e8f0; color: #64748b; }
+    .footer { text-align: center; color: #94a3b8; font-size: 0.85rem; padding: 34px 0 10px; }
+    ${SVG_CSS}
+    @media (max-width: 760px) {
+      .page { padding: 24px 16px 44px; }
+      .hero { padding: 26px; border-radius: 18px; }
+      .gauge-grid > .gauge-large { grid-column: span 1; }
+      .heatmap-row { grid-template-columns: 1fr; }
+      .heatmap-cells { grid-template-columns: repeat(2, minmax(120px, 1fr)); }
+    }
+    @media print {
+      body { background: #fff; }
+      .page { max-width: none; padding: 24px; }
+      .summary-card, .exec-lens, .decision-card, .withheld-card, .heatmap-panel, .chart-card, .summary-roadmap-phase, .gauge-card { page-break-inside: avoid; box-shadow: none; }
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <header class="hero">
+      <h1>FinOps Summary Report</h1>
+      <p>A shareable view of the validated assessment: executive interpretation, evidence-gated maturity, diagnosis, planning decision, roadmap, and heatmap. Detailed forensic evidence remains in the Master Data report.</p>
+      <div class="hero-meta">
+        <span class="pill">Generated ${escapeHtml(result.meta.timestamp)}</span>
+        <span class="pill">Classification ${escapeHtml(cwrClass)}</span>
+        <span class="pill pill-${qgTone}">Quality Gate ${escapeHtml(result.quality_gate.decision)}</span>
+        <span class="pill">Evidence ${Math.round(m.evidence_density)}%</span>
+      </div>
+      ${sourceNote}
+    </header>
+
+    <section class="summary-section">
+      <h2>Executive Summary</h2>
+      ${renderSummaryExecutiveSummary(result)}
+    </section>
+
+    <section class="summary-section">
+      <h2>Maturity Gauges</h2>
+      <div class="summary-metrics">
+        ${summaryMetricCard('Evidence-Gated Readiness', `${Math.round(m.finops_readiness)}%`, readinessDescription, isBlocked ? 'rose' : 'emerald')}
+        ${summaryMetricCard('Maturity Depth', `${Math.round(m.maturity_depth)}%`, METRIC_DESCRIPTIONS.maturity_depth)}
+        ${summaryMetricCard('Evidence Density', `${Math.round(m.evidence_density)}%`, METRIC_DESCRIPTIONS.evidence_density, m.evidence_density < 60 ? 'amber' : 'emerald')}
+        ${summaryMetricCard('Anti-Pattern Burden', `${Math.round(m.antipattern_burden)}%`, METRIC_DESCRIPTIONS.antipattern_burden, 'rose')}
+      </div>
+      <div class="gauge-grid">
+        ${gauges.map(g => svgGaugeCard(g)).join('')}
+      </div>
+    </section>
+
+    <section class="summary-section">
+      <h2>Visual Diagnosis</h2>
+      <div class="chart-row">
+        <div class="chart-card">
+          <h3>Category Footprint</h3>
+          <p class="chart-desc">Per-domain maturity versus anti-pattern burden.</p>
+          ${svgRadar(result.phase_1_audit_logs)}
+        </div>
+        <div class="chart-card">
+          <h3>Position vs. Quadrants</h3>
+          <p class="chart-desc">Validated maturity depth plotted against confirmed anti-pattern burden. Insufficient evidence suppresses misleading quadrant labels.</p>
+          ${svgScatter(m.maturity_depth, m.antipattern_burden, isInsufficientEvidence)}
+        </div>
+      </div>
+    </section>
+
+    ${renderSummaryDiagnosis(result)}
+    ${renderSummaryPlanningDecision(result)}
+    ${renderSummaryRoadmap(result)}
+    ${renderSummaryHeatmap(result)}
+
+    <footer class="footer">
+      <p>FinOps Assessment Engine v${escapeHtml(result.meta.engine_version)} · Summary Report</p>
+      <p>This report is generated deterministically from the validated assessment output. Full audit details are available in the Master Data report.</p>
+    </footer>
+  </main>
+  <script id="finops-data" type="application/json">${JSON.stringify(result)}</script>
+</body>
+</html>`;
 };
 
 const generateReportHtml = (result: DiagnosticResult): string => {
