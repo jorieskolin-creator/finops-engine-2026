@@ -404,7 +404,18 @@ const renderHeatmapCells = (
           const klass = stream === 'maturity' ? maturityHeatClass(item) : antiPatternHeatClass(item);
           const label = stream === 'maturity' ? maturityHeatLabel(item) : antiPatternStatusLabel(item);
           const score = item?.count ?? 0;
-          return `<div class="${compact ? 'compact-heat-cell' : 'heat-cell'} ${klass}" title="${escapeHtml(`${cat.id} · ${cat.title} · ${label} · score ${score}`)}"><strong>${escapeHtml(cat.id)}</strong><span>${escapeHtml(label)}</span></div>`;
+          if (compact) {
+            return `
+              <article class="compact-heat-cell ${klass}" title="${escapeHtml(`${cat.id} · ${cat.title} · ${label} · score ${score}`)}">
+                <div class="compact-heat-head">
+                  <strong>${escapeHtml(cat.id)}</strong>
+                  <span>${escapeHtml(label)}</span>
+                </div>
+                <h4>${escapeHtml(cat.title)}</h4>
+                <p>${escapeHtml(cat.desc)}</p>
+              </article>`;
+          }
+          return `<div class="heat-cell ${klass}" title="${escapeHtml(`${cat.id} · ${cat.title} · ${label} · score ${score}`)}"><strong>${escapeHtml(cat.id)}</strong><span>${escapeHtml(label)}</span></div>`;
         }).join('')}
       </div>
     </div>`;
@@ -529,9 +540,12 @@ const generateSummaryReportHtml = (result: DiagnosticResult): string => {
     .compact-heatmap-batch strong { display: block; font-size: 1rem; }
     .compact-heatmap-batch span { color: #64748b; font-size: 0.74rem; }
     .compact-heatmap-cells { display: grid; grid-template-columns: repeat(5, minmax(84px, 1fr)); gap: 7px; }
-    .compact-heat-cell { min-height: 58px; border-radius: 10px; padding: 9px; border: 1px solid; }
-    .compact-heat-cell strong { display: block; font-family: ui-monospace, SFMono-Regular, monospace; font-size: 0.76rem; }
-    .compact-heat-cell span { display: block; margin-top: 6px; font-size: 0.7rem; font-weight: 800; }
+    .compact-heat-cell { min-height: 172px; border-radius: 12px; padding: 12px; border: 1px solid; }
+    .compact-heat-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; margin-bottom: 10px; }
+    .compact-heat-head strong { display: block; font-family: ui-monospace, SFMono-Regular, monospace; font-size: 0.76rem; }
+    .compact-heat-head span { display: inline-flex; align-items: center; justify-content: center; min-height: 22px; padding: 3px 7px; border-radius: 999px; background: rgba(255,255,255,0.55); border: 1px solid currentColor; font-size: 0.62rem; font-weight: 900; text-transform: uppercase; }
+    .compact-heat-cell h4 { margin: 0 0 8px; color: #0f172a; font-size: 0.88rem; line-height: 1.18; }
+    .compact-heat-cell p { margin: 0; color: #334155; font-size: 0.74rem; line-height: 1.38; }
     .heatmap-panel { margin: 16px 0; }
     .heatmap-row { display: grid; grid-template-columns: 170px 1fr; gap: 12px; align-items: stretch; padding: 10px 0; border-top: 1px solid #eef2f7; }
     .heatmap-row:first-of-type { border-top: 0; }
