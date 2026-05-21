@@ -2,6 +2,8 @@ import assert from 'node:assert/strict';
 import {
   extractJsonFrontMatter,
   expectedIdsFromPathname,
+  normalizeCapabilityId,
+  normalizeCriterionId,
   sanitizeKbDocument,
   validateKbMetadata,
 } from '../lib/kbIndex.js';
@@ -42,6 +44,18 @@ const antiMeta = {
 };
 delete antiMeta.capability_name;
 assert.deepEqual(validateKbMetadata(antiMeta, antiPath), []);
+assert.equal(normalizeCriterionId('AP – A1'), 'AP-A1');
+assert.equal(normalizeCriterionId('AP - A1'), 'AP-A1');
+assert.equal(normalizeCriterionId('AP—A1'), 'AP-A1');
+assert.equal(normalizeCriterionId('APA1'), 'AP-A1');
+assert.equal(normalizeCapabilityId('AP – A1'), 'A1');
+
+const extractedDashMeta = {
+  ...antiMeta,
+  criterion_id: 'AP – A1',
+  capability_id: 'AP - A1',
+};
+assert.deepEqual(validateKbMetadata(extractedDashMeta, antiPath), []);
 
 const legacyMeta = {
   ...antiMeta,
@@ -66,5 +80,16 @@ const doc = sanitizeKbDocument({
 assert.equal(doc.stream, 'maturity');
 assert.equal(doc.criterion_id, 'A1');
 assert(doc.body_excerpt.includes('Reference body'));
+
+const antiDoc = sanitizeKbDocument({
+  pathname: antiPath,
+  url: 'https://example.test/ap.pdf',
+  downloadUrl: 'https://example.test/ap.pdf?download=1',
+  size: 123,
+  uploadedAt: '2026-05-21T00:00:00.000Z',
+  text: `${JSON.stringify(extractedDashMeta, null, 2)}\n\nAnti-pattern reference body.`,
+});
+assert.equal(antiDoc.criterion_id, 'AP-A1');
+assert.equal(antiDoc.capability_id, 'A1');
 
 console.log('KB index tests passed');
