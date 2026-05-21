@@ -463,6 +463,11 @@ const generateSummaryReportHtml = (result: DiagnosticResult): string => {
     { value: m.antipattern_clearance, label: 'Anti-Pattern Clearance', color: '#10b981', description: METRIC_DESCRIPTIONS.antipattern_clearance, trend: 'positive' as const }
   ];
   const qgTone = result.quality_gate.decision === 'GO' ? 'go' : result.quality_gate.decision === 'WARN' ? 'warn' : 'block';
+  const kbStatus = result.meta.knowledge_base
+    ? result.meta.knowledge_base.source === 'remote_blob'
+      ? `Remote KB ${result.meta.knowledge_base.document_count} PDFs`
+      : 'Built-in KB fallback'
+    : '';
   const sourceNote = (result.meta.source_parse_warnings?.length ?? 0) > 0
     ? `<p class="source-note">Source parse note: ${escapeHtml(result.meta.source_parse_warnings![0])}${result.meta.source_parse_warnings!.length > 1 ? ` (+${result.meta.source_parse_warnings!.length - 1} more)` : ''}</p>`
     : '';
@@ -588,6 +593,7 @@ const generateSummaryReportHtml = (result: DiagnosticResult): string => {
         <span class="pill">Classification ${escapeHtml(cwrClass)}</span>
         <span class="pill pill-${qgTone}">Quality Gate ${escapeHtml(result.quality_gate.decision)}</span>
         <span class="pill">Evidence ${Math.round(m.evidence_density)}%</span>
+        ${kbStatus ? `<span class="pill">${escapeHtml(kbStatus)}</span>` : ''}
       </div>
       ${sourceNote}
     </header>
@@ -800,6 +806,9 @@ const generateReportHtml = (result: DiagnosticResult): string => {
   <div class="meta">
     <p>Generated ${escapeHtml(result.meta.timestamp)} · Engine ${escapeHtml(result.meta.engine_version)}</p>
     <p>Models: ${escapeHtml(result.meta.model_config.preflight)} (Pre-Flight) · ${escapeHtml(result.meta.model_config.forensic_audit)} (Audit) · ${escapeHtml(result.meta.model_config.evidence_check)} (Evidence Check) · ${escapeHtml(result.meta.model_config.synthesis)} (Summary/Diagnosis)${result.meta.model_config.roadmap_synthesis ? ` · ${escapeHtml(result.meta.model_config.roadmap_synthesis)} (Roadmap)` : ''} · ${escapeHtml(result.meta.model_config.fact_check)} (Fact-Check)</p>
+    ${result.meta.knowledge_base ? `<p>Knowledge Base: ${result.meta.knowledge_base.source === 'remote_blob'
+      ? `Remote PDF KB loaded (${escapeHtml(String(result.meta.knowledge_base.document_count))} PDFs${result.meta.knowledge_base.failure_count ? `, ${escapeHtml(String(result.meta.knowledge_base.failure_count))} issue(s)` : ''})`
+      : 'Built-in KB fallback'}</p>` : ''}
     ${(result.meta.source_parse_warnings?.length ?? 0) > 0 ? `<p>Source parse note: ${escapeHtml(result.meta.source_parse_warnings![0])}${result.meta.source_parse_warnings!.length > 1 ? ` (+${result.meta.source_parse_warnings!.length - 1} more)` : ''}</p>` : ''}
   </div>
 

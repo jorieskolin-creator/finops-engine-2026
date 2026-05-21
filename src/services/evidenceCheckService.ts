@@ -1,4 +1,4 @@
-import { BATCH_DEFINITIONS } from '../knowledge_base';
+import { BATCH_DEFINITIONS, knowledgeBaseService } from '../knowledge_base';
 import {
   AuditItem,
   EvidenceCheckAdjustment,
@@ -95,7 +95,8 @@ const buildEvidenceCheckPrompt = (
   batchId: string,
   definitions: any,
   batch: BatchAuditResult,
-  text: string
+  text: string,
+  referenceKbContext: string
 ): string => `
 <role>
 You are an independent FinOps evidence verifier. Your job is NOT to rescan the whole document. Your job is to verify whether the scanner's forwarded findings and scores are actually supported by the raw source material.
@@ -104,6 +105,8 @@ You are an independent FinOps evidence verifier. Your job is NOT to rescan the w
 <batch_scope>
 Batch ${batchId}: ${definitions.title}
 </batch_scope>
+
+${referenceKbContext}
 
 <source_material>
 ${text.substring(0, 50000)}
@@ -129,6 +132,7 @@ ${summarizeBatch(batch)}
 - "missing": the scanner scored >0 but did not provide usable traceable evidence, or the evidence cannot be located.
 - For text evidence, quoted text must be a real substring or clearly faithful excerpt from the source.
 - For image evidence, the description must be something visible in the attached image content.
+- The REFERENCE_KNOWLEDGE_BASE is rubric/reference material only. It can clarify what good evidence looks like, false positives, and coverage expectations, but it is never source evidence for this customer.
 - Do not invent stronger scores. If unsure, recommend the lower score.
 - verified_count must be 0-3 and must not exceed original_count.
 - rescan_recommended should be true when status is weak, unsupported, or missing and original_count > 0.
@@ -173,8 +177,13 @@ export const runEvidenceCheck = async (
   const expectedTotal = expectedIds.length * STREAMS.length;
 
   try {
+    const referenceKbContext = await knowledgeBaseService.fetchReferenceKnowledgeBaseContext({
+      batchId,
+      maxDocChars: 1100,
+      label: 'evidence_check',
+    });
     const resp = await runStage('evidence_check', {
-      userText: buildEvidenceCheckPrompt(batchId, definitions, batch, text),
+      userText: buildEvidenceCheckPrompt(batchId, definitions, batch, text, referenceKbContext),
       images,
     }, ctx);
     const parsed = parseAiResponse(resp.text);

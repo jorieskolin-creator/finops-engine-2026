@@ -887,6 +887,13 @@ export const ReportView: React.FC<ReportViewProps> = ({ result, onBack, onDownlo
             Models: {result.meta.model_config.preflight} (Pre-Flight) | {result.meta.model_config.forensic_audit} (Audit) | {result.meta.model_config.evidence_check} (Evidence Check) | {result.meta.model_config.synthesis} (Summary/Diagnosis)
             {result.meta.model_config.roadmap_synthesis ? ` | ${result.meta.model_config.roadmap_synthesis} (Roadmap)` : ''} | {result.meta.model_config.fact_check} (Fact-Check)
           </p>
+          {result.meta.knowledge_base && (
+            <p>
+              Knowledge Base: {result.meta.knowledge_base.source === 'remote_blob'
+                ? `Remote PDF KB loaded (${result.meta.knowledge_base.document_count} PDFs${result.meta.knowledge_base.failure_count ? `, ${result.meta.knowledge_base.failure_count} issue(s)` : ''})`
+                : 'Built-in KB fallback'}
+            </p>
+          )}
         </div>
       </div>
     </div>

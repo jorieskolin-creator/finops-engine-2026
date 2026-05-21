@@ -1,5 +1,5 @@
 
-import { KnowledgeTaxonomyRegistry, StrategicTactic } from '../types';
+import type { KnowledgeTaxonomyRegistry, RemoteKnowledgeBaseDocument, RemoteKnowledgeBaseIndex, StrategicTactic } from '../types';
 import criteriaData from './finops_criteria.json';
 import antipatternData from './finops_antipatterns.json';
 import keywordsData from './finops_preflight_keywords.json';
@@ -181,7 +181,115 @@ const FALLBACK_TACTICS: StrategicTactic[] = [
   }
 ];
 
+const emptyRemoteKbIndex = (reason: string): RemoteKnowledgeBaseIndex => ({
+  status: {
+    source: 'built_in',
+    document_count: 0,
+    failure_count: reason ? 1 : 0,
+  },
+  documents: [],
+  failures: reason ? [{ pathname: 'Knowledge Base/', reason }] : [],
+});
+
+let remoteKbIndexPromise: Promise<RemoteKnowledgeBaseIndex> | null = null;
+
+const normalizeKbText = (text: string, maxChars: number): string => {
+  const compacted = String(text || '')
+    .replace(/\r/g, '')
+    .replace(/[ \t]+\n/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+  return compacted.length > maxChars
+    ? `${compacted.slice(0, maxChars).trim()}\n[truncated]`
+    : compacted;
+};
+
+const formatKbDoc = (doc: RemoteKnowledgeBaseDocument, maxChars: number): string => {
+  const allowed = doc.allowed_uses?.length ? doc.allowed_uses.join(', ') : 'rubric_context';
+  const forbidden = doc.forbidden_uses?.length ? doc.forbidden_uses.join(', ') : 'customer_current_state_claim, source_evidence_quote';
+  const categories = doc.evidence_categories?.length ? doc.evidence_categories.join(', ') : '(not declared)';
+  return [
+    `[${doc.stream.toUpperCase()} ${doc.criterion_id}] ${doc.title}`,
+    `Domain: ${doc.domain_id} ${doc.domain_name}`,
+    `Capability: ${doc.capability_id}`,
+    `Evidence categories: ${categories}`,
+    `Allowed uses: ${allowed}`,
+    `Forbidden uses: ${forbidden}`,
+    'Reference content:',
+    normalizeKbText(doc.body_excerpt || '', maxChars),
+  ].join('\n');
+};
+
+const formatRemoteKbContext = (
+  index: RemoteKnowledgeBaseIndex,
+  options: { batchId?: string; maxDocChars?: number; label?: string } = {}
+): string => {
+  const batchId = options.batchId;
+  const maxDocChars = options.maxDocChars ?? (batchId ? 1400 : 650);
+  const documents = (index.documents || [])
+    .filter(doc => !batchId || doc.domain_id === batchId)
+    .sort((a, b) => `${a.stream}.${a.criterion_id}`.localeCompare(`${b.stream}.${b.criterion_id}`));
+
+  if (documents.length === 0) {
+    const reason = index.failures?.[0]?.reason || 'remote KB unavailable';
+    return `<REFERENCE_KNOWLEDGE_BASE status="fallback">
+Remote PDF Knowledge Base unavailable or empty (${reason}). Use built-in criteria and tactics only.
+</REFERENCE_KNOWLEDGE_BASE>`;
+  }
+
+  const scope = batchId ? `Batch ${batchId}` : 'All domains';
+  return `<REFERENCE_KNOWLEDGE_BASE status="${index.status.source}" scope="${scope}" usage="rubric_reference_only_not_customer_evidence">
+Remote PDF Knowledge Base loaded: ${index.status.document_count} document(s), ${index.status.failure_count} parse/validation issue(s).
+
+BOUNDARIES:
+- Use this KB only for rubric interpretation, evidence requirements, false-positive checks, validation questions, and roadmap/remediation patterns.
+- Never cite this KB as proof of the assessed customer's current state.
+- Never copy KB text into source_evidence_quote.
+- Evidence summaries and diagnosis must remain grounded in uploaded source material, Phase 1 evidence quotes, and Phase 2 metrics.
+
+${documents.map(doc => formatKbDoc(doc, maxDocChars)).join('\n\n---\n\n')}
+</REFERENCE_KNOWLEDGE_BASE>`;
+};
+
 export const knowledgeBaseService = {
+  async fetchReferenceKnowledgeBaseIndex(): Promise<RemoteKnowledgeBaseIndex> {
+    if (remoteKbIndexPromise) return remoteKbIndexPromise;
+    remoteKbIndexPromise = (async () => {
+      try {
+        if (typeof fetch !== 'function') {
+          return emptyRemoteKbIndex('fetch API unavailable');
+        }
+        const response = await fetch('/api/kb-index', {
+          method: 'GET',
+          headers: { 'Accept': 'application/json' },
+          cache: 'no-store',
+        });
+        if (!response.ok) {
+          throw new Error(`/api/kb-index HTTP ${response.status}`);
+        }
+        const index = await response.json() as RemoteKnowledgeBaseIndex;
+        if (!index?.documents) {
+          return emptyRemoteKbIndex('remote KB index response was malformed');
+        }
+        if (index.status?.source === 'remote_blob') {
+          console.info(`[FinOps KnowledgeBase] Remote PDF KB loaded: ${index.status.document_count} documents.`);
+        } else {
+          console.info(`[FinOps KnowledgeBase] Using built-in KB fallback (${index.failures?.[0]?.reason || 'remote unavailable'}).`);
+        }
+        return index;
+      } catch (error: any) {
+        console.warn('[FinOps KnowledgeBase] Remote PDF KB unavailable, using built-in fallback:', error);
+        return emptyRemoteKbIndex(error?.message || String(error));
+      }
+    })();
+    return remoteKbIndexPromise;
+  },
+
+  async fetchReferenceKnowledgeBaseContext(options: { batchId?: string; maxDocChars?: number; label?: string } = {}): Promise<string> {
+    const index = await this.fetchReferenceKnowledgeBaseIndex();
+    return formatRemoteKbContext(index, options);
+  },
+
   async fetchStrategicPlaybook(): Promise<string> {
     let tactics: StrategicTactic[] = [];
     let blobUrl: string | undefined = undefined;

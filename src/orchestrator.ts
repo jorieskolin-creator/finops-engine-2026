@@ -1,6 +1,6 @@
 
 import { generateBatchSystemInstruction, generateBatchUserPrompt, generateTargetedBatchUserPrompt } from './prompts';
-import { BATCH_DEFINITIONS } from './knowledge_base';
+import { BATCH_DEFINITIONS, knowledgeBaseService } from './knowledge_base';
 import { runStage, serverLog, RunContext } from './services/modelRouter';
 import { EvidenceCheckItem, EvidenceCheckResult, ImageInput } from './types';
 import {
@@ -51,8 +51,13 @@ const runSingleBatch = async (
   const definitions = BATCH_DEFINITIONS[batchId];
   const systemInstruction = generateBatchSystemInstruction(batchId, definitions.title);
   const userPrompt = userPromptOverride || generateBatchUserPrompt(batchId, definitions);
+  const referenceKbContext = await knowledgeBaseService.fetchReferenceKnowledgeBaseContext({
+    batchId,
+    maxDocChars: userPromptOverride ? 1000 : 1400,
+    label: userPromptOverride ? 'targeted_rescan' : 'forensic_audit',
+  });
 
-  const userText = `${userPrompt}\n\n<UNTRUSTED_CONTENT>\n${text}\n</UNTRUSTED_CONTENT>`;
+  const userText = `${userPrompt}\n\n${referenceKbContext}\n\n<UNTRUSTED_CONTENT>\n${text}\n</UNTRUSTED_CONTENT>`;
 
   const response = await runStage('forensic_audit', {
     userText,

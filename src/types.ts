@@ -241,6 +241,7 @@ export interface AnalysisMeta {
   timestamp: string;
   engine_version: string;
   source_parse_warnings?: string[];
+  knowledge_base?: KnowledgeBaseRuntimeStatus;
   model_config: {
     preflight: string;
     forensic_audit: string;
@@ -250,6 +251,42 @@ export interface AnalysisMeta {
     fact_check: string;
     validators: string;
   };
+}
+
+export interface KnowledgeBaseRuntimeStatus {
+  source: 'remote_blob' | 'fallback' | 'built_in';
+  prefix?: string;
+  document_count: number;
+  failure_count: number;
+  domains?: Record<string, number>;
+  loaded_at?: string;
+}
+
+export interface RemoteKnowledgeBaseDocument {
+  pathname: string;
+  url?: string;
+  downloadUrl?: string;
+  size?: number;
+  uploadedAt?: string;
+  kb_id?: string;
+  domain_id: string;
+  domain_name: string;
+  stream: 'maturity' | 'antipattern';
+  criterion_id: string;
+  capability_id: string;
+  title: string;
+  evidence_categories: string[];
+  allowed_uses: string[];
+  forbidden_uses: string[];
+  legacy_ids: string[];
+  body_excerpt: string;
+}
+
+export interface RemoteKnowledgeBaseIndex {
+  status: KnowledgeBaseRuntimeStatus;
+  documents: RemoteKnowledgeBaseDocument[];
+  failures: Array<{ pathname: string; reason: string }>;
+  cached?: boolean;
 }
 
 export type QualityGateDecision = 'GO' | 'WARN' | 'BLOCK';

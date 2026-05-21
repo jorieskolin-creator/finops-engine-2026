@@ -249,6 +249,14 @@ export const analyzeDocument = async (
 
     console.log("[FinOps] Pre-fetching Tactics Database for Phase 3...");
     const tacticsPromise = knowledgeBaseService.fetchStrategicPlaybook();
+    const referenceKbPromise = knowledgeBaseService.fetchReferenceKnowledgeBaseIndex();
+    const referenceKbIndex = await referenceKbPromise;
+    serverLog(runId, referenceKbIndex.status.source === 'remote_blob' ? 'info' : 'warn', referenceKbIndex.status.source === 'remote_blob' ? 'kb_index_loaded' : 'kb_index_fallback', {
+      documents: referenceKbIndex.status.document_count,
+      failures: referenceKbIndex.status.failure_count,
+      prefix: referenceKbIndex.status.prefix || 'Knowledge Base/',
+      source: referenceKbIndex.status.source,
+    });
 
     onProgress('audit', 5);
     console.log(`[FinOps] [${runId}] Running Phase 1 Parallel Audit (5 batches)...`);
@@ -353,6 +361,10 @@ export const analyzeDocument = async (
 
     onProgress('strategy', 20);
     const tacticsContext = await tacticsPromise;
+    const referenceKbContext = await knowledgeBaseService.fetchReferenceKnowledgeBaseContext({
+      maxDocChars: 650,
+      label: 'phase3_strategy',
+    });
 
     const definitionsContext = JSON.stringify(BATCH_DEFINITIONS, null, 2);
     const taxonomyContext = JSON.stringify(FINOPS_TAXONOMY_REGISTRY, null, 2);
@@ -369,7 +381,10 @@ ${taxonomyContext}
 === PART 2: THE CRITERIA (DEFINITIONS) ===
 ${definitionsContext}
 
-=== PART 3: THE PLAYBOOK (SOLUTIONS) ===
+=== PART 3: REFERENCE KNOWLEDGE BASE (PDF RUBRICS + USAGE BOUNDARIES) ===
+${referenceKbContext}
+
+=== PART 4: THE PLAYBOOK (SOLUTIONS) ===
 ${tacticsContext}`;
 
     onProgress('strategy', 50);
@@ -887,6 +902,7 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => `  ${cat}
         document_analyzed: "Uploaded Text",
         timestamp: new Date().toISOString(),
         engine_version: "finops-1.0.0",
+        knowledge_base: referenceKbIndex.status,
         model_config: {
           preflight: actuals.preflight,
           forensic_audit: actuals.forensic_audit,
