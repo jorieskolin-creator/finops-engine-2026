@@ -65,7 +65,13 @@ export const calculateMetrics = (logs: Phase1AuditLogs): Phase2Validation => {
     const item = rawItem as AuditItem;
     tally(item, 'antipattern');
     const absenceStatus = inferAntiPatternAbsenceStatus(item);
-    antipatternSum += Math.max(item.count, 0);
+    const effectiveBurdenCount =
+      absenceStatus === 'confirmed_present'
+        ? Math.max(item.count, 3)
+        : absenceStatus === 'partially_present'
+          ? Math.max(item.count, 1)
+          : Math.max(item.count, 0);
+    antipatternSum += effectiveBurdenCount;
     if (absenceStatus !== 'unknown_absent') assessedAntipatternCount++;
     if (absenceStatus === 'tested_absent') {
       testedAbsentCount++;
@@ -75,9 +81,10 @@ export const calculateMetrics = (logs: Phase1AuditLogs): Phase2Validation => {
     if (absenceStatus === 'unknown_absent') {
       unknownAntipatternAbsences.push(`[${key}] Not assessed: ${item.coverage_reason || item.reasoning || item.evidence || 'Source coverage was insufficient to verify absence.'}`);
     }
-    if (absenceStatus === 'confirmed_present') antipatternCount++;
-    if (item.count > 0) {
-      antipatternFindings.push(`[${key}] Finding: ${item.evidence.substring(0, 100)}...`);
+    if (absenceStatus === 'confirmed_present' || absenceStatus === 'partially_present') antipatternCount++;
+    if (absenceStatus === 'confirmed_present' || absenceStatus === 'partially_present' || item.count > 0) {
+      const findingLabel = absenceStatus === 'partially_present' ? 'Partial finding' : 'Finding';
+      antipatternFindings.push(`[${key}] ${findingLabel}: ${item.evidence.substring(0, 100)}...`);
     }
   });
 

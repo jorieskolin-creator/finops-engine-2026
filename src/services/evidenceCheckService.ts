@@ -12,8 +12,7 @@ import { runStage, RunContext } from './modelRouter';
 import { verifyTextEvidenceSupport } from './evidenceSupport';
 import {
   antiPatternStatusDescription,
-  inferAntiPatternAbsenceStatus,
-  normalizeAntiPatternAbsenceStatus
+  resolveAntiPatternAbsenceStatus
 } from './antiPatternSemantics';
 
 type Stream = 'maturity' | 'antipattern';
@@ -139,8 +138,9 @@ ${summarizeBatch(batch)}
 - For anti-pattern items, also return antipattern_absence_status:
   - "confirmed_present": verified_count > 0 and the harmful pattern is evidenced.
   - "partially_present": verified_count is 1-2 or the harmful pattern signal is weak/partial.
-  - "tested_absent": verified_count is 0 AND the source has relevant coverage that would reasonably reveal the anti-pattern if present.
+  - "tested_absent": verified_count is 0, original_count is 0, no weak/partial harmful signal exists, AND the source has relevant coverage that would reasonably reveal the anti-pattern if present.
   - "unknown_absent": verified_count is 0 BUT the source is silent, irrelevant, or too weak to prove absence.
+- Never label an anti-pattern "tested_absent" when status is "weak", original_count is above 0, or the rationale/coverage_reason says there is partial harmful-pattern evidence. Use "partially_present" for weak but real harmful signals, or "unknown_absent" when the signal is too weak to count.
 - For anti-pattern "tested_absent" or "unknown_absent", include coverage_reason explaining why absence is meaningful or why it is not assessable.
 </rules>
 
@@ -222,7 +222,7 @@ export const runEvidenceCheck = async (
           : localStatus === 'weak'
             ? Math.max(0, original - 1)
             : original;
-        const verified_count = Math.min(original, rawVerified, locallyCapped);
+        let verified_count = Math.min(original, rawVerified, locallyCapped);
         if (original > verified_count && status === 'supported') {
           status = verified_count === 0 ? 'unsupported' : 'weak';
         }
@@ -236,11 +236,22 @@ export const runEvidenceCheck = async (
         const antipattern_absence_status = stream === 'antipattern'
           ? antiPatternStatusForItem(
             verified_count,
+            original,
+            status,
             raw?.antipattern_absence_status,
             scannerItem || {},
-            typeof raw?.coverage_reason === 'string' ? raw.coverage_reason : rationale
+            rationale,
+            typeof raw?.coverage_reason === 'string' ? raw.coverage_reason : undefined
           )
           : undefined;
+        if (
+          stream === 'antipattern' &&
+          antipattern_absence_status === 'partially_present' &&
+          original > 0 &&
+          verified_count === 0
+        ) {
+          verified_count = 1;
+        }
         const coverage_reason = stream === 'antipattern'
           ? (typeof raw?.coverage_reason === 'string'
             ? raw.coverage_reason
@@ -303,18 +314,21 @@ const statusForScore = (stream: Stream, count: number): AuditItem['status'] => {
 
 const antiPatternStatusForItem = (
   verified: number,
+  original: number,
+  evidenceStatus: EvidenceCheckStatus | undefined,
   rawStatus: unknown,
   existing: Partial<AuditItem>,
-  rationale: string
+  rationale: string,
+  coverageReason?: string
 ): AntiPatternAbsenceStatus => {
-  const explicit = normalizeAntiPatternAbsenceStatus(rawStatus);
-  if (verified >= 3) return 'confirmed_present';
-  if (verified > 0) return 'partially_present';
-  if (explicit === 'tested_absent' || explicit === 'unknown_absent') return explicit;
-  return inferAntiPatternAbsenceStatus({
-    ...existing,
-    count: verified,
-    coverage_reason: existing.coverage_reason || rationale
+  return resolveAntiPatternAbsenceStatus({
+    verifiedCount: verified,
+    originalCount: original,
+    explicitStatus: rawStatus,
+    evidenceStatus,
+    existing,
+    rationale,
+    coverageReason
   });
 };
 
@@ -334,11 +348,22 @@ export const applyEvidenceCheckToBatch = (
     const existing = streamBucket[item.id] || {};
     const verified = Math.min(item.original_count, item.verified_count);
     const key = `${item.stream}.${item.id}`;
-    const downgraded = verified < item.original_count;
     const reason = item.rationale || 'Evidence verifier adjusted this score.';
     const antipatternAbsenceStatus = item.stream === 'antipattern'
-      ? item.antipattern_absence_status || antiPatternStatusForItem(verified, undefined, existing, reason)
+      ? antiPatternStatusForItem(
+          verified,
+          item.original_count,
+          item.status,
+          item.antipattern_absence_status,
+          existing,
+          reason,
+          item.coverage_reason
+        )
       : undefined;
+    const finalCount = item.stream === 'antipattern' && antipatternAbsenceStatus === 'partially_present' && item.original_count > 0 && verified === 0
+      ? 1
+      : verified;
+    const downgraded = finalCount < item.original_count;
     const coverageReason = item.coverage_reason || existing.coverage_reason || (antipatternAbsenceStatus ? antiPatternStatusDescription(antipatternAbsenceStatus) : undefined);
     const shouldRewriteReasoning = item.stream === 'antipattern'
       || downgraded
@@ -347,12 +372,12 @@ export const applyEvidenceCheckToBatch = (
 
     streamBucket[item.id] = {
       ...existing,
-      count: verified,
-      status: statusForScore(item.stream, verified),
-      evidence: downgraded && verified === 0
+      count: finalCount,
+      status: statusForScore(item.stream, finalCount),
+      evidence: downgraded && finalCount === 0
         ? `Evidence-check downgraded this finding: ${reason}`
         : existing.evidence,
-      evidence_quotes: verified === 0 && antipatternAbsenceStatus !== 'tested_absent'
+      evidence_quotes: finalCount === 0 && antipatternAbsenceStatus !== 'tested_absent'
         ? []
         : (existing.evidence_quotes || []),
       is_silent: item.stream === 'antipattern'
@@ -360,7 +385,7 @@ export const applyEvidenceCheckToBatch = (
         : existing.is_silent,
       evidence_check_status: item.status,
       original_count: item.original_count,
-      verified_count: verified,
+      verified_count: finalCount,
       adjustment_reason: reason,
       rescan_attempted: rescannedKeys.has(key),
       antipattern_absence_status: antipatternAbsenceStatus,
@@ -370,7 +395,7 @@ export const applyEvidenceCheckToBatch = (
             stream: item.stream,
             status: item.status,
             originalCount: item.original_count,
-            verifiedCount: verified,
+            verifiedCount: finalCount,
             reason,
             rescanAttempted: rescannedKeys.has(key),
             antipatternAbsenceStatus,
@@ -384,7 +409,7 @@ export const applyEvidenceCheckToBatch = (
         stream: item.stream,
         id: item.id,
         original_count: item.original_count,
-        verified_count: verified,
+        verified_count: finalCount,
         status: item.status,
         reason,
         rescan_attempted: rescannedKeys.has(key)
