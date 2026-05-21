@@ -400,7 +400,7 @@ Anti-Pattern Burden Confidence: ${validationData.metrics.antipattern_burden_conf
 Anti-Pattern Clearance: ${Math.round(validationData.metrics.antipattern_clearance)}%
 Anti-Pattern Coverage: ${Math.round(validationData.metrics.antipattern_coverage)}%
 Delivery Integrity: ${validationData.metrics.delivery_integrity}% (criteria the audit returned data for)
-Evidence Density: ${validationData.metrics.evidence_density}% (criteria with quotable evidence from source)
+Evidence Density: ${validationData.metrics.evidence_density}% (criteria with verified source coverage, including quote-backed gaps)
 ${validationData.metrics.readiness_cap_reason ? `Readiness Cap: ${validationData.metrics.readiness_cap_reason}` : ''}
 Anti-Pattern Findings: ${validationData.antipattern_findings.length}
 Verified Anti-Pattern Absences: ${validationData.verified_antipattern_absences.length}

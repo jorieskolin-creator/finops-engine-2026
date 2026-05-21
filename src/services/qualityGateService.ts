@@ -98,7 +98,7 @@ export const isBlockingUnsupportedClaim = (claim: FactCheckClaim): boolean => {
 export const buildEvidenceDensityBlock = (density: number): QualityGateResult => ({
   decision: 'BLOCK',
   blocking_reasons: [
-    `Evidence density ${density}% is below the ${EVIDENCE_DENSITY_BLOCK}% floor. Fewer than ${Math.ceil(EVIDENCE_DENSITY_BLOCK / 2)} of 50 criteria had quotable evidence in the source — the audit cannot ground a strategy on this material.`
+    `Evidence density ${density}% is below the ${EVIDENCE_DENSITY_BLOCK}% floor. Fewer than ${Math.ceil(EVIDENCE_DENSITY_BLOCK / 2)} of 50 criteria had verified source coverage — the audit cannot ground a strategy on this material.`
   ],
   warnings: [],
   notes: ['Skipped Phase 3 (strategy) and fact-check to avoid building on unreliable signal.'],
@@ -204,7 +204,7 @@ export const runQualityGate = (
     phase2.metrics.evidence_density < EVIDENCE_DENSITY_WARN
   ) {
     warnings.push(
-      `Evidence density ${phase2.metrics.evidence_density}% < ${EVIDENCE_DENSITY_WARN}% — many criteria scored without quotable source material.`
+      `Evidence density ${phase2.metrics.evidence_density}% < ${EVIDENCE_DENSITY_WARN}% — many criteria were scored without verified source coverage.`
     );
   }
 

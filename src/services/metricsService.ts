@@ -6,6 +6,23 @@ export const EVIDENCE_DENSITY_WARN = 60;
 
 const clampPercent = (value: number): number => Math.min(Math.max(value, 0), 100);
 
+const hasSourceQuote = (item: AuditItem): boolean =>
+  Array.isArray(item.evidence_quotes) &&
+  item.evidence_quotes.some(q =>
+    typeof q?.quote === 'string' &&
+    q.quote.trim().length > 0 &&
+    (q.evidence_source === undefined || q.evidence_source === 'text' || q.evidence_source === 'image')
+  );
+
+const hasVerifiedSourceCoverage = (item: AuditItem, stream: 'maturity' | 'antipattern'): boolean => {
+  if (hasSourceQuote(item)) return true;
+  if (item.evidence_check_status === 'unsupported' || item.evidence_check_status === 'missing') return false;
+  if (stream === 'antipattern') {
+    return inferAntiPatternAbsenceStatus(item) === 'tested_absent' && Boolean(item.coverage_reason);
+  }
+  return false;
+};
+
 const evidenceCapForDensity = (density: number): { cap: number; reason?: string } => {
   if (density < EVIDENCE_DENSITY_BLOCK) {
     return {
@@ -37,7 +54,7 @@ export const calculateMetrics = (logs: Phase1AuditLogs): Phase2Validation => {
 
   const tally = (item: AuditItem, stream: 'maturity' | 'antipattern') => {
     if (item.count !== -1) deliveredItems++;
-    if (item.evidence_quotes && item.evidence_quotes.length > 0) {
+    if (hasVerifiedSourceCoverage(item, stream)) {
       itemsWithEvidence++;
     }
     if (item.category_footprint) {
@@ -56,8 +73,9 @@ export const calculateMetrics = (logs: Phase1AuditLogs): Phase2Validation => {
     const catPrefix = key.charAt(0);
     if (categoryScores[catPrefix] !== undefined) categoryScores[catPrefix] += Math.max(item.count, 0);
     if (item.count === 0) {
-      silentAreas.push(`Missing Capability: ${key}`);
-      maturityGaps.push(`[${key}] Missing: ${item.reasoning}`);
+      const hasGapEvidence = hasVerifiedSourceCoverage(item, 'maturity');
+      if (!hasGapEvidence) silentAreas.push(`Missing Capability: ${key}`);
+      maturityGaps.push(`[${key}] ${hasGapEvidence ? 'Confirmed gap' : 'Missing'}: ${item.reasoning}`);
     }
   });
 
@@ -75,7 +93,6 @@ export const calculateMetrics = (logs: Phase1AuditLogs): Phase2Validation => {
     if (absenceStatus !== 'unknown_absent') assessedAntipatternCount++;
     if (absenceStatus === 'tested_absent') {
       testedAbsentCount++;
-      if (!item.evidence_quotes || item.evidence_quotes.length === 0) itemsWithEvidence++;
       verifiedAntipatternAbsences.push(`[${key}] Tested absent: ${item.coverage_reason || item.reasoning || item.evidence}`);
     }
     if (absenceStatus === 'unknown_absent') {

@@ -19,7 +19,7 @@ export const METRIC_DESCRIPTIONS: Record<string, string> = {
   delivery_integrity:
     'Did the audit pipeline complete? Share of 50 criteria the LLM returned valid data for. Below 100% means batches failed.',
   evidence_density:
-    'Did the source actually say anything? Share of 50 criteria where the audit captured at least one quotable evidence excerpt from the source document.'
+    'Did the source actually cover the criterion? Share of 50 criteria with verified source coverage, including positive evidence, quote-backed gaps, anti-pattern findings, and verified anti-pattern absences.'
 };
 
 export const FINOPS_METHODOLOGY_CONTEXT = `

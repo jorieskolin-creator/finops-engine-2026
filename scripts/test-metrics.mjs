@@ -104,4 +104,35 @@ const logs = (maturityFactory, antiFactory) => ({
   assert.equal(result.metrics.antipattern_coverage, 100);
 }
 
+{
+  const result = calculateMetrics(logs(
+    () => item(0, true),
+    () => anti(0, false)
+  ));
+  assert.equal(result.metrics.evidence_density, 50, 'quote-backed maturity gaps should count as verified source coverage');
+  assert.equal(result.metrics.maturity_depth, 0, 'gap evidence must not improve maturity score');
+  assert.equal(result.maturity_gaps.length, 25);
+  assert.equal(result.silent_areas.length, 0, 'quote-backed maturity gaps should not be treated as silent');
+  assert.match(result.maturity_gaps[0], /Confirmed gap/, 'quote-backed maturity gaps should be labelled as confirmed gaps');
+}
+
+{
+  const result = calculateMetrics(logs(
+    () => item(0, false),
+    () => anti(0, false)
+  ));
+  assert.equal(result.metrics.evidence_density, 0, 'silent maturity gaps should not count as source coverage');
+  assert.equal(result.silent_areas.length, 25, 'silent maturity gaps should remain silent areas');
+  assert.match(result.maturity_gaps[0], /Missing/, 'silent maturity gaps should remain missing, not confirmed');
+}
+
+{
+  const result = calculateMetrics(logs(
+    () => item(3, true),
+    () => ({ ...anti(0, false, 'unknown_absent'), coverage_reason: 'Source did not cover this anti-pattern.' })
+  ));
+  assert.equal(result.metrics.evidence_density, 50, 'unknown anti-pattern absence should not count as verified coverage');
+  assert.equal(result.metrics.antipattern_clearance, 0);
+}
+
 console.log('metrics unit tests passed');
