@@ -19,6 +19,9 @@ await writeFile(modulePath, compile(source), 'utf8');
 
 const { STAGE_MODELS, modelsFor } = await import(`file://${modulePath}`);
 
+assert.equal(STAGE_MODELS.preflight.provider, 'gemini');
+assert.equal(STAGE_MODELS.preflight.id, 'gemini-3.5-flash');
+assert.deepEqual(STAGE_MODELS.preflight.thinkingConfig, { thinkingLevel: 'low' });
 assert.equal(STAGE_MODELS.fact_check.provider, 'openai');
 assert.equal(STAGE_MODELS.fact_check.id, 'gpt-5.5');
 assert.deepEqual(STAGE_MODELS.fact_check.openaiReasoning, { effort: 'medium' });

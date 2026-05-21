@@ -56,14 +56,14 @@ export type StageId =
 
 export const PROFILES = {
   // Gemini family
-  GEMINI_3_FLASH: {
-    id: 'gemini-3-flash-preview',
+  GEMINI_35_FLASH: {
+    id: 'gemini-3.5-flash',
     provider: 'gemini',
     thinkingConfig: { thinkingLevel: 'low' },
   } satisfies ModelProfile,
 
-  GEMINI_3_FLASH_MEDIUM: {
-    id: 'gemini-3-flash-preview',
+  GEMINI_35_FLASH_MEDIUM: {
+    id: 'gemini-3.5-flash',
     provider: 'gemini',
     thinkingConfig: { thinkingLevel: 'medium' },
   } satisfies ModelProfile,
@@ -133,7 +133,7 @@ export const PROFILES = {
 // ============================================================================
 
 export const STAGE_MODELS: Record<StageId, ModelProfile> = {
-  preflight:            PROFILES.GEMINI_3_FLASH,
+  preflight:            PROFILES.GEMINI_35_FLASH,
   forensic_audit:       PROFILES.SONNET_46,
   evidence_check:       PROFILES.GEMINI_31_PRO,
   synthesis:            PROFILES.SONNET_46,

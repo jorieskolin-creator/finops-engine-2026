@@ -964,7 +964,7 @@
       <div class="stage" data-phase="0">
         <div class="stage-header">
           <div class="stage-title">Phase 0 — Pre-Flight</div>
-          <div class="stage-meta">Local parsing · DLP Officer · gemini-3-flash-preview · deterministic redaction</div>
+          <div class="stage-meta">Local parsing · DLP Officer · gemini-3.5-flash · deterministic redaction</div>
         </div>
         <div class="stage-body">
           Client-side parsers extract source material before model analysis: PDF.js extracts embedded PDF text up to 100 pages with page markers, CSV/TSV files become table summaries, HTML is sanitized, JSON is normalized, and selected PDF/image pages are attached as visual evidence under an image budget. A deterministic parse-quality check marks PDFs as good, mixed, or poor extraction, prioritizing sparse/scanned pages for visual inclusion. A DLP LLM pass plus deterministic regex redaction scans for PII, secrets, and risky input. Low FinOps keyword signal is now a warning, not a hard rejection, when the material is technically parseable.
@@ -1180,7 +1180,7 @@
           <dt>Behaviour</dt>
           <dd>Paranoid about safety, conservative about relevance. Scans input documents for PII, secrets, and risky content, while local parsers preserve usable low-signal material for evidence-gated assessment instead of rejecting it too early.</dd>
           <dt>Model</dt>
-          <dd><code style="font-family: var(--mono); font-size: 12px;">gemini-3-flash-preview</code> with deterministic redaction, PDF.js extraction, parse-quality checks, CSV/TSV parsing, and local HTML/JSON handling.</dd>
+          <dd><code style="font-family: var(--mono); font-size: 12px;">gemini-3.5-flash</code> with deterministic redaction, PDF.js extraction, parse-quality checks, CSV/TSV parsing, and local HTML/JSON handling.</dd>
           <dt>Decision</dt>
           <dd>Hard blocks are reserved for unsafe, unreadable, unsupported, over-limit, or corrupt files. Generic but parseable material becomes a low-relevance warning, then the evidence pipeline decides whether it supports FinOps findings.</dd>
         </dl>
