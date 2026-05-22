@@ -7,6 +7,7 @@ import { renderDelimitedTableForAnalysis } from './services/tableService';
 import { downloadMasterDataReport, downloadSummaryReport } from './services/exportService';
 import { forensicSanitizeImport } from './services/securityService';
 import { extractDiagnosticResultFromHtmlReport, isDiagnosticResultPayload, parseDiagnosticResultJson, serializeDiagnosticResultForHtml } from './services/reportImportService';
+import { findGeneratedReportPrivacyFindings, scrubDiagnosticResultForPrivacy } from './services/privacyService';
 import { PerformanceMonitor } from './services/debugService';
 import { runFullDriftSuite } from './services/driftDetectionService';
 import { DiagnosticResult, ScanResult, PersonaId, PERSONA_IDS, PERSONA_LABELS, ImageInput } from './types';
@@ -125,6 +126,16 @@ const clearLastCrash = () => {
   }
 };
 
+const cloneResult = (result: DiagnosticResult): DiagnosticResult =>
+  typeof structuredClone === 'function'
+    ? structuredClone(result)
+    : JSON.parse(JSON.stringify(result));
+
+const arrayToText = (items?: string[]): string => (items || []).join('\n');
+
+const textToArray = (text: string): string[] =>
+  text.split('\n').map(line => line.trim()).filter(Boolean);
+
 const TIER1_FIXTURES: Array<{ pack_id: string; name: string; label: string; text: string }> = [
   { pack_id: 'tier1-governance-policy', name: 'tier1-governance-policy.txt', label: 'Cloud Governance / FinOps Policy', text: tier1GovernancePolicy },
   { pack_id: 'tier1-tagging-policy', name: 'tier1-tagging-policy.txt', label: 'Tagging & Cost Allocation Policy', text: tier1TaggingPolicy },
@@ -195,6 +206,272 @@ const PrivacyProtocolCard = () => (
   </div>
 );
 
+const PrivacyReviewPanel: React.FC<{
+  result: DiagnosticResult;
+  edited: boolean;
+  notice: string | null;
+  organizationRedactionTerm: string;
+  onOrganizationRedactionTermChange: (value: string) => void;
+  onApplyPersonRedaction: () => void;
+  onApplyOrganizationRedaction: () => void;
+  onPreview: () => void;
+  onChange: (updater: (draft: DiagnosticResult) => void) => void;
+}> = ({
+  result,
+  edited,
+  notice,
+  organizationRedactionTerm,
+  onOrganizationRedactionTermChange,
+  onApplyPersonRedaction,
+  onApplyOrganizationRedaction,
+  onPreview,
+  onChange
+}) => {
+  const strategy = result.phase_3_strategy;
+  const evidence = strategy.evidence_summary;
+  const diagnosis = strategy.diagnosis;
+  const planning = strategy.planning_decision;
+  const roadmap = strategy.remediation_roadmap || [];
+
+  const textareaClass = 'w-full min-h-[90px] rounded-xl border border-white/10 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-600 focus:border-emerald-400 focus:outline-none';
+  const labelClass = 'text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-2 block';
+
+  return (
+    <div className="glass-panel p-6 md:p-8 rounded-[2rem] bg-slate-900/50 border border-emerald-500/20">
+      <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4 mb-6">
+        <div>
+          <div className="flex flex-wrap items-center gap-2 mb-2">
+            <h3 className="text-xl font-display font-bold text-white">Privacy Review / Edit Report</h3>
+            {edited && <span className="px-2 py-1 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-[10px] font-bold uppercase tracking-widest text-emerald-300">Edited locally</span>}
+          </div>
+          <p className="text-sm text-slate-400 max-w-3xl">
+            These edits apply only to generated report wording and exported HTML/JSON. Raw source evidence remains unchanged inside this browser session for audit traceability.
+          </p>
+          {notice && <p className="mt-3 text-sm text-amber-200">{notice}</p>}
+        </div>
+        <button
+          type="button"
+          onClick={onPreview}
+          className="px-4 py-2 rounded-xl bg-white text-slate-950 text-xs font-bold uppercase tracking-widest hover:bg-emerald-100 transition-colors"
+        >
+          Preview exported report
+        </button>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-8">
+        <button
+          type="button"
+          onClick={onApplyPersonRedaction}
+          className="px-4 py-3 rounded-xl bg-slate-800 text-slate-100 text-xs font-bold uppercase tracking-widest hover:bg-slate-700 transition-colors"
+        >
+          Redact detected person names
+        </button>
+        <input
+          value={organizationRedactionTerm}
+          onChange={(e) => onOrganizationRedactionTermChange(e.target.value)}
+          placeholder="Organization name to redact"
+          className="rounded-xl border border-white/10 bg-slate-950/70 px-3 py-3 text-sm text-slate-100 placeholder:text-slate-600 focus:border-emerald-400 focus:outline-none"
+        />
+        <button
+          type="button"
+          onClick={onApplyOrganizationRedaction}
+          disabled={!organizationRedactionTerm.trim()}
+          className="px-4 py-3 rounded-xl bg-slate-800 text-slate-100 text-xs font-bold uppercase tracking-widest hover:bg-slate-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          Redact organization name
+        </button>
+      </div>
+
+      <div className="space-y-8">
+        <section>
+          <h4 className="text-sm font-bold uppercase tracking-widest text-emerald-300 mb-4">Executive summaries</h4>
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+            {PERSONA_IDS.map(persona => (
+              <label key={persona} className="block">
+                <span className={labelClass}>{PERSONA_LABELS[persona]}</span>
+                <textarea
+                  className={textareaClass}
+                  value={strategy.executive_summaries?.[persona] || (persona === 'finops_lead' ? strategy.executive_summary || '' : '')}
+                  onChange={(e) => onChange(draft => {
+                    draft.phase_3_strategy.executive_summaries = {
+                      ...(draft.phase_3_strategy.executive_summaries || {}),
+                      [persona]: e.target.value
+                    } as any;
+                    if (persona === 'finops_lead') draft.phase_3_strategy.executive_summary = e.target.value;
+                  })}
+                />
+              </label>
+            ))}
+          </div>
+        </section>
+
+        {evidence && (
+          <section>
+            <h4 className="text-sm font-bold uppercase tracking-widest text-emerald-300 mb-4">Evidence summary</h4>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              <label className="block">
+                <span className={labelClass}>Headline</span>
+                <textarea
+                  className={textareaClass}
+                  value={evidence.headline || ''}
+                  onChange={(e) => onChange(draft => { if (draft.phase_3_strategy.evidence_summary) draft.phase_3_strategy.evidence_summary.headline = e.target.value; })}
+                />
+              </label>
+              {(['key_metrics', 'confirmed_strengths', 'confirmed_gaps', 'confirmed_antipatterns', 'silent_or_missing_evidence'] as const).map(field => (
+                <label key={field} className="block">
+                  <span className={labelClass}>{field.replace(/_/g, ' ')}</span>
+                  <textarea
+                    className={textareaClass}
+                    value={arrayToText(evidence[field])}
+                    onChange={(e) => onChange(draft => { if (draft.phase_3_strategy.evidence_summary) (draft.phase_3_strategy.evidence_summary as any)[field] = textToArray(e.target.value); })}
+                  />
+                </label>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {diagnosis && (
+          <section>
+            <h4 className="text-sm font-bold uppercase tracking-widest text-emerald-300 mb-4">Diagnosis</h4>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              <label className="block">
+                <span className={labelClass}>Primary bottleneck</span>
+                <textarea
+                  className={textareaClass}
+                  value={diagnosis.primary_bottleneck || ''}
+                  onChange={(e) => onChange(draft => { if (draft.phase_3_strategy.diagnosis) draft.phase_3_strategy.diagnosis.primary_bottleneck = e.target.value; })}
+                />
+              </label>
+              <label className="block">
+                <span className={labelClass}>Root causes</span>
+                <textarea
+                  className={textareaClass}
+                  value={arrayToText(diagnosis.root_causes)}
+                  onChange={(e) => onChange(draft => { if (draft.phase_3_strategy.diagnosis) draft.phase_3_strategy.diagnosis.root_causes = textToArray(e.target.value); })}
+                />
+              </label>
+              <label className="block lg:col-span-2">
+                <span className={labelClass}>Domain diagnosis</span>
+                <textarea
+                  className={`${textareaClass} min-h-[140px]`}
+                  value={Object.entries(diagnosis.domain_diagnosis || {}).map(([domain, text]) => `${domain}: ${text}`).join('\n')}
+                  onChange={(e) => onChange(draft => {
+                    if (!draft.phase_3_strategy.diagnosis) return;
+                    draft.phase_3_strategy.diagnosis.domain_diagnosis = Object.fromEntries(
+                      e.target.value.split('\n')
+                        .map(line => line.trim())
+                        .filter(Boolean)
+                        .map(line => {
+                          const idx = line.indexOf(':');
+                          return idx >= 0 ? [line.slice(0, idx).trim(), line.slice(idx + 1).trim()] : [line, ''];
+                        })
+                    );
+                  })}
+                />
+              </label>
+            </div>
+          </section>
+        )}
+
+        {planning && (
+          <section>
+            <h4 className="text-sm font-bold uppercase tracking-widest text-emerald-300 mb-4">Planning decision</h4>
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+              <label className="block lg:col-span-3">
+                <span className={labelClass}>Rationale</span>
+                <textarea
+                  className={textareaClass}
+                  value={planning.rationale || ''}
+                  onChange={(e) => onChange(draft => { if (draft.phase_3_strategy.planning_decision) draft.phase_3_strategy.planning_decision.rationale = e.target.value; })}
+                />
+              </label>
+              <label className="block">
+                <span className={labelClass}>Safe to act on</span>
+                <textarea
+                  className={textareaClass}
+                  value={arrayToText(planning.safe_to_act_on)}
+                  onChange={(e) => onChange(draft => { if (draft.phase_3_strategy.planning_decision) draft.phase_3_strategy.planning_decision.safe_to_act_on = textToArray(e.target.value); })}
+                />
+              </label>
+              <label className="block lg:col-span-2">
+                <span className={labelClass}>Evidence needed before action</span>
+                <textarea
+                  className={textareaClass}
+                  value={arrayToText(planning.evidence_needed_before_action)}
+                  onChange={(e) => onChange(draft => { if (draft.phase_3_strategy.planning_decision) draft.phase_3_strategy.planning_decision.evidence_needed_before_action = textToArray(e.target.value); })}
+                />
+              </label>
+            </div>
+          </section>
+        )}
+
+        {roadmap.length > 0 && (
+          <section>
+            <h4 className="text-sm font-bold uppercase tracking-widest text-emerald-300 mb-4">Roadmap</h4>
+            <div className="space-y-4">
+              {roadmap.map((step, index) => (
+                <div key={index} className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                    <label className="block">
+                      <span className={labelClass}>Phase title</span>
+                      <input
+                        value={step.phase || ''}
+                        onChange={(e) => onChange(draft => { draft.phase_3_strategy.remediation_roadmap[index].phase = e.target.value; })}
+                        className="w-full rounded-xl border border-white/10 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:border-emerald-400 focus:outline-none"
+                      />
+                    </label>
+                    <label className="block">
+                      <span className={labelClass}>Confidence</span>
+                      <input
+                        value={step.confidence || ''}
+                        onChange={(e) => onChange(draft => { draft.phase_3_strategy.remediation_roadmap[index].confidence = e.target.value as any; })}
+                        className="w-full rounded-xl border border-white/10 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 focus:border-emerald-400 focus:outline-none"
+                      />
+                    </label>
+                    <label className="block">
+                      <span className={labelClass}>Why</span>
+                      <textarea
+                        className={textareaClass}
+                        value={step.why || ''}
+                        onChange={(e) => onChange(draft => { draft.phase_3_strategy.remediation_roadmap[index].why = e.target.value; })}
+                      />
+                    </label>
+                    <label className="block">
+                      <span className={labelClass}>What</span>
+                      <textarea
+                        className={textareaClass}
+                        value={step.what || ''}
+                        onChange={(e) => onChange(draft => { draft.phase_3_strategy.remediation_roadmap[index].what = e.target.value; })}
+                      />
+                    </label>
+                    <label className="block">
+                      <span className={labelClass}>How / actions</span>
+                      <textarea
+                        className={textareaClass}
+                        value={arrayToText(step.actions)}
+                        onChange={(e) => onChange(draft => { draft.phase_3_strategy.remediation_roadmap[index].actions = textToArray(e.target.value); })}
+                      />
+                    </label>
+                    <label className="block">
+                      <span className={labelClass}>Assumptions</span>
+                      <textarea
+                        className={textareaClass}
+                        value={arrayToText(step.assumptions)}
+                        onChange={(e) => onChange(draft => { draft.phase_3_strategy.remediation_roadmap[index].assumptions = textToArray(e.target.value); })}
+                      />
+                    </label>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
+      </div>
+    </div>
+  );
+};
+
 const App: React.FC = () => {
   const [files, setFiles] = useState<UploadedFile[]>([]);
   const [parsing, setParsing] = useState(false);
@@ -223,6 +500,10 @@ const App: React.FC = () => {
   const [safeRecoveryMeta, setSafeRecoveryMeta] = useState<SavedAssessmentMeta | null>(null);
   const [lastCrashMessage, setLastCrashMessage] = useState<string | null>(null);
   const [errorBoundaryResetKey, setErrorBoundaryResetKey] = useState(0);
+  const [privacyPanelOpen, setPrivacyPanelOpen] = useState(false);
+  const [privacyEdited, setPrivacyEdited] = useState(false);
+  const [privacyNotice, setPrivacyNotice] = useState<string | null>(null);
+  const [organizationRedactionTerm, setOrganizationRedactionTerm] = useState('');
   const pendingAnalyzeRef = useRef(false);
   const pendingDriftRef = useRef(false);
   const pendingPerPackRef = useRef(false);
@@ -231,6 +512,63 @@ const App: React.FC = () => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const clearFileInput = () => {
     if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  const prepareResultForDisplay = (
+    next: DiagnosticResult,
+    source: SavedAssessmentMeta['source'] = 'completed_assessment'
+  ): DiagnosticResult => {
+    const scrubbed = scrubDiagnosticResultForPrivacy(next, { redactPersonNames: true });
+    nextRecoverySourceRef.current = source;
+    setPrivacyEdited(prev => prev || scrubbed.changed);
+    if (scrubbed.replacements > 0) {
+      setPrivacyNotice(`Privacy scrubber redacted ${scrubbed.replacements} item(s) in generated report text. Review before sharing.`);
+    } else if (scrubbed.potentialNames.length > 0) {
+      setPrivacyNotice('Potential names detected in generated report text. Review before sharing.');
+    }
+    return scrubbed.result;
+  };
+
+  const setPreparedResult = (
+    next: DiagnosticResult,
+    source: SavedAssessmentMeta['source'] = 'completed_assessment'
+  ) => {
+    setSafeRecoveryResult(null);
+    setResult(prepareResultForDisplay(next, source));
+  };
+
+  const updateCurrentResult = (updater: (draft: DiagnosticResult) => void) => {
+    setResult(prev => {
+      if (!prev) return prev;
+      const draft = cloneResult(prev);
+      updater(draft);
+      setPrivacyEdited(true);
+      setPrivacyNotice('Report text edited locally. Exports will use this edited version.');
+      return draft;
+    });
+  };
+
+  const applyPersonRedaction = () => {
+    if (!result) return;
+    const scrubbed = scrubDiagnosticResultForPrivacy(result, { redactPersonNames: true });
+    setResult(scrubbed.result);
+    setPrivacyEdited(prev => prev || scrubbed.changed);
+    setPrivacyNotice(scrubbed.replacements > 0
+      ? `Redacted ${scrubbed.replacements} detected item(s) in generated report text.`
+      : 'No additional deterministic person-name patterns were found.');
+  };
+
+  const applyOrganizationRedaction = () => {
+    if (!result || !organizationRedactionTerm.trim()) return;
+    const scrubbed = scrubDiagnosticResultForPrivacy(result, {
+      redactPersonNames: false,
+      redactOrganizationName: organizationRedactionTerm.trim()
+    });
+    setResult(scrubbed.result);
+    setPrivacyEdited(prev => prev || scrubbed.changed);
+    setPrivacyNotice(scrubbed.replacements > 0
+      ? `Redacted ${scrubbed.replacements} organization-name occurrence(s) in generated report text.`
+      : 'That organization name was not found in generated report text.');
   };
 
   useEffect(() => {
@@ -246,6 +584,9 @@ const App: React.FC = () => {
         setRecoveryNotice('A saved assessment was found after a view crash. Opened recovery mode so you can download or retry safely.');
       } else {
         setResult(saved);
+        if (findGeneratedReportPrivacyFindings(saved).length > 0) {
+          setPrivacyNotice('Potential names detected in generated report text. Review before sharing.');
+        }
         setRecoveryNotice('Restored the last completed assessment from this browser session.');
       }
     }
@@ -386,9 +727,7 @@ const App: React.FC = () => {
         const text = await file.text();
         const imported = extractDiagnosticResultFromHtmlReport(text);
         if (imported.kind === 'report') {
-          nextRecoverySourceRef.current = 'html_import';
-          setSafeRecoveryResult(null);
-          setResult(imported.result);
+          setPreparedResult(imported.result, 'html_import');
           setViewMode('dashboard');
           setRecoveryNotice('Imported a saved FinOps report from HTML.');
           setError(null);
@@ -405,9 +744,7 @@ const App: React.FC = () => {
           const text = await file.text();
           const imported = parseDiagnosticResultJson(text);
           if (imported.kind === 'report' && isDiagnosticResultPayload(imported.result)) {
-            nextRecoverySourceRef.current = 'json_import';
-            setSafeRecoveryResult(null);
-            setResult(imported.result);
+            setPreparedResult(imported.result, 'json_import');
             setViewMode('dashboard');
             setRecoveryNotice('Imported a saved FinOps report from JSON.');
             setError(null);
@@ -558,8 +895,7 @@ const App: React.FC = () => {
       if (source_parse_warnings.length > 0) {
         data.meta = { ...data.meta, source_parse_warnings };
       }
-      setSafeRecoveryResult(null);
-      setResult(data);
+      setPreparedResult(data, 'completed_assessment');
     } catch (e: any) {
       setError(e.message || "Analysis failed.");
     } finally {
@@ -701,6 +1037,10 @@ const App: React.FC = () => {
     setSafeRecoveryMeta(null);
     setLastCrashMessage(null);
     setHasSavedAssessment(false);
+    setPrivacyPanelOpen(false);
+    setPrivacyEdited(false);
+    setPrivacyNotice(null);
+    setOrganizationRedactionTerm('');
     clearSavedAssessment();
   };
 
@@ -718,6 +1058,9 @@ const App: React.FC = () => {
     setViewMode('dashboard');
     setActiveTab('overview');
     setRecoveryNotice('Opened recovery mode for the last completed assessment. You can download reports before retrying the dashboard.');
+    if (findGeneratedReportPrivacyFindings(saved).length > 0) {
+      setPrivacyNotice('Potential names detected in generated report text. Review before sharing.');
+    }
     setError(null);
     setHasSavedAssessment(true);
     setErrorBoundaryResetKey(key => key + 1);
@@ -761,6 +1104,9 @@ const App: React.FC = () => {
     setViewMode('dashboard');
     setActiveTab('overview');
     setRecoveryNotice('Recovered assessment opened. If the view fails again, use recovery mode to download the report.');
+    if (findGeneratedReportPrivacyFindings(safeRecoveryResult).length > 0) {
+      setPrivacyNotice('Potential names detected in generated report text. Review before sharing.');
+    }
     setErrorBoundaryResetKey(key => key + 1);
   };
 
@@ -1249,6 +1595,42 @@ const App: React.FC = () => {
                     })()}
                   </div>
                   <TransferProtocol />
+                  <div className="mt-8 rounded-2xl border border-emerald-500/20 bg-emerald-950/20 p-5">
+                    <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                      <div>
+                        <div className="flex flex-wrap items-center gap-2 mb-1">
+                          <p className="text-xs font-bold uppercase tracking-widest text-emerald-300">Privacy Review</p>
+                          {privacyEdited && <span className="px-2 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-[10px] font-bold uppercase tracking-widest text-emerald-200">Edited locally</span>}
+                        </div>
+                        <p className="text-sm text-slate-300">
+                          Review generated wording before sharing. Manual edits and redactions are applied to the dashboard and exported HTML payload.
+                        </p>
+                        {privacyNotice && <p className="mt-2 text-xs text-amber-200">{privacyNotice}</p>}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setPrivacyPanelOpen(open => !open)}
+                        className="px-5 py-3 rounded-xl bg-slate-900 text-emerald-200 border border-emerald-500/30 text-xs font-bold uppercase tracking-widest hover:bg-emerald-500 hover:text-slate-950 transition-colors"
+                      >
+                        {privacyPanelOpen ? 'Close editor' : 'Privacy Review / Edit Report'}
+                      </button>
+                    </div>
+                  </div>
+                  {privacyPanelOpen && (
+                    <div className="mt-6">
+                      <PrivacyReviewPanel
+                        result={result}
+                        edited={privacyEdited}
+                        notice={privacyNotice}
+                        organizationRedactionTerm={organizationRedactionTerm}
+                        onOrganizationRedactionTermChange={setOrganizationRedactionTerm}
+                        onApplyPersonRedaction={applyPersonRedaction}
+                        onApplyOrganizationRedaction={applyOrganizationRedaction}
+                        onPreview={() => setViewMode('report')}
+                        onChange={updateCurrentResult}
+                      />
+                    </div>
+                  )}
                   <div className="mt-12 flex flex-col md:flex-row justify-center items-center gap-6 w-full">
                     <button onClick={() => setViewMode('report')} className="group relative px-8 py-4 rounded-2xl bg-white hover:bg-emerald-50 border border-white shadow-[0_0_20px_rgba(255,255,255,0.1)] hover:shadow-[0_0_30px_rgba(16,185,129,0.4)] transition-all duration-300">
                       <div className="relative flex items-center gap-4">

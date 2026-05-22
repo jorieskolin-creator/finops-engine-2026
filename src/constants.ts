@@ -127,12 +127,13 @@ ${STRATEGY_PERSONAS_BLOCK}
    - **DO NOT** use large headers (###) for the main sections of the evidence summary.
    - **USE** the specific 3-paragraph summary structure below, using inline bold labels.
 9. **FINANCIAL SENSITIVITY:** Do NOT repeat specific dollar amounts or pricing terms from the source documents. Reference them generically.
+10. **PRIVACY LANGUAGE:** Do not name individuals in generated summaries, diagnosis, planning decisions, or roadmap text. Avoid repeating the assessed organization/legal entity name unless it is essential to preserve meaning; prefer neutral labels such as "the assessed organization", "the finance team", "the engineering team", or "the FinOps team".
 </strict_constraints>
 
 <task>
 1. **Synthesize Sources:**
    - **Step 1 (Grounding):** Look at the **VALIDATED SYSTEM REPORT**. These scores are the absolute truth.
-   - **Step 2 (Contextualizing):** Look at the **ORIGINAL DOCUMENT**. Use it ONLY for finding proper nouns (project names, tool names, team names) to label findings. Do not change the diagnosis.
+   - **Step 2 (Contextualizing):** Look at the **ORIGINAL DOCUMENT** only for source-grounded context. Use neutral functional labels instead of personal names or legal-entity names unless a tool or team/function label is needed for clarity. Do not change the diagnosis.
    - **Step 3 (Prescribing):** Look at the **VERIFIED TACTICS DATABASE** and **METHODOLOGY**.
      - Use the Crawl-Walk-Run framework to structure the roadmap.
      - Use case studies from the DATABASE to prescribe specific mechanisms.
@@ -246,7 +247,8 @@ ${STRATEGY_PERSONAS_BLOCK}
 5. **NO DOMAIN REASSIGNMENT:** Do not attribute B findings to D, D findings to E, or governance/culture findings to A merely because they sound related. Domain diagnosis must follow the criterion IDs in Phase 1/2.
 6. **NO IMPLEMENTATION LANGUAGE:** Do not use directive verbs such as Implement, Enforce, Automate, Launch, Establish, Deploy, or Optimize except when quoting source evidence.
 7. **SOURCE-TYPE SAFETY:** If the source appears to describe best practices, case studies, or methodology rather than the audited organization's operations, say the audit can assess document coverage but cannot prove operational adoption.
-8. **JSON STRING SAFETY:** No double quotes inside JSON values. Use single quotes or asterisks.
+8. **PRIVACY LANGUAGE:** Do not name individuals. Avoid repeating the assessed organization/legal entity name unless it is essential to preserve meaning; prefer neutral labels such as "the assessed organization", "the finance team", "the engineering team", or "the FinOps team".
+9. **JSON STRING SAFETY:** No double quotes inside JSON values. Use single quotes or asterisks.
 </strict_constraints>
 
 <task>
@@ -328,7 +330,8 @@ ${FINOPS_METHODOLOGY_CONTEXT}
 8. **NO CULTURE/GOVERNANCE OVERREACH:** Do not use culture or governance tactic IDs for generic improvement language. Culture tactics require a matching culture anti-pattern in LOCKED FINDINGS, and governance tactics require a matching governance gap in LOCKED FINDINGS.
 9. **NO VAGUE MATURITY ACTIONS:** Do not prescribe shifting from activity tracking to outcome tracking, product-level cadence embedding, growth/scale operating model work, or access-pattern baselines unless that exact gap appears in LOCKED FINDINGS.
 10. **WHY / WHAT GROUNDING:** Each roadmap phase must include "why" and "what" paragraphs. They are roadmap claims and must be grounded exactly like actions. Do not introduce new current-state facts, unsupported financial impact, or "closes the gap" language unless the locked findings include explicit acceptance criteria proving closure.
-11. **JSON STRING SAFETY:** No double quotes inside JSON values. Use single quotes or asterisks.
+11. **PRIVACY LANGUAGE:** Do not name individuals. Avoid repeating the assessed organization/legal entity name; use "the assessed organization" or functional labels such as finance, engineering, platform, or FinOps team.
+12. **JSON STRING SAFETY:** No double quotes inside JSON values. Use single quotes or asterisks.
 </strict_constraints>
 
 <task>
