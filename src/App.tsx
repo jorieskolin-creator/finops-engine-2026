@@ -6,6 +6,7 @@ import type { PdfParseQuality } from './services/pdfService';
 import { renderDelimitedTableForAnalysis } from './services/tableService';
 import { downloadMasterDataReport, downloadSummaryReport } from './services/exportService';
 import { forensicSanitizeImport } from './services/securityService';
+import { extractDiagnosticResultFromHtmlReport, isDiagnosticResultPayload, parseDiagnosticResultJson, serializeDiagnosticResultForHtml } from './services/reportImportService';
 import { PerformanceMonitor } from './services/debugService';
 import { runFullDriftSuite } from './services/driftDetectionService';
 import { DiagnosticResult, ScanResult, PersonaId, PERSONA_IDS, PERSONA_LABELS, ImageInput } from './types';
@@ -13,6 +14,7 @@ import { METRIC_DESCRIPTIONS } from './constants';
 import { GaugeCard, AuditGrid, StrategicRoadmap, ComparisonChart, ReferenceLibrary, QualityGateBanner, BenchmarkingChart, TransferProtocol, MarkdownRenderer, NeuralLoadingGrid } from './components/DashboardComponents';
 import { ReportView } from './components/ReportView';
 import { LoginModal } from './components/LoginModal';
+import { AppErrorBoundary } from './components/AppErrorBoundary';
 import { checkSession, logout } from './services/authService';
 import goldenCrawl from '../test/golden-crawl.txt?raw';
 import goldenWalk from '../test/golden-walk.txt?raw';
@@ -32,6 +34,37 @@ const DRIFT_FIXTURES = [
 ];
 const DRIFT_LABEL = 'Drift Test — Combined Golden Fixtures';
 const DEMO_SIMULATION_LABEL = 'Engine Simulation — Northstar Retail Demo Pack';
+const SAVED_ASSESSMENT_KEY = 'finops:last-assessment:v1';
+
+const readSavedAssessment = (): DiagnosticResult | null => {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = window.sessionStorage.getItem(SAVED_ASSESSMENT_KEY);
+    if (!raw) return null;
+    const parsed = parseDiagnosticResultJson(raw);
+    return parsed.kind === 'report' ? parsed.result : null;
+  } catch {
+    return null;
+  }
+};
+
+const saveAssessmentToSession = (result: DiagnosticResult) => {
+  if (typeof window === 'undefined') return;
+  try {
+    window.sessionStorage.setItem(SAVED_ASSESSMENT_KEY, serializeDiagnosticResultForHtml(result));
+  } catch (error) {
+    console.warn('[FinOps] Could not save assessment recovery payload', error);
+  }
+};
+
+const clearSavedAssessment = () => {
+  if (typeof window === 'undefined') return;
+  try {
+    window.sessionStorage.removeItem(SAVED_ASSESSMENT_KEY);
+  } catch {
+    // Ignore unavailable browser storage.
+  }
+};
 
 const TIER1_FIXTURES: Array<{ pack_id: string; name: string; label: string; text: string }> = [
   { pack_id: 'tier1-governance-policy', name: 'tier1-governance-policy.txt', label: 'Cloud Governance / FinOps Policy', text: tier1GovernancePolicy },
@@ -125,15 +158,32 @@ const App: React.FC = () => {
   const [perPackCurrentLabel, setPerPackCurrentLabel] = useState<string>('');
   const [perPackReport, setPerPackReport] = useState<ReturnType<typeof runFullDriftSuite> | null>(null);
   const [perPackError, setPerPackError] = useState<string | null>(null);
+  const [recoveryNotice, setRecoveryNotice] = useState<string | null>(null);
+  const [hasSavedAssessment, setHasSavedAssessment] = useState(false);
   const pendingAnalyzeRef = useRef(false);
   const pendingDriftRef = useRef(false);
   const pendingPerPackRef = useRef(false);
   const pendingSimulationRef = useRef(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const clearFileInput = () => {
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
 
   useEffect(() => {
     checkSession().then(setAuthenticated);
+    const saved = readSavedAssessment();
+    setHasSavedAssessment(Boolean(saved));
+    if (saved) {
+      setResult(saved);
+      setRecoveryNotice('Restored the last completed assessment from this browser session.');
+    }
   }, []);
+
+  useEffect(() => {
+    if (!result) return;
+    saveAssessmentToSession(result);
+    setHasSavedAssessment(true);
+  }, [result]);
 
   const MIN_FILES = 2;
   const MAX_FILES = 20;
@@ -261,30 +311,40 @@ const App: React.FC = () => {
       const file = newFiles[0];
       if (file.type === 'text/html' || file.name.endsWith('.html')) {
         const text = await file.text();
-        const cleanText = forensicSanitizeImport(text);
-        if (cleanText.includes('id="finops-data"')) {
-          try {
-            const parser = new DOMParser();
-            const doc = parser.parseFromString(cleanText, 'text/html');
-            const script = doc.getElementById('finops-data');
-            if (script?.textContent) {
-              setResult(JSON.parse(script.textContent));
-              setError(null);
-              return;
-            }
-          } catch (e) { console.error("Failed to parse report", e); }
+        const imported = extractDiagnosticResultFromHtmlReport(text);
+        if (imported.kind === 'report') {
+          setResult(imported.result);
+          setViewMode('dashboard');
+          setRecoveryNotice('Imported a saved FinOps report from HTML.');
+          setError(null);
+          clearFileInput();
+          return;
+        }
+        if (imported.kind === 'invalid_report') {
+          setError(imported.error);
+          clearFileInput();
+          return;
         }
       } else if (file.type === 'application/json' || file.name.endsWith('.json')) {
         try {
           const text = await file.text();
           const json = JSON.parse(text);
-          if (json.phase_1_audit_logs && json.phase_2_validation) {
+          if (isDiagnosticResultPayload(json)) {
             setResult(json);
+            setViewMode('dashboard');
+            setRecoveryNotice('Imported a saved FinOps report from JSON.');
             setError(null);
+            clearFileInput();
             return;
           }
         } catch (e) { console.error("Failed to parse JSON file", e); }
       }
+    }
+
+    if (result) {
+      setError('A completed assessment is currently open. Use Reset Session before uploading new source material; the current report is preserved.');
+      clearFileInput();
+      return;
     }
 
     if (files.length + newFiles.length > MAX_FILES) {
@@ -548,26 +608,80 @@ const App: React.FC = () => {
     setResult(null);
     setFiles([]);
     setAggregatedText('');
+    setAggregatedImages([]);
     setError(null);
     setLoadingStage(null);
     setActiveTab('overview');
     setViewMode('dashboard');
+    setRecoveryNotice(null);
+    setHasSavedAssessment(false);
+    clearSavedAssessment();
+  };
+
+  const restoreSavedAssessment = () => {
+    const saved = readSavedAssessment();
+    if (!saved) {
+      setHasSavedAssessment(false);
+      setError('No saved assessment was found in this browser session.');
+      return;
+    }
+    setResult(saved);
+    setViewMode('dashboard');
+    setActiveTab('overview');
+    setRecoveryNotice('Restored the last completed assessment from this browser session.');
+    setError(null);
+    setHasSavedAssessment(true);
+  };
+
+  const clearSavedAssessmentAndRestart = () => {
+    clearSavedAssessment();
+    setHasSavedAssessment(false);
+    setRecoveryNotice(null);
+    reset();
+  };
+
+  const downloadSavedAssessment = () => {
+    const saved = readSavedAssessment();
+    if (!saved) {
+      setHasSavedAssessment(false);
+      return;
+    }
+    const blob = new Blob([JSON.stringify(saved, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `FinOps_Recovered_Assessment_${new Date().toISOString().split('T')[0]}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
   };
 
   const showReference = !result && activeTab === 'reference';
 
   if (result && viewMode === 'report') {
     return (
-      <ReportView
-        result={result}
-        onBack={() => setViewMode('dashboard')}
-        onDownloadSummary={() => downloadSummaryReport(result)}
-        onDownloadMaster={() => downloadMasterDataReport(result)}
-      />
+      <AppErrorBoundary
+        hasSavedAssessment={hasSavedAssessment}
+        onRestoreSaved={restoreSavedAssessment}
+        onDownloadSaved={downloadSavedAssessment}
+        onClearSaved={clearSavedAssessmentAndRestart}
+      >
+        <ReportView
+          result={result}
+          onBack={() => setViewMode('dashboard')}
+          onDownloadSummary={() => downloadSummaryReport(result)}
+          onDownloadMaster={() => downloadMasterDataReport(result)}
+        />
+      </AppErrorBoundary>
     );
   }
 
   return (
+    <AppErrorBoundary
+      hasSavedAssessment={hasSavedAssessment}
+      onRestoreSaved={restoreSavedAssessment}
+      onDownloadSaved={downloadSavedAssessment}
+      onClearSaved={clearSavedAssessmentAndRestart}
+    >
     <div className="min-h-screen font-sans relative overflow-x-hidden selection:bg-emerald-500/30 selection:text-white flex flex-col">
       <header className="sticky top-0 z-50 glass-panel border-b border-white/5 transition-all duration-300 backdrop-blur-xl">
         <div className="max-w-7xl mx-auto px-6 py-4 flex justify-between items-center">
@@ -661,6 +775,32 @@ const App: React.FC = () => {
           </div>
         </div>
       </header>
+
+      {recoveryNotice && (
+        <div className="relative z-30 mx-auto mt-4 w-[calc(100%-2rem)] max-w-7xl rounded-2xl border border-emerald-500/30 bg-emerald-950/80 px-5 py-3 text-sm text-emerald-100 shadow-lg shadow-emerald-950/20 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+          <span>{recoveryNotice}</span>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => setRecoveryNotice(null)}
+              className="rounded-lg border border-emerald-400/30 px-3 py-1.5 text-xs font-bold uppercase tracking-wider text-emerald-100 hover:bg-emerald-400/10"
+            >
+              Dismiss
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                clearSavedAssessment();
+                setHasSavedAssessment(false);
+                setRecoveryNotice(null);
+              }}
+              className="rounded-lg border border-white/10 px-3 py-1.5 text-xs font-bold uppercase tracking-wider text-slate-300 hover:bg-white/10"
+            >
+              Clear saved assessment
+            </button>
+          </div>
+        </div>
+      )}
 
       <main className="max-w-7xl mx-auto px-6 pt-12 flex-grow w-full relative z-20">
         {!result && !showReference && (
@@ -1222,6 +1362,7 @@ const App: React.FC = () => {
         }}
       />
     </div>
+    </AppErrorBoundary>
   );
 };
 

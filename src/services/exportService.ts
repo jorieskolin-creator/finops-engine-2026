@@ -6,6 +6,7 @@ import { SVG_CSS, svgGaugeCard, svgRadar, svgScatter } from './svgChartService';
 import { isInsufficientEvidenceReport, renderInlineMarkdownHtml, renderMarkdownSummaryHtml, strengthsSectionTitle } from './reportTextService';
 import { antiPatternStatusLabel, inferAntiPatternAbsenceStatus } from './antiPatternSemantics';
 import { displayQualityGateDiagnostic, isReportableSourceCoverageGap, splitQualityGateDiagnostics } from './reportDiagnosticsService';
+import { serializeDiagnosticResultForHtml } from './reportImportService';
 
 const BATCHES: Array<'A' | 'B' | 'C' | 'D' | 'E'> = ['A', 'B', 'C', 'D', 'E'];
 const PERSONA_SUMMARY_LABELS = {
@@ -636,7 +637,7 @@ const generateSummaryReportHtml = (result: DiagnosticResult): string => {
       <p>This report is generated deterministically from the validated assessment output. Full audit details are available in the Master Data report.</p>
     </footer>
   </main>
-  <script id="finops-data" type="application/json">${JSON.stringify(result)}</script>
+  <script id="finops-data" type="application/json">${serializeDiagnosticResultForHtml(result)}</script>
 </body>
 </html>`;
 };
@@ -1013,7 +1014,7 @@ const generateReportHtml = (result: DiagnosticResult): string => {
     <p>FinOps Assessment Engine v${escapeHtml(result.meta.engine_version)}</p>
   </div>
 
-  <script id="finops-data" type="application/json">${JSON.stringify(result)}</script>
+  <script id="finops-data" type="application/json">${serializeDiagnosticResultForHtml(result)}</script>
 </body>
 </html>`;
 };
