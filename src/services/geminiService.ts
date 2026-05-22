@@ -9,7 +9,7 @@ import {
 } from "../constants";
 import { bracketFromValidation, explainBracket } from "./confidenceBracket";
 import { runPhase1Audit } from "../orchestrator";
-import { knowledgeBaseService, BATCH_DEFINITIONS, FINOPS_TACTICS_LOCAL, FINOPS_TAXONOMY_REGISTRY, buildTacticIdTable, validTacticIdSet } from "../knowledge_base";
+import { knowledgeBaseService, BATCH_DEFINITIONS, FINOPS_TACTICS_LOCAL, FINOPS_TACTIC_ACTIVITY_PLAYBOOK, FINOPS_TAXONOMY_REGISTRY, buildTacticIdTable, validTacticIdSet } from "../knowledge_base";
 import { DiagnosticResult, Phase1AuditLogs, Phase2Validation, AuditItem, EvidenceQuote, EvidenceCategory, EVIDENCE_CATEGORIES, PersonaId, PERSONA_IDS, ImageInput } from "../types";
 import { generateSafetyAuditPrompt } from "./securityService";
 import { validatePhase1Output, validatePhase3Grounding } from "./validatorService";
@@ -621,6 +621,7 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => `  ${cat}
           phase2: validationData,
           imageCount: images.length,
           tactics: FINOPS_TACTICS_LOCAL,
+          tacticActivityPlaybook: FINOPS_TACTIC_ACTIVITY_PLAYBOOK,
         });
         const roadmapStarted = Date.now();
         const roadmapResp = await runStage(stage, {

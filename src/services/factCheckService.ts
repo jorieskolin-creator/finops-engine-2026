@@ -1,5 +1,5 @@
 
-import { AuditItem, FactCheckClaim, FactCheckResult, Phase1AuditLogs, Phase2Validation, ClaimFailureType, ClaimSeverity, ClaimSourceLocation, StrategicTactic } from '../types';
+import { AuditItem, FactCheckClaim, FactCheckResult, Phase1AuditLogs, Phase2Validation, ClaimFailureType, ClaimSeverity, ClaimSourceLocation, StrategicTactic, TacticActivityPlaybookEntry } from '../types';
 
 const VALID_FAILURE_TYPES: ClaimFailureType[] = ['fabricated_number', 'unverifiable_entity', 'unsupported_org_claim', 'out_of_scope', 'other'];
 const VALID_SEVERITIES: ClaimSeverity[] = ['BLOCKING_UNSUPPORTED_FACT', 'BLOCKING_UNSAFE_ROADMAP', 'WARN_MISCLASSIFIED_BUT_REAL', 'WARN_TACTIC_HYGIENE', 'SUPPORTED'];
@@ -17,6 +17,7 @@ export interface FactCheckInputs {
   // Spotify's tag governance" or "Implement [TAC-VIS-002]") are verified
   // against THIS, not the customer source document.
   tactics?: StrategicTactic[];
+  tacticActivityPlaybook?: TacticActivityPlaybookEntry[];
 }
 
 export interface RoadmapFactCheckInputs extends FactCheckInputs {
@@ -59,6 +60,17 @@ const compactTactics = (tactics: StrategicTactic[] | undefined): string => {
     const companyList = companies.length > 0 ? companies.join(', ') : '(no named company)';
     return `${t.id} [${t.category}]: "${t.problem_pattern}" → companies: ${companyList}`;
   }).join('\n');
+};
+
+const compactTacticActivityPlaybook = (entries: TacticActivityPlaybookEntry[] | undefined): string => {
+  if (!entries || entries.length === 0) return '(no tactic activity playbook supplied)';
+  return entries.map(entry => [
+    `${entry.tactic_id}: maturity=${entry.maturity_criteria.join(', ')}; antipattern=${entry.antipattern_criteria.join(', ')}`,
+    `goal=${entry.activity_goal}`,
+    `activities=${entry.implementation_activities.slice(0, 5).join('; ')}`,
+    `artifacts=${entry.expected_artifacts.join(', ')}`,
+    `acceptance=${entry.acceptance_criteria.slice(0, 4).join('; ')}`
+  ].join('\n')).join('\n\n');
 };
 
 const compactMetrics = (phase2: Phase2Validation): string => {
@@ -351,7 +363,7 @@ Your job: verify that the planning decision and roadmap are logical, grounded re
 ROADMAP GROUNDING:
 - "supported_by_audit": the action or planning rationale logically follows from LOCKED_FINDINGS, PHASE_1_EVIDENCE, or PHASE_2_METRICS.
 - "supported_by_source": the action or rationale is directly supported by the SOURCE_DOCUMENT.
-- "supported_by_tactics_db": tactic IDs, mechanism names, and named case-study references are valid and correctly paired in VERIFIED_TACTICS_DB.
+- "supported_by_tactics_db": tactic IDs, mechanism names, named case-study references, and implementation activity details are valid and correctly paired in VERIFIED_TACTICS_DB or TACTIC_ACTIVITY_PLAYBOOK.
 - "unsupported": the roadmap action, planning rationale, or tactic reference does not trace to locked findings/evidence, uses a mismatched tactic/company pairing, or introduces a new current-state claim not present in LOCKED_FINDINGS.
 </classifications>
 
@@ -362,6 +374,7 @@ ROADMAP GROUNDING:
 - Tactic IDs are allowed only in roadmap actions and must exist in the tactics DB.
 - If tactic IDs appear in the planning decision but the underlying action is grounded, classify the issue as unsupported with severity "WARN_TACTIC_HYGIENE" instead of a blocking roadmap failure.
 - A grounded roadmap action may have zero tactic IDs when no exact tactics DB match exists. Do not flag zero tactic IDs by itself.
+- Activity-playbook details support roadmap HOW language only. They do not support new claims about what the audited organization currently has or does.
 - If the action is grounded but the output uses a wrong label/category for the finding, classify unsupported with severity "WARN_MISCLASSIFIED_BUT_REAL".
 - WHY and WHAT may summarize context and intended change, but they may not invent new current-state claims, unsupported financial impacts, or claim that a gap is fully closed unless LOCKED_FINDINGS provide acceptance criteria proving closure.
 - Maximum 15 claims per pass — focus on consequential grounding errors.
@@ -400,6 +413,10 @@ ${compactEvidence(inputs.phase1)}
 <verified_tactics_db>
 ${compactTactics(inputs.tactics)}
 </verified_tactics_db>
+
+<tactic_activity_playbook>
+${compactTacticActivityPlaybook(inputs.tacticActivityPlaybook)}
+</tactic_activity_playbook>
 
 <source_document>
 ${inputs.sourceDocument.substring(0, MAX_SOURCE_CHARS)}

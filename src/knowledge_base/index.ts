@@ -1,11 +1,12 @@
 
-import type { KnowledgeTaxonomyRegistry, RemoteKnowledgeBaseDocument, RemoteKnowledgeBaseIndex, StrategicTactic } from '../types';
+import type { KnowledgeTaxonomyRegistry, RemoteKnowledgeBaseDocument, RemoteKnowledgeBaseIndex, StrategicTactic, TacticActivityPlaybookEntry } from '../types';
 import criteriaData from './finops_criteria.json';
 import antipatternData from './finops_antipatterns.json';
 import keywordsData from './finops_preflight_keywords.json';
 import taxonomyData from './finops_evidence_taxonomy.json';
 import personasData from './finops_personas.json';
 import tacticsData from './finops_tactics_database.json';
+import tacticActivityPlaybookData from './finops_tactic_activity_playbook.json';
 import validationData from './finops_validation_rules.json';
 import taxonomyRegistryData from './finops_taxonomy_registry.json';
 
@@ -15,6 +16,7 @@ export const FINOPS_KEYWORDS = keywordsData;
 export const FINOPS_EVIDENCE_TAXONOMY = taxonomyData;
 export const FINOPS_PERSONAS = personasData;
 export const FINOPS_TACTICS_LOCAL = tacticsData.tactics as StrategicTactic[];
+export const FINOPS_TACTIC_ACTIVITY_PLAYBOOK = tacticActivityPlaybookData.entries as TacticActivityPlaybookEntry[];
 export const FINOPS_VALIDATION_RULES = validationData;
 export const FINOPS_TAXONOMY_REGISTRY = taxonomyRegistryData as KnowledgeTaxonomyRegistry;
 
@@ -41,6 +43,33 @@ export function buildTacticIdTable(tactics: StrategicTactic[] = FINOPS_TACTICS_L
 // Set of valid tactic IDs for the post-synthesis ID scanner.
 export function validTacticIdSet(tactics: StrategicTactic[] = FINOPS_TACTICS_LOCAL): Set<string> {
   return new Set(tactics.map(t => t.id));
+}
+
+export function buildTacticActivityContext(
+  tactics: StrategicTactic[] = FINOPS_TACTICS_LOCAL,
+  entries: TacticActivityPlaybookEntry[] = FINOPS_TACTIC_ACTIVITY_PLAYBOOK
+): string {
+  const tacticIds = new Set(tactics.map(t => t.id));
+  const byId = new Map(tactics.map(t => [t.id, t]));
+  return entries
+    .filter(entry => tacticIds.has(entry.tactic_id))
+    .map(entry => {
+      const tactic = byId.get(entry.tactic_id);
+      return [
+        `[${entry.tactic_id}] ${tactic?.canonical_name || tactic?.problem_pattern || 'Unnamed tactic'}`,
+        `KB coverage: maturity=${entry.maturity_criteria.join(', ')}; antipattern=${entry.antipattern_criteria.join(', ')}`,
+        `Activity goal: ${entry.activity_goal}`,
+        `Use when: ${entry.when_to_use.join('; ')}`,
+        `Do not use when: ${entry.when_not_to_use.join('; ')}`,
+        `Prerequisite evidence: ${entry.prerequisite_evidence.join('; ')}`,
+        `Implementation activities: ${entry.implementation_activities.join('; ')}`,
+        `Owner roles: ${entry.owner_roles.join(', ')}`,
+        `Expected artifacts: ${entry.expected_artifacts.join(', ')}`,
+        `Acceptance criteria: ${entry.acceptance_criteria.join('; ')}`,
+        `Risks and controls: ${entry.risks_and_controls.join('; ')}`
+      ].join('\n');
+    })
+    .join('\n\n---\n\n');
 }
 
 const MASTER_BINGO_FINOPS = {
@@ -352,6 +381,20 @@ export const knowledgeBaseService = {
       return entry;
     }).join("\n\n");
 
-    return `<VERIFIED_TACTICS_DATABASE>\n${formattedContext}\n</VERIFIED_TACTICS_DATABASE>`;
+    const activityContext = buildTacticActivityContext(tactics);
+
+    return `<VERIFIED_TACTICS_DATABASE>
+${formattedContext}
+</VERIFIED_TACTICS_DATABASE>
+
+<TACTIC_ACTIVITY_PLAYBOOK usage="roadmap_activity_guidance_only_not_customer_evidence">
+BOUNDARIES:
+- Use this playbook only to enrich roadmap WHY, WHAT, and HOW for tactic actions that are already grounded in locked findings.
+- Never cite this playbook as proof of the assessed organization's current state.
+- Never copy this playbook into source_evidence_quote.
+- If the locked findings do not match the tactic coverage or use-when rules, withhold the tactic ID.
+
+${activityContext || '(no tactic activity playbook entries available)'}
+</TACTIC_ACTIVITY_PLAYBOOK>`;
   }
 };

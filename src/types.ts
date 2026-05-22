@@ -462,3 +462,18 @@ export interface StrategicTactic {
   resource_label?: string;
   resource_url?: string;
 }
+
+export interface TacticActivityPlaybookEntry {
+  tactic_id: string;
+  maturity_criteria: string[];
+  antipattern_criteria: string[];
+  activity_goal: string;
+  when_to_use: string[];
+  when_not_to_use: string[];
+  prerequisite_evidence: string[];
+  implementation_activities: string[];
+  owner_roles: string[];
+  expected_artifacts: string[];
+  acceptance_criteria: string[];
+  risks_and_controls: string[];
+}

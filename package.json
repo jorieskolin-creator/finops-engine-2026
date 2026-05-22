@@ -20,6 +20,7 @@
     "test:internal-call-protection": "node scripts/test-internal-call-protection.mjs",
     "test:internal-result-store": "node scripts/test-internal-result-store.mjs",
     "test:tactic-grounding": "node scripts/test-tactic-grounding.mjs",
+    "test:tactic-activity-playbook": "node scripts/test-tactic-activity-playbook.mjs",
     "test:kb-index": "node scripts/test-kb-index.mjs",
     "preview": "vite preview",
     "start": "node server.js"

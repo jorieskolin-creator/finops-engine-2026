@@ -308,8 +308,9 @@ export const ROADMAP_SYNTHESIS_USER_PROMPT = `
 You will be provided with:
 1. **LOCKED FINDINGS JSON:** evidence summaries, evidence_summary, diagnosis, and visual_scorecard already created without the tactics KB. Treat these as immutable.
 2. **VERIFIED TACTICS DATABASE:** approved remediation mechanisms and tactic IDs.
-3. **METHODOLOGY:** Crawl-Walk-Run sequencing.
-4. **PHASE 2 METRICS:** numeric confidence signals and Quality Gate precursors.
+3. **TACTIC ACTIVITY PLAYBOOK:** KB-aligned implementation activities, roles, artifacts, and acceptance criteria for approved tactic IDs.
+4. **METHODOLOGY:** Crawl-Walk-Run sequencing.
+5. **PHASE 2 METRICS:** numeric confidence signals and Quality Gate precursors.
 </input_data>
 
 <reference_material>
@@ -319,7 +320,7 @@ ${FINOPS_METHODOLOGY_CONTEXT}
 <strict_constraints>
 1. **LOCKED FINDINGS:** Do not change, reinterpret, or add factual claims to the evidence summary or diagnosis. The roadmap must answer: what actions logically follow from these findings?
 2. **GROUNDING RULE:** Every roadmap action must trace to at least one confirmed gap, confirmed anti-pattern, silent/missing evidence item, or diagnosis statement in LOCKED FINDINGS. Prefer 3-5 actions per phase when the locked findings support them. If a phase has fewer than 3 genuinely grounded actions, return fewer actions rather than inventing filler.
-3. **TACTICS KB SCOPE:** Use the Verified Tactics Database only for prescriptions, mechanism names, case-study references, and tactic IDs. Never use it to alter current-state findings.
+3. **TACTICS KB SCOPE:** Use the Verified Tactics Database and Tactic Activity Playbook only for prescriptions, mechanism names, case-study references, activity detail, artifacts, roles, and acceptance criteria. Never use them to alter current-state findings.
 4. **TACTIC ID RULE:** Every prescribed tactic action must include exactly one valid bracketed tactic ID from the database only when that tactic's problem_pattern semantically matches the locked finding. Generic evidence-gathering actions should omit tactic IDs. No tactic ID is better than a wrong tactic ID.
 5. **PLANNING DECISION:**
    - GO only when evidence is strong and no unresolved fact-check warnings are being regenerated.
@@ -330,8 +331,9 @@ ${FINOPS_METHODOLOGY_CONTEXT}
 8. **NO CULTURE/GOVERNANCE OVERREACH:** Do not use culture or governance tactic IDs for generic improvement language. Culture tactics require a matching culture anti-pattern in LOCKED FINDINGS, and governance tactics require a matching governance gap in LOCKED FINDINGS.
 9. **NO VAGUE MATURITY ACTIONS:** Do not prescribe shifting from activity tracking to outcome tracking, product-level cadence embedding, growth/scale operating model work, or access-pattern baselines unless that exact gap appears in LOCKED FINDINGS.
 10. **WHY / WHAT GROUNDING:** Each roadmap phase must include "why" and "what" paragraphs. They are roadmap claims and must be grounded exactly like actions. Do not introduce new current-state facts, unsupported financial impact, or "closes the gap" language unless the locked findings include explicit acceptance criteria proving closure.
-11. **PRIVACY LANGUAGE:** Do not name individuals. Avoid repeating the assessed organization/legal entity name; use "the assessed organization" or functional labels such as finance, engineering, platform, or FinOps team.
-12. **JSON STRING SAFETY:** No double quotes inside JSON values. Use single quotes or asterisks.
+11. **ACTIVITY PLAYBOOK BOUNDARY:** Use activity playbook content to make HOW actions concrete only after the tactic's KB coverage and use-when rules match locked findings. Do not force a tactic ID merely because the playbook contains useful generic activities.
+12. **PRIVACY LANGUAGE:** Do not name individuals. Avoid repeating the assessed organization/legal entity name; use "the assessed organization" or functional labels such as finance, engineering, platform, or FinOps team.
+13. **JSON STRING SAFETY:** No double quotes inside JSON values. Use single quotes or asterisks.
 </strict_constraints>
 
 <task>
@@ -344,7 +346,7 @@ ${FINOPS_METHODOLOGY_CONTEXT}
 3. For every phase:
    - "why": 75-125 words explaining why this phase exists, referencing only locked findings, confirmed gaps, confirmed anti-patterns, missing-evidence needs, diagnosis statements, and matching KB mechanisms.
    - "what": 75-125 words describing the intended change/outcome without inventing unproven benefits or claiming a gap is fully closed unless the locked findings prove the acceptance criteria.
-   - "actions": the HOW layer — 3-5 concrete bullets grounded in locked findings where possible. Include tactic IDs only where the KB problem pattern exactly matches. If fewer than 3 grounded HOW actions exist for a phase, use fewer and do not pad with generic work.
+   - "actions": the HOW layer — 3-5 concrete bullets grounded in locked findings where possible. Use the Tactic Activity Playbook for practical activity, owner, artifact, and acceptance language after the tactic is grounded. Include tactic IDs only where the KB problem pattern exactly matches. If fewer than 3 grounded HOW actions exist for a phase, use fewer and do not pad with generic work.
    - Do not write blanket claims that every gap maps to a verified KB tactic. Use narrower wording: source-confirmed gaps drive the roadmap; tactic IDs are used only where an exact KB match is supported.
 4. If evidence is low or mixed, use validation actions first and mark assumptions/confidence when requested by the prompt appendix.
 </task>
