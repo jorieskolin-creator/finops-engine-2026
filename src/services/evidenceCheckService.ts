@@ -8,10 +8,11 @@ import {
   ImageInput,
   AntiPatternAbsenceStatus
 } from '../types';
-import { runStage, RunContext } from './modelRouter';
+import { runStage, RunContext, serverLog } from './modelRouter';
 import { verifyTextEvidenceSupport } from './evidenceSupport';
 import {
   antiPatternStatusDescription,
+  normalizeAntiPatternAbsenceStatus,
   resolveAntiPatternAbsenceStatus
 } from './antiPatternSemantics';
 
@@ -165,6 +166,122 @@ Return STRICT JSON:
 </output_format>
 `;
 
+const needsAntiPatternAdjudication = (item: EvidenceCheckItem): boolean => {
+  return item.stream === 'antipattern'
+    && item.original_count > 0
+    && item.verified_count === 0
+    && (item.status === 'weak' || item.status === 'unsupported' || item.status === 'missing')
+    && item.antipattern_absence_status !== 'partially_present';
+};
+
+const buildAntiPatternAdjudicationPrompt = (
+  batchId: string,
+  text: string,
+  items: EvidenceCheckItem[],
+  batch: BatchAuditResult
+): string => `
+<role>
+You are a senior FinOps evidence adjudicator. A first evidence-check found disputed anti-pattern signals. Your job is only to decide whether each disputed item is a weak/partial harmful anti-pattern finding or not assessable from source coverage.
+</role>
+
+<rules>
+- The REFERENCE or Knowledge Base is not customer source evidence.
+- Do not upgrade maturity or invent new findings.
+- For each item choose exactly one status:
+  - "partially_present": the source contains weak, partial, indirect, or low-confidence evidence of the harmful anti-pattern.
+  - "unknown_absent": the scanner signal is not reliable enough and source coverage is too weak, silent, irrelevant, or contradictory to support either a finding or tested absence.
+- Do not return "tested_absent" for these disputed items because the scanner already found a harmful signal and the verifier could not support a clean absence.
+- Prefer "unknown_absent" when the source does not actually discuss the anti-pattern topic.
+- Prefer "partially_present" when the source discusses the topic and shows a weak version of the harmful pattern.
+</rules>
+
+<source_material>
+${text.substring(0, 50000)}
+</source_material>
+
+<scanner_output>
+${summarizeBatch(batch)}
+</scanner_output>
+
+<disputed_items>
+${items.map(i => `- antipattern.${i.id}: scanner=${i.original_count}, verifier=${i.verified_count}, evidence_status=${i.status}, current_semantics=${i.antipattern_absence_status || 'unknown'}, rationale=${i.rationale}, coverage=${i.coverage_reason || ''}`).join('\n')}
+</disputed_items>
+
+<output_format>
+Return STRICT JSON:
+{
+  "items": [
+    {
+      "id": "${batchId}1",
+      "antipattern_absence_status": "partially_present | unknown_absent",
+      "rationale": "Short source-grounded reason for the adjudication.",
+      "coverage_reason": "Short source coverage interpretation."
+    }
+  ]
+}
+</output_format>
+`;
+
+const applyAntiPatternAdjudication = async (
+  batchId: string,
+  batch: BatchAuditResult,
+  text: string,
+  images: ImageInput[],
+  ctx: RunContext,
+  items: EvidenceCheckItem[]
+): Promise<{ items: EvidenceCheckItem[]; model_used?: string }> => {
+  const candidates = items.filter(needsAntiPatternAdjudication);
+  if (candidates.length === 0) return { items };
+
+  try {
+    const resp = await runStage('evidence_adjudication', {
+      userText: buildAntiPatternAdjudicationPrompt(batchId, text, candidates, batch),
+      images,
+    }, ctx);
+    const parsed = parseAiResponse(resp.text);
+    const decisions = new Map<string, any>();
+    for (const raw of flattenVerifierItems(parsed)) {
+      if (raw && typeof raw === 'object' && typeof raw.id === 'string') {
+        decisions.set(raw.id, raw);
+      }
+    }
+    const next = items.map(item => {
+      if (!needsAntiPatternAdjudication(item)) return item;
+      const decision = decisions.get(item.id);
+      const status = normalizeAntiPatternAbsenceStatus(decision?.antipattern_absence_status);
+      if (status !== 'partially_present' && status !== 'unknown_absent') return item;
+      const rationale = typeof decision?.rationale === 'string' && decision.rationale.trim().length > 0
+        ? `Adjudication: ${decision.rationale.trim()}`
+        : item.rationale;
+      const coverageReason = typeof decision?.coverage_reason === 'string' && decision.coverage_reason.trim().length > 0
+        ? decision.coverage_reason.trim()
+        : item.coverage_reason;
+      return {
+        ...item,
+        status: status === 'partially_present' ? 'weak' : item.status,
+        verified_count: status === 'partially_present' ? Math.max(1, item.verified_count) : 0,
+        rationale,
+        antipattern_absence_status: status,
+        coverage_reason: coverageReason,
+        rescan_recommended: item.rescan_recommended || (status === 'partially_present' && item.original_count > Math.max(1, item.verified_count)),
+      };
+    });
+    await serverLog(ctx.runId, 'info', 'evidence_adjudication_used', {
+      batch: batchId,
+      model: resp.modelUsed.id,
+      criteria: candidates.map(i => `antipattern.${i.id}`).join(','),
+    });
+    return { items: next, model_used: resp.modelUsed.id };
+  } catch (error: any) {
+    await serverLog(ctx.runId, 'warn', 'evidence_adjudication_failed', {
+      batch: batchId,
+      criteria: candidates.map(i => `antipattern.${i.id}`).join(','),
+      error: error?.message || String(error),
+    });
+    return { items };
+  }
+};
+
 export const runEvidenceCheck = async (
   batchId: string,
   batch: BatchAuditResult,
@@ -274,7 +391,12 @@ export const runEvidenceCheck = async (
       }
     }
 
-    return { ...summarizeEvidenceCheck(batchId, items, []), model_used: resp.modelUsed.id };
+    const adjudicated = await applyAntiPatternAdjudication(batchId, batch, text, images, ctx, items);
+    return {
+      ...summarizeEvidenceCheck(batchId, adjudicated.items, []),
+      model_used: resp.modelUsed.id,
+      adjudication_model_used: adjudicated.model_used,
+    };
   } catch (error: any) {
     return {
       batch_id: batchId,
@@ -447,6 +569,7 @@ export const mergeEvidenceCheckResults = (results: EvidenceCheckResult[]): Evide
   return {
     ...merged,
     failed: results.some(r => r.failed),
+    adjudication_model_used: Array.from(new Set(results.map(r => r.adjudication_model_used).filter(Boolean))).join(',') || undefined,
     failure_reason: results.filter(r => r.failure_reason).map(r => `${r.batch_id}: ${r.failure_reason}`).join(' | ') || undefined
   };
 };

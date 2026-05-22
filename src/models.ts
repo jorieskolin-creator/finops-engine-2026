@@ -43,11 +43,14 @@ export interface ModelProfile {
 export type StageId =
   | 'preflight'           // Phase 0: DLP / safety scan
   | 'forensic_audit'      // Phase 1: 5 parallel batch audits
+  | 'targeted_rescan'     // Phase 1 repair: high-value second-opinion rescans
   | 'evidence_check'      // Phase 1.5: verify batch evidence before scoring
+  | 'evidence_adjudication'// Phase 1.6: resolve disputed anti-pattern semantics
   | 'synthesis'           // Phase 3: strategy + roadmap (default)
   | 'roadmap_synthesis'   // Phase 3: deeper planning/roadmap substage
   | 'synthesis_escalation'// Phase 3: high-stakes / complex orgs
   | 'fact_check'          // Phase 3.5: claim verification
+  | 'fact_check_high'     // Phase 3.5: high-reasoning retry for fact-check BLOCKs
   | 'quality_gate';       // Phase 2.5: reserved for future LLM-driven QG
 
 // ============================================================================
@@ -113,6 +116,13 @@ export const PROFILES = {
     maxTokens: 12000,
   } satisfies ModelProfile,
 
+  GPT_55_FACT_CHECK_HIGH: {
+    id: 'gpt-5.5',
+    provider: 'openai',
+    openaiReasoning: { effort: 'high' },
+    maxTokens: 12000,
+  } satisfies ModelProfile,
+
   GPT_55_QUALITY_GATE: {
     id: 'gpt-5.5',
     provider: 'openai',
@@ -135,11 +145,14 @@ export const PROFILES = {
 export const STAGE_MODELS: Record<StageId, ModelProfile> = {
   preflight:            PROFILES.GEMINI_35_FLASH,
   forensic_audit:       PROFILES.SONNET_46,
+  targeted_rescan:      PROFILES.OPUS_47,
   evidence_check:       PROFILES.GEMINI_31_PRO,
+  evidence_adjudication: PROFILES.GPT_55_FACT_CHECK,
   synthesis:            PROFILES.SONNET_46,
   roadmap_synthesis:    PROFILES.OPUS_47,
   synthesis_escalation: PROFILES.OPUS_47,
   fact_check:           PROFILES.GPT_55_FACT_CHECK,
+  fact_check_high:      PROFILES.GPT_55_FACT_CHECK_HIGH,
   quality_gate:         PROFILES.GPT_55_QUALITY_GATE,
 };
 
@@ -155,11 +168,14 @@ export const STAGE_MODELS: Record<StageId, ModelProfile> = {
 export const FALLBACK_CHAIN: Record<StageId, ModelProfile[]> = {
   preflight:            [PROFILES.GEMINI_25_FLASH, PROFILES.HAIKU_45],
   forensic_audit:       [PROFILES.HAIKU_45, PROFILES.GEMINI_25_PRO],
+  targeted_rescan:      [PROFILES.GPT_55_ROADMAP, PROFILES.SONNET_46],
   evidence_check:       [PROFILES.GEMINI_25_PRO, PROFILES.SONNET_46],
+  evidence_adjudication: [PROFILES.OPUS_47],
   synthesis:            [PROFILES.HAIKU_45, PROFILES.GEMINI_25_PRO],
   roadmap_synthesis:    [PROFILES.GPT_55_ROADMAP, PROFILES.GEMINI_31_PRO],
   synthesis_escalation: [PROFILES.SONNET_46, PROFILES.GEMINI_25_PRO],
   fact_check:           [PROFILES.SONNET_46],
+  fact_check_high:      [PROFILES.SONNET_46],
   quality_gate:         [PROFILES.SONNET_46],
 };
 

@@ -130,6 +130,7 @@ export interface EvidenceCheckAdjustment {
 export interface EvidenceCheckResult {
   batch_id?: string;
   model_used?: string;
+  adjudication_model_used?: string;
   total_items: number;
   supported_count: number;
   weak_count: number;
@@ -245,10 +246,13 @@ export interface AnalysisMeta {
   model_config: {
     preflight: string;
     forensic_audit: string;
+    targeted_rescan?: string;
     evidence_check: string;
+    evidence_adjudication?: string;
     synthesis: string;
     roadmap_synthesis?: string;
     fact_check: string;
+    fact_check_high?: string;
     validators: string;
   };
 }

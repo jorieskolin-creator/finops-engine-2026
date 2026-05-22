@@ -2,6 +2,7 @@
 import { generateBatchSystemInstruction, generateBatchUserPrompt, generateTargetedBatchUserPrompt } from './prompts';
 import { BATCH_DEFINITIONS, knowledgeBaseService } from './knowledge_base';
 import { runStage, serverLog, RunContext } from './services/modelRouter';
+import { StageId } from './models';
 import { EvidenceCheckItem, EvidenceCheckResult, ImageInput } from './types';
 import {
   applyEvidenceCheckToBatch,
@@ -38,7 +39,9 @@ export interface Phase1Result {
   evidence_check: EvidenceCheckResult;
   failed_batches: string[];
   models_used: string[];
+  targeted_rescan_models_used: string[];
   evidence_check_models_used: string[];
+  evidence_adjudication_models_used: string[];
 }
 
 const runSingleBatch = async (
@@ -46,7 +49,8 @@ const runSingleBatch = async (
   text: string,
   images: ImageInput[],
   ctx: RunContext,
-  userPromptOverride?: string
+  userPromptOverride?: string,
+  stage: StageId = 'forensic_audit'
 ): Promise<BatchAuditResult & { model_used?: string }> => {
   const definitions = BATCH_DEFINITIONS[batchId];
   const systemInstruction = generateBatchSystemInstruction(batchId, definitions.title);
@@ -59,7 +63,7 @@ const runSingleBatch = async (
 
   const userText = `${userPrompt}\n\n${referenceKbContext}\n\n<UNTRUSTED_CONTENT>\n${text}\n</UNTRUSTED_CONTENT>`;
 
-  const response = await runStage('forensic_audit', {
+  const response = await runStage(stage, {
     userText,
     systemInstruction,
     images,
@@ -97,7 +101,7 @@ const runTargetedRescan = async (
     antipatternIds,
     feedbackForRescan(items)
   );
-  return runSingleBatch(batchId, text, images, ctx, prompt);
+  return runSingleBatch(batchId, text, images, ctx, prompt, 'targeted_rescan');
 };
 
 export const runPhase1Audit = async (
@@ -114,12 +118,16 @@ export const runPhase1Audit = async (
     evidence_check: mergeEvidenceCheckResults([]),
     failed_batches: [],
     models_used: [],
+    targeted_rescan_models_used: [],
     evidence_check_models_used: [],
+    evidence_adjudication_models_used: [],
   };
 
   let completedCount = 0;
   const modelsSeen = new Set<string>();
+  const targetedRescanModelsSeen = new Set<string>();
   const evidenceModelsSeen = new Set<string>();
+  const evidenceAdjudicationModelsSeen = new Set<string>();
   const evidenceResults: EvidenceCheckResult[] = [];
 
   const auditPromises = batches.map(async (batchId) => {
@@ -135,6 +143,7 @@ export const runPhase1Audit = async (
 
         let evidenceCheck = await runEvidenceCheck(batchId, batchResult, text, images, ctx);
         if (evidenceCheck.model_used) evidenceModelsSeen.add(evidenceCheck.model_used);
+        if (evidenceCheck.adjudication_model_used) evidenceAdjudicationModelsSeen.add(evidenceCheck.adjudication_model_used);
         const needsRescan = evidenceItemsNeedingRescan(evidenceCheck);
         const rescannedKeys = new Set<string>();
         const preRescanCounts = new Map<string, number>();
@@ -145,7 +154,14 @@ export const runPhase1Audit = async (
             criteria: needsRescan.map(i => `${i.stream}.${i.id}`).join(','),
           });
           const rescanResult = await runTargetedRescan(batchId, text, images, ctx, needsRescan);
-          if (rescanResult.model_used) modelsSeen.add(rescanResult.model_used);
+          if (rescanResult.model_used) {
+            targetedRescanModelsSeen.add(rescanResult.model_used);
+            serverLog(ctx.runId, 'info', 'targeted_rescan_model_used', {
+              batch: batchId,
+              model: rescanResult.model_used,
+              criteria: needsRescan.map(i => `${i.stream}.${i.id}`).join(','),
+            });
+          }
           batchResult = mergeBatchResult(batchResult, rescanResult) as BatchAuditResult & { model_used?: string };
           needsRescan.forEach(i => {
             const key = `${i.stream}.${i.id}`;
@@ -155,6 +171,7 @@ export const runPhase1Audit = async (
 
           evidenceCheck = await runEvidenceCheck(batchId, batchResult, text, images, ctx);
           if (evidenceCheck.model_used) evidenceModelsSeen.add(evidenceCheck.model_used);
+          if (evidenceCheck.adjudication_model_used) evidenceAdjudicationModelsSeen.add(evidenceCheck.adjudication_model_used);
         }
 
         const checked = applyEvidenceCheckToBatch(batchResult, evidenceCheck, rescannedKeys);
@@ -166,6 +183,7 @@ export const runPhase1Audit = async (
         evidenceCheck = {
           ...summarizeEvidenceCheck(batchId, evidenceCheck.items, adjustments),
           model_used: evidenceCheck.model_used,
+          adjudication_model_used: evidenceCheck.adjudication_model_used,
           failed: evidenceCheck.failed,
           failure_reason: evidenceCheck.failure_reason,
         };
@@ -178,6 +196,7 @@ export const runPhase1Audit = async (
           attempt,
           model: batchResult.model_used,
           evidence_check_model: evidenceCheck.model_used || 'n/a',
+          evidence_adjudication_model: evidenceCheck.adjudication_model_used || 'n/a',
           evidence_downgrades: evidenceCheck.downgraded_count,
           evidence_rescans: evidenceCheck.rescan_count,
           duration_ms: Date.now() - batchStarted,
@@ -205,7 +224,9 @@ export const runPhase1Audit = async (
 
   await Promise.all(auditPromises);
   aggregated.models_used = Array.from(modelsSeen);
+  aggregated.targeted_rescan_models_used = Array.from(targetedRescanModelsSeen);
   aggregated.evidence_check_models_used = Array.from(evidenceModelsSeen);
+  aggregated.evidence_adjudication_models_used = Array.from(evidenceAdjudicationModelsSeen);
   aggregated.evidence_check = mergeEvidenceCheckResults(evidenceResults.sort((a, b) => (a.batch_id || '').localeCompare(b.batch_id || '')));
   return aggregated;
 };

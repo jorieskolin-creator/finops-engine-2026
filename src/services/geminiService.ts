@@ -22,7 +22,7 @@ import {
   parseFactCheckResponse
 } from "./factCheckService";
 import { FactCheckClaim, FactCheckResult, FactCheckPassSnapshot } from "../types";
-import { STAGE_MODELS } from "../models";
+import { STAGE_MODELS, StageId } from "../models";
 import { runStage, serverLog, newRunId } from "./modelRouter";
 import { sanitizeRoadmapTacticGrounding } from "./tacticGroundingService";
 import { sanitizeStrategyAfterFactCheck } from "./strategySanitationService";
@@ -199,10 +199,13 @@ export const analyzeDocument = async (
   const actuals: Record<string, string> = {
     preflight: STAGE_MODELS.preflight.id,
     forensic_audit: STAGE_MODELS.forensic_audit.id,
+    targeted_rescan: STAGE_MODELS.targeted_rescan.id,
     evidence_check: STAGE_MODELS.evidence_check.id,
+    evidence_adjudication: STAGE_MODELS.evidence_adjudication.id,
     synthesis: STAGE_MODELS.synthesis.id,
     roadmap_synthesis: STAGE_MODELS.roadmap_synthesis.id,
     fact_check: STAGE_MODELS.fact_check.id,
+    fact_check_high: STAGE_MODELS.fact_check_high.id,
   };
 
   console.log(`[FinOps] === Pipeline start === run=${runId} deepMode=${!!options.deepMode}`);
@@ -213,10 +216,13 @@ export const analyzeDocument = async (
     deep_mode: !!options.deepMode,
     preflight: STAGE_MODELS.preflight.id,
     forensic_audit: STAGE_MODELS.forensic_audit.id,
+    targeted_rescan: STAGE_MODELS.targeted_rescan.id,
     evidence_check: STAGE_MODELS.evidence_check.id,
+    evidence_adjudication: STAGE_MODELS.evidence_adjudication.id,
     synthesis: STAGE_MODELS.synthesis.id,
     roadmap_synthesis: STAGE_MODELS.roadmap_synthesis.id,
     fact_check: STAGE_MODELS.fact_check.id,
+    fact_check_high: STAGE_MODELS.fact_check_high.id,
   });
 
   try {
@@ -267,13 +273,21 @@ export const analyzeDocument = async (
     if (aggregatedRawData.models_used.length > 0) {
       actuals.forensic_audit = aggregatedRawData.models_used.join(',');
     }
+    if (aggregatedRawData.targeted_rescan_models_used.length > 0) {
+      actuals.targeted_rescan = aggregatedRawData.targeted_rescan_models_used.join(',');
+    }
     if (aggregatedRawData.evidence_check_models_used.length > 0) {
       actuals.evidence_check = aggregatedRawData.evidence_check_models_used.join(',');
+    }
+    if (aggregatedRawData.evidence_adjudication_models_used.length > 0) {
+      actuals.evidence_adjudication = aggregatedRawData.evidence_adjudication_models_used.join(',');
     }
     serverLog(runId, 'info', 'stage_complete', {
       stage: 'forensic_audit',
       model: aggregatedRawData.models_used.join(',') || STAGE_MODELS.forensic_audit.id,
+      targeted_rescan_model: aggregatedRawData.targeted_rescan_models_used.join(',') || 'n/a',
       evidence_check_model: aggregatedRawData.evidence_check_models_used.join(',') || STAGE_MODELS.evidence_check.id,
+      evidence_adjudication_model: aggregatedRawData.evidence_adjudication_models_used.join(',') || 'n/a',
       duration_ms: Date.now() - phase1Started,
       failed_batches: aggregatedRawData.failed_batches.join(',') || 'none',
       evidence_downgrades: aggregatedRawData.evidence_check.downgraded_count,
@@ -570,7 +584,7 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => `  ${cat}
       };
     };
 
-    const runFactCheck = async (data: any, attemptNumber: number): Promise<FactCheckResult> => {
+    const runFactCheck = async (data: any, attemptNumber: number, stage: Extract<StageId, 'fact_check' | 'fact_check_high'> = 'fact_check'): Promise<FactCheckResult> => {
       const strategy = data?.phase_3_strategy || {};
       const roadmap = strategy.remediation_roadmap || [];
       const roadmapText = buildRoadmapGroundingText(roadmap);
@@ -584,13 +598,13 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => `  ${cat}
           imageCount: images.length,
         });
         const summaryStarted = Date.now();
-        const summaryResp = await runStage('fact_check', {
+        const summaryResp = await runStage(stage, {
           userText: summaryPrompt,
           images,
         }, { runId });
-        actuals.fact_check = summaryResp.modelUsed.id;
+        actuals[stage] = summaryResp.modelUsed.id;
         serverLog(runId, 'info', 'stage_complete', {
-          stage: 'fact_check',
+          stage,
           model: summaryResp.modelUsed.id,
           substage: 'summary',
           duration_ms: Date.now() - summaryStarted,
@@ -609,13 +623,13 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => `  ${cat}
           tactics: FINOPS_TACTICS_LOCAL,
         });
         const roadmapStarted = Date.now();
-        const roadmapResp = await runStage('fact_check', {
+        const roadmapResp = await runStage(stage, {
           userText: roadmapPrompt,
           images,
         }, { runId });
-        actuals.fact_check = roadmapResp.modelUsed.id;
+        actuals[stage] = roadmapResp.modelUsed.id;
         serverLog(runId, 'info', 'stage_complete', {
-          stage: 'fact_check',
+          stage,
           model: roadmapResp.modelUsed.id,
           substage: 'roadmap',
           duration_ms: Date.now() - roadmapStarted,
@@ -818,26 +832,31 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => `  ${cat}
       }
     }
 
-    const sanitation = sanitizeStrategyAfterFactCheck(strategyData, factCheck);
+    const applySanitation = (data: any, fc: FactCheckResult, event: string = 'strategy_sanitized') => {
+      const sanitation = sanitizeStrategyAfterFactCheck(data, fc);
+      if (sanitation.sanitized.length > 0) {
+        const removed = sanitation.sanitized.filter(i => i.action === 'removed').length;
+        const rewritten = sanitation.sanitized.filter(i => i.action === 'rewritten').length;
+        const quarantined = sanitation.sanitized.filter(i => i.action === 'quarantined').length;
+        console.warn(`[FinOps] [${runId}] Strategy sanitation handled ${sanitation.sanitized.length} unsupported item(s): removed=${removed}, rewritten=${rewritten}, quarantined=${quarantined}.`);
+        serverLog(runId, 'warn', event, {
+          total: sanitation.sanitized.length,
+          removed,
+          rewritten,
+          quarantined,
+          remaining_unsupported: sanitation.factCheck.unsupported_claims.length,
+        });
+      }
+      return sanitation;
+    };
+
+    let sanitation = applySanitation(strategyData, factCheck);
     strategyData = sanitation.strategyData;
     factCheck = sanitation.factCheck;
-    if (sanitation.sanitized.length > 0) {
-      const removed = sanitation.sanitized.filter(i => i.action === 'removed').length;
-      const rewritten = sanitation.sanitized.filter(i => i.action === 'rewritten').length;
-      const quarantined = sanitation.sanitized.filter(i => i.action === 'quarantined').length;
-      console.warn(`[FinOps] [${runId}] Strategy sanitation handled ${sanitation.sanitized.length} unsupported item(s): removed=${removed}, rewritten=${rewritten}, quarantined=${quarantined}.`);
-      serverLog(runId, 'warn', 'strategy_sanitized', {
-        total: sanitation.sanitized.length,
-        removed,
-        rewritten,
-        quarantined,
-        remaining_unsupported: factCheck.unsupported_claims.length,
-      });
-    }
 
     onProgress('strategy', 90);
 
-    const groundingValidation = validatePhase3Grounding(strategyData, validationData, text);
+    let groundingValidation = validatePhase3Grounding(strategyData, validationData, text);
     groundingValidation.warnings.push(...tacticGroundingWarnings);
     if (groundingValidation.errors.length > 0) {
       console.error("[FinOps] Phase 3 grounding errors:", groundingValidation.errors);
@@ -846,7 +865,37 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => `  ${cat}
       console.warn("[FinOps] Phase 3 grounding warnings:", groundingValidation.warnings);
     }
 
-    const qualityGate = runQualityGate(auditLogs, validationData, phase1Validation, groundingValidation, aggregatedRawData.evidence_check, factCheck);
+    let qualityGate = runQualityGate(auditLogs, validationData, phase1Validation, groundingValidation, aggregatedRawData.evidence_check, factCheck);
+    const factCheckOnlyBlock = qualityGate.decision === 'BLOCK'
+      && qualityGate.blocking_reasons.length > 0
+      && qualityGate.blocking_reasons.every(reason => reason.startsWith('Fact-check:'));
+    if (factCheckOnlyBlock && !factCheck.failed) {
+      serverLog(runId, 'warn', 'fact_check_escalated', {
+        from_stage: 'fact_check',
+        to_stage: 'fact_check_high',
+        medium_attempts: factCheck.attempts,
+        blocking_reasons: qualityGate.blocking_reasons.length,
+      });
+      const highFactCheck = await runFactCheck(strategyData, factCheck.attempts + 1, 'fact_check_high');
+      if (!highFactCheck.failed) {
+        highFactCheck.trajectory = [...(factCheck.trajectory || []), snapshot(highFactCheck)];
+        sanitation = applySanitation(strategyData, highFactCheck, 'strategy_sanitized_after_high_fact_check');
+        strategyData = sanitation.strategyData;
+        factCheck = sanitation.factCheck;
+        groundingValidation = validatePhase3Grounding(strategyData, validationData, text);
+        groundingValidation.warnings.push(...tacticGroundingWarnings);
+        qualityGate = runQualityGate(auditLogs, validationData, phase1Validation, groundingValidation, aggregatedRawData.evidence_check, factCheck);
+      }
+      serverLog(runId, highFactCheck.failed ? 'warn' : 'info', 'fact_check_escalation_result', {
+        ok: !highFactCheck.failed,
+        decision: qualityGate.decision,
+        model: actuals.fact_check_high,
+        supported: highFactCheck.supported_count,
+        total: highFactCheck.total_claims,
+        unsupported: highFactCheck.unsupported_claims.length,
+        ...(highFactCheck.failed ? { failure_reason: highFactCheck.failure_reason } : {}),
+      });
+    }
     console.log(`[FinOps] [${runId}] Quality Gate decision: ${qualityGate.decision}`);
 
     // LLM-augmented explanation only when the deterministic gate flagged
@@ -906,10 +955,13 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => `  ${cat}
         model_config: {
           preflight: actuals.preflight,
           forensic_audit: actuals.forensic_audit,
+          targeted_rescan: actuals.targeted_rescan,
           evidence_check: actuals.evidence_check,
+          evidence_adjudication: actuals.evidence_adjudication,
           synthesis: actuals.synthesis,
           roadmap_synthesis: actuals.roadmap_synthesis,
           fact_check: actuals.fact_check,
+          fact_check_high: actuals.fact_check_high,
           validators: "deterministic"
         }
       },
