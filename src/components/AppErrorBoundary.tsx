@@ -3,9 +3,11 @@ import React from 'react';
 interface AppErrorBoundaryProps {
   children: React.ReactNode;
   hasSavedAssessment: boolean;
+  resetKey?: number;
   onRestoreSaved: () => void;
   onDownloadSaved: () => void;
   onClearSaved: () => void;
+  onError?: (error: Error, info: React.ErrorInfo) => void;
 }
 
 interface AppErrorBoundaryState {
@@ -19,12 +21,18 @@ export class AppErrorBoundary extends React.Component<AppErrorBoundaryProps, App
     return { hasError: true };
   }
 
+  componentDidUpdate(prevProps: AppErrorBoundaryProps) {
+    if (prevProps.resetKey !== this.props.resetKey && this.state.hasError) {
+      this.setState({ hasError: false });
+    }
+  }
+
   componentDidCatch(error: Error, info: React.ErrorInfo) {
     console.error('[FinOps] UI render failed', error, info);
+    this.props.onError?.(error, info);
   }
 
   private restore = () => {
-    this.setState({ hasError: false });
     this.props.onRestoreSaved();
   };
 
@@ -42,7 +50,7 @@ export class AppErrorBoundary extends React.Component<AppErrorBoundaryProps, App
           <p className="text-xs font-bold uppercase tracking-[0.25em] text-rose-300 mb-3">View Recovery</p>
           <h1 className="text-3xl font-display font-black mb-3">The report view stopped rendering.</h1>
           <p className="text-slate-300 leading-relaxed">
-            Your assessment may still be recoverable from this browser session. Restore it, or clear the saved session and return to the start screen.
+            Your assessment may still be recoverable from this browser session. Open the recovery view to download the saved JSON or regenerate HTML reports without rendering the crashed view.
           </p>
           <div className="mt-6 flex flex-wrap gap-3">
             <button
@@ -51,7 +59,7 @@ export class AppErrorBoundary extends React.Component<AppErrorBoundaryProps, App
               disabled={!this.props.hasSavedAssessment}
               className={`px-5 py-3 rounded-xl font-bold ${this.props.hasSavedAssessment ? 'bg-emerald-400 text-slate-950 hover:bg-emerald-300' : 'bg-slate-800 text-slate-500 cursor-not-allowed'}`}
             >
-              Restore last assessment
+              Open recovery view
             </button>
             <button
               type="button"

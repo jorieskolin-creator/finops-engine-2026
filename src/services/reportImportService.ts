@@ -19,6 +19,21 @@ export const isDiagnosticResultPayload = (payload: unknown): payload is Diagnost
 
 const FINOPS_DATA_SCRIPT_RE = /<script\b(?=[^>]*\bid\s*=\s*["']finops-data["'])[^>]*>([\s\S]*?)<\/script>/i;
 
+const extractFinOpsPayloadScript = (html: string): string | null => {
+  if (typeof DOMParser !== 'undefined') {
+    try {
+      const doc = new DOMParser().parseFromString(html, 'text/html');
+      const script = doc.querySelector('script#finops-data');
+      const text = script?.textContent?.trim();
+      if (text) return text;
+    } catch {
+      // Fall back to regex extraction for malformed browser-saved HTML.
+    }
+  }
+  const match = html.match(FINOPS_DATA_SCRIPT_RE);
+  return match?.[1]?.trim() || null;
+};
+
 export const parseDiagnosticResultJson = (jsonText: string): ReportImportResult => {
   try {
     const parsed = JSON.parse(jsonText);
@@ -32,9 +47,9 @@ export const parseDiagnosticResultJson = (jsonText: string): ReportImportResult 
 };
 
 export const extractDiagnosticResultFromHtmlReport = (html: string): ReportImportResult => {
-  const match = html.match(FINOPS_DATA_SCRIPT_RE);
-  if (!match) return { kind: 'not_report' };
-  return parseDiagnosticResultJson(match[1].trim());
+  const payload = extractFinOpsPayloadScript(html);
+  if (!payload) return { kind: 'not_report' };
+  return parseDiagnosticResultJson(payload);
 };
 
 export const serializeDiagnosticResultForHtml = (result: DiagnosticResult): string =>

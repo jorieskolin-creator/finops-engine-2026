@@ -35,6 +35,14 @@ const DRIFT_FIXTURES = [
 const DRIFT_LABEL = 'Drift Test — Combined Golden Fixtures';
 const DEMO_SIMULATION_LABEL = 'Engine Simulation — Northstar Retail Demo Pack';
 const SAVED_ASSESSMENT_KEY = 'finops:last-assessment:v1';
+const SAVED_ASSESSMENT_META_KEY = 'finops:last-assessment-meta:v1';
+const LAST_CRASH_KEY = 'finops:last-crash:v1';
+
+interface SavedAssessmentMeta {
+  savedAt: string;
+  source: 'completed_assessment' | 'html_import' | 'json_import';
+  documentAnalyzed?: string;
+}
 
 const readSavedAssessment = (): DiagnosticResult | null => {
   if (typeof window === 'undefined') return null;
@@ -48,10 +56,25 @@ const readSavedAssessment = (): DiagnosticResult | null => {
   }
 };
 
-const saveAssessmentToSession = (result: DiagnosticResult) => {
+const readSavedAssessmentMeta = (): SavedAssessmentMeta | null => {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = window.sessionStorage.getItem(SAVED_ASSESSMENT_META_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+};
+
+const saveAssessmentToSession = (result: DiagnosticResult, source: SavedAssessmentMeta['source'] = 'completed_assessment') => {
   if (typeof window === 'undefined') return;
   try {
     window.sessionStorage.setItem(SAVED_ASSESSMENT_KEY, serializeDiagnosticResultForHtml(result));
+    window.sessionStorage.setItem(SAVED_ASSESSMENT_META_KEY, JSON.stringify({
+      savedAt: new Date().toISOString(),
+      source,
+      documentAnalyzed: result.meta?.document_analyzed
+    } satisfies SavedAssessmentMeta));
   } catch (error) {
     console.warn('[FinOps] Could not save assessment recovery payload', error);
   }
@@ -61,6 +84,42 @@ const clearSavedAssessment = () => {
   if (typeof window === 'undefined') return;
   try {
     window.sessionStorage.removeItem(SAVED_ASSESSMENT_KEY);
+    window.sessionStorage.removeItem(SAVED_ASSESSMENT_META_KEY);
+    window.sessionStorage.removeItem(LAST_CRASH_KEY);
+  } catch {
+    // Ignore unavailable browser storage.
+  }
+};
+
+const saveLastCrash = (message: string, componentStack?: string) => {
+  if (typeof window === 'undefined') return;
+  try {
+    window.sessionStorage.setItem(LAST_CRASH_KEY, JSON.stringify({
+      at: new Date().toISOString(),
+      message,
+      componentStack: componentStack?.slice(0, 4000)
+    }));
+  } catch {
+    // Ignore unavailable browser storage.
+  }
+};
+
+const readLastCrash = (): string | null => {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = window.sessionStorage.getItem(LAST_CRASH_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    return typeof parsed?.message === 'string' ? parsed.message : null;
+  } catch {
+    return null;
+  }
+};
+
+const clearLastCrash = () => {
+  if (typeof window === 'undefined') return;
+  try {
+    window.sessionStorage.removeItem(LAST_CRASH_KEY);
   } catch {
     // Ignore unavailable browser storage.
   }
@@ -160,10 +219,15 @@ const App: React.FC = () => {
   const [perPackError, setPerPackError] = useState<string | null>(null);
   const [recoveryNotice, setRecoveryNotice] = useState<string | null>(null);
   const [hasSavedAssessment, setHasSavedAssessment] = useState(false);
+  const [safeRecoveryResult, setSafeRecoveryResult] = useState<DiagnosticResult | null>(null);
+  const [safeRecoveryMeta, setSafeRecoveryMeta] = useState<SavedAssessmentMeta | null>(null);
+  const [lastCrashMessage, setLastCrashMessage] = useState<string | null>(null);
+  const [errorBoundaryResetKey, setErrorBoundaryResetKey] = useState(0);
   const pendingAnalyzeRef = useRef(false);
   const pendingDriftRef = useRef(false);
   const pendingPerPackRef = useRef(false);
   const pendingSimulationRef = useRef(false);
+  const nextRecoverySourceRef = useRef<SavedAssessmentMeta['source']>('completed_assessment');
   const fileInputRef = useRef<HTMLInputElement>(null);
   const clearFileInput = () => {
     if (fileInputRef.current) fileInputRef.current.value = '';
@@ -174,14 +238,23 @@ const App: React.FC = () => {
     const saved = readSavedAssessment();
     setHasSavedAssessment(Boolean(saved));
     if (saved) {
-      setResult(saved);
-      setRecoveryNotice('Restored the last completed assessment from this browser session.');
+      const crashMessage = readLastCrash();
+      if (crashMessage) {
+        setSafeRecoveryResult(saved);
+        setSafeRecoveryMeta(readSavedAssessmentMeta());
+        setLastCrashMessage(crashMessage);
+        setRecoveryNotice('A saved assessment was found after a view crash. Opened recovery mode so you can download or retry safely.');
+      } else {
+        setResult(saved);
+        setRecoveryNotice('Restored the last completed assessment from this browser session.');
+      }
     }
   }, []);
 
   useEffect(() => {
     if (!result) return;
-    saveAssessmentToSession(result);
+    saveAssessmentToSession(result, nextRecoverySourceRef.current);
+    nextRecoverySourceRef.current = 'completed_assessment';
     setHasSavedAssessment(true);
   }, [result]);
 
@@ -313,6 +386,8 @@ const App: React.FC = () => {
         const text = await file.text();
         const imported = extractDiagnosticResultFromHtmlReport(text);
         if (imported.kind === 'report') {
+          nextRecoverySourceRef.current = 'html_import';
+          setSafeRecoveryResult(null);
           setResult(imported.result);
           setViewMode('dashboard');
           setRecoveryNotice('Imported a saved FinOps report from HTML.');
@@ -328,12 +403,19 @@ const App: React.FC = () => {
       } else if (file.type === 'application/json' || file.name.endsWith('.json')) {
         try {
           const text = await file.text();
-          const json = JSON.parse(text);
-          if (isDiagnosticResultPayload(json)) {
-            setResult(json);
+          const imported = parseDiagnosticResultJson(text);
+          if (imported.kind === 'report' && isDiagnosticResultPayload(imported.result)) {
+            nextRecoverySourceRef.current = 'json_import';
+            setSafeRecoveryResult(null);
+            setResult(imported.result);
             setViewMode('dashboard');
             setRecoveryNotice('Imported a saved FinOps report from JSON.');
             setError(null);
+            clearFileInput();
+            return;
+          }
+          if (imported.kind === 'invalid_report') {
+            setError(imported.error);
             clearFileInput();
             return;
           }
@@ -476,6 +558,7 @@ const App: React.FC = () => {
       if (source_parse_warnings.length > 0) {
         data.meta = { ...data.meta, source_parse_warnings };
       }
+      setSafeRecoveryResult(null);
       setResult(data);
     } catch (e: any) {
       setError(e.message || "Analysis failed.");
@@ -614,6 +697,9 @@ const App: React.FC = () => {
     setActiveTab('overview');
     setViewMode('dashboard');
     setRecoveryNotice(null);
+    setSafeRecoveryResult(null);
+    setSafeRecoveryMeta(null);
+    setLastCrashMessage(null);
     setHasSavedAssessment(false);
     clearSavedAssessment();
   };
@@ -625,23 +711,29 @@ const App: React.FC = () => {
       setError('No saved assessment was found in this browser session.');
       return;
     }
-    setResult(saved);
+    setSafeRecoveryResult(saved);
+    setSafeRecoveryMeta(readSavedAssessmentMeta());
+    setLastCrashMessage(readLastCrash());
+    setResult(null);
     setViewMode('dashboard');
     setActiveTab('overview');
-    setRecoveryNotice('Restored the last completed assessment from this browser session.');
+    setRecoveryNotice('Opened recovery mode for the last completed assessment. You can download reports before retrying the dashboard.');
     setError(null);
     setHasSavedAssessment(true);
+    setErrorBoundaryResetKey(key => key + 1);
   };
 
   const clearSavedAssessmentAndRestart = () => {
     clearSavedAssessment();
     setHasSavedAssessment(false);
     setRecoveryNotice(null);
+    setSafeRecoveryResult(null);
+    setSafeRecoveryMeta(null);
+    setLastCrashMessage(null);
     reset();
   };
 
-  const downloadSavedAssessment = () => {
-    const saved = readSavedAssessment();
+  const downloadResultJson = (saved: DiagnosticResult | null) => {
     if (!saved) {
       setHasSavedAssessment(false);
       return;
@@ -655,15 +747,138 @@ const App: React.FC = () => {
     URL.revokeObjectURL(url);
   };
 
+  const downloadSavedAssessment = () => {
+    downloadResultJson(safeRecoveryResult || readSavedAssessment());
+  };
+
+  const openRecoveredDashboard = () => {
+    if (!safeRecoveryResult) return;
+    setResult(safeRecoveryResult);
+    setSafeRecoveryResult(null);
+    setSafeRecoveryMeta(null);
+    setLastCrashMessage(null);
+    clearLastCrash();
+    setViewMode('dashboard');
+    setActiveTab('overview');
+    setRecoveryNotice('Recovered assessment opened. If the view fails again, use recovery mode to download the report.');
+    setErrorBoundaryResetKey(key => key + 1);
+  };
+
+  const downloadRecoveredSummaryReport = () => {
+    const saved = safeRecoveryResult || readSavedAssessment();
+    if (!saved) {
+      setHasSavedAssessment(false);
+      return;
+    }
+    downloadSummaryReport(saved);
+  };
+
+  const downloadRecoveredMasterReport = () => {
+    const saved = safeRecoveryResult || readSavedAssessment();
+    if (!saved) {
+      setHasSavedAssessment(false);
+      return;
+    }
+    downloadMasterDataReport(saved);
+  };
+
+  const recordUiCrash = (error: Error, info: React.ErrorInfo) => {
+    const message = error?.message || 'Unknown render error';
+    saveLastCrash(message, info.componentStack || undefined);
+    setLastCrashMessage(message);
+    setHasSavedAssessment(Boolean(readSavedAssessment()));
+  };
+
   const showReference = !result && activeTab === 'reference';
+
+  if (safeRecoveryResult) {
+    const savedAt = safeRecoveryMeta?.savedAt ? new Date(safeRecoveryMeta.savedAt).toLocaleString() : 'this browser session';
+    const source = safeRecoveryMeta?.source?.replace(/_/g, ' ') || 'saved assessment';
+    const analyzed = safeRecoveryMeta?.documentAnalyzed || safeRecoveryResult.meta?.document_analyzed || 'Recovered assessment';
+    return (
+      <div className="min-h-screen bg-slate-950 text-white flex items-center justify-center px-6 py-12">
+        <div className="max-w-3xl w-full rounded-3xl border border-white/10 bg-slate-900 p-8 md:p-10 shadow-2xl">
+          <p className="text-xs font-bold uppercase tracking-[0.25em] text-emerald-300 mb-3">Assessment Recovery</p>
+          <h1 className="text-3xl md:text-4xl font-display font-black mb-4">Your assessment data is still available.</h1>
+          <p className="text-slate-300 leading-relaxed">
+            This safe view avoids rendering the dashboard or report components that may have crashed. Download the recovered files first, then retry the dashboard when you are ready.
+          </p>
+          <div className="mt-6 rounded-2xl border border-white/10 bg-slate-950/60 p-5 text-sm text-slate-300 space-y-2">
+            <div><span className="text-slate-500 font-bold uppercase tracking-wider text-xs">Source:</span> {source}</div>
+            <div><span className="text-slate-500 font-bold uppercase tracking-wider text-xs">Saved:</span> {savedAt}</div>
+            <div><span className="text-slate-500 font-bold uppercase tracking-wider text-xs">Assessment:</span> {analyzed}</div>
+            {lastCrashMessage && (
+              <div className="pt-2 text-amber-200">
+                <span className="text-amber-400 font-bold uppercase tracking-wider text-xs">Last render error:</span> {lastCrashMessage}
+              </div>
+            )}
+          </div>
+          <div className="mt-8 grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <button
+              type="button"
+              onClick={downloadRecoveredSummaryReport}
+              className="px-5 py-3 rounded-xl font-bold bg-emerald-400 text-slate-950 hover:bg-emerald-300 transition-colors"
+            >
+              Download Summary Report
+            </button>
+            <button
+              type="button"
+              onClick={downloadRecoveredMasterReport}
+              className="px-5 py-3 rounded-xl font-bold bg-white text-slate-950 hover:bg-emerald-50 transition-colors"
+            >
+              Download Master Data Report
+            </button>
+            <button
+              type="button"
+              onClick={() => downloadResultJson(safeRecoveryResult)}
+              className="px-5 py-3 rounded-xl font-bold bg-slate-800 text-slate-200 hover:bg-slate-700 transition-colors"
+            >
+              Download Recovered JSON
+            </button>
+            <button
+              type="button"
+              onClick={openRecoveredDashboard}
+              className="px-5 py-3 rounded-xl font-bold bg-slate-800 text-slate-200 hover:bg-slate-700 transition-colors"
+            >
+              Open Dashboard
+            </button>
+          </div>
+          <div className="mt-5 flex flex-wrap gap-3">
+            <button
+              type="button"
+              onClick={() => {
+                setSafeRecoveryResult(null);
+                setSafeRecoveryMeta(null);
+                setLastCrashMessage(null);
+                clearLastCrash();
+                setErrorBoundaryResetKey(key => key + 1);
+              }}
+              className="text-sm font-bold text-slate-400 hover:text-white transition-colors"
+            >
+              Return to start screen
+            </button>
+            <button
+              type="button"
+              onClick={clearSavedAssessmentAndRestart}
+              className="text-sm font-bold text-rose-300 hover:text-rose-200 transition-colors"
+            >
+              Clear saved assessment
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (result && viewMode === 'report') {
     return (
       <AppErrorBoundary
         hasSavedAssessment={hasSavedAssessment}
+        resetKey={errorBoundaryResetKey}
         onRestoreSaved={restoreSavedAssessment}
         onDownloadSaved={downloadSavedAssessment}
         onClearSaved={clearSavedAssessmentAndRestart}
+        onError={recordUiCrash}
       >
         <ReportView
           result={result}
@@ -678,9 +893,11 @@ const App: React.FC = () => {
   return (
     <AppErrorBoundary
       hasSavedAssessment={hasSavedAssessment}
+      resetKey={errorBoundaryResetKey}
       onRestoreSaved={restoreSavedAssessment}
       onDownloadSaved={downloadSavedAssessment}
       onClearSaved={clearSavedAssessmentAndRestart}
+      onError={recordUiCrash}
     >
     <div className="min-h-screen font-sans relative overflow-x-hidden selection:bg-emerald-500/30 selection:text-white flex flex-col">
       <header className="sticky top-0 z-50 glass-panel border-b border-white/5 transition-all duration-300 backdrop-blur-xl">
