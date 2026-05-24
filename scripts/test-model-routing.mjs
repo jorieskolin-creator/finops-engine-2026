@@ -44,7 +44,8 @@ assert.equal(factCheckChain[0].provider, 'openai');
 assert.equal(factCheckChain[0].id, 'gpt-5.5');
 assert.equal(factCheckChain[1].provider, 'anthropic');
 assert.equal(factCheckChain[1].id, 'claude-sonnet-4-6');
-assert.equal(factCheckChain.some((profile) => profile.provider === 'gemini'), false);
+assert.equal(factCheckChain[2].provider, 'gemini');
+assert.equal(factCheckChain[2].id, 'gemini-2.5-pro');
 
 const highFactCheckChain = modelsFor('fact_check_high');
 assert.equal(highFactCheckChain[0].provider, 'openai');
@@ -56,10 +57,36 @@ const targetedRescanChain = modelsFor('targeted_rescan');
 assert.equal(targetedRescanChain[0].id, 'claude-opus-4-7');
 assert.equal(targetedRescanChain[1].id, 'gpt-5.5');
 assert.equal(targetedRescanChain[2].id, 'claude-sonnet-4-6');
+assert.equal(targetedRescanChain[3].id, 'gemini-2.5-pro');
+
+const preflightChain = modelsFor('preflight');
+assert.equal(preflightChain[0].id, 'gemini-3.5-flash');
+assert.equal(preflightChain[1].id, 'gemini-2.5-pro');
+assert.equal(preflightChain[2].id, 'gpt-5.5');
+
+const auditChain = modelsFor('forensic_audit');
+assert.equal(auditChain[0].id, 'claude-sonnet-4-6');
+assert.equal(auditChain[1].id, 'gpt-5.5');
+assert.equal(auditChain[2].id, 'gemini-2.5-pro');
+
+const evidenceCheckChain = modelsFor('evidence_check');
+assert.equal(evidenceCheckChain[0].id, 'gemini-3.1-pro-preview');
+assert.equal(evidenceCheckChain[1].id, 'claude-sonnet-4-6');
+assert.equal(evidenceCheckChain[2].id, 'gpt-5.5');
 
 const adjudicationChain = modelsFor('evidence_adjudication');
 assert.equal(adjudicationChain[0].provider, 'openai');
 assert.equal(adjudicationChain[1].id, 'claude-opus-4-7');
+
+const synthesisChain = modelsFor('synthesis');
+assert.equal(synthesisChain[0].id, 'claude-sonnet-4-6');
+assert.equal(synthesisChain[1].id, 'gpt-5.5');
+assert.equal(synthesisChain[2].id, 'gemini-2.5-pro');
+
+const escalationChain = modelsFor('synthesis_escalation');
+assert.equal(escalationChain[0].id, 'claude-opus-4-7');
+assert.equal(escalationChain[1].id, 'gpt-5.5');
+assert.equal(escalationChain[2].id, 'gemini-3.1-pro-preview');
 
 const qualityGateChain = modelsFor('quality_gate');
 assert.equal(qualityGateChain[0].provider, 'openai');
