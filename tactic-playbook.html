@@ -1,0 +1,1239 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FinOps Tactic Playbook - KB-Aligned Remediation Patterns</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,300;9..144,400;9..144,500;9..144,600;9..144,700&family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ink: #0E1B2C;
+    --ink-2: #1F2D3F;
+    --ink-3: #4A5668;
+    --paper: #F7F5F0;
+    --paper-2: #ECE8DF;
+    --rule: #C9C2B5;
+    --rule-soft: #E1DCD0;
+    --accent: #B5472D;
+    --accent-2: #2D5F4E;
+    --accent-3: #8C6D2F;
+    --serif: 'Fraunces', Georgia, serif;
+    --sans: 'Inter', -apple-system, system-ui, sans-serif;
+    --mono: 'JetBrains Mono', 'Courier New', monospace;
+    --max: 1180px;
+    --gutter: clamp(20px, 4vw, 56px);
+  }
+
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--sans);
+    font-size: 16px;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    opacity: 0.4;
+    background-image: radial-gradient(circle at 1px 1px, rgba(14, 27, 44, 0.025) 1px, transparent 0);
+    background-size: 24px 24px;
+    z-index: 0;
+  }
+
+  main { position: relative; z-index: 1; }
+  .container { max-width: var(--max); margin: 0 auto; padding: 0 var(--gutter); }
+  section { padding: 80px 0; border-bottom: 1px solid var(--rule-soft); }
+  section:last-of-type { border-bottom: none; }
+
+  .hero {
+    padding: 100px 0 80px;
+    border-bottom: 1px solid var(--rule);
+  }
+
+  .eyebrow, .section-tag {
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--ink-3);
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+
+  .eyebrow { margin-bottom: 32px; }
+  .eyebrow::before {
+    content: '';
+    width: 32px;
+    height: 1px;
+    background: var(--accent);
+  }
+
+  .section-tag { align-items: baseline; gap: 16px; margin-bottom: 18px; }
+  .section-tag .num { color: var(--accent); font-weight: 600; }
+
+  h1 {
+    font-family: var(--serif);
+    font-weight: 400;
+    font-size: clamp(38px, 5.5vw, 68px);
+    line-height: 1.05;
+    letter-spacing: -0.02em;
+    margin: 0 0 32px;
+    max-width: 980px;
+    font-variation-settings: "opsz" 144;
+  }
+
+  h1 em { color: var(--accent); font-style: italic; }
+
+  h2 {
+    font-family: var(--serif);
+    font-weight: 400;
+    font-size: clamp(28px, 3.6vw, 44px);
+    line-height: 1.15;
+    letter-spacing: -0.015em;
+    margin: 0 0 24px;
+    max-width: 900px;
+    font-variation-settings: "opsz" 96;
+  }
+
+  h3 {
+    font-family: var(--serif);
+    font-size: clamp(20px, 2vw, 26px);
+    line-height: 1.25;
+    margin: 0 0 12px;
+    font-weight: 500;
+  }
+
+  h4 {
+    font-family: var(--sans);
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--ink-3);
+    margin: 0 0 8px;
+  }
+
+  p { margin: 0 0 16px; }
+  p:last-child { margin-bottom: 0; }
+  strong { font-weight: 600; color: var(--ink); }
+
+  .lede {
+    font-family: var(--serif);
+    font-weight: 300;
+    font-size: clamp(18px, 1.8vw, 22px);
+    line-height: 1.5;
+    color: var(--ink-2);
+    max-width: 800px;
+  }
+
+  .lede strong {
+    font-weight: 500;
+    background: linear-gradient(transparent 60%, rgba(181, 71, 45, 0.18) 60%);
+    padding: 0 2px;
+  }
+
+  .meta-strip {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 1px;
+    margin-top: 56px;
+    border: 1px solid var(--rule);
+    background: var(--rule);
+  }
+
+  .meta-box {
+    background: #FDFCF8;
+    padding: 24px;
+  }
+
+  .meta-value {
+    display: block;
+    font-family: var(--serif);
+    font-size: clamp(34px, 4vw, 52px);
+    line-height: 1;
+    color: var(--accent);
+    margin-bottom: 8px;
+  }
+
+  .meta-label {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--ink-3);
+  }
+
+  .two-col {
+    display: grid;
+    grid-template-columns: 0.9fr 1.1fr;
+    gap: clamp(32px, 6vw, 72px);
+    align-items: start;
+  }
+
+  .principles {
+    display: grid;
+    gap: 18px;
+  }
+
+  .principle {
+    border-left: 3px solid var(--accent);
+    padding: 16px 0 16px 22px;
+  }
+
+  .principle:nth-child(2) { border-left-color: var(--accent-2); }
+  .principle:nth-child(3) { border-left-color: var(--accent-3); }
+
+  .small {
+    color: var(--ink-3);
+    font-size: 14px;
+  }
+
+  .coverage-grid {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 16px;
+    margin-top: 36px;
+  }
+
+  .domain-card {
+    background: #FDFCF8;
+    border: 1px solid var(--rule);
+    padding: 22px;
+    min-height: 220px;
+  }
+
+  .domain-letter {
+    font-family: var(--serif);
+    font-size: 42px;
+    line-height: 1;
+    color: var(--accent);
+    margin-bottom: 10px;
+  }
+
+  .criterion-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 14px;
+  }
+
+  .pill {
+    display: inline-flex;
+    align-items: center;
+    border: 1px solid var(--rule);
+    border-radius: 999px;
+    padding: 4px 9px;
+    font-family: var(--mono);
+    font-size: 11px;
+    line-height: 1.2;
+    color: var(--ink-2);
+    background: var(--paper);
+  }
+
+  .pill.ap { border-color: rgba(140, 109, 47, 0.38); color: var(--accent-3); }
+  .pill.tac { border-color: rgba(45, 95, 78, 0.35); color: var(--accent-2); }
+
+  .category-nav {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin: 34px 0 8px;
+  }
+
+  .category-nav a {
+    color: var(--ink);
+    text-decoration: none;
+    border: 1px solid var(--rule);
+    background: #FDFCF8;
+    padding: 10px 14px;
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .category-nav a:hover { border-color: var(--accent); color: var(--accent); }
+
+  .category-section { padding-top: 52px; }
+  .category-heading {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 18px;
+    border-bottom: 1px solid var(--rule);
+    padding-bottom: 14px;
+    margin-bottom: 24px;
+  }
+
+  .tactic-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 24px;
+  }
+
+  .tactic-card {
+    background: #FDFCF8;
+    border: 1px solid var(--rule);
+    padding: 26px;
+    display: grid;
+    gap: 18px;
+    min-height: 100%;
+  }
+
+  .tactic-top {
+    display: flex;
+    justify-content: space-between;
+    gap: 18px;
+    align-items: flex-start;
+  }
+
+  .tactic-id {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--accent);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+
+  .tactic-title {
+    font-family: var(--serif);
+    font-size: 26px;
+    line-height: 1.15;
+    margin: 0;
+  }
+
+  .tactic-category {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--ink-3);
+  }
+
+  .card-block {
+    border-top: 1px solid var(--rule-soft);
+    padding-top: 14px;
+  }
+
+  .card-block ul {
+    margin: 0;
+    padding-left: 18px;
+  }
+
+  .card-block li { margin: 0 0 6px; }
+
+  .compact-list {
+    display: grid;
+    gap: 8px;
+  }
+
+  .boundary {
+    background: var(--paper-2);
+    border: 1px solid var(--rule);
+    padding: 30px;
+    margin-top: 32px;
+  }
+
+  .footer-note {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--ink-3);
+    padding: 38px 0 70px;
+  }
+
+  @media (max-width: 900px) {
+    .meta-strip, .coverage-grid, .tactic-grid, .two-col { grid-template-columns: 1fr; }
+    section { padding: 56px 0; }
+    .hero { padding-top: 70px; }
+  }
+</style>
+</head>
+<body>
+<main>
+  <header class="hero">
+    <div class="container">
+      <div class="eyebrow">FinOps Assessment Engine</div>
+      <h1>The Tactic Playbook turns verified findings into <em>grounded action</em>.</h1>
+      <p class="lede">
+        The playbook is not a second source of truth about the customer. It is a controlled remediation layer:
+        each tactic is mapped to the A-F Knowledge Base taxonomy, tied to maturity and anti-pattern themes, and
+        used only when the assessment evidence supports the recommendation.
+      </p>
+
+      <div class="meta-strip" aria-label="Playbook summary">
+        <div class="meta-box"><span class="meta-value" id="metric-tactics">23</span><span class="meta-label">Approved tactics</span></div>
+        <div class="meta-box"><span class="meta-value">6</span><span class="meta-label">FinOps domains</span></div>
+        <div class="meta-box"><span class="meta-value">30</span><span class="meta-label">Maturity themes</span></div>
+        <div class="meta-box"><span class="meta-value">30</span><span class="meta-label">Anti-pattern themes</span></div>
+      </div>
+    </div>
+  </header>
+
+  <section>
+    <div class="container two-col">
+      <div>
+        <div class="section-tag"><span class="num">01</span><span>Operating Idea</span></div>
+        <h2>Evidence chooses the tactic. The tactic gives the roadmap depth.</h2>
+        <p>
+          The Engine first verifies source evidence, scores maturity and anti-pattern semantics, and locks the diagnosis.
+          Only after that can the roadmap use the tactic playbook. This keeps the report useful without letting generic
+          best practice material masquerade as customer evidence.
+        </p>
+      </div>
+      <div class="principles">
+        <div class="principle">
+          <h3>Stable tactic IDs</h3>
+          <p>Each tactic keeps a stable `TAC-*` identifier. The ID anchors the recommendation and prevents broad advisory language from drifting away from the approved playbook.</p>
+        </div>
+        <div class="principle">
+          <h3>KB-aligned coverage</h3>
+          <p>Every tactic maps explicitly to maturity criteria and anti-pattern criteria across the A-F taxonomy. The mapping explains why the tactic belongs in the FinOps assessment model.</p>
+        </div>
+        <div class="principle">
+          <h3>Activity depth</h3>
+          <p>The playbook adds when-to-use rules, implementation activities, owner roles, expected artifacts, acceptance criteria, and risks. It enriches HOW without inventing facts.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="container">
+      <div class="section-tag"><span class="num">02</span><span>Taxonomy Coverage</span></div>
+      <h2>The playbook covers all A-F domains and all 60 maturity / anti-pattern themes.</h2>
+      <p class="lede">Coverage is direct and explicit: each tactic card declares which maturity criteria and anti-pattern criteria it can support when the locked findings justify its use.</p>
+      <div id="coverage" class="coverage-grid"></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="container">
+      <div class="section-tag"><span class="num">03</span><span>Tactic Catalog</span></div>
+      <h2>The approved remediation patterns.</h2>
+      <p class="lede">Each card below describes the tactic rationale, the linked Knowledge Base themes, and the activity layer that helps the roadmap explain WHY, WHAT, and HOW. It shows how approved actions translate verified evidence into practical delivery steps, artifacts, ownership, and controls.</p>
+      <nav id="category-nav" class="category-nav" aria-label="Tactic categories"></nav>
+      <div id="tactics"></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="container">
+      <div class="section-tag"><span class="num">04</span><span>Evidence Boundary</span></div>
+      <h2>What the playbook is allowed to do.</h2>
+      <div class="boundary">
+        <p><strong>Allowed:</strong> guide roadmap mechanisms, implementation sequence, artifacts, owner roles, acceptance criteria, and risk controls after findings have been locked.</p>
+        <p><strong>Forbidden:</strong> prove customer current state, appear as a source evidence quote, change Phase 1 or Phase 2 scoring, or add summary/diagnosis facts that the uploaded material did not support.</p>
+        <p><strong>Practical rule:</strong> no tactic ID is better than a wrong tactic ID. When no exact tactic fits, the roadmap can still provide grounded actions without pretending a KB match exists.</p>
+      </div>
+    </div>
+  </section>
+
+  <div class="container footer-note">
+    FinOps Assessment Engine - Tactic Playbook companion. Generated from the local tactic registry and activity playbook used by roadmap synthesis.
+  </div>
+</main>
+
+<script>
+const DOMAINS = {
+  A: 'Cost Visibility & Allocation',
+  B: 'Rate & Usage Optimization',
+  C: 'Governance & Policy',
+  D: 'Architecture & Engineering',
+  E: 'Culture & Organization',
+  F: 'GenAI & AI Cost Management'
+};
+
+const TACTICS = [
+  {
+    id: "TAC-VIS-001",
+    category: "Visibility",
+    name: "Tag Governance Framework",
+    maturity: [
+      "A1",
+      "A2",
+      "C1"
+    ],
+    antipattern: [
+      "AP-A1",
+      "AP-A4"
+    ],
+    goal: "Create enforceable tag and allocation rules that make cloud spend attributable to accountable teams, products, services, or cost centers.",
+    use: "Source evidence shows weak or inconsistent tagging",
+    activities: [
+      "Define mandatory tag keys and allowed values",
+      "Publish exception and remediation rules",
+      "Deploy policy-as-code checks in cloud accounts and CI/CD",
+      "Run audit mode before enforcement",
+      "Report compliance by team and service"
+    ],
+    artifacts: [
+      "Tagging standard",
+      "Allocation model",
+      "Policy-as-code rules",
+      "Compliance dashboard"
+    ],
+    risk: "Enforcement can break deployments; start with audit mode and time-boxed exceptions"
+  },
+  {
+    id: "TAC-VIS-002",
+    category: "Visibility",
+    name: "Engineering Cost Dashboards",
+    maturity: [
+      "A4",
+      "A2",
+      "E2"
+    ],
+    antipattern: [
+      "AP-A2",
+      "AP-A4",
+      "AP-E1"
+    ],
+    goal: "Give engineering teams usable cost visibility for the services they influence so cost decisions move closer to the work.",
+    use: "Cost data is visible only to finance or administrators",
+    activities: [
+      "Define team-level dashboard views",
+      "Publish cost by service, owner, environment, and trend",
+      "Add anomaly and budget context",
+      "Route dashboard access to engineering managers and service owners",
+      "Review adoption in engineering cadence"
+    ],
+    artifacts: [
+      "Engineering cost dashboard",
+      "Owner mapping",
+      "Dashboard usage metric",
+      "Team cost review template"
+    ],
+    risk: "Raw spend without context creates noise; include ownership, trends, and actionable drivers"
+  },
+  {
+    id: "TAC-VIS-003",
+    category: "Visibility",
+    name: "Multi-cloud Cost Normalization",
+    maturity: [
+      "A4",
+      "D4",
+      "C5"
+    ],
+    antipattern: [
+      "AP-A4",
+      "AP-D4",
+      "AP-C4"
+    ],
+    goal: "Normalize multi-provider cost data so reporting, allocation, and governance use a common cost language.",
+    use: "Cost views are split across providers, accounts, or tools",
+    activities: [
+      "List providers and billing sources",
+      "Choose a normalization model or FOCUS-compatible schema",
+      "Map accounts to owners and business units",
+      "Publish a unified reporting layer",
+      "Document provider-specific limitations"
+    ],
+    artifacts: [
+      "Normalized cost schema",
+      "Provider mapping table",
+      "Unified report",
+      "Data quality checks"
+    ],
+    risk: "Normalization can hide provider nuance; keep provider-specific fields available for drilldown"
+  },
+  {
+    id: "TAC-VIS-004",
+    category: "Visibility",
+    name: "Cost Anomaly Detection",
+    maturity: [
+      "A3",
+      "A4",
+      "C2"
+    ],
+    antipattern: [
+      "AP-A3",
+      "AP-C2"
+    ],
+    goal: "Detect cost anomalies quickly and route them to accountable owners before monthly reporting exposes the issue late.",
+    use: "Cost spikes are discovered late",
+    activities: [
+      "Define anomaly thresholds by service and team",
+      "Enable cloud-native anomaly detection",
+      "Route alerts to service owners and finance",
+      "Create triage workflow and escalation rules",
+      "Track alert resolution outcomes"
+    ],
+    artifacts: [
+      "Anomaly alert rules",
+      "Alert routing matrix",
+      "Triage runbook",
+      "Resolution log"
+    ],
+    risk: "Alert fatigue reduces trust; start with material thresholds and tune after review"
+  },
+  {
+    id: "TAC-OPT-001",
+    category: "Optimization",
+    name: "Commitment Strategy",
+    maturity: [
+      "B1",
+      "C4",
+      "C2"
+    ],
+    antipattern: [
+      "AP-B1",
+      "AP-B5"
+    ],
+    goal: "Create a controlled commitment purchasing process for stable usage while avoiding stranded commitments.",
+    use: "Stable on-demand usage exists without commitment strategy",
+    activities: [
+      "Segment stable baseline usage",
+      "Calculate conservative commitment candidates",
+      "Review purchase risk with finance and engineering",
+      "Define coverage and utilization targets",
+      "Monitor utilization after purchase"
+    ],
+    artifacts: [
+      "Commitment analysis",
+      "Purchase approval record",
+      "Coverage/utilization dashboard",
+      "Renewal calendar"
+    ],
+    risk: "Over-commitment creates waste; start conservative and expand only after utilization evidence"
+  },
+  {
+    id: "TAC-OPT-002",
+    category: "Optimization",
+    name: "Right-sizing Analysis",
+    maturity: [
+      "B2",
+      "D1"
+    ],
+    antipattern: [
+      "AP-B2"
+    ],
+    goal: "Turn utilization evidence into controlled right-sizing actions that preserve reliability while reducing over-provisioning.",
+    use: "Low utilization or over-provisioning is evidenced",
+    activities: [
+      "Collect utilization metrics",
+      "Rank right-sizing candidates by materiality and risk",
+      "Apply non-production changes first",
+      "Validate production changes with owners",
+      "Track accepted, rejected, and deferred recommendations"
+    ],
+    artifacts: [
+      "Right-sizing candidate list",
+      "Risk classification",
+      "Change records",
+      "Savings tracking log"
+    ],
+    risk: "Aggressive downsizing can harm performance; require workload validation and rollback path"
+  },
+  {
+    id: "TAC-OPT-003",
+    category: "Optimization",
+    name: "Resource Lifecycle Management",
+    maturity: [
+      "B3",
+      "B5"
+    ],
+    antipattern: [
+      "AP-B3"
+    ],
+    goal: "Remove idle, orphaned, and expired resources through governed lifecycle controls rather than ad hoc cleanup campaigns.",
+    use: "Orphaned or idle resources are evidenced",
+    activities: [
+      "Identify idle and orphaned resources",
+      "Add owner and expiry attributes",
+      "Create cleanup approval workflow",
+      "Automate dev/test scheduling",
+      "Track recurring waste causes"
+    ],
+    artifacts: [
+      "Waste inventory",
+      "Cleanup runbook",
+      "Expiry policy",
+      "Exception register"
+    ],
+    risk: "Cleanup can remove needed assets; use soft-delete, owner approval, and recovery windows"
+  },
+  {
+    id: "TAC-OPT-004",
+    category: "Optimization",
+    name: "Spot / Preemptible Adoption",
+    maturity: [
+      "B4",
+      "D1"
+    ],
+    antipattern: [
+      "AP-B4"
+    ],
+    goal: "Use spot or preemptible capacity only for workloads that can tolerate interruption and retry safely.",
+    use: "Fault-tolerant workloads are identified but not using spot/preemptible capacity",
+    activities: [
+      "Identify eligible workloads",
+      "Design graceful interruption handling",
+      "Pilot in non-critical environments",
+      "Set fallback capacity rules",
+      "Measure reliability and cost impact"
+    ],
+    artifacts: [
+      "Eligibility register",
+      "Interruption handling design",
+      "Pilot results",
+      "Fallback policy"
+    ],
+    risk: "Spot interruption can disrupt service; limit to eligible workloads and test failure paths"
+  },
+  {
+    id: "TAC-GOV-001",
+    category: "Governance",
+    name: "Cloud Financial Policy Framework",
+    maturity: [
+      "C1",
+      "C2",
+      "C5",
+      "A1"
+    ],
+    antipattern: [
+      "AP-C2",
+      "AP-C3",
+      "AP-C5",
+      "AP-A1"
+    ],
+    goal: "Define and enforce the financial guardrails that make cloud spend governable without turning governance into a manual bottleneck.",
+    use: "Cloud financial policy is missing or fragmented",
+    activities: [
+      "Define spend approval thresholds",
+      "Document provisioning standards",
+      "Add tag and budget requirements",
+      "Create exception workflow",
+      "Automate enforceable controls where feasible"
+    ],
+    artifacts: [
+      "Cloud financial policy",
+      "Approval matrix",
+      "Exception register",
+      "Policy-as-code rules"
+    ],
+    risk: "Overly strict policy slows delivery; use guardrails and automated feedback before hard gates"
+  },
+  {
+    id: "TAC-GOV-002",
+    category: "Governance",
+    name: "Account Vending Machine",
+    maturity: [
+      "C3",
+      "C1"
+    ],
+    antipattern: [
+      "AP-C1"
+    ],
+    goal: "Bring cloud account creation under governed provisioning so ownership, billing, and baseline controls are applied by default.",
+    use: "Shadow accounts or unmanaged subscriptions are evidenced",
+    activities: [
+      "Inventory all accounts and subscriptions",
+      "Define account request workflow",
+      "Apply mandatory baseline controls",
+      "Consolidate billing visibility",
+      "Migrate unmanaged accounts into governance"
+    ],
+    artifacts: [
+      "Account inventory",
+      "Account vending workflow",
+      "Baseline control set",
+      "Owner register"
+    ],
+    risk: "Unmanaged accounts may host production workloads; migrate with owners instead of terminating abruptly"
+  },
+  {
+    id: "TAC-GOV-003",
+    category: "Governance",
+    name: "Automated Budget Enforcement",
+    maturity: [
+      "C2",
+      "C1"
+    ],
+    antipattern: [
+      "AP-C2"
+    ],
+    goal: "Turn budgets from passive reports into accountable thresholds with defined response paths.",
+    use: "Budget overruns are tolerated",
+    activities: [
+      "Define budget thresholds",
+      "Route alerts by owner",
+      "Create escalation stages",
+      "Review variance monthly",
+      "Use hard controls only for safe non-production scopes"
+    ],
+    artifacts: [
+      "Budget threshold policy",
+      "Alert routing map",
+      "Variance review log",
+      "Escalation runbook"
+    ],
+    risk: "Hard stops can disrupt service; use progressive controls and production-safe escalation"
+  },
+  {
+    id: "TAC-ARCH-001",
+    category: "Architecture",
+    name: "Post-migration Optimization",
+    maturity: [
+      "D1",
+      "D5",
+      "B2"
+    ],
+    antipattern: [
+      "AP-D1",
+      "AP-D5",
+      "AP-B2"
+    ],
+    goal: "Review migrated or legacy workloads for cloud-native cost and architecture improvements after the initial move.",
+    use: "Lift-and-shift patterns are evidenced",
+    activities: [
+      "Rank migrated workloads by cost and risk",
+      "Assess right-sizing and managed-service candidates",
+      "Identify container or serverless opportunities",
+      "Create modernization backlog",
+      "Sequence changes by value and operational risk"
+    ],
+    artifacts: [
+      "Workload optimization backlog",
+      "Architecture review notes",
+      "Modernization decision records",
+      "Risk-ranked sequence"
+    ],
+    risk: "Modernization can add delivery risk; prioritize stable high-cost workloads and require rollback plans"
+  },
+  {
+    id: "TAC-ARCH-002",
+    category: "Architecture",
+    name: "Cost Estimation in Architecture Review",
+    maturity: [
+      "D1",
+      "D2",
+      "C1"
+    ],
+    antipattern: [
+      "AP-D2"
+    ],
+    goal: "Make cost visible before architecture and infrastructure decisions are approved.",
+    use: "Architecture decisions are cost-blind",
+    activities: [
+      "Add cost section to design documents",
+      "Integrate cost estimates into IaC pull requests",
+      "Define review thresholds",
+      "Train architects and service owners",
+      "Track decisions with material cost impact"
+    ],
+    artifacts: [
+      "Cost-aware architecture checklist",
+      "Cost estimate output",
+      "ADR template",
+      "Pipeline check"
+    ],
+    risk: "Estimates are directional; use them for decision quality, not exact forecasts"
+  },
+  {
+    id: "TAC-ARCH-003",
+    category: "Architecture",
+    name: "Cost-aware Autoscaling",
+    maturity: [
+      "D3",
+      "C2"
+    ],
+    antipattern: [
+      "AP-D3"
+    ],
+    goal: "Add cost guardrails to autoscaling so scale events remain reliable and financially bounded.",
+    use: "Autoscaling lacks limits or cost guardrails",
+    activities: [
+      "Review maximum scale settings",
+      "Define cost ceiling alerts",
+      "Add circuit-breaker escalation",
+      "Test scaling limits in staging",
+      "Document reliability tradeoffs"
+    ],
+    artifacts: [
+      "Autoscaling guardrail policy",
+      "Cost ceiling alerts",
+      "Scaling test results",
+      "Exception process"
+    ],
+    risk: "Cost limits can affect availability; balance guardrails with service reliability requirements"
+  },
+  {
+    id: "TAC-CULT-001",
+    category: "Culture",
+    name: "Engineering Cost Ownership",
+    maturity: [
+      "E2",
+      "A4"
+    ],
+    antipattern: [
+      "AP-E1",
+      "AP-A2"
+    ],
+    goal: "Give engineering teams cost accountability together with the visibility and authority needed to act.",
+    use: "Cost is treated as finance-only or IT-only",
+    activities: [
+      "Assign cost ownership by service or team",
+      "Add cost review to engineering cadence",
+      "Define team-level cost metrics",
+      "Create escalation and support path",
+      "Recognize optimization wins"
+    ],
+    artifacts: [
+      "Team cost ownership map",
+      "Review agenda",
+      "Team scorecard",
+      "Optimization backlog"
+    ],
+    risk: "Accountability without control creates blame; pair expectations with tooling and support"
+  },
+  {
+    id: "TAC-CULT-002",
+    category: "Culture",
+    name: "Cross-functional FinOps Cadence",
+    maturity: [
+      "E4",
+      "C3"
+    ],
+    antipattern: [
+      "AP-E4"
+    ],
+    goal: "Create a working cadence between finance, engineering, and business stakeholders so cloud cost decisions are shared.",
+    use: "Finance and engineering operate separately",
+    activities: [
+      "Define monthly FinOps review",
+      "Set required inputs and outputs",
+      "Assign decision owners",
+      "Track action items",
+      "Create shared cost vocabulary"
+    ],
+    artifacts: [
+      "FinOps review agenda",
+      "Decision log",
+      "Action register",
+      "Stakeholder RACI"
+    ],
+    risk: "Meetings without decisions become theater; require inputs, outputs, and action tracking"
+  },
+  {
+    id: "TAC-CULT-003",
+    category: "Culture",
+    name: "FinOps Executive Business Case",
+    maturity: [
+      "E1",
+      "E3",
+      "C3"
+    ],
+    antipattern: [
+      "AP-E3"
+    ],
+    goal: "Turn executive interest in FinOps into funded ownership, mandate, and measurable operating capacity.",
+    use: "FinOps sponsorship is aspirational",
+    activities: [
+      "Document FinOps mandate",
+      "Build investment case from verified spend and gaps",
+      "Define team responsibilities",
+      "Set initial measurable milestones",
+      "Secure executive decision forum"
+    ],
+    artifacts: [
+      "FinOps charter",
+      "Business case",
+      "Role/RACI model",
+      "Milestone plan"
+    ],
+    risk: "Inflated savings claims reduce credibility; base the case on verified evidence and conservative assumptions"
+  },
+  {
+    id: "TAC-CULT-004",
+    category: "Culture",
+    name: "Blameless Cost Reviews",
+    maturity: [
+      "E5",
+      "E4"
+    ],
+    antipattern: [
+      "AP-E2"
+    ],
+    goal: "Use cost incidents and overruns as system-learning events rather than blame events.",
+    use: "Cost management is blame-oriented",
+    activities: [
+      "Define blameless cost review format",
+      "Review systemic causes",
+      "Assign improvements",
+      "Track recurring themes",
+      "Share lessons across teams"
+    ],
+    artifacts: [
+      "Cost review template",
+      "Incident learning log",
+      "Improvement backlog",
+      "Theme report"
+    ],
+    risk: "Blameless language without leadership behavior will fail; leaders must model the expected response"
+  },
+  {
+    id: "TAC-GOV-004",
+    category: "Governance",
+    name: "FinOps Outcome Tracking",
+    maturity: [
+      "E5",
+      "C3",
+      "A5"
+    ],
+    antipattern: [
+      "AP-C3",
+      "AP-E5",
+      "AP-A5"
+    ],
+    goal: "Measure FinOps by operational outcomes instead of activity volume, meetings, or vanity metrics.",
+    use: "FinOps activity exists but outcomes are unclear",
+    activities: [
+      "Define outcome KPIs",
+      "Link actions to savings, waste, coverage, or unit economics",
+      "Publish monthly scorecard",
+      "Review progress with accountable owners",
+      "Retire activity-only measures"
+    ],
+    artifacts: [
+      "Outcome scorecard",
+      "KPI definitions",
+      "Action-to-outcome register",
+      "Review cadence"
+    ],
+    risk: "Outcome targets without reliable baselines damage trust; validate baseline before setting targets"
+  },
+  {
+    id: "TAC-OPT-005",
+    category: "Optimization",
+    name: "Storage Lifecycle Policies",
+    maturity: [
+      "B5"
+    ],
+    antipattern: [
+      "AP-B5",
+      "AP-B3"
+    ],
+    goal: "Control storage growth and tiering through documented lifecycle policies and access-pattern evidence.",
+    use: "Storage lifecycle management is absent",
+    activities: [
+      "Classify storage by owner and access pattern",
+      "Define lifecycle thresholds",
+      "Pilot tiering on low-risk data",
+      "Automate snapshot cleanup",
+      "Monitor retrieval latency and exceptions"
+    ],
+    artifacts: [
+      "Lifecycle policy",
+      "Storage inventory",
+      "Retention exception list",
+      "Tiering report"
+    ],
+    risk: "Aggressive tiering can harm access; validate access patterns and compliance constraints first"
+  },
+  {
+    id: "TAC-AI-001",
+    category: "GenAI",
+    name: "AI Cost Attribution Model",
+    maturity: [
+      "F1",
+      "F2",
+      "A2",
+      "A4"
+    ],
+    antipattern: [
+      "AP-F1",
+      "AP-F2",
+      "AP-A2"
+    ],
+    goal: "Make token, model, API, and inference spend attributable to accountable products, teams, use cases, customers, and environments.",
+    use: "AI costs are visible only as platform or provider totals",
+    activities: [
+      "Define AI cost allocation dimensions",
+      "Instrument AI requests with owner and use-case metadata",
+      "Map provider/model billing to applications",
+      "Publish token and model spend dashboards",
+      "Review unallocated AI spend each month"
+    ],
+    artifacts: [
+      "AI cost allocation model",
+      "Token/model spend dashboard",
+      "Owner mapping",
+      "Unallocated AI spend report"
+    ],
+    risk: "Avoid storing sensitive prompts or personal data; meter cost metadata without unnecessary content capture"
+  },
+  {
+    id: "TAC-AI-002",
+    category: "GenAI",
+    name: "Model Routing and Context Efficiency Controls",
+    maturity: [
+      "F3",
+      "F1",
+      "D1"
+    ],
+    antipattern: [
+      "AP-F3",
+      "AP-F4"
+    ],
+    goal: "Control GenAI unit cost by routing work to appropriate models and managing context, caching, batching, and retry behavior.",
+    use: "Premium models are used without task-based justification",
+    activities: [
+      "Define model tiers by task complexity and risk",
+      "Set token and context budgets",
+      "Measure cache hit rate and retry volume",
+      "Create premium-model approval rules",
+      "Review cost-quality-latency outcomes before rollout"
+    ],
+    artifacts: [
+      "Model routing policy",
+      "Prompt/context budget",
+      "Evaluation scorecard",
+      "Premium model exception register"
+    ],
+    risk: "Lower-cost routing can reduce output quality; use evaluation thresholds and exception paths for high-risk tasks"
+  },
+  {
+    id: "TAC-AI-003",
+    category: "GenAI",
+    name: "AI Budget Guardrails and Value Scorecard",
+    maturity: [
+      "F4",
+      "F5",
+      "C2",
+      "E5"
+    ],
+    antipattern: [
+      "AP-F2",
+      "AP-F5",
+      "AP-C2",
+      "AP-E5"
+    ],
+    goal: "Govern AI consumption with budgets, alerts, approvals, and value metrics so adoption does not outpace financial accountability.",
+    use: "AI usage grows without budgets or quotas",
+    activities: [
+      "Set AI budgets and quota thresholds",
+      "Route spend and token anomaly alerts to owners",
+      "Define approval rules for premium model expansion",
+      "Create AI value scorecard",
+      "Review low-value or high-cost use cases for redesign"
+    ],
+    artifacts: [
+      "AI budget policy",
+      "Quota and alert rules",
+      "Premium model approval workflow",
+      "AI value scorecard"
+    ],
+    risk: "Value metrics can become vanity metrics; tie them to verified workflows, business outcomes, and owner decisions"
+  }
+];
+
+function esc(value) {
+  return String(value || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+function pills(items, cls = '') {
+  return items.map(item => `<span class="pill ${cls}">${esc(item)}</span>`).join('');
+}
+
+function list(items) {
+  return `<ul>${items.map(item => `<li>${esc(item)}</li>`).join('')}</ul>`;
+}
+
+function renderCoverage() {
+  const root = document.getElementById('coverage');
+  const domainData = Object.keys(DOMAINS).map(domain => {
+    const maturity = new Set();
+    const antipattern = new Set();
+    const tactics = new Set();
+    TACTICS.forEach(tactic => {
+      if (tactic.maturity.some(id => id[0] === domain) || tactic.antipattern.some(id => id.replace('AP-', '')[0] === domain)) {
+        tactic.maturity.filter(id => id[0] === domain).forEach(id => maturity.add(id));
+        tactic.antipattern.filter(id => id.replace('AP-', '')[0] === domain).forEach(id => antipattern.add(id));
+        tactics.add(tactic.id);
+      }
+    });
+    return { domain, name: DOMAINS[domain], maturity: [...maturity].sort(), antipattern: [...antipattern].sort(), tactics: [...tactics].sort() };
+  });
+  root.innerHTML = domainData.map(d => `
+    <article class="domain-card">
+      <div class="domain-letter">${esc(d.domain)}</div>
+      <h3>${esc(d.name)}</h3>
+      <p class="small">${d.tactics.length} tactic${d.tactics.length === 1 ? '' : 's'} connected to this domain.</p>
+      <h4>Maturity</h4>
+      <div class="criterion-list">${pills(d.maturity)}</div>
+      <h4 style="margin-top:16px">Anti-pattern</h4>
+      <div class="criterion-list">${pills(d.antipattern, 'ap')}</div>
+    </article>
+  `).join('');
+}
+
+function renderTactics() {
+  const categories = ['Visibility', 'Optimization', 'Governance', 'Architecture', 'Culture', 'GenAI'];
+  document.getElementById('category-nav').innerHTML = categories.map(category => `<a href="#${category.toLowerCase()}">${category}</a>`).join('');
+  document.getElementById('tactics').innerHTML = categories.map(category => {
+    const items = TACTICS.filter(t => t.category === category);
+    return `
+      <div class="category-section" id="${category.toLowerCase()}">
+        <div class="category-heading">
+          <h3>${esc(category)}</h3>
+          <span class="meta-label">${items.length} tactics</span>
+        </div>
+        <div class="tactic-grid">
+          ${items.map(tactic => `
+            <article class="tactic-card">
+              <div class="tactic-top">
+                <div>
+                  <div class="tactic-category">${esc(tactic.category)}</div>
+                  <h3 class="tactic-title">${esc(tactic.name)}</h3>
+                </div>
+                <div class="tactic-id">${esc(tactic.id)}</div>
+              </div>
+              <div>
+                <h4>Rationale</h4>
+                <p>${esc(tactic.goal)}</p>
+                <p class="small"><strong>Use when:</strong> ${esc(tactic.use)}</p>
+              </div>
+              <div class="card-block">
+                <h4>KB alignment</h4>
+                <div class="criterion-list">${pills(tactic.maturity)}${pills(tactic.antipattern, 'ap')}</div>
+              </div>
+              <div class="card-block">
+                <h4>Activity shape</h4>
+                ${list(tactic.activities)}
+              </div>
+              <div class="card-block">
+                <h4>Expected artifacts</h4>
+                <div class="criterion-list">${pills(tactic.artifacts, 'tac')}</div>
+              </div>
+              <div class="card-block">
+                <h4>Risk control</h4>
+                <p class="small">${esc(tactic.risk)}</p>
+              </div>
+            </article>
+          `).join('')}
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+document.getElementById('metric-tactics').textContent = String(TACTICS.length);
+renderCoverage();
+renderTactics();
+</script>
+</body>
+</html>

@@ -967,7 +967,7 @@
           <div class="stage-meta">Local parsing · DLP Officer · gemini-3.5-flash · deterministic redaction</div>
         </div>
         <div class="stage-body">
-          Client-side parsers extract source material before model analysis: PDF.js extracts embedded PDF text up to 100 pages with page markers, CSV/TSV files become table summaries, HTML is sanitized, JSON is normalized, and selected PDF/image pages are attached as visual evidence under an image budget. A deterministic parse-quality check marks PDFs as good, mixed, or poor extraction, prioritizing sparse/scanned pages for visual inclusion. A DLP LLM pass plus deterministic regex redaction scans for PII, secrets, and risky input. Low FinOps keyword signal is now a warning, not a hard rejection, when the material is technically parseable.
+          Client-side parsers extract source material before model analysis: PDF.js extracts embedded PDF text up to 100 pages with page markers, CSV/TSV/XLSX files become profiled table evidence packets, HTML is sanitized, JSON is normalized, and selected PDF/image pages are attached as visual evidence under an image budget. A deterministic parse-quality check marks PDFs as good, mixed, or poor extraction, prioritizing sparse/scanned pages for visual inclusion. A DLP LLM pass plus deterministic regex redaction scans for PII, secrets, and risky input. Low FinOps keyword signal is now a warning, not a hard rejection, when the material is technically parseable.
         </div>
       </div>
 
@@ -977,24 +977,25 @@
       <div class="stage" data-phase="1">
         <div class="stage-header">
           <div class="stage-title">Phase 1 — Forensic Audit</div>
-          <div class="stage-meta">5 parallel AI calls · claude-sonnet-4-6 primary · fallback chain in src/models.ts</div>
+          <div class="stage-meta">6 parallel AI calls · claude-sonnet-4-6 primary · fallback chain in src/models.ts</div>
         </div>
         <div class="stage-body">
-          Five batches run simultaneously. Each batch evaluates 10 criteria (5 maturity + 5 anti-pattern). Each criterion has 3 sub-criteria. Evidence scale 0–3. Every captured evidence quote is tagged with one of <strong>seven evidence categories</strong> (Policy / Process / Operational / Automation / Accountability / Financial-Integration / Cultural). Phase 1 produces candidate audit logs; it does not get the final word.
+          Six batches run simultaneously. Each batch evaluates 10 criteria (5 maturity + 5 anti-pattern). Each criterion has 3 sub-criteria. Evidence scale 0–3. Every captured evidence quote is tagged with one of <strong>seven evidence categories</strong> (Policy / Process / Operational / Automation / Accountability / Financial-Integration / Cultural). Phase 1 produces candidate audit logs; it does not get the final word.
           <div class="batch-grid">
             <div class="batch-chip"><strong>Batch A</strong><span>Visibility &amp; Allocation</span></div>
             <div class="batch-chip"><strong>Batch B</strong><span>Rate &amp; Usage</span></div>
             <div class="batch-chip"><strong>Batch C</strong><span>Governance</span></div>
             <div class="batch-chip"><strong>Batch D</strong><span>Architecture</span></div>
             <div class="batch-chip"><strong>Batch E</strong><span>Culture</span></div>
+            <div class="batch-chip"><strong>Batch F</strong><span>GenAI &amp; AI Cost</span></div>
           </div>
           <div style="margin-top: 14px; font-family: var(--mono); font-size: 12px; color: var(--ink-3); letter-spacing: 0.05em;">
-            Total: 50 criteria · 150 sub-criteria · 7-category evidence taxonomy · structured JSON output
+            Total: 60 criteria · 180 sub-criteria · 7-category evidence taxonomy · structured JSON output
           </div>
         </div>
       </div>
 
-      <div class="connector">50 candidate scored items with evidence + categories</div>
+      <div class="connector">60 candidate scored items with evidence + categories</div>
 
       <!-- PHASE 1.5 -->
       <div class="stage" data-phase="1" style="border-style: dashed;">
@@ -1003,7 +1004,7 @@
           <div class="stage-meta">gemini-3.1-pro-preview · independent verifier · targeted rescans</div>
         </div>
         <div class="stage-body">
-          Each completed A–E batch is checked against the raw source material before Phase 2 can calculate metrics. The verifier classifies every maturity and anti-pattern item as <em>supported</em>, <em>weak</em>, <em>unsupported</em>, or <em>missing</em>, recommends a verified score, and identifies anti-pattern absence as <em>confirmed present</em>, <em>partial finding</em>, <em>tested absent</em>, or <em>not assessed</em>. Weak or over-scored criteria trigger one targeted rescan; if the rescan still fails, the score is deterministically downgraded.
+          Each completed A-F batch is checked against the raw source material before Phase 2 can calculate metrics. The verifier classifies every maturity and anti-pattern item as <em>supported</em>, <em>weak</em>, <em>unsupported</em>, or <em>missing</em>, recommends a verified score, and identifies anti-pattern absence as <em>confirmed present</em>, <em>partial finding</em>, <em>tested absent</em>, or <em>not assessed</em>. Weak or over-scored criteria trigger one targeted rescan; if the rescan still fails, the score is deterministically downgraded.
         </div>
       </div>
 
@@ -1033,11 +1034,11 @@
           <ol style="margin: 0 0 12px 20px; padding: 0; font-size: 14.5px; color: var(--ink-2);">
             <li>Evidence-checked metrics from Phase 2 (treated as absolute truth)</li>
             <li>Original documents (for proper nouns and organizational context only)</li>
-            <li>FinOps taxonomy and tactics database — available to roadmap synthesis only; never used as source evidence for summaries</li>
+            <li>Remote PDF Knowledge Base, taxonomy, tactics database, and tactic activity playbook — available to roadmap synthesis only; never used as source evidence for summaries</li>
             <li>Crawl-Walk-Run methodology framework</li>
             <li>Three persona definitions: FinOps Lead, CFO, Engineering Lead</li>
           </ol>
-          <p>Outputs depend on confidence. Evidence summary and diagnosis are generated separately from roadmap synthesis. The roadmap/planning substage uses <code style="font-family: var(--mono); font-size: 12px;">claude-opus-4-7</code> first, then <code style="font-family: var(--mono); font-size: 12px;">gpt-5.5</code>, then <code style="font-family: var(--mono); font-size: 12px;">gemini-3.1-pro-preview</code>. HIGH confidence can produce planning, scorecard, and a 4-phase roadmap with WHY, WHAT, and HOW layers. MEDIUM produces cautious planning with assumptions. LOW produces findings mode only: evidence-backed findings, missing evidence, validation plan, <strong>NO_GO</strong>, and an empty roadmap.</p>
+          <p>Outputs depend on confidence. Evidence summary and diagnosis are generated separately from roadmap synthesis. The roadmap/planning substage uses <code style="font-family: var(--mono); font-size: 12px;">claude-opus-4-7</code> first, then <code style="font-family: var(--mono); font-size: 12px;">gpt-5.5</code>, then <code style="font-family: var(--mono); font-size: 12px;">gemini-3.1-pro-preview</code>; the non-Gemini operating mode can remove Gemini fallbacks while preserving the same stage boundaries. HIGH confidence can produce planning, scorecard, and a 4-phase roadmap with WHY, WHAT, and HOW layers. MEDIUM produces cautious planning with assumptions. LOW produces findings mode only: evidence-backed findings, missing evidence, validation plan, <strong>NO_GO</strong>, and an empty roadmap.</p>
         </div>
       </div>
 
@@ -1050,7 +1051,7 @@
           <div class="stage-meta">gpt-5.5 primary · claude-sonnet-4-6 fallback · summary/diagnosis separate from roadmap</div>
         </div>
         <div class="stage-body">
-          Evidence summaries and diagnosis are checked only against the source document, Phase 1 evidence, and Phase 2 metrics. Planning decisions and roadmap WHY/WHAT/HOW are checked against locked findings plus the verified tactics database. Unsupported claims are tagged with failure type, severity, source location, and missing material so the regeneration loop or sanitation layer can repair the right kind of error.
+          Evidence summaries and diagnosis are checked only against the source document, Phase 1 evidence, and Phase 2 metrics. Planning decisions and roadmap WHY/WHAT/HOW are checked against locked findings plus the verified tactics database and tactic activity playbook. Unsupported claims are tagged with failure type, severity, source location, and missing material so the regeneration loop or sanitation layer can repair the right kind of error.
         </div>
       </div>
 
@@ -1245,7 +1246,7 @@ metrics, vendor management, VP+ engagement</code></pre>
             Receives 10 criteria definitions (5 maturity + 5 anti-pattern). Each criterion has 3 specific sub-criteria to check. For each criterion, writes a "reasoning" field — a scratchpad proving the connection to source text. Assigns a score of 0–3 based on how many sub-criteria have traceable evidence. Returns structured JSON — not prose, not opinions.
           </dd>
           <dt>Model · Concurrency</dt>
-          <dd><code style="font-family: var(--mono); font-size: 12px;">claude-sonnet-4-6</code> primary, with fallback routing centralized in <code style="font-family: var(--mono); font-size: 12px;">src/models.ts</code>. <strong>5 batches run simultaneously.</strong> Evidence-check runs separately after each completed batch.</dd>
+          <dd><code style="font-family: var(--mono); font-size: 12px;">claude-sonnet-4-6</code> primary, with fallback routing centralized in <code style="font-family: var(--mono); font-size: 12px;">src/models.ts</code>. <strong>6 batches run simultaneously.</strong> Evidence-check runs separately after each completed batch.</dd>
         </dl>
         <div class="persona-rules">
           <h4>Behavioural Rules</h4>
@@ -1276,7 +1277,7 @@ metrics, vendor management, VP+ engagement</code></pre>
           <dd>A transformation architect constrained by confidence. At high confidence it can prescribe; at medium confidence it must hedge execution; at low confidence it produces findings and validation needs, not a roadmap.</dd>
           <dt>What It Receives</dt>
           <dd>
-            (1) Evidence-checked Phase 2 metrics — treated as absolute truth. (2) Original documents — for proper nouns and organisational context only. (3) Taxonomy registry and FinOps Tactics Database — available for roadmap actions, not as evidence for current-state summaries. (4) Crawl-Walk-Run methodology framework. (5) Three persona definitions (FinOps Lead, CFO, Engineering Lead) with focus areas, language style, and key questions.
+            (1) Evidence-checked Phase 2 metrics — treated as absolute truth. (2) Original documents — for proper nouns and organisational context only. (3) Remote PDF Knowledge Base, taxonomy registry, FinOps Tactics Database, and tactic activity playbook — available for roadmap actions, not as evidence for current-state summaries. (4) Crawl-Walk-Run methodology framework. (5) Three persona definitions (FinOps Lead, CFO, Engineering Lead) with focus areas, language style, and key questions.
           </dd>
           <dt>What It Produces</dt>
           <dd>
@@ -1358,14 +1359,14 @@ metrics, vendor management, VP+ engagement</code></pre>
 </section>
 
 <!-- ============================================================== -->
-<!-- 04 · BATCH DEFINITIONS — 50-CRITERIA KNOWLEDGE BASE             -->
+<!-- 04 · BATCH DEFINITIONS — 60-CRITERIA KNOWLEDGE BASE             -->
 <!-- ============================================================== -->
 <section>
   <div class="container">
     <div class="section-tag"><span class="num">04</span><span>Batch Definitions</span></div>
-    <h2>The 50-Criteria FinOps Knowledge Base</h2>
+    <h2>The 60-Criteria FinOps Knowledge Base</h2>
     <p style="max-width: 760px; color: var(--ink-2);">
-      Five batches. Each batch holds 5 maturity indicators (Stream A) paired against 5 anti-patterns (Stream B). Each criterion carries 3 sub-criteria — the traceable evidence checks the auditor must pass.
+      Six batches. Each batch holds 5 maturity indicators (Stream A) paired against 5 anti-patterns (Stream B). Each criterion carries 3 sub-criteria — the traceable evidence checks the auditor must pass.
     </p>
 
     <!-- ───── BATCH A ───── -->
@@ -1444,7 +1445,7 @@ metrics, vendor management, VP+ engagement</code></pre>
           <div class="col-label">Stream B · Anti-Patterns</div>
 
           <div class="criterion">
-            <div class="criterion-id">A1-T</div>
+            <div class="criterion-id">AP-A1</div>
             <div class="criterion-name">Tag Sprawl &amp; Missing Tags</div>
             <div class="criterion-desc">Cloud resources lack consistent tagging or have inconsistent, redundant tag taxonomies. Cost allocation is impossible or unreliable. Untagged spend is treated as acceptable overhead rather than a governance failure.</div>
             <ol class="criterion-subs">
@@ -1455,7 +1456,7 @@ metrics, vendor management, VP+ engagement</code></pre>
           </div>
 
           <div class="criterion">
-            <div class="criterion-id">A2-T</div>
+            <div class="criterion-id">AP-A2</div>
             <div class="criterion-name">Black Box Cloud Spend</div>
             <div class="criterion-desc">Cloud costs are visible only to a small group (typically finance or a single cloud admin). Engineering teams cannot see the cost of the resources they provision. Cost is discovered only during monthly invoice shock.</div>
             <ol class="criterion-subs">
@@ -1466,7 +1467,7 @@ metrics, vendor management, VP+ engagement</code></pre>
           </div>
 
           <div class="criterion">
-            <div class="criterion-id">A3-T</div>
+            <div class="criterion-id">AP-A3</div>
             <div class="criterion-name">Delayed Cost Reporting</div>
             <div class="criterion-desc">Cost data is stale — reports arrive days or weeks after the spend occurs. By the time anomalies are discovered, the damage is done. No near-real-time cost signal exists.</div>
             <ol class="criterion-subs">
@@ -1477,7 +1478,7 @@ metrics, vendor management, VP+ engagement</code></pre>
           </div>
 
           <div class="criterion">
-            <div class="criterion-id">A4-T</div>
+            <div class="criterion-id">AP-A4</div>
             <div class="criterion-name">Siloed Cost Views</div>
             <div class="criterion-desc">Each cloud provider, account, or team has its own cost view with no unified perspective. Total cloud economics is unknown. Finance sees invoices; engineering sees resource metrics; nobody sees both together.</div>
             <ol class="criterion-subs">
@@ -1488,7 +1489,7 @@ metrics, vendor management, VP+ engagement</code></pre>
           </div>
 
           <div class="criterion">
-            <div class="criterion-id">A5-T</div>
+            <div class="criterion-id">AP-A5</div>
             <div class="criterion-name">Vanity Cost Metrics</div>
             <div class="criterion-desc">The organization tracks meaningless or misleading cost metrics — total spend without context, percentage discounts without baseline, or savings numbers that cannot be verified. Metrics look good on slides but drive no real optimization.</div>
             <ol class="criterion-subs">
@@ -1577,7 +1578,7 @@ metrics, vendor management, VP+ engagement</code></pre>
           <div class="col-label">Stream B · Anti-Patterns</div>
 
           <div class="criterion">
-            <div class="criterion-id">B1-T</div>
+            <div class="criterion-id">AP-B1</div>
             <div class="criterion-name">Commitment Avoidance</div>
             <div class="criterion-desc">The organization runs predominantly on on-demand pricing despite stable, predictable workloads. Fear of commitment results in paying 40–70% premiums unnecessarily.</div>
             <ol class="criterion-subs">
@@ -1588,7 +1589,7 @@ metrics, vendor management, VP+ engagement</code></pre>
           </div>
 
           <div class="criterion">
-            <div class="criterion-id">B2-T</div>
+            <div class="criterion-id">AP-B2</div>
             <div class="criterion-name">Chronic Over-Provisioning</div>
             <div class="criterion-desc">Resources systematically oversized "just in case." Instances run at 5–15% CPU utilization. Databases provisioned for peak that never arrives. Nobody right-sizes because nobody owns the waste.</div>
             <ol class="criterion-subs">
@@ -1599,7 +1600,7 @@ metrics, vendor management, VP+ engagement</code></pre>
           </div>
 
           <div class="criterion">
-            <div class="criterion-id">B3-T</div>
+            <div class="criterion-id">AP-B3</div>
             <div class="criterion-name">Resource Hoarding &amp; Zombie Resources</div>
             <div class="criterion-desc">Teams accumulate cloud resources they no longer use — stopped instances with attached storage, orphaned snapshots, unused IPs, dev environments left running permanently. Cleanup is nobody's job.</div>
             <ol class="criterion-subs">
@@ -1610,7 +1611,7 @@ metrics, vendor management, VP+ engagement</code></pre>
           </div>
 
           <div class="criterion">
-            <div class="criterion-id">B4-T</div>
+            <div class="criterion-id">AP-B4</div>
             <div class="criterion-name">Manual-Only Optimization</div>
             <div class="criterion-desc">Cost optimization is a manual, periodic exercise — someone reviews a spreadsheet quarterly and makes recommendations. There is no automation, no continuous optimization, no integration with engineering workflows.</div>
             <ol class="criterion-subs">
@@ -1621,7 +1622,7 @@ metrics, vendor management, VP+ engagement</code></pre>
           </div>
 
           <div class="criterion">
-            <div class="criterion-id">B5-T</div>
+            <div class="criterion-id">AP-B5</div>
             <div class="criterion-name">Discount Stacking Ignorance</div>
             <div class="criterion-desc">The organization does not understand how discounts interact across providers. Savings Plans applied to already-discounted workloads, conflicting commitment types, or unused negotiated rates.</div>
             <ol class="criterion-subs">
@@ -1710,7 +1711,7 @@ metrics, vendor management, VP+ engagement</code></pre>
           <div class="col-label">Stream B · Anti-Patterns</div>
 
           <div class="criterion">
-            <div class="criterion-id">C1-T</div>
+            <div class="criterion-id">AP-C1</div>
             <div class="criterion-name">Shadow IT &amp; Unmanaged Cloud Accounts</div>
             <div class="criterion-desc">Teams or individuals create cloud accounts outside the governed organizational structure. Spend occurs on personal cards, departmental accounts, or unlinked accounts. Total cloud exposure is unknown.</div>
             <ol class="criterion-subs">
@@ -1721,7 +1722,7 @@ metrics, vendor management, VP+ engagement</code></pre>
           </div>
 
           <div class="criterion">
-            <div class="criterion-id">C2-T</div>
+            <div class="criterion-id">AP-C2</div>
             <div class="criterion-name">Budget Blowout Tolerance</div>
             <div class="criterion-desc">Cloud budgets are set but not enforced. Overruns are discovered after the fact with no consequences. Forecasts are fiction. The budget process is a compliance exercise disconnected from operational reality.</div>
             <ol class="criterion-subs">
@@ -1732,7 +1733,7 @@ metrics, vendor management, VP+ engagement</code></pre>
           </div>
 
           <div class="criterion">
-            <div class="criterion-id">C3-T</div>
+            <div class="criterion-id">AP-C3</div>
             <div class="criterion-name">FinOps Theater (Process Without Teeth)</div>
             <div class="criterion-desc">The organization has FinOps titles, meetings, and dashboards but no actual optimization outcomes. FinOps is a checkbox for management reporting, not an operational discipline.</div>
             <ol class="criterion-subs">
@@ -1743,7 +1744,7 @@ metrics, vendor management, VP+ engagement</code></pre>
           </div>
 
           <div class="criterion">
-            <div class="criterion-id">C4-T</div>
+            <div class="criterion-id">AP-C4</div>
             <div class="criterion-name">Vendor Lock-In Blindness</div>
             <div class="criterion-desc">Major cloud commitments (multi-year EDPs, proprietary service adoption) are made without evaluating exit costs, portability, or competitive alternatives. Lock-in is accepted by default rather than managed deliberately.</div>
             <ol class="criterion-subs">
@@ -1754,7 +1755,7 @@ metrics, vendor management, VP+ engagement</code></pre>
           </div>
 
           <div class="criterion">
-            <div class="criterion-id">C5-T</div>
+            <div class="criterion-id">AP-C5</div>
             <div class="criterion-name">Compliance as Cost Afterthought</div>
             <div class="criterion-desc">Regulatory and compliance requirements create cost surprises because they are not integrated into architecture planning. Data residency, encryption mandates, and audit requirements add unplanned spend.</div>
             <ol class="criterion-subs">
@@ -1843,7 +1844,7 @@ metrics, vendor management, VP+ engagement</code></pre>
           <div class="col-label">Stream B · Anti-Patterns</div>
 
           <div class="criterion">
-            <div class="criterion-id">D1-T</div>
+            <div class="criterion-id">AP-D1</div>
             <div class="criterion-name">Lift-and-Shift Without Optimization</div>
             <div class="criterion-desc">Workloads were migrated to the cloud with on-premises sizing intact. Virtual machines mirror physical server specs. No cloud-native optimization occurs post-migration. The cloud becomes an expensive colocation facility.</div>
             <ol class="criterion-subs">
@@ -1854,7 +1855,7 @@ metrics, vendor management, VP+ engagement</code></pre>
           </div>
 
           <div class="criterion">
-            <div class="criterion-id">D2-T</div>
+            <div class="criterion-id">AP-D2</div>
             <div class="criterion-name">Cost-Blind Architecture</div>
             <div class="criterion-desc">Architecture decisions are made purely on technical merit without cost modeling. Teams choose services, instance types, and configurations based on features or familiarity, not cost-performance tradeoffs.</div>
             <ol class="criterion-subs">
@@ -1865,7 +1866,7 @@ metrics, vendor management, VP+ engagement</code></pre>
           </div>
 
           <div class="criterion">
-            <div class="criterion-id">D3-T</div>
+            <div class="criterion-id">AP-D3</div>
             <div class="criterion-name">Scaling Without Limits</div>
             <div class="criterion-desc">Autoscaling is configured without cost ceilings. A traffic spike or runaway process can scale resources to unlimited cost. There are no circuit breakers between demand signals and infrastructure provisioning.</div>
             <ol class="criterion-subs">
@@ -1876,7 +1877,7 @@ metrics, vendor management, VP+ engagement</code></pre>
           </div>
 
           <div class="criterion">
-            <div class="criterion-id">D4-T</div>
+            <div class="criterion-id">AP-D4</div>
             <div class="criterion-name">Single-Cloud Tunnel Vision</div>
             <div class="criterion-desc">The organization is locked into a single cloud provider without evaluating whether specific workloads would be more cost-effective elsewhere. Provider loyalty overrides economic rationality.</div>
             <ol class="criterion-subs">
@@ -1887,7 +1888,7 @@ metrics, vendor management, VP+ engagement</code></pre>
           </div>
 
           <div class="criterion">
-            <div class="criterion-id">D5-T</div>
+            <div class="criterion-id">AP-D5</div>
             <div class="criterion-name">Monolith Tax</div>
             <div class="criterion-desc">Large monolithic applications prevent granular cost allocation and optimization. The entire monolith must be scaled together even if only one component is under load. Decomposition is deferred indefinitely.</div>
             <ol class="criterion-subs">
@@ -1976,7 +1977,7 @@ metrics, vendor management, VP+ engagement</code></pre>
           <div class="col-label">Stream B · Anti-Patterns</div>
 
           <div class="criterion">
-            <div class="criterion-id">E1-T</div>
+            <div class="criterion-id">AP-E1</div>
             <div class="criterion-name">Cost is IT's Problem</div>
             <div class="criterion-desc">Cloud cost management is viewed as solely an IT or infrastructure responsibility. Business stakeholders who drive demand feel no accountability for cost. Engineers who provision resources never see the bill.</div>
             <ol class="criterion-subs">
@@ -1987,7 +1988,7 @@ metrics, vendor management, VP+ engagement</code></pre>
           </div>
 
           <div class="criterion">
-            <div class="criterion-id">E2-T</div>
+            <div class="criterion-id">AP-E2</div>
             <div class="criterion-name">Blame-Based Cost Management</div>
             <div class="criterion-desc">Cost overruns trigger blame and punishment rather than systemic analysis. Teams hide cost problems instead of surfacing them. Cost discussions are adversarial between finance and engineering rather than collaborative.</div>
             <ol class="criterion-subs">
@@ -1998,7 +1999,7 @@ metrics, vendor management, VP+ engagement</code></pre>
           </div>
 
           <div class="criterion">
-            <div class="criterion-id">E3-T</div>
+            <div class="criterion-id">AP-E3</div>
             <div class="criterion-name">FinOps Lip Service</div>
             <div class="criterion-desc">Leadership talks about FinOps but does not invest in it. No dedicated team, no tooling budget, no training. FinOps is an additional duty for someone who already has a full-time job. Optimization is expected to happen organically.</div>
             <ol class="criterion-subs">
@@ -2009,7 +2010,7 @@ metrics, vendor management, VP+ engagement</code></pre>
           </div>
 
           <div class="criterion">
-            <div class="criterion-id">E4-T</div>
+            <div class="criterion-id">AP-E4</div>
             <div class="criterion-name">Finance-Engineering Wall</div>
             <div class="criterion-desc">Finance and engineering operate as separate fiefdoms with different tools, languages, and objectives around cloud spend. Finance sees cost centers; engineering sees resource metrics. Translation between them is manual and lossy.</div>
             <ol class="criterion-subs">
@@ -2020,13 +2021,146 @@ metrics, vendor management, VP+ engagement</code></pre>
           </div>
 
           <div class="criterion">
-            <div class="criterion-id">E5-T</div>
+            <div class="criterion-id">AP-E5</div>
             <div class="criterion-name">Static Maturity Assumption</div>
             <div class="criterion-desc">The organization treats FinOps maturity as a destination rather than a continuous journey. After initial optimization efforts, the discipline atrophies. No regular maturity assessment, no improvement targets, no benchmarking.</div>
             <ol class="criterion-subs">
               <li>Does the organization treat FinOps as a completed project rather than a continuous improvement discipline?</li>
               <li>Has initial optimization momentum stalled with no ongoing maturity assessment or improvement targets?</li>
               <li>Is there no external benchmarking or peer comparison to drive continued advancement?</li>
+            </ol>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ───── BATCH F ───── -->
+    <div class="batch-section">
+      <div class="batch-header">
+        <div style="display: flex; align-items: baseline; gap: 24px;">
+          <div class="batch-letter">F</div>
+          <div>
+            <div class="batch-name">GenAI &amp; AI Cost Management</div>
+            <div class="batch-meta">5 maturity indicators · 5 anti-patterns · 30 sub-criteria</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="criteria-pair">
+        <div class="criteria-col maturity">
+          <div class="col-label">Stream A · Maturity Indicators</div>
+
+          <div class="criterion">
+            <div class="criterion-id">F1</div>
+            <div class="criterion-name">Token &amp; Model Spend Visibility</div>
+            <div class="criterion-desc">The organization must be able to see AI token, API, model, and inference spend by application, team, use case, customer, and environment. AI consumption must be visible as an operational cost surface, not only as a provider invoice line.</div>
+            <ol class="criterion-subs">
+              <li>Can the organization track token, API, model, and inference spend by application, use case, team, customer, and environment?</li>
+              <li>Are provider, model, endpoint, retry, cache, batch, and real-time cost drivers visible in reporting where applicable?</li>
+              <li>Do FinOps, product, and engineering owners receive dashboard or alert views that expose AI cost trends and anomalies?</li>
+            </ol>
+          </div>
+
+          <div class="criterion">
+            <div class="criterion-id">F2</div>
+            <div class="criterion-name">AI Cost Allocation &amp; Unit Economics</div>
+            <div class="criterion-desc">The organization must map GenAI costs to products, workflows, customers, transactions, or business outcomes. AI costs should be connected to unit economics so teams can judge whether usage is economically justified.</div>
+            <ol class="criterion-subs">
+              <li>Are LLM and AI platform costs allocated to products, workflows, customers, teams, or business units?</li>
+              <li>Are shared AI platform costs allocated through a documented model rather than left as unassigned overhead?</li>
+              <li>Does the organization track unit metrics such as cost per task, workflow, customer interaction, API call, transaction, or outcome?</li>
+            </ol>
+          </div>
+
+          <div class="criterion">
+            <div class="criterion-id">F3</div>
+            <div class="criterion-name">Model Routing &amp; Prompt Efficiency</div>
+            <div class="criterion-desc">The organization must optimize GenAI cost through model routing, prompt design, context management, caching, batching, retry controls, and cost-quality tradeoff measurement. Premium models should be used intentionally where quality, risk, or reasoning need justifies them.</div>
+            <ol class="criterion-subs">
+              <li>Is there a model-routing policy that matches model strength and cost to task value, risk, and complexity?</li>
+              <li>Are prompt length, context size, retrieval scope, caching, batching, retry behavior, and agent loops monitored or optimized for cost efficiency?</li>
+              <li>Are cost, quality, latency, and reliability tradeoffs measured before moving workloads to premium models or larger context windows?</li>
+            </ol>
+          </div>
+
+          <div class="criterion">
+            <div class="criterion-id">F4</div>
+            <div class="criterion-name">AI Budgeting, Forecasting &amp; Guardrails</div>
+            <div class="criterion-desc">The organization must govern AI consumption with budgets, quotas, alerts, approvals, anomaly detection, and forecasting. AI workloads need guardrails against runaway spend from high-volume usage, retries, context growth, or experimental systems becoming production traffic.</div>
+            <ol class="criterion-subs">
+              <li>Are AI budgets, quotas, alerts, and approval thresholds defined for applications, teams, environments, or model tiers?</li>
+              <li>Does the organization forecast AI spend and monitor anomalies from token volume, retries, context growth, or usage spikes?</li>
+              <li>Are production AI workloads protected by guardrails such as rate limits, spend limits, escalation paths, or model-access controls?</li>
+            </ol>
+          </div>
+
+          <div class="criterion">
+            <div class="criterion-id">F5</div>
+            <div class="criterion-name">AI Value Realization &amp; Governance</div>
+            <div class="criterion-desc">The organization must compare AI consumption cost against business value, productivity gain, quality improvement, risk reduction, or revenue impact. AI governance should include cost ownership and decisions about whether AI usage is worth continuing.</div>
+            <ol class="criterion-subs">
+              <li>Are AI costs compared against business value such as productivity gain, quality improvement, risk reduction, revenue impact, or customer outcome?</li>
+              <li>Is there ownership or governance for AI cost decisions across product, engineering, finance, risk, and business stakeholders?</li>
+              <li>Are low-value AI use cases reviewed, redesigned, downgraded, or retired when cost per outcome is not justified?</li>
+            </ol>
+          </div>
+        </div>
+
+        <div class="criteria-col antipattern">
+          <div class="col-label">Stream B · Anti-Patterns</div>
+
+          <div class="criterion">
+            <div class="criterion-id">AP-F1</div>
+            <div class="criterion-name">Invisible Token Spend</div>
+            <div class="criterion-desc">AI/API usage exists, but token and model costs are not visible by owner, use case, application, or system. GenAI cost appears only as a provider invoice or platform total, preventing accountability.</div>
+            <ol class="criterion-subs">
+              <li>Does AI/API spend exist without visibility by owner, team, application, use case, customer, or environment?</li>
+              <li>Are token, model, endpoint, retry, or inference costs visible only as aggregate provider or platform charges?</li>
+              <li>Is there no accountable owner for AI consumption cost or usage growth?</li>
+            </ol>
+          </div>
+
+          <div class="criterion">
+            <div class="criterion-id">AP-F2</div>
+            <div class="criterion-name">Playground-to-Production Cost Drift</div>
+            <div class="criterion-desc">Experiments, pilots, or playground usage become production AI consumption without cost governance. Sandbox keys, prototypes, or ad hoc integrations accumulate persistent spend without lifecycle review.</div>
+            <ol class="criterion-subs">
+              <li>Do AI experiments or playground workloads become recurring production usage without budget, owner, or approval review?</li>
+              <li>Do sandbox keys, prototypes, or pilots generate persistent AI spend without lifecycle controls?</li>
+              <li>Are AI use cases moved into production without cost forecast, quota, or operating model?</li>
+            </ol>
+          </div>
+
+          <div class="criterion">
+            <div class="criterion-id">AP-F3</div>
+            <div class="criterion-name">Premium Model Overuse</div>
+            <div class="criterion-desc">Expensive models are used where cheaper models, caching, batching, smaller context, or simpler workflows would meet the need. Model choice is driven by convenience or prestige rather than measured cost-quality fit.</div>
+            <ol class="criterion-subs">
+              <li>Are premium models used for low-risk, repetitive, or simple tasks without a cost-quality comparison?</li>
+              <li>Are cheaper models, caching, batching, prompt reduction, or smaller context windows not tested before premium-model use?</li>
+              <li>Do retries, agent loops, or orchestration patterns run premium models without cost controls?</li>
+            </ol>
+          </div>
+
+          <div class="criterion">
+            <div class="criterion-id">AP-F4</div>
+            <div class="criterion-name">Unbounded Context Growth</div>
+            <div class="criterion-desc">RAG, prompt, memory, or conversation context grows without cost-quality control. The organization pays for excessive tokens because retrieval scope, history length, documents, or prompt structures are not governed.</div>
+            <ol class="criterion-subs">
+              <li>Do RAG, prompt, memory, or conversation contexts grow without explicit size, relevance, or cost limits?</li>
+              <li>Are irrelevant documents, long histories, or oversized prompts routinely included without measuring quality improvement?</li>
+              <li>Is there no policy or instrumentation for context cost, cache efficiency, or token budget per workflow?</li>
+            </ol>
+          </div>
+
+          <div class="criterion">
+            <div class="criterion-id">AP-F5</div>
+            <div class="criterion-name">AI Value Theater</div>
+            <div class="criterion-desc">AI usage is celebrated while cost per outcome is unknown. The organization tracks usage, pilots, or activity volume but cannot show whether AI spend improves productivity, quality, revenue, risk, or customer outcomes.</div>
+            <ol class="criterion-subs">
+              <li>Are AI adoption, usage, or pilot counts celebrated without cost-per-outcome or value-realization evidence?</li>
+              <li>Do dashboards focus on AI activity volume rather than productivity, quality, revenue, risk, or customer outcome impact?</li>
+              <li>Do AI use cases continue despite unclear ROI, unmeasured benefit, or missing ownership for value realization?</li>
             </ol>
           </div>
         </div>
@@ -2253,20 +2387,20 @@ OUTPUT RULES:
     <div class="section-tag"><span class="num">07</span><span>Input Document Guidance</span></div>
     <h2>What to Submit</h2>
     <p style="max-width: 760px; color: var(--ink-2);">
-      The assessment accepts any combination of documents. More document types provide richer signal across all five batches. <strong>Absence of entire document categories is itself a maturity indicator.</strong>
+      The assessment accepts any combination of documents. More document types provide richer signal across all six batches. <strong>Absence of entire document categories is itself a maturity indicator.</strong>
     </p>
 
     <div class="metrics-list" style="margin: 28px 0 36px;">
       <div class="metric-item">
         <div class="metric-name">Accepted Set<span>2–20 artifacts</span></div>
         <div>
-          <div class="metric-interp">The upload budget is <strong>25 MB total</strong> across the source set. Supported formats: PDF, HTML, CSV, TSV, JSON, PNG, JPG.</div>
+          <div class="metric-interp">The upload budget is <strong>25 MB total</strong> across the source set. Supported formats: PDF, HTML, CSV, TSV, XLSX, JSON, PNG, JPG.</div>
         </div>
       </div>
       <div class="metric-item">
         <div class="metric-name">Local Parsing<span>not model parsing</span></div>
         <div>
-          <div class="metric-interp">PDF, HTML, CSV/TSV, JSON, and image inputs are parsed or encoded locally before analysis. Gemini, Claude, and GPT analyze the extracted material; they are not the primary parsers.</div>
+          <div class="metric-interp">PDF, HTML, CSV/TSV/XLSX, JSON, and image inputs are parsed or encoded locally before analysis. Gemini, Claude, and GPT analyze the extracted material; they are not the primary parsers.</div>
         </div>
       </div>
       <div class="metric-item">
@@ -2282,9 +2416,9 @@ OUTPUT RULES:
         </div>
       </div>
       <div class="metric-item">
-        <div class="metric-name">CSV / TSV<span>table summaries</span></div>
+        <div class="metric-name">CSV / TSV / XLSX<span>local table profiler</span></div>
         <div>
-          <div class="metric-interp">Delimited files are normalized into model-readable table summaries with headers, row count, representative rows, and truncation warnings for large tables.</div>
+          <div class="metric-interp">Delimited files and workbooks are profiled locally: row and column counts, inferred types, missing-value rates, numeric ranges, FinOps signals, and targeted evidence rows are forwarded instead of raw 50,000-row dumps.</div>
         </div>
       </div>
     </div>
@@ -2298,6 +2432,7 @@ OUTPUT RULES:
         <li>Cloud strategy or cloud-first strategy document</li>
         <li>Reserved Instance / Savings Plan purchase strategy</li>
         <li>Cost optimization review reports or meeting notes</li>
+        <li>AI cost / token usage dashboards, model routing policies, or AI platform cost reports</li>
       </ul>
     </div>
 
@@ -2354,8 +2489,8 @@ OUTPUT RULES:
 
     <h3 style="margin-top: 32px;">Inputs from Phase 1 + Evidence Check</h3>
     <ul style="font-size: 14.5px; color: var(--ink-2); max-width: 720px;">
-      <li>25 verified maturity criteria scores (0–3 each, max possible = 75)</li>
-      <li>25 verified anti-pattern criteria scores (0–3 each, max possible = 75)</li>
+      <li>30 verified maturity criteria scores (0–3 each, max possible = 90)</li>
+      <li>30 verified anti-pattern criteria scores (0–3 each, max possible = 90)</li>
       <li>Evidence-check status, original count, verified count, rescan flag, and adjustment reason per affected item</li>
       <li>Anti-pattern absence semantics: confirmed present, partial finding, tested absent, or not assessed</li>
     </ul>
@@ -2375,23 +2510,23 @@ finops_readiness = min(uncapped, evidence_density_cap)</div>
       <div class="metric-item">
         <div class="metric-name">Maturity Ratio<span>0–100</span></div>
         <div>
-          <div class="metric-formula">maturity_ratio = (criteria scored 3 / 25) * 100</div>
-          <div class="metric-interp">Share of the 25 maturity criteria scored as fully embedded (3 of 3 sub-criteria met).</div>
+          <div class="metric-formula">maturity_ratio = (criteria scored 3 / 30) * 100</div>
+          <div class="metric-interp">Share of the 30 maturity criteria scored as fully embedded (3 of 3 sub-criteria met).</div>
         </div>
       </div>
 
       <div class="metric-item">
         <div class="metric-name">Maturity Depth<span>0–100</span></div>
         <div>
-          <div class="metric-formula">maturity_depth = (sum of all maturity scores / 75) * 100</div>
-          <div class="metric-interp">Average maturity score across all 25 criteria on a 0–3 scale, normalized to 0–100%. Captures partial progress that maturity_ratio misses.</div>
+          <div class="metric-formula">maturity_depth = (sum of all maturity scores / 90) * 100</div>
+          <div class="metric-interp">Average maturity score across all 30 criteria on a 0–3 scale, normalized to 0–100%. Captures partial progress that maturity_ratio misses.</div>
         </div>
       </div>
 
       <div class="metric-item">
         <div class="metric-name">Anti-Pattern Burden<span>0–100</span></div>
         <div>
-          <div class="metric-formula">antipattern_burden = (sum of all anti-pattern scores / 75) * 100</div>
+          <div class="metric-formula">antipattern_burden = (sum of all anti-pattern scores / 90) * 100</div>
           <div class="metric-interp">Average severity across confirmed or partial harmful anti-pattern evidence. Higher = more friction blocking current FinOps practice.</div>
         </div>
       </div>
@@ -2399,7 +2534,7 @@ finops_readiness = min(uncapped, evidence_density_cap)</div>
       <div class="metric-item">
         <div class="metric-name">Anti-Pattern Clearance<span>0–100</span></div>
         <div>
-          <div class="metric-formula">antipattern_clearance = (tested_absent criteria / 25) * 100</div>
+          <div class="metric-formula">antipattern_clearance = (tested_absent criteria / 30) * 100</div>
           <div class="metric-interp">How much of the anti-pattern surface was meaningfully tested and found absent. This is the only way absence becomes positive evidence.</div>
         </div>
       </div>
@@ -2407,7 +2542,7 @@ finops_readiness = min(uncapped, evidence_density_cap)</div>
       <div class="metric-item">
         <div class="metric-name">Anti-Pattern Coverage<span>0–100</span></div>
         <div>
-          <div class="metric-formula">antipattern_coverage = (tested_absent + confirmed_present + partially_present) / 25 * 100</div>
+          <div class="metric-formula">antipattern_coverage = (tested_absent + confirmed_present + partially_present) / 30 * 100</div>
           <div class="metric-interp">How many anti-pattern criteria were actually assessable from the source. Low burden with low coverage means unknown burden, not excellence.</div>
         </div>
       </div>
@@ -2427,21 +2562,21 @@ else: "Run"</div>
       <div class="metric-item">
         <div class="metric-name">Delivery Integrity<span>0–100 %</span></div>
         <div>
-          <div class="metric-formula">delivery_integrity = (criteria with valid LLM response / 50) * 100</div>
-          <div class="metric-interp">Did the pipeline finish? Share of 50 criteria the LLM returned valid data for. Below 100% means batches failed and the audit is incomplete.</div>
+          <div class="metric-formula">delivery_integrity = (criteria with valid LLM response / 60) * 100</div>
+          <div class="metric-interp">Did the pipeline finish? Share of 60 criteria the LLM returned valid data for. Below 100% means batches failed and the audit is incomplete.</div>
         </div>
       </div>
 
       <div class="metric-item">
         <div class="metric-name">Evidence Density<span>0–100 %</span></div>
         <div>
-          <div class="metric-formula">evidence_density = (criteria with source evidence or verified anti-pattern absence / 50) * 100</div>
+          <div class="metric-formula">evidence_density = (criteria with source evidence or verified anti-pattern absence / 60) * 100</div>
           <div class="metric-interp">Did the source actually support the assessment? Includes quotable evidence and verified anti-pattern absence. Distinct from delivery_integrity — separates "pipeline finished" from "source had content."</div>
         </div>
       </div>
 
       <div class="metric-item">
-        <div class="metric-name">Domain Breakdown<span>per batch A–E</span></div>
+        <div class="metric-name">Domain Breakdown<span>per batch A-F</span></div>
         <div>
           <div class="metric-formula">category_scores[batch] = sum of 5 maturity scores in that batch  (0–15)</div>
           <div class="metric-interp">Drives the radar chart. Enables claims like <em>"Your Governance is Walk-level but your Optimization is still Crawl."</em></div>
@@ -2609,7 +2744,7 @@ else: "Run"</div>
         <div class="metric-name">Split Fact-Check Pass<span>independent LLM</span></div>
         <div>
           <div class="metric-interp">
-            GPT-5.5 verifies evidence summaries and diagnosis separately from roadmap/planning, with Sonnet 4.6 as fallback. Summary claims must trace to the source document, Phase 1 evidence, or Phase 2 metrics. Roadmap WHY, WHAT, HOW, and planning claims may also trace to locked findings and the verified tactics database. Unsupported claims receive severity, failure_type, source_location, and missing_material hints.
+            GPT-5.5 verifies evidence summaries and diagnosis separately from roadmap/planning, with Sonnet 4.6 as fallback. Summary claims must trace to the source document, Phase 1 evidence, or Phase 2 metrics. Roadmap WHY, WHAT, HOW, and planning claims may also trace to locked findings and the verified tactics database and tactic activity playbook. Unsupported claims receive severity, failure_type, source_location, and missing_material hints.
           </div>
         </div>
       </div>
@@ -2726,16 +2861,16 @@ else: "Run"</div>
       </div>
 
       <div class="metric-item">
-        <div class="metric-name">Forensic Evidence Extraction<span>150+ judgments</span></div>
+        <div class="metric-name">Forensic Evidence Extraction<span>180+ judgments</span></div>
         <div>
-          <p style="font-size: 14px; color: var(--ink-2); margin: 0;">50 criteria × 3 sub-criteria each = 150 explicit sub-judgments · Reasoning captured per criterion · Evidence quotes extracted from source text or visual pages · Each quote tagged with one of 7 categories · "Silence is Data" applied · "Plans = 1 max" applied · "Tool Presence ≠ Practice" applied · Document-type signature honored</p>
+          <p style="font-size: 14px; color: var(--ink-2); margin: 0;">60 criteria × 3 sub-criteria each = 180 explicit sub-judgments · Reasoning captured per criterion · Evidence quotes extracted from source text or visual pages · Each quote tagged with one of 7 categories · "Silence is Data" applied · "Plans = 1 max" applied · "Tool Presence ≠ Practice" applied · Document-type signature honored</p>
         </div>
       </div>
 
       <div class="metric-item">
         <div class="metric-name">Phase 1 Schema + Evidence Check<span>verification before math</span></div>
         <div>
-          <p style="font-size: 14px; color: var(--ink-2); margin: 0;">All 50 criteria IDs present and unique · Score integer in [0,3] · Required fields present · Evidence-check classifies each scanner item supported / weak / unsupported / missing · Targeted rescans for weak or over-scored criteria · Deterministic downgrades before Phase 2</p>
+          <p style="font-size: 14px; color: var(--ink-2); margin: 0;">All 60 criteria IDs present and unique · Score integer in [0,3] · Required fields present · Evidence-check classifies each scanner item supported / weak / unsupported / missing · Targeted rescans for weak or over-scored criteria · Deterministic downgrades before Phase 2</p>
         </div>
       </div>
 
@@ -2798,7 +2933,7 @@ else: "Run"</div>
       <div class="metric-item">
         <div class="metric-name">Rendered Artifact<span>self-documenting</span></div>
         <div>
-          <p style="font-size: 14px; color: var(--ink-2); margin: 0;">Persona switcher (3 lenses on the same facts) · Findings mode for LOW confidence · WHY/WHAT/HOW roadmap when allowed · Evidence Check section · Anti-pattern labels: Finding / Partial finding / Tested absent / Not assessed · Source Coverage Gaps panel · 50 Forensic Audit cards with evidence quotes and category chips · Quality &amp; Strategy Hygiene Appendix · Downloadable HTML with all of the above</p>
+          <p style="font-size: 14px; color: var(--ink-2); margin: 0;">Persona switcher (3 lenses on the same facts) · Findings mode for LOW confidence · WHY/WHAT/HOW roadmap when allowed · Evidence Check section · Anti-pattern labels: Finding / Partial finding / Tested absent / Not assessed · Source Coverage Gaps panel · 60 Forensic Audit cards with evidence quotes and category chips · Quality &amp; Strategy Hygiene Appendix · Downloadable HTML with all of the above</p>
         </div>
       </div>
 
@@ -2813,7 +2948,7 @@ else: "Run"</div>
 
     <h3 style="margin-top: 56px;">What the User Saves</h3>
     <p style="max-width: 820px; color: var(--ink-2);">
-      Expressed as discrete acts a human would otherwise perform to produce the same artifact: <strong>~150 sub-criterion judgments</strong>, evidence extraction from text and visual pages, parse-quality review, <strong>~50 evidence-check judgments</strong>, targeted rescans, anti-pattern absence classification, evidence-gated metric calculation, three persona-tailored writeups, WHY/WHAT/HOW roadmap synthesis, tactic-ID validation, split fact-check verification, strategy sanitation, quality-gate explanation, plus the visualization labor. Conservatively, <strong>300+ discrete decisions and lookups per assessment</strong> — 1 to 2 person-days of senior FinOps practitioner time, every time. The Engine turns that work into an auditable artifact so humans can focus on validating, deciding, designing solutions, and delivering outcomes.
+      Expressed as discrete acts a human would otherwise perform to produce the same artifact: <strong>~180 sub-criterion judgments</strong>, evidence extraction from text and visual pages, parse-quality review, <strong>~60 evidence-check judgments</strong>, targeted rescans, anti-pattern absence classification, evidence-gated metric calculation, three persona-tailored writeups, WHY/WHAT/HOW roadmap synthesis, tactic-ID validation, split fact-check verification, strategy sanitation, quality-gate explanation, plus the visualization labor. Conservatively, <strong>300+ discrete decisions and lookups per assessment</strong> — 1 to 2 person-days of senior FinOps practitioner time, every time. The Engine turns that work into an auditable artifact so humans can focus on validating, deciding, designing solutions, and delivering outcomes.
     </p>
 
     <h3 style="margin-top: 56px;">Where the 70%-vs-99% Gap Actually Lives</h3>
@@ -2863,7 +2998,7 @@ else: "Run"</div>
 <footer>
   <div class="container">
     <p class="footer-note">
-      This document describes the intellectual architecture of the FinOps Maturity Assessment Engine. The knowledge base criteria, guardrails, taxonomy registry, tactics database, evidence-check stage, validation rules, quality gates, and golden baselines defined here represent the domain-specific content layer that sits on top of the Engine's reusable technical infrastructure (React UI, local parsing and parse-quality checks, Gemini / Anthropic / OpenAI model routing, internal-call protected model proxies, parallel batch processing, dedicated roadmap synthesis, fact-check pipeline, strategy sanitation, Quality Gate, drift detection suite, export system, and Railway deployment).
+      This document describes the intellectual architecture of the FinOps Maturity Assessment Engine. The knowledge base criteria, guardrails, taxonomy registry, tactics database, evidence-check stage, validation rules, quality gates, and golden baselines defined here represent the domain-specific content layer that sits on top of the Engine's reusable technical infrastructure (React UI, local parsing and parse-quality checks, Gemini / Anthropic / OpenAI model routing, with provider-specific fallback chains and a non-Gemini operating path when policy requires it, internal-call protected model proxies, parallel batch processing, dedicated roadmap synthesis, fact-check pipeline, strategy sanitation, Quality Gate, drift detection suite, export system, and Railway deployment).
     </p>
     <p class="footer-note" style="margin-top: 24px;">
       <a href="https://finops-engine.vercel.app/" target="_blank" rel="noopener noreferrer">FinOps Assessment Engine - DEMO</a>
