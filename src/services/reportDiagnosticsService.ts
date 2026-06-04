@@ -3,7 +3,7 @@ import type { FactCheckClaim, QualityGateResult } from '../types';
 export const scannerEvidenceCheckDisagreementTitle = 'Scanner/evidence-check disagreement resolved by downgrade';
 export const strategyHygieneNotesTitle = 'Strategy Hygiene Notes';
 
-const phase1ScannerDisagreementPattern = /^Phase 1: (maturity|antipattern)\.[A-E][1-5]: Score 0 but evidence does not indicate silence$/;
+const phase1ScannerDisagreementPattern = /^Phase 1: (maturity|antipattern)\.[A-F][1-5]: Score 0 but evidence does not indicate silence$/;
 const strategyHygienePatterns = [
   /^Strategy hygiene:/,
   /^Roadmap tactic grounding /,

@@ -1376,7 +1376,7 @@ const App: React.FC = () => {
                     <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 via-teal-400 to-cyan-400 animate-gradient-x drop-shadow-none filter brightness-110">Assessment Engine</span>
                   </h2>
                   <p className="text-lg md:text-xl text-slate-300 font-light max-w-3xl mx-auto leading-relaxed">
-                    Your cloud spend is either a strategic asset or a hidden liability. This <strong>forensic assessment tool</strong> interrogates your FinOps documentation against <strong>25 maturity vectors and 25 anti-pattern indicators</strong> to determine your Crawl-Walk-Run classification.
+                    Your cloud spend is either a strategic asset or a hidden liability. This <strong>forensic assessment tool</strong> interrogates your FinOps documentation against <strong>30 maturity vectors and 30 anti-pattern indicators</strong> to determine your Crawl-Walk-Run classification.
                   </p>
                   <div className="mt-8 flex flex-col sm:flex-row justify-center items-center gap-3">
                       <a

@@ -285,6 +285,48 @@
       "expected_artifacts": ["Cost review template", "Incident learning log", "Improvement backlog", "Theme report"],
       "acceptance_criteria": ["Reviews focus on system causes", "Actions are tracked", "Teams can surface issues safely", "Recurring causes are reduced"],
       "risks_and_controls": ["Blameless language without leadership behavior will fail; leaders must model the expected response"]
+    },
+    {
+      "tactic_id": "TAC-AI-001",
+      "maturity_criteria": ["F1", "F2", "A2", "A4"],
+      "antipattern_criteria": ["AP-F1", "AP-F2", "AP-A2"],
+      "activity_goal": "Make token, model, API, and inference spend attributable to accountable products, teams, use cases, customers, and environments.",
+      "when_to_use": ["AI costs are visible only as platform or provider totals", "Token/API/model usage has no product or owner allocation", "AI pilots or production apps generate spend without accountable cost dimensions"],
+      "when_not_to_use": ["AI spend is already allocated to owners and unit economics", "The source has no evidence of AI/API/model usage"],
+      "prerequisite_evidence": ["AI provider billing exports", "Application or use-case inventory", "Owner/team mapping", "Request metadata or AI gateway logs"],
+      "implementation_activities": ["Define AI cost allocation dimensions", "Instrument AI requests with owner and use-case metadata", "Map provider/model billing to applications", "Publish token and model spend dashboards", "Review unallocated AI spend each month"],
+      "owner_roles": ["FinOps lead", "AI platform owner", "Product owner", "Engineering lead", "Finance partner"],
+      "expected_artifacts": ["AI cost allocation model", "Token/model spend dashboard", "Owner mapping", "Unallocated AI spend report"],
+      "acceptance_criteria": ["AI spend is reportable by owner and use case", "Unallocated AI cost is visible", "Dashboards separate provider/model/environment where available", "Cost owners review AI spend cadence"],
+      "risks_and_controls": ["Avoid storing sensitive prompts or personal data; meter cost metadata without unnecessary content capture"]
+    },
+    {
+      "tactic_id": "TAC-AI-002",
+      "maturity_criteria": ["F3", "F1", "D1"],
+      "antipattern_criteria": ["AP-F3", "AP-F4"],
+      "activity_goal": "Control GenAI unit cost by routing work to appropriate models and managing context, caching, batching, and retry behavior.",
+      "when_to_use": ["Premium models are used without task-based justification", "Prompt/context growth is uncontrolled", "Retries, agent loops, or RAG retrieval inflate token cost"],
+      "when_not_to_use": ["Model selection is already governed by cost-quality evaluations", "Quality or risk requirements explicitly justify premium model use"],
+      "prerequisite_evidence": ["Model usage logs", "Prompt/context telemetry", "Quality evaluation set", "Application criticality or risk tiering"],
+      "implementation_activities": ["Define model tiers by task complexity and risk", "Set token and context budgets", "Measure cache hit rate and retry volume", "Create premium-model approval rules", "Review cost-quality-latency outcomes before rollout"],
+      "owner_roles": ["Engineering lead", "AI platform owner", "Product owner", "FinOps analyst", "Risk or quality owner"],
+      "expected_artifacts": ["Model routing policy", "Prompt/context budget", "Evaluation scorecard", "Premium model exception register"],
+      "acceptance_criteria": ["Tasks have documented model tiers", "Context limits are visible", "Premium model use has rationale", "Cost-quality tradeoffs are measured"],
+      "risks_and_controls": ["Lower-cost routing can reduce output quality; use evaluation thresholds and exception paths for high-risk tasks"]
+    },
+    {
+      "tactic_id": "TAC-AI-003",
+      "maturity_criteria": ["F4", "F5", "C2", "E5"],
+      "antipattern_criteria": ["AP-F2", "AP-F5", "AP-C2", "AP-E5"],
+      "activity_goal": "Govern AI consumption with budgets, alerts, approvals, and value metrics so adoption does not outpace financial accountability.",
+      "when_to_use": ["AI usage grows without budgets or quotas", "AI spend anomalies or runaway retries are not detected", "AI success is measured by activity rather than value per outcome"],
+      "when_not_to_use": ["No AI consumption is evidenced", "The immediate blocker is basic attribution rather than budget or value governance"],
+      "prerequisite_evidence": ["AI spend baseline", "Team/application owner mapping", "Budget owner", "Outcome or productivity metric candidates"],
+      "implementation_activities": ["Set AI budgets and quota thresholds", "Route spend and token anomaly alerts to owners", "Define approval rules for premium model expansion", "Create AI value scorecard", "Review low-value or high-cost use cases for redesign"],
+      "owner_roles": ["CFO or finance owner", "FinOps lead", "AI platform owner", "Product owner", "Engineering lead"],
+      "expected_artifacts": ["AI budget policy", "Quota and alert rules", "Premium model approval workflow", "AI value scorecard"],
+      "acceptance_criteria": ["AI budget thresholds have owners", "Anomaly alerts route to accountable teams", "Premium expansion requires approval", "Cost per outcome is reviewed for material use cases"],
+      "risks_and_controls": ["Value metrics can become vanity metrics; tie them to verified workflows, business outcomes, and owner decisions"]
     }
   ]
 }

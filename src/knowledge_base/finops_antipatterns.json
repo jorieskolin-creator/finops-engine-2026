@@ -2,7 +2,7 @@
   "version": "1.0.0",
   "domain": "FinOps Maturity Assessment",
   "stream": "antipattern",
-  "description": "25 FinOps anti-patterns organized into 5 domains. High scores indicate presence of harmful patterns.",
+  "description": "30 FinOps anti-patterns organized into 6 domains. High scores indicate presence of harmful patterns.",
   "criteria": [
     {
       "id": "A1",
@@ -302,6 +302,66 @@
         "Does the organization treat FinOps as a completed project rather than a continuous improvement discipline?",
         "Has initial optimization momentum stalled with no ongoing maturity assessment or improvement targets?",
         "Is there no external benchmarking or peer comparison to drive continued advancement?"
+      ]
+    },
+    {
+      "id": "F1",
+      "batch": "F",
+      "domain": "GenAI Cost Anti-Patterns",
+      "title": "Invisible Token Spend",
+      "description": "AI/API usage exists, but token and model costs are not visible by owner, use case, application, or system. GenAI cost appears only as a provider invoice or platform total, preventing accountability.",
+      "sub_criteria": [
+        "Does AI/API spend exist without visibility by owner, team, application, use case, customer, or environment?",
+        "Are token, model, endpoint, retry, or inference costs visible only as aggregate provider or platform charges?",
+        "Is there no accountable owner for AI consumption cost or usage growth?"
+      ]
+    },
+    {
+      "id": "F2",
+      "batch": "F",
+      "domain": "GenAI Cost Anti-Patterns",
+      "title": "Playground-to-Production Cost Drift",
+      "description": "Experiments, pilots, or playground usage become production AI consumption without cost governance. Sandbox keys, prototypes, or ad hoc integrations accumulate persistent spend without lifecycle review.",
+      "sub_criteria": [
+        "Do AI experiments or playground workloads become recurring production usage without budget, owner, or approval review?",
+        "Do sandbox keys, prototypes, or pilots generate persistent AI spend without lifecycle controls?",
+        "Are AI use cases moved into production without cost forecast, quota, or operating model?"
+      ]
+    },
+    {
+      "id": "F3",
+      "batch": "F",
+      "domain": "GenAI Cost Anti-Patterns",
+      "title": "Premium Model Overuse",
+      "description": "Expensive models are used where cheaper models, caching, batching, smaller context, or simpler workflows would meet the need. Model choice is driven by convenience or prestige rather than measured cost-quality fit.",
+      "sub_criteria": [
+        "Are premium models used for low-risk, repetitive, or simple tasks without a cost-quality comparison?",
+        "Are cheaper models, caching, batching, prompt reduction, or smaller context windows not tested before premium-model use?",
+        "Do retries, agent loops, or orchestration patterns run premium models without cost controls?"
+      ]
+    },
+    {
+      "id": "F4",
+      "batch": "F",
+      "domain": "GenAI Cost Anti-Patterns",
+      "title": "Unbounded Context Growth",
+      "description": "RAG, prompt, memory, or conversation context grows without cost-quality control. The organization pays for excessive tokens because retrieval scope, history length, documents, or prompt structures are not governed.",
+      "sub_criteria": [
+        "Do RAG, prompt, memory, or conversation contexts grow without explicit size, relevance, or cost limits?",
+        "Are irrelevant documents, long histories, or oversized prompts routinely included without measuring quality improvement?",
+        "Is there no policy or instrumentation for context cost, cache efficiency, or token budget per workflow?"
+      ]
+    },
+    {
+      "id": "F5",
+      "batch": "F",
+      "domain": "GenAI Cost Anti-Patterns",
+      "title": "AI Value Theater",
+      "description": "AI usage is celebrated while cost per outcome is unknown. The organization tracks usage, pilots, or activity volume but cannot show whether AI spend improves productivity, quality, revenue, risk, or customer outcomes.",
+      "sub_criteria": [
+        "Are AI adoption, usage, or pilot counts celebrated without cost-per-outcome or value-realization evidence?",
+        "Do dashboards focus on AI activity volume rather than productivity, quality, revenue, risk, or customer outcome impact?",
+        "Do AI use cases continue despite unclear ROI, unmeasured benefit, or missing ownership for value realization?"
       ]
     }
   ]

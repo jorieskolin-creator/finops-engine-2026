@@ -5,21 +5,21 @@ export const METRIC_DESCRIPTIONS: Record<string, string> = {
   finops_readiness:
     'Evidence-gated readiness score. Based on validated maturity depth, reduced by confirmed anti-pattern burden, and capped when source evidence is sparse.',
   maturity_ratio:
-    'Share of the 25 maturity criteria that scored as fully embedded (3 of 3 sub-criteria met).',
+    'Share of maturity criteria that scored as fully embedded (3 of 3 sub-criteria met).',
   maturity_depth:
-    'Average maturity score across all 25 criteria on a 0–3 scale, normalized to 0–100%. Captures partial progress that maturity_ratio misses.',
+    'Average maturity score across all criteria on a 0–3 scale, normalized to 0–100%. Captures partial progress that maturity_ratio misses.',
   antipattern_ratio:
-    'Share of the 25 anti-patterns scored as deeply entrenched (3 of 3 sub-criteria met). Higher = worse.',
+    'Share of anti-patterns scored as deeply entrenched (3 of 3 sub-criteria met). Higher = worse.',
   antipattern_burden:
-    'Average severity across all 25 anti-patterns. Higher = more friction blocking current FinOps practice. Low values mean "low confirmed burden" only when source evidence is strong enough.',
+    'Average severity across all anti-patterns. Higher = more friction blocking current FinOps practice. Low values mean "low confirmed burden" only when source evidence is strong enough.',
   antipattern_clearance:
     'Share of anti-patterns that were meaningfully tested and not found. This is positive only when the source had relevant coverage.',
   antipattern_coverage:
     'Share of anti-pattern criteria that were meaningfully assessed, either as findings or verified absences. Low coverage means absence is unknown, not good.',
   delivery_integrity:
-    'Did the audit pipeline complete? Share of 50 criteria the LLM returned valid data for. Below 100% means batches failed.',
+    'Did the audit pipeline complete? Share of maturity and anti-pattern criteria the LLM returned valid data for. Below 100% means batches failed.',
   evidence_density:
-    'Did the source actually cover the criterion? Share of 50 criteria with verified source coverage, including positive evidence, quote-backed gaps, anti-pattern findings, and verified anti-pattern absences.'
+    'Did the source actually cover the criterion? Share of maturity and anti-pattern criteria with verified source coverage, including positive evidence, quote-backed gaps, anti-pattern findings, and verified anti-pattern absences.'
 };
 
 export const FINOPS_METHODOLOGY_CONTEXT = `
@@ -184,7 +184,7 @@ STRICTLY return a JSON object.
     "diagnosis": {
       "primary_bottleneck": "String, interpretation of the main maturity blocker",
       "root_causes": ["String bullets"],
-      "domain_diagnosis": { "A": "...", "B": "...", "C": "...", "D": "...", "E": "..." },
+      "domain_diagnosis": { "A": "...", "B": "...", "C": "...", "D": "...", "E": "...", "F": "..." },
       "confidence": "high | medium | low",
       "confidence_rationale": "String"
     },
@@ -238,13 +238,14 @@ ${STRATEGY_PERSONAS_BLOCK}
 1. **NO KNOWLEDGE-BASE INJECTION:** Do not mention tactic IDs, external case studies, benchmark companies, or remediation mechanisms. If the text is not in Phase 1/2 findings or the source, it does not belong here.
 2. **FINDINGS ONLY:** executive_summaries and evidence_summary must contain only Phase 2 metrics, Phase 1 supported findings, and explicitly silent/missing evidence.
 3. **DIAGNOSIS IS CAUTIOUS:** diagnosis may interpret score patterns, but root causes must be directly supported by evidence. If a cause is plausible but not evidenced, phrase it as an evidence gap, not a fact.
-4. **CANONICAL DOMAIN LABELS:** Use these exact A-E labels and do not invent thematic names:
+4. **CANONICAL DOMAIN LABELS:** Use these exact A-F labels and do not invent thematic names:
    - A = Cost Visibility & Allocation
    - B = Rate & Usage Optimization
    - C = Governance & Policy
    - D = Architecture & Engineering
    - E = Culture & Organization
-5. **NO DOMAIN REASSIGNMENT:** Do not attribute B findings to D, D findings to E, or governance/culture findings to A merely because they sound related. Domain diagnosis must follow the criterion IDs in Phase 1/2.
+   - F = GenAI & AI Cost Management
+5. **NO DOMAIN REASSIGNMENT:** Do not attribute B findings to D, D findings to E, governance/culture findings to A, or GenAI/token-cost findings to A-E merely because they sound related. Domain diagnosis must follow the criterion IDs in Phase 1/2.
 6. **NO IMPLEMENTATION LANGUAGE:** Do not use directive verbs such as Implement, Enforce, Automate, Launch, Establish, Deploy, or Optimize except when quoting source evidence.
 7. **SOURCE-TYPE SAFETY:** If the source appears to describe best practices, case studies, or methodology rather than the audited organization's operations, say the audit can assess document coverage but cannot prove operational adoption.
 8. **PRIVACY LANGUAGE:** Do not name individuals. Avoid repeating the assessed organization/legal entity name unless it is essential to preserve meaning; prefer neutral labels such as "the assessed organization", "the finance team", "the engineering team", or "the FinOps team".
@@ -257,7 +258,7 @@ ${STRATEGY_PERSONAS_BLOCK}
    **2. Evidence-Backed Findings:** confirmed FinOps strengths, confirmed gaps, confirmed anti-pattern findings, verified anti-pattern absences, anti-patterns not assessable from source, and silent areas with domain scores where present. If the source has generic process facts but no FinOps evidence, describe them as source observations outside FinOps scope.
    **3. Source Confidence & Boundaries:** what the evidence can and cannot prove. No recommendations.
 2. Populate evidence_summary with concise fact-only bullets.
-3. Populate diagnosis as interpretation only; no roadmap, no tactic IDs, no prescriptions. The domain_diagnosis keys A-E must use the canonical labels above and summarize only findings from the matching A-E criteria family.
+3. Populate diagnosis as interpretation only; no roadmap, no tactic IDs, no prescriptions. The domain_diagnosis keys A-F must use the canonical labels above and summarize only findings from the matching A-F criteria family.
 4. Populate visual_scorecard from Phase 2 metrics.
 </task>
 
@@ -282,7 +283,7 @@ STRICTLY return JSON:
     "diagnosis": {
       "primary_bottleneck": "String, interpretation of the main evidenced blocker",
       "root_causes": ["String bullets; direct evidence only or clearly marked as evidence gaps"],
-      "domain_diagnosis": { "A": "...", "B": "...", "C": "...", "D": "...", "E": "..." },
+      "domain_diagnosis": { "A": "...", "B": "...", "C": "...", "D": "...", "E": "...", "F": "..." },
       "confidence": "high | medium | low",
       "confidence_rationale": "String"
     },
@@ -479,7 +480,7 @@ STRICTLY return JSON. The schema in FINDINGS mode:
     "diagnosis": {
       "primary_bottleneck": "String, provisional interpretation only",
       "root_causes": ["String bullets"],
-      "domain_diagnosis": { "A": "...", "B": "...", "C": "...", "D": "...", "E": "..." },
+      "domain_diagnosis": { "A": "...", "B": "...", "C": "...", "D": "...", "E": "...", "F": "..." },
       "confidence": "low",
       "confidence_rationale": "String"
     },

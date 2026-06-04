@@ -1,5 +1,6 @@
 
 import { AuditItem, Phase1AuditLogs } from '../types';
+import { BATCH_TITLES } from '../knowledge_base';
 
 export const escapeXml = (s: string): string =>
   s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -50,11 +51,14 @@ const CATEGORY_LABELS: Record<string, string> = {
   B: 'Optimization',
   C: 'Governance',
   D: 'Architecture',
-  E: 'Culture'
+  E: 'Culture',
+  F: 'GenAI'
 };
 
 const computeCategoryScores = (logs: Record<string, AuditItem>): Record<string, number> => {
-  const scores: Record<string, number> = { A: 0, B: 0, C: 0, D: 0, E: 0 };
+  const scores: Record<string, number> = Object.fromEntries(
+    Object.keys(BATCH_TITLES).map(batch => [batch, 0])
+  ) as Record<string, number>;
   Object.entries(logs).forEach(([k, item]) => {
     const c = k.charAt(0);
     if (scores[c] !== undefined && typeof item.count === 'number') {
@@ -65,7 +69,7 @@ const computeCategoryScores = (logs: Record<string, AuditItem>): Record<string, 
 };
 
 export const svgRadar = (phase1: Phase1AuditLogs): string => {
-  const cats = ['A', 'B', 'C', 'D', 'E'];
+  const cats = Object.keys(BATCH_TITLES);
   const w = 400;
   const h = 380;
   const cx = w / 2;
@@ -76,7 +80,7 @@ export const svgRadar = (phase1: Phase1AuditLogs): string => {
   const mScores = computeCategoryScores(phase1.maturity);
   const aScores = computeCategoryScores(phase1.antipattern);
 
-  const angle = (i: number) => -Math.PI / 2 + (i * 2 * Math.PI) / 5;
+  const angle = (i: number) => -Math.PI / 2 + (i * 2 * Math.PI) / cats.length;
   const point = (i: number, valueRatio: number): [number, number] => {
     const a = angle(i);
     const r = maxRadius * Math.max(0, Math.min(1, valueRatio));

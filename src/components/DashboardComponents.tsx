@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { ResponsiveContainer, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar, Legend, Tooltip } from 'recharts';
 import { AuditCategory, AuditItem, QualityGateResult, RemediationStep } from '../types';
-import { BATCH_DEFINITIONS, MASTER_BINGO_FINOPS } from '../knowledge_base';
+import { BATCH_DEFINITIONS, BATCH_IDS, MASTER_BINGO_FINOPS } from '../knowledge_base';
 import { antiPatternStatusLabel, inferAntiPatternAbsenceStatus } from '../services/antiPatternSemantics';
 import { displayQualityGateDiagnostic, scannerEvidenceCheckDisagreementTitle, splitQualityGateDiagnostics } from '../services/reportDiagnosticsService';
 
@@ -38,13 +38,7 @@ interface BenchmarkingProps {
   qualityGateDecision?: QualityGateResult['decision'];
 }
 
-const ALL_CRITERIA_IDS = [
-  'A1', 'A2', 'A3', 'A4', 'A5',
-  'B1', 'B2', 'B3', 'B4', 'B5',
-  'C1', 'C2', 'C3', 'C4', 'C5',
-  'D1', 'D2', 'D3', 'D4', 'D5',
-  'E1', 'E2', 'E3', 'E4', 'E5'
-];
+const ALL_CRITERIA_IDS = BATCH_IDS.flatMap(batch => [1, 2, 3, 4, 5].map(n => `${batch}${n}`));
 
 export const MarkdownRenderer: React.FC<{ content: string; textColor?: string }> = ({ content, textColor = "text-slate-200" }) => {
   if (!content) return null;
@@ -559,7 +553,7 @@ export const AuditGrid: React.FC<AuditGridProps> = ({ title, data, isAntipattern
             </button>
           )}
         </div>
-        <div className="text-xs font-mono text-slate-400 uppercase tracking-widest">N = 25 Checkpoints</div>
+        <div className="text-xs font-mono text-slate-400 uppercase tracking-widest">N = {ALL_CRITERIA_IDS.length} Checkpoints</div>
       </div>
 
       {isDetailsOpen && (
@@ -741,8 +735,8 @@ export const ReferenceLibrary: React.FC = () => {
         </div>
 
         <div className="inline-flex bg-slate-800/80 backdrop-blur-sm p-1 rounded-xl shadow-inner border border-white/5">
-          <button onClick={() => setDataset('criteria')} className={`px-5 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-all ${dataset === 'criteria' ? 'bg-slate-700 text-white shadow-sm border border-white/10' : 'text-slate-500 hover:text-slate-300 hover:bg-slate-700/50'}`}>Active Audit Logic (A1-E5)</button>
-          <button onClick={() => setDataset('signals')} className={`px-5 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-all ${dataset === 'signals' ? 'bg-slate-700 text-white shadow-sm border border-white/10' : 'text-slate-500 hover:text-slate-300 hover:bg-slate-700/50'}`}>Signal Corpus (50 Items)</button>
+          <button onClick={() => setDataset('criteria')} className={`px-5 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-all ${dataset === 'criteria' ? 'bg-slate-700 text-white shadow-sm border border-white/10' : 'text-slate-500 hover:text-slate-300 hover:bg-slate-700/50'}`}>Active Audit Logic (A1-F5)</button>
+          <button onClick={() => setDataset('signals')} className={`px-5 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-all ${dataset === 'signals' ? 'bg-slate-700 text-white shadow-sm border border-white/10' : 'text-slate-500 hover:text-slate-300 hover:bg-slate-700/50'}`}>Signal Corpus ({ALL_CRITERIA_IDS.length * 2} Items)</button>
         </div>
       </div>
 

@@ -114,14 +114,17 @@ export const BATCH_TITLES: Record<string, string> = {
   B: 'Rate & Usage Optimization',
   C: 'Governance & Policy',
   D: 'Architecture & Engineering',
-  E: 'Culture & Organization'
+  E: 'Culture & Organization',
+  F: 'GenAI & AI Cost Management'
 };
 
 export const TAXONOMY_DOCUMENT_NAMING = FINOPS_TAXONOMY_REGISTRY.kb_document_naming;
 export const TAXONOMY_USAGE_BOUNDARIES = FINOPS_TAXONOMY_REGISTRY.usage_boundaries;
 
+export const BATCH_IDS = Object.keys(BATCH_TITLES);
+
 export const BATCH_DEFINITIONS: Record<string, BatchDefinition> = {};
-for (const batchId of ['A', 'B', 'C', 'D', 'E']) {
+for (const batchId of BATCH_IDS) {
   BATCH_DEFINITIONS[batchId] = {
     title: BATCH_TITLES[batchId],
     maturity: buildBatchXml(FINOPS_CRITERIA, batchId),
@@ -157,7 +160,7 @@ For EVERY item in the provided Knowledge Base, you must determine **Signal Stren
 **SCALE:**
 *   **0 (Absent):** No evidence found.
     *   *Stream A (Maturity):* This is **BAD** (Missing Capability).
-    *   *Stream B (Anti-Pattern):* This is **GOOD** (Clean/Healthy).
+    *   *Stream B (Anti-Pattern):* This is only **GOOD** when relevant source coverage verifies that the harmful pattern was tested and not found. Otherwise it is **unknown / not assessed**.
 *   **1 (Aspirational):** Buzzwords, plans, or vague intent only. Plans = Score 1 max.
 *   **2 (Operational):** Behavior or process is described and functioning.
 *   **3 (Embedded):** Explicit mechanisms, automation, enforcement, or cultural norms.
@@ -175,14 +178,14 @@ For EVERY item in the provided Knowledge Base, you must determine **Signal Stren
 **DOCUMENT-TYPE SIGNATURES (USE TO HONOR "SILENCE IS DATA"):**
 Real source documents are often single-purpose. A narrow document is EXPECTED to be silent on most criteria. Do not infer evidence for criteria the document type would not naturally cover. Common signatures:
 
-*   **Tagging / cost allocation policy:** Expect evidence in A1 (tagging), A2 (allocation). Expect SILENCE in B (optimization), D (architecture), E (culture). Anti-patterns: expect SILENCE — a policy doc declares intent, it does not describe organizational behavior.
-*   **Cloud governance / FinOps policy:** Expect evidence in C1–C5 (governance, policy, procurement, compliance) and A1 (tagging declared). Expect SILENCE in B (no actual optimization actions), D (no architecture details), E1–E3 (no observed culture).
-*   **FinOps team charter / CoE model:** Expect evidence in C1 (FinOps team), E4 (executive sponsorship if signed). Expect SILENCE in A4 (dashboards not described), B (no optimization described), D (no architecture).
+*   **Tagging / cost allocation policy:** Expect evidence in A1 (tagging), A2 (allocation). Expect SILENCE in B (optimization), D (architecture), E (culture), and F (GenAI/token cost) unless those topics are explicitly covered. Anti-patterns: expect SILENCE — a policy doc declares intent, it does not describe organizational behavior.
+*   **Cloud governance / FinOps policy:** Expect evidence in C1–C5 (governance, policy, procurement, compliance) and A1 (tagging declared). Expect evidence in F4 only if AI/token budgets, quotas, or guardrails are explicitly described. Expect SILENCE in B (no actual optimization actions), D (no architecture details), E1–E3 (no observed culture), and F otherwise.
+*   **FinOps team charter / CoE model:** Expect evidence in C1 (FinOps team), E4 (executive sponsorship if signed). Expect evidence in F5 only if AI value governance or AI cost ownership is explicitly part of the charter. Expect SILENCE in A4 (dashboards not described), B (no optimization described), D (no architecture), and F otherwise.
 *   **Cloud strategy document:** Expect SCATTERED evidence at score 1 across A, C, D — strategy documents describe intent, not operations. "Plans = Score 1 max" applies aggressively here. Expect SILENCE in detailed operational evidence.
 *   **RI / Savings Plan strategy:** Expect evidence in B1 (commitments) and possibly B5 (storage). Expect SILENCE in A (no allocation), C (no governance framing), D (no architecture), E (no culture).
 *   **Cost optimization review / report:** Expect evidence in B1–B5 (optimization is the topic) and possibly A4 (dashboards used for the review). May contain LEGITIMATE anti-pattern evidence in B (waste, over-provisioning) because the review surfaced them. Expect SILENCE in C policy and E culture.
-*   **Dashboard screenshot (image input):** A single dashboard image evidences A4 (Cloud Cost Dashboards) at Score 2–3 — the dashboard is in use. Possibly A2 (Showback) if breakdown by team/cost-center is visible. Expect SILENCE on B/C/D/E unless the dashboard explicitly displays those signals. Evidence_source is "image".
-*   **Architecture diagram (image input):** May evidence D1 (Cost-Aware Architecture), D2 (IaC), D3 (Scaling), D4 (Multi-Cloud) depending on what is annotated. Expect SILENCE on A/B/C/E unless the diagram shows tagging, cost annotations, or org-level callouts. Evidence_source is "image".
+*   **Dashboard screenshot (image input):** A single dashboard image evidences A4 (Cloud Cost Dashboards) at Score 2–3 — the dashboard is in use. Possibly A2 (Showback) if breakdown by team/cost-center is visible, or F1/F4 if token/API/model spend, AI budgets, or AI anomalies are visible. Expect SILENCE on B/C/D/E/F unless the dashboard explicitly displays those signals. Evidence_source is "image".
+*   **Architecture diagram (image input):** May evidence D1 (Cost-Aware Architecture), D2 (IaC), D3 (Scaling), D4 (Multi-Cloud), or F3 if model routing, AI gateway, context controls, cache layers, or token budget controls are annotated. Expect SILENCE on A/B/C/E/F unless the diagram shows tagging, cost annotations, AI cost controls, or org-level callouts. Evidence_source is "image".
 *   **Org chart (image input):** Evidences C3 (Operating Model RACI), E1 (FinOps Team), E3 (Exec Sponsorship), E4 (Cross-Functional Collaboration) when FinOps roles or reporting lines are visible. Expect SILENCE elsewhere. Evidence_source is "image".
 *   **General organizational status report (multi-topic):** Evidence may appear across all batches; this is the only doc type where broad coverage is expected.
 

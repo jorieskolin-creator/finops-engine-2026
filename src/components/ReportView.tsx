@@ -279,7 +279,7 @@ const QualityGateAppendix: React.FC<{ gate: QualityGateResult }> = ({ gate }) =>
   );
 };
 
-const BATCHES: Array<'A' | 'B' | 'C' | 'D' | 'E'> = ['A', 'B', 'C', 'D', 'E'];
+const BATCHES = Object.keys(BATCH_TITLES);
 
 const statusBadgeClass = (status: string): string => {
   if (status === 'OK') return 'bg-emerald-100 text-emerald-700';
@@ -633,7 +633,7 @@ export const ReportView: React.FC<ReportViewProps> = ({ result, onBack, onDownlo
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
             <div className="chart-card">
               <h3>Category Footprint</h3>
-              <p className="chart-desc">Per-domain maturity (emerald) vs anti-pattern burden (rose). Each axis is one of the five batches; values are the sum of sub-criterion counts (0–15) for that batch.</p>
+              <p className="chart-desc">Per-domain maturity (emerald) vs anti-pattern burden (rose). Each axis is one assessment domain; values are the sum of sub-criterion counts (0–15) for that domain.</p>
               <InlineSvg html={svgRadar(result.phase_1_audit_logs)} />
             </div>
             <div className="chart-card">

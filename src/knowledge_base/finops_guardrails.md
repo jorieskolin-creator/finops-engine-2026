@@ -12,7 +12,7 @@ For EVERY criterion, evaluate ALL 3 sub-criteria to determine Signal Strength:
 
 - **0 (Absent):** No evidence found.
   - *Stream A (Maturity):* This is **BAD** (Missing Capability).
-  - *Stream B (Anti-Pattern):* This is **GOOD** (Clean/Healthy).
+  - *Stream B (Anti-Pattern):* This is **positive only when relevant source coverage verifies absence**. Without coverage, it is unknown / not assessed.
 - **1 (Aspirational):** Buzzwords, plans, or vague intent only.
   - Plans = Score 1 maximum. "We intend to" is NOT evidence of practice.
 - **2 (Operational):** Behavior or process is described and functioning.
@@ -34,7 +34,7 @@ For EVERY criterion, evaluate ALL 3 sub-criteria to determine Signal Strength:
 
 - You are looking for **EVIDENCE OF HARMFUL PATTERNS**.
 - If you find "no tagging policy", "manual cost reviews", or "engineer has no cost visibility" → **Score 2-3**.
-- If the text is silent on harmful patterns → **Score 0** (clean).
+- If the text is silent on harmful patterns → **Score 0**, but absence remains **unknown / not assessed** until relevant coverage verifies it.
 - A high anti-pattern score is BAD for the organization.
 
 ## Output Requirements

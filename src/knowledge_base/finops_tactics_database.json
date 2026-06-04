@@ -302,6 +302,54 @@
       "owner_persona": "finops_lead",
       "expected_outcome": "20-40% storage cost reduction within 6 months.",
       "risk_notes": "Aggressive tiering can impact data access latency. Validate access patterns before implementing."
+    },
+    {
+      "id": "TAC-AI-001",
+      "category": "GenAI",
+      "canonical_name": "AI Cost Attribution Model",
+      "problem_pattern": "Invisible token or model spend with no owner, use-case, or product allocation",
+      "solution_mechanism": "Implement AI Cost Attribution Model: tag or meter AI requests by application, team, use case, customer, environment, provider, model, and endpoint. Publish token and model spend dashboards for FinOps, product, and engineering owners.",
+      "case_study": "INTERNAL BENCHMARK: Organizations that expose model and token cost by product team can shift AI spend decisions from platform-level invoice review to accountable product economics.",
+      "prerequisites": [
+        "AI gateway or request logging",
+        "Application and team ownership metadata",
+        "Model/provider billing exports"
+      ],
+      "owner_persona": "finops_lead",
+      "expected_outcome": "AI/API spend becomes attributable by owner, use case, and environment within one reporting cycle.",
+      "risk_notes": "Attribution can expose sensitive prompts or users if designed poorly. Meter costs and metadata without storing unnecessary content."
+    },
+    {
+      "id": "TAC-AI-002",
+      "category": "GenAI",
+      "canonical_name": "Model Routing and Context Efficiency Controls",
+      "problem_pattern": "Premium model overuse or unbounded context growth",
+      "solution_mechanism": "Implement Model Routing and Context Efficiency Controls: define task-based model tiers, cap context and retrieval scope, monitor cache efficiency, constrain retry loops, and compare cost-quality-latency before approving premium model use.",
+      "case_study": "INTERNAL BENCHMARK: Mature AI platform teams reduce unit cost by routing simple tasks to cheaper models and reserving premium models for high-reasoning or high-risk work.",
+      "prerequisites": [
+        "Model gateway or routing layer",
+        "Prompt/context telemetry",
+        "Quality evaluation set"
+      ],
+      "owner_persona": "engineering_lead",
+      "expected_outcome": "AI workloads have explicit model tiers, token budgets, and cost-quality review before premium model expansion.",
+      "risk_notes": "Over-optimizing for cost can reduce output quality. Use evaluation gates and task-specific quality thresholds."
+    },
+    {
+      "id": "TAC-AI-003",
+      "category": "GenAI",
+      "canonical_name": "AI Budget Guardrails and Value Scorecard",
+      "problem_pattern": "AI budgets, quotas, anomaly controls, or value measurement are missing",
+      "solution_mechanism": "Implement AI Budget Guardrails and Value Scorecard: set budgets and quotas by team or application, alert on token anomalies, require approval for premium model expansion, and report cost per outcome alongside productivity, quality, risk, or revenue metrics.",
+      "case_study": "INTERNAL BENCHMARK: AI programs become financially governable when consumption guardrails and value metrics are reviewed together instead of treating AI adoption volume as success.",
+      "prerequisites": [
+        "AI spend baseline",
+        "Usage owner mapping",
+        "Outcome or productivity metrics"
+      ],
+      "owner_persona": "cfo",
+      "expected_outcome": "AI consumption decisions include budget, guardrail, and value evidence instead of usage volume alone.",
+      "risk_notes": "Value scorecards can become theater if outcomes are vague. Keep metrics tied to verified workflows and accountable owners."
     }
   ]
 }

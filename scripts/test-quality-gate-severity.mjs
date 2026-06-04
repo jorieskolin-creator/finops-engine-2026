@@ -31,7 +31,7 @@ const {
   runQualityGate
 } = await import(`file://${modulePath}`);
 
-const ids = ['A', 'B', 'C', 'D', 'E'].flatMap(batch => [1, 2, 3, 4, 5].map(n => `${batch}${n}`));
+const ids = ['A', 'B', 'C', 'D', 'E', 'F'].flatMap(batch => [1, 2, 3, 4, 5].map(n => `${batch}${n}`));
 const emptyItem = {
   count: 0,
   status: 'NOK',

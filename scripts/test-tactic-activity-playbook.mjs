@@ -49,7 +49,7 @@ for (const tactic of tactics) {
   assert.ok(seen.has(tactic.id), `${tactic.id} is missing from playbook`);
 }
 
-for (const domain of ['A', 'B', 'C', 'D', 'E']) {
+for (const domain of ['A', 'B', 'C', 'D', 'E', 'F']) {
   assert.ok(coveredDomains.has(domain), `domain ${domain} must have tactic/playbook coverage`);
 }
 
@@ -57,7 +57,7 @@ const uncoveredMaturity = criteriaDb.criteria.map(c => c.id).filter(id => !cover
 const uncoveredAntipattern = antipatternDb.criteria.map(c => `AP-${c.id}`).filter(id => !coveredAntipattern.has(id));
 
 console.log(`tactic activity playbook validation passed (${entries.length} entries)`);
-console.log(`maturity criteria covered: ${coveredMaturity.size}/25`);
-console.log(`anti-pattern criteria covered: ${coveredAntipattern.size}/25`);
+console.log(`maturity criteria covered: ${coveredMaturity.size}/${validMaturityIds.size}`);
+console.log(`anti-pattern criteria covered: ${coveredAntipattern.size}/${validAntipatternIds.size}`);
 if (uncoveredMaturity.length) console.log(`maturity criteria without direct tactic coverage: ${uncoveredMaturity.join(', ')}`);
 if (uncoveredAntipattern.length) console.log(`anti-pattern criteria without direct tactic coverage: ${uncoveredAntipattern.join(', ')}`);

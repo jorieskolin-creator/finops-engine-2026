@@ -1,5 +1,6 @@
 
 import { AuditItem, EvidenceCheckResult, FactCheckClaim, FactCheckResult, Phase1AuditLogs, Phase2Validation, QualityGateResult, QualityGateLlmExplanation, ValidationResult } from '../types';
+import { FINOPS_CRITERIA } from '../knowledge_base';
 import { runStage, RunContext } from './modelRouter';
 
 export const EVIDENCE_DENSITY_BLOCK = 30;
@@ -13,13 +14,15 @@ const THRESHOLDS = {
   silent_areas_warn: SILENT_AREAS_WARN,
   unsupported_claims_block: UNSUPPORTED_CLAIMS_BLOCK
 };
+const maturityCriterionTotal = Math.max(FINOPS_CRITERIA.length, 1);
+const totalCriterionCount = maturityCriterionTotal * 2;
 
 const claimBlob = (claim: FactCheckClaim): string =>
   `${claim.claim || ''}\n${claim.rationale || ''}\n${claim.missing_material || ''}`.toLowerCase();
 
 export const isDomainTaxonomyHygieneClaim = (claim: FactCheckClaim): boolean => {
   const blob = claimBlob(claim);
-  const mentionsDomain = /\bdomain\s+[a-e]\b/.test(blob) || /\b[a-e]\s*\(\s*\d+\s*\/\s*15\s*\)/.test(blob);
+  const mentionsDomain = /\bdomain\s+[a-f]\b/.test(blob) || /\b[a-f]\s*\(\s*\d+\s*\/\s*15\s*\)/.test(blob);
   if (!mentionsDomain) return false;
   return [
     'thematic names',
@@ -98,7 +101,7 @@ export const isBlockingUnsupportedClaim = (claim: FactCheckClaim): boolean => {
 export const buildEvidenceDensityBlock = (density: number): QualityGateResult => ({
   decision: 'BLOCK',
   blocking_reasons: [
-    `Evidence density ${density}% is below the ${EVIDENCE_DENSITY_BLOCK}% floor. Fewer than ${Math.ceil(EVIDENCE_DENSITY_BLOCK / 2)} of 50 criteria had verified source coverage — the audit cannot ground a strategy on this material.`
+    `Evidence density ${density}% is below the ${EVIDENCE_DENSITY_BLOCK}% floor. Fewer than ${Math.ceil(totalCriterionCount * (EVIDENCE_DENSITY_BLOCK / 100))} of ${totalCriterionCount} criteria had verified source coverage — the audit cannot ground a strategy on this material.`
   ],
   warnings: [],
   notes: ['Skipped Phase 3 (strategy) and fact-check to avoid building on unreliable signal.'],
@@ -216,7 +219,7 @@ export const runQualityGate = (
 
   if (phase2.silent_areas.length > SILENT_AREAS_WARN) {
     warnings.push(
-      `${phase2.silent_areas.length} of 25 maturity criteria are silent — strategy may over-extrapolate from sparse signal.`
+      `${phase2.silent_areas.length} of ${maturityCriterionTotal} maturity criteria are silent — strategy may over-extrapolate from sparse signal.`
     );
   }
 

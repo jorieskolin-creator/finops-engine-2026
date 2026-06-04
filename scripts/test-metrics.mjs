@@ -22,7 +22,7 @@ await writeFile(modulePath, compile(source).replace('./antiPatternSemantics', '.
 
 const { calculateMetrics } = await import(`file://${modulePath}`);
 
-const ids = ['A', 'B', 'C', 'D', 'E'].flatMap(batch => [1, 2, 3, 4, 5].map(n => `${batch}${n}`));
+const ids = ['A', 'B', 'C', 'D', 'E', 'F'].flatMap(batch => [1, 2, 3, 4, 5].map(n => `${batch}${n}`));
 
 const item = (count, withEvidence = false) => ({
   count,

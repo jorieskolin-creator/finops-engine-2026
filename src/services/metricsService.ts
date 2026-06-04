@@ -1,10 +1,16 @@
 import type { AuditItem, EvidenceCategory, Phase1AuditLogs, Phase2Validation } from '../types';
+import { BATCH_TITLES, FINOPS_ANTIPATTERNS, FINOPS_CRITERIA } from '../knowledge_base';
 import { inferAntiPatternAbsenceStatus } from './antiPatternSemantics';
 
 export const EVIDENCE_DENSITY_BLOCK = 30;
 export const EVIDENCE_DENSITY_WARN = 60;
 
 const clampPercent = (value: number): number => Math.min(Math.max(value, 0), 100);
+const maturityCriterionTotal = Math.max(FINOPS_CRITERIA.length, 1);
+const antipatternCriterionTotal = Math.max(FINOPS_ANTIPATTERNS.length, 1);
+const totalCriterionCount = maturityCriterionTotal + antipatternCriterionTotal;
+const maturityMaxScore = maturityCriterionTotal * 3;
+const antipatternMaxScore = antipatternCriterionTotal * 3;
 
 const hasSourceQuote = (item: AuditItem): boolean =>
   Array.isArray(item.evidence_quotes) &&
@@ -49,7 +55,9 @@ export const calculateMetrics = (logs: Phase1AuditLogs): Phase2Validation => {
   let deliveredItems = 0;
   let itemsWithEvidence = 0;
   const silentAreas: string[] = [];
-  const categoryScores: Record<string, number> = { A: 0, B: 0, C: 0, D: 0, E: 0 };
+  const categoryScores: Record<string, number> = Object.fromEntries(
+    Object.keys(BATCH_TITLES).map(batch => [batch, 0])
+  ) as Record<string, number>;
   const evidenceCategoryTotals: Partial<Record<EvidenceCategory, number>> = {};
 
   const tally = (item: AuditItem, stream: 'maturity' | 'antipattern') => {
@@ -105,15 +113,15 @@ export const calculateMetrics = (logs: Phase1AuditLogs): Phase2Validation => {
     }
   });
 
-  const delivery_integrity = Math.round((deliveredItems / 50) * 100);
-  const evidence_density = Math.round((itemsWithEvidence / 50) * 100);
+  const delivery_integrity = Math.round((deliveredItems / totalCriterionCount) * 100);
+  const evidence_density = Math.round((itemsWithEvidence / totalCriterionCount) * 100);
 
-  const maturity_ratio = (maturityCount / 25) * 100;
-  const maturity_depth = (maturitySum / 75) * 100;
-  const antipattern_ratio = (antipatternCount / 25) * 100;
-  const antipattern_burden = (antipatternSum / 75) * 100;
-  const antipattern_clearance = Math.round((testedAbsentCount / 25) * 100);
-  const antipattern_coverage = Math.round((assessedAntipatternCount / 25) * 100);
+  const maturity_ratio = (maturityCount / maturityCriterionTotal) * 100;
+  const maturity_depth = (maturitySum / maturityMaxScore) * 100;
+  const antipattern_ratio = (antipatternCount / antipatternCriterionTotal) * 100;
+  const antipattern_burden = (antipatternSum / antipatternMaxScore) * 100;
+  const antipattern_clearance = Math.round((testedAbsentCount / antipatternCriterionTotal) * 100);
+  const antipattern_coverage = Math.round((assessedAntipatternCount / antipatternCriterionTotal) * 100);
   const antipattern_burden_confidence =
     antipatternSum > 0 || antipattern_coverage >= EVIDENCE_DENSITY_WARN
       ? 'confirmed'

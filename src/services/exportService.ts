@@ -8,7 +8,7 @@ import { antiPatternStatusLabel, inferAntiPatternAbsenceStatus } from './antiPat
 import { displayQualityGateDiagnostic, isReportableSourceCoverageGap, splitQualityGateDiagnostics } from './reportDiagnosticsService';
 import { serializeDiagnosticResultForHtml } from './reportImportService';
 
-const BATCHES: Array<'A' | 'B' | 'C' | 'D' | 'E'> = ['A', 'B', 'C', 'D', 'E'];
+const BATCHES = Object.keys(BATCH_TITLES);
 const PERSONA_SUMMARY_LABELS = {
   finops_lead: 'FinOps Lead',
   cfo: 'CFO',
@@ -864,7 +864,7 @@ const generateReportHtml = (result: DiagnosticResult): string => {
   <div class="chart-row">
     <div class="chart-card">
       <h3>Category Footprint</h3>
-      <p class="chart-desc">Per-domain maturity (emerald) vs anti-pattern burden (rose). Each axis is one of the five batches; values are the sum of sub-criterion counts (0–15) for that batch.</p>
+      <p class="chart-desc">Per-domain maturity (emerald) vs anti-pattern burden (rose). Each axis is one assessment domain; values are the sum of sub-criterion counts (0–15) for that domain.</p>
       ${svgRadar(result.phase_1_audit_logs)}
     </div>
     <div class="chart-card">

@@ -2,7 +2,7 @@
   "version": "1.0.0",
   "domain": "FinOps Maturity Assessment",
   "stream": "maturity",
-  "description": "25 FinOps maturity criteria organized into 5 domains. Each criterion has 3 sub-criteria scored 0-3.",
+  "description": "30 FinOps maturity criteria organized into 6 domains. Each criterion has 3 sub-criteria scored 0-3.",
   "criteria": [
     {
       "id": "A1",
@@ -302,6 +302,66 @@
         "Does the organization treat FinOps as a continuous improvement discipline with regular retrospectives and maturity assessments?",
         "Is internal benchmarking (team-vs-team, month-over-month efficiency) used to drive healthy competition and learning?",
         "Does the organization benchmark against industry peers or FinOps Foundation standards to gauge relative maturity?"
+      ]
+    },
+    {
+      "id": "F1",
+      "batch": "F",
+      "domain": "GenAI & AI Cost Management",
+      "title": "Token & Model Spend Visibility",
+      "description": "The organization must be able to see AI token, API, model, and inference spend by application, team, use case, customer, and environment. AI consumption must be visible as an operational cost surface, not only as a provider invoice line.",
+      "sub_criteria": [
+        "Can the organization track token, API, model, and inference spend by application, use case, team, customer, and environment?",
+        "Are provider, model, endpoint, retry, cache, batch, and real-time cost drivers visible in reporting where applicable?",
+        "Do FinOps, product, and engineering owners receive dashboard or alert views that expose AI cost trends and anomalies?"
+      ]
+    },
+    {
+      "id": "F2",
+      "batch": "F",
+      "domain": "GenAI & AI Cost Management",
+      "title": "AI Cost Allocation & Unit Economics",
+      "description": "The organization must map GenAI costs to products, workflows, customers, transactions, or business outcomes. AI costs should be connected to unit economics so teams can judge whether usage is economically justified.",
+      "sub_criteria": [
+        "Are LLM and AI platform costs allocated to products, workflows, customers, teams, or business units?",
+        "Are shared AI platform costs allocated through a documented model rather than left as unassigned overhead?",
+        "Does the organization track unit metrics such as cost per task, workflow, customer interaction, API call, transaction, or outcome?"
+      ]
+    },
+    {
+      "id": "F3",
+      "batch": "F",
+      "domain": "GenAI & AI Cost Management",
+      "title": "Model Routing & Prompt Efficiency",
+      "description": "The organization must optimize GenAI cost through model routing, prompt design, context management, caching, batching, retry controls, and cost-quality tradeoff measurement. Premium models should be used intentionally where quality, risk, or reasoning need justifies them.",
+      "sub_criteria": [
+        "Is there a model-routing policy that matches model strength and cost to task value, risk, and complexity?",
+        "Are prompt length, context size, retrieval scope, caching, batching, retry behavior, and agent loops monitored or optimized for cost efficiency?",
+        "Are cost, quality, latency, and reliability tradeoffs measured before moving workloads to premium models or larger context windows?"
+      ]
+    },
+    {
+      "id": "F4",
+      "batch": "F",
+      "domain": "GenAI & AI Cost Management",
+      "title": "AI Budgeting, Forecasting & Guardrails",
+      "description": "The organization must govern AI consumption with budgets, quotas, alerts, approvals, anomaly detection, and forecasting. AI workloads need guardrails against runaway spend from high-volume usage, retries, context growth, or experimental systems becoming production traffic.",
+      "sub_criteria": [
+        "Are AI budgets, quotas, alerts, and approval thresholds defined for applications, teams, environments, or model tiers?",
+        "Does the organization forecast AI spend and monitor anomalies from token volume, retries, context growth, or usage spikes?",
+        "Are production AI workloads protected by guardrails such as rate limits, spend limits, escalation paths, or model-access controls?"
+      ]
+    },
+    {
+      "id": "F5",
+      "batch": "F",
+      "domain": "GenAI & AI Cost Management",
+      "title": "AI Value Realization & Governance",
+      "description": "The organization must compare AI consumption cost against business value, productivity gain, quality improvement, risk reduction, or revenue impact. AI governance should include cost ownership and decisions about whether AI usage is worth continuing.",
+      "sub_criteria": [
+        "Are AI costs compared against business value such as productivity gain, quality improvement, risk reduction, revenue impact, or customer outcome?",
+        "Is there ownership or governance for AI cost decisions across product, engineering, finance, risk, and business stakeholders?",
+        "Are low-value AI use cases reviewed, redesigned, downgraded, or retired when cost per outcome is not justified?"
       ]
     }
   ]

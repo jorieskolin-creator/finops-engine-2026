@@ -14,7 +14,7 @@ The engine uses the same indexes for Knowledge Base content and assessment outpu
 
 ## Streams
 
-Use `maturity` for what good looks like and `antipattern` for harmful patterns. Always include the stream when a document is meant to support scoring logic; `A1` alone is ambiguous because both streams use A1-E5.
+Use `maturity` for what good looks like and `antipattern` for harmful patterns. Always include the stream when a document is meant to support scoring logic; `A1` alone is ambiguous because both streams use A1-F5.
 
 ## Evidence categories
 

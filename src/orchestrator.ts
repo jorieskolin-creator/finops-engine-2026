@@ -1,6 +1,6 @@
 
 import { generateBatchSystemInstruction, generateBatchUserPrompt, generateTargetedBatchUserPrompt } from './prompts';
-import { BATCH_DEFINITIONS, knowledgeBaseService } from './knowledge_base';
+import { BATCH_DEFINITIONS, BATCH_IDS, knowledgeBaseService } from './knowledge_base';
 import { runStage, serverLog, RunContext } from './services/modelRouter';
 import { StageId } from './models';
 import { EvidenceCheckItem, EvidenceCheckResult, ImageInput } from './types';
@@ -110,7 +110,7 @@ export const runPhase1Audit = async (
   onProgress: (completed: number, total: number) => void,
   ctx: RunContext
 ): Promise<Phase1Result> => {
-  const batches = ['A', 'B', 'C', 'D', 'E'];
+  const batches = BATCH_IDS;
   const totalBatches = batches.length;
 
   const aggregated: Phase1Result = {
