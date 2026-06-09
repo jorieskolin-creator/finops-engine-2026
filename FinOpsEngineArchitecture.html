@@ -1,0 +1,750 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FinOps Assessment Engine &mdash; Current Evidence-Gated Architecture</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --paper:        #f5efe6;
+    --paper-2:      #ede5d6;
+    --paper-3:      #e4dac5;
+    --ink:          #2b2823;
+    --ink-2:        #5a544b;
+    --ink-3:        #8a8276;
+    --rule:         #cdc3ad;
+    --rule-soft:    #ddd3bd;
+    --sienna:       #a04a2a;
+    --ochre:        #b78a3c;
+    --olive:        #6b7a3a;
+    --teal:         #3d6e6a;
+    --plum:         #5e3a5c;
+    --blue:         #405f8a;
+
+    --phase-0:      #6b7a3a;
+    --phase-1:      #a04a2a;
+    --phase-15:     #b78a3c;
+    --phase-2:      #3d6e6a;
+    --phase-3:      #5e3a5c;
+    --phase-q:      #405f8a;
+
+    --shadow:       0 1px 2px rgba(43, 40, 35, 0.06), 0 4px 12px rgba(43, 40, 35, 0.04);
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html, body {
+    background: var(--paper);
+    color: var(--ink);
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    font-size: 15px;
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  body {
+    background-image:
+      radial-gradient(ellipse at top, rgba(160, 74, 42, 0.04), transparent 60%),
+      radial-gradient(ellipse at bottom, rgba(61, 110, 106, 0.03), transparent 60%);
+    background-attachment: fixed;
+    min-height: 100vh;
+    padding: 56px 24px 80px;
+  }
+
+  .page {
+    max-width: 1180px;
+    margin: 0 auto;
+  }
+
+  header {
+    border-bottom: 1px solid var(--rule);
+    padding-bottom: 32px;
+    margin-bottom: 48px;
+  }
+
+  .eyebrow {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--sienna);
+    margin-bottom: 14px;
+  }
+
+  h1 {
+    font-family: 'Fraunces', Georgia, serif;
+    font-weight: 500;
+    font-size: 44px;
+    line-height: 1.08;
+    letter-spacing: -0.018em;
+    color: var(--ink);
+    margin-bottom: 16px;
+    max-width: 820px;
+  }
+
+  h1 em {
+    font-style: italic;
+    color: var(--sienna);
+    font-weight: 400;
+  }
+
+  .subtitle {
+    font-size: 16px;
+    color: var(--ink-2);
+    max-width: 760px;
+    line-height: 1.6;
+  }
+
+  .subtitle strong {
+    color: var(--ink);
+    font-weight: 600;
+  }
+
+  .input-node {
+    background: var(--paper-2);
+    border: 1px solid var(--rule);
+    border-radius: 4px;
+    padding: 18px 28px;
+    text-align: center;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+    font-weight: 500;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--ink);
+    max-width: 420px;
+    margin: 0 auto;
+    box-shadow: var(--shadow);
+  }
+
+  .connector {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    margin: 10px auto;
+    max-width: 560px;
+  }
+
+  .connector-line {
+    width: 2px;
+    height: 28px;
+    background: var(--rule);
+  }
+
+  .connector-tip {
+    width: 0;
+    height: 0;
+    border-left: 6px solid transparent;
+    border-right: 6px solid transparent;
+    border-top: 8px solid var(--rule);
+    margin-top: -1px;
+  }
+
+  .connector-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    color: var(--ink-3);
+    background: var(--paper);
+    padding: 4px 12px;
+    margin: -18px 0;
+    z-index: 2;
+    position: relative;
+    text-align: center;
+    max-width: 520px;
+  }
+
+  .connector-label strong {
+    color: var(--sienna);
+    font-weight: 600;
+  }
+
+  .stage {
+    background: var(--paper-2);
+    border: 1px solid var(--rule);
+    border-left: 4px solid var(--rule);
+    border-radius: 4px;
+    padding: 28px 32px;
+    margin: 0 auto;
+    box-shadow: var(--shadow);
+    position: relative;
+  }
+
+  .stage[data-phase="0"] { border-left-color: var(--phase-0); }
+  .stage[data-phase="1"] { border-left-color: var(--phase-1); }
+  .stage[data-phase="15"] { border-left-color: var(--phase-15); }
+  .stage[data-phase="2"] { border-left-color: var(--phase-2); }
+  .stage[data-phase="3"] { border-left-color: var(--phase-3); }
+  .stage[data-phase="q"] { border-left-color: var(--phase-q); }
+
+  .stage-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: 12px;
+    padding-bottom: 16px;
+    margin-bottom: 20px;
+    border-bottom: 1px solid var(--rule-soft);
+  }
+
+  .stage-title {
+    font-family: 'Fraunces', Georgia, serif;
+    font-size: 24px;
+    font-weight: 500;
+    letter-spacing: -0.01em;
+    color: var(--ink);
+  }
+
+  .stage-title .phase-num {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    font-weight: 500;
+    letter-spacing: 0.12em;
+    color: var(--ink-3);
+    margin-right: 10px;
+    text-transform: uppercase;
+    vertical-align: middle;
+  }
+
+  .stage[data-phase="0"] .phase-num { color: var(--phase-0); }
+  .stage[data-phase="1"] .phase-num { color: var(--phase-1); }
+  .stage[data-phase="15"] .phase-num { color: var(--phase-15); }
+  .stage[data-phase="2"] .phase-num { color: var(--phase-2); }
+  .stage[data-phase="3"] .phase-num { color: var(--phase-3); }
+  .stage[data-phase="q"] .phase-num { color: var(--phase-q); }
+
+  .stage-meta {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.06em;
+    color: var(--ink-3);
+    text-transform: uppercase;
+  }
+
+  .stage-body {
+    font-size: 15px;
+    line-height: 1.65;
+    color: var(--ink-2);
+  }
+
+  .batches {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    gap: 12px;
+    margin: 20px 0 24px;
+  }
+
+  .batch {
+    background: var(--paper);
+    border: 1px solid var(--rule-soft);
+    border-radius: 3px;
+    padding: 16px 12px;
+    text-align: center;
+  }
+
+  .batch-id {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    color: var(--sienna);
+    margin-bottom: 6px;
+  }
+
+  .batch-domain {
+    font-family: 'Fraunces', Georgia, serif;
+    font-size: 15px;
+    line-height: 1.2;
+    font-weight: 500;
+    color: var(--ink);
+  }
+
+  .specs {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px 24px;
+    padding: 18px 20px;
+    background: var(--paper);
+    border: 1px solid var(--rule-soft);
+    border-radius: 3px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    color: var(--ink-2);
+    margin-top: 18px;
+  }
+
+  .spec-label {
+    color: var(--ink-3);
+    letter-spacing: 0.04em;
+  }
+
+  .spec-value {
+    color: var(--ink);
+    font-weight: 500;
+  }
+
+  .spec-value strong {
+    color: var(--sienna);
+    font-weight: 600;
+  }
+
+  .io-block {
+    margin-top: 18px;
+  }
+
+  .io-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--ink-3);
+    margin-bottom: 10px;
+  }
+
+  .io-list {
+    list-style: none;
+    padding: 0;
+  }
+
+  .io-list li {
+    padding: 7px 0 7px 22px;
+    position: relative;
+    font-size: 14.5px;
+    color: var(--ink-2);
+    line-height: 1.55;
+    border-bottom: 1px dashed var(--rule-soft);
+  }
+
+  .io-list li:last-child { border-bottom: none; }
+
+  .io-list li::before {
+    content: "->";
+    position: absolute;
+    left: 0;
+    top: 7px;
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--sienna);
+    font-weight: 500;
+  }
+
+  .io-list.numbered { counter-reset: io-counter; }
+
+  .io-list.numbered li::before {
+    counter-increment: io-counter;
+    content: counter(io-counter, decimal-leading-zero);
+    font-size: 11px;
+    color: var(--ink-3);
+    font-weight: 600;
+    top: 9px;
+  }
+
+  .io-list li strong {
+    color: var(--ink);
+    font-weight: 600;
+  }
+
+  .banner {
+    display: inline-block;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    border-radius: 2px;
+    padding: 5px 12px;
+    margin-bottom: 16px;
+  }
+
+  .banner.parse {
+    color: var(--phase-0);
+    background: rgba(107, 122, 58, 0.08);
+    border: 1px solid rgba(107, 122, 58, 0.25);
+  }
+
+  .banner.check {
+    color: var(--phase-15);
+    background: rgba(183, 138, 60, 0.10);
+    border: 1px solid rgba(183, 138, 60, 0.28);
+  }
+
+  .banner.math {
+    color: var(--phase-2);
+    background: rgba(61, 110, 106, 0.08);
+    border: 1px solid rgba(61, 110, 106, 0.25);
+  }
+
+  .banner.strategy {
+    color: var(--phase-3);
+    background: rgba(94, 58, 92, 0.08);
+    border: 1px solid rgba(94, 58, 92, 0.25);
+  }
+
+  .terminal-node {
+    background: var(--ink);
+    color: var(--paper);
+    border-radius: 4px;
+    padding: 24px 32px;
+    text-align: center;
+    font-family: 'Fraunces', Georgia, serif;
+    font-size: 20px;
+    font-weight: 500;
+    letter-spacing: -0.01em;
+    max-width: 600px;
+    margin: 0 auto;
+    box-shadow: var(--shadow);
+  }
+
+  .terminal-node .terminal-eyebrow {
+    display: block;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--sienna);
+    margin-bottom: 6px;
+    font-weight: 500;
+  }
+
+  .terminal-node a {
+    color: var(--paper);
+    text-decoration: none;
+    border-bottom: 1px solid rgba(245, 239, 230, 0.55);
+  }
+
+  .legend {
+    margin-top: 64px;
+    padding-top: 32px;
+    border-top: 1px solid var(--rule);
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 24px;
+  }
+
+  .legend-item {
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+  }
+
+  .legend-swatch {
+    width: 4px;
+    height: 36px;
+    flex-shrink: 0;
+    border-radius: 2px;
+    margin-top: 2px;
+  }
+
+  .legend-text {
+    font-size: 13px;
+    line-height: 1.5;
+    color: var(--ink-2);
+  }
+
+  .legend-text strong {
+    display: block;
+    font-family: 'Fraunces', Georgia, serif;
+    font-weight: 500;
+    color: var(--ink);
+    font-size: 14px;
+    margin-bottom: 2px;
+  }
+
+  footer {
+    margin-top: 48px;
+    padding-top: 24px;
+    border-top: 1px solid var(--rule-soft);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.06em;
+    color: var(--ink-3);
+    text-transform: uppercase;
+    text-align: center;
+  }
+
+  @media (max-width: 760px) {
+    body { padding: 32px 16px 48px; }
+    h1 { font-size: 32px; }
+    .stage { padding: 22px 20px; }
+    .stage-title { font-size: 20px; }
+    .batches { grid-template-columns: repeat(2, 1fr); }
+    .specs { grid-template-columns: 1fr; }
+    .legend { grid-template-columns: 1fr; }
+  }
+
+  @media print {
+    body {
+      background: white;
+      padding: 0;
+      font-size: 11pt;
+    }
+    .stage, .input-node, .terminal-node {
+      box-shadow: none;
+      break-inside: avoid;
+    }
+    .terminal-node {
+      background: var(--ink);
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+  }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <header>
+    <div class="eyebrow">FinOps Assessment Engine · Current Architecture</div>
+    <h1>Evidence first. Scores second. <em>Strategy last.</em></h1>
+    <p class="subtitle">A governed enterprise-grade assessment engine with deterministic, evidence-gated reasoning, designed to produce trusted and actionable decisions in complex enterprise environments. Unlike traditional AI agents that rely on autonomous generation, the FinOps Engine operates through a controlled reasoning pipeline: source material is parsed into a source registry and A-F evidence packets, evidence is extracted, findings are independently verified, scores are calculated through deterministic logic, and outputs pass through strict quality gates. <strong>Every maturity claim must trace back to real source evidence; Knowledge Base material can guide interpretation and planning without becoming proof of current state.</strong></p>
+  </header>
+
+  <div class="input-node">Input Material</div>
+
+  <div class="connector">
+    <div class="connector-line"></div>
+    <div class="connector-tip"></div>
+  </div>
+
+  <div class="stage" data-phase="0">
+    <div class="stage-header">
+      <div class="stage-title"><span class="phase-num">Phase 00</span>Local Parsing, Source Registry &amp; Pre-Flight</div>
+      <div class="stage-meta">PDF.js + local parsers · source chunks · GPT-5.5 low reasoning</div>
+    </div>
+    <div class="banner parse">Privacy-safe local parsing first</div>
+    <div class="stage-body">
+      Files are parsed before analysis: PDF text through PDF.js, CSV/TSV/XLSX through the local Tabular Evidence Profiler, HTML/JSON as text, and images as source visuals. PDFs are checked for parse quality so scanned or sparse-text pages are visible as source-coverage warnings. Large tables are profiled locally across all rows and only compact aggregates plus targeted evidence rows are forwarded to models. The Engine builds a source registry with stable source, page, sheet, row, and chunk IDs, then runs deterministic full-source DLP scanning plus distributed high-risk model review samples. Low-relevance material is allowed to run, but it should produce insufficient evidence rather than a forced rejection.
+    </div>
+    <div class="specs">
+      <div><span class="spec-label">Artifacts</span></div>
+      <div class="spec-value">2-20 files · 25 MB total set</div>
+      <div><span class="spec-label">Formats</span></div>
+      <div class="spec-value">PDF · HTML · CSV · TSV · XLSX · JSON · PNG · JPG</div>
+      <div><span class="spec-label">PDF text</span></div>
+      <div class="spec-value">Up to 100 pages, with page boundaries preserved</div>
+      <div><span class="spec-label">Tables</span></div>
+      <div class="spec-value">Full-table local profiling, sheet metadata, targeted evidence rows</div>
+      <div><span class="spec-label">Visual pages</span></div>
+      <div class="spec-value">Sparse/image-heavy pages prioritized within budget</div>
+      <div><span class="spec-label">Source registry</span></div>
+      <div class="spec-value">Stable source_id, page_id, sheet/row references, and chunk_id</div>
+      <div><span class="spec-label">DLP</span></div>
+      <div class="spec-value">Full-source deterministic scan + distributed GPT-5.5 review packet</div>
+    </div>
+  </div>
+
+  <div class="connector">
+    <div class="connector-line"></div>
+    <div class="connector-label"><strong>Parseable + safe</strong> &nbsp;·&nbsp; weak input becomes a warning, not evidence</div>
+    <div class="connector-line"></div>
+    <div class="connector-tip"></div>
+  </div>
+
+  <div class="stage" data-phase="1">
+    <div class="stage-header">
+      <div class="stage-title"><span class="phase-num">Phase 01</span>Forensic Audit</div>
+      <div class="stage-meta">6 parallel audits · Claude Sonnet 4.6</div>
+    </div>
+    <div class="stage-body">
+      Six FinOps domains are scanned in parallel. Each batch receives its own A-F context packet containing likely relevant chunks, source references, parse-quality notes, table profile evidence, and absence-test coverage hints. Each batch evaluates 5 maturity criteria and 5 anti-pattern criteria. The auditor extracts candidate evidence from uploaded material only; the Knowledge Base is not allowed to become source evidence. Uploaded material is treated as untrusted content: it can be quoted as evidence, but it cannot instruct the engine.
+    </div>
+    <div class="batches">
+      <div class="batch">
+        <div class="batch-id">Batch A</div>
+        <div class="batch-domain">Cost Visibility &amp; Allocation</div>
+      </div>
+      <div class="batch">
+        <div class="batch-id">Batch B</div>
+        <div class="batch-domain">Rate &amp; Usage Optimization</div>
+      </div>
+      <div class="batch">
+        <div class="batch-id">Batch C</div>
+        <div class="batch-domain">Governance &amp; Policy</div>
+      </div>
+      <div class="batch">
+        <div class="batch-id">Batch D</div>
+        <div class="batch-domain">Architecture &amp; Engineering</div>
+      </div>
+      <div class="batch">
+        <div class="batch-id">Batch E</div>
+        <div class="batch-domain">Culture &amp; Organization</div>
+      </div>
+      <div class="batch">
+        <div class="batch-id">Batch F</div>
+        <div class="batch-domain">GenAI &amp; AI Cost Management</div>
+      </div>
+    </div>
+    <div class="specs">
+      <div><span class="spec-label">Criteria per batch</span></div>
+      <div class="spec-value">10 <span style="color:var(--ink-3)">(5 maturity + 5 anti-pattern)</span></div>
+      <div><span class="spec-label">Total database</span></div>
+      <div class="spec-value">60 criteria · 30 maturity + 30 anti-pattern · A-F</div>
+      <div><span class="spec-label">Evidence scale</span></div>
+      <div class="spec-value">0-3, with evidence quotes and category tags</div>
+      <div><span class="spec-label">Important rule</span></div>
+      <div class="spec-value"><strong>Scanner output is provisional.</strong></div>
+      <div><span class="spec-label">Fallback</span></div>
+      <div class="spec-value">GPT-5.5 audit profile, then Claude Opus 4.7 if Sonnet fails</div>
+    </div>
+  </div>
+
+  <div class="connector">
+    <div class="connector-line"></div>
+    <div class="connector-label">Candidate findings must be verified before scoring</div>
+    <div class="connector-line"></div>
+    <div class="connector-tip"></div>
+  </div>
+
+  <div class="stage" data-phase="15">
+    <div class="stage-header">
+      <div class="stage-title"><span class="phase-num">Phase 1.5</span>Evidence Check</div>
+      <div class="stage-meta">GPT-5.5 evidence-check profile · independent verifier</div>
+    </div>
+    <div class="banner check">The scanner does not grade itself</div>
+    <div class="stage-body">
+      Each batch is checked against cited source chunks before metrics are calculated. Evidence is classified as supported, weak, unsupported, or missing. If citation location is unclear, the verifier can fall back to the full source registry. If a score is over-supported, the engine runs one targeted rescan for the affected criteria. If support still fails, the criterion is downgraded deterministically before Phase 2. This is why a scanner can be optimistic without the final score becoming optimistic.
+    </div>
+    <div class="io-block">
+      <div class="io-label">Anti-pattern absence is handled carefully</div>
+      <ul class="io-list">
+        <li><strong>Finding</strong> means harmful behavior was found.</li>
+        <li><strong>Partial finding</strong> means weak or partial harmful signal exists.</li>
+        <li><strong>Tested absent</strong> means relevant evidence exists and the anti-pattern was meaningfully tested but not found.</li>
+        <li><strong>Not assessed</strong> means absence is unknown, not automatically good.</li>
+      </ul>
+    </div>
+    <div class="specs">
+      <div><span class="spec-label">Targeted rescan</span></div>
+      <div class="spec-value">Claude Opus 4.7 primary · GPT-5.5 fallback · Sonnet fallback</div>
+      <div><span class="spec-label">AP adjudication</span></div>
+      <div class="spec-value">GPT-5.5 first, Opus fallback for disputed absence semantics</div>
+    </div>
+  </div>
+
+  <div class="connector">
+    <div class="connector-line"></div>
+    <div class="connector-label">Evidence-checked audit logs</div>
+    <div class="connector-line"></div>
+    <div class="connector-tip"></div>
+  </div>
+
+  <div class="stage" data-phase="2">
+    <div class="stage-header">
+      <div class="stage-title"><span class="phase-num">Phase 02</span>Evidence-Gated Scoring</div>
+      <div class="stage-meta">Pure deterministic · no AI</div>
+    </div>
+    <div class="banner math">Mathematics, not model opinion</div>
+    <div class="stage-body">
+      Phase 2 converts only verified audit logs into metrics. Readiness is capped when evidence density is low, so weak or irrelevant material cannot accidentally produce a healthy score. Low anti-pattern burden helps only when absence has actually been tested.
+    </div>
+    <div class="io-block">
+      <div class="io-label">Outputs</div>
+      <ul class="io-list">
+      <li><strong>Evidence-Gated Readiness</strong> and maturity depth</li>
+      <li><strong>Anti-Pattern Burden</strong>, clearance, coverage, and burden confidence</li>
+        <li><strong>Evidence Density</strong> as verified source coverage, including quote-backed gaps and tested anti-pattern absences</li>
+        <li><strong>Delivery Integrity</strong>, silent areas, confirmed gaps, and category footprint</li>
+      <li><strong>Classification</strong>: Insufficient Evidence, Crawl, Walk, or Run</li>
+      <li><strong>Quality signal</strong>: enough evidence to synthesize, or findings mode only</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="connector">
+    <div class="connector-line"></div>
+    <div class="connector-label">Validated metrics become locked facts</div>
+    <div class="connector-line"></div>
+    <div class="connector-tip"></div>
+  </div>
+
+  <div class="stage" data-phase="3">
+    <div class="stage-header">
+      <div class="stage-title"><span class="phase-num">Phase 03</span>Synthesis &amp; Roadmap</div>
+      <div class="stage-meta">Sonnet summaries · Opus roadmap</div>
+    </div>
+    <div class="banner strategy">Strategy is bracketed by confidence</div>
+    <div class="stage-body">
+      Evidence summary and diagnosis are written separately from roadmap planning. Summary uses source evidence and Phase 1/2 metrics only. Roadmap synthesis is a dedicated stage: Claude Opus 4.7 first, GPT-5.5 fallback, Claude Sonnet 4.6 second fallback. The roadmap explains WHY, WHAT, and HOW, and HOW actions must trace to locked findings. Tactic IDs are used only when an exact Knowledge Base match is supported; no tactic ID is better than a wrong tactic ID. The remote PDF Knowledge Base, tactics database, and tactic activity playbook can enrich planning, but they cannot prove customer current state.
+    </div>
+    <div class="io-block">
+      <div class="io-label">Confidence behavior</div>
+      <ul class="io-list">
+        <li><strong>HIGH</strong>: evidence summary, diagnosis, planning decision, scorecard, and roadmap.</li>
+        <li><strong>MEDIUM</strong>: cautious planning with assumptions and validation needs.</li>
+        <li><strong>LOW</strong>: findings mode only, NO_GO, missing-evidence guidance, and empty roadmap.</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="connector">
+    <div class="connector-line"></div>
+    <div class="connector-label">Candidate report must survive validation</div>
+    <div class="connector-line"></div>
+    <div class="connector-tip"></div>
+  </div>
+
+  <div class="stage" data-phase="q">
+    <div class="stage-header">
+      <div class="stage-title"><span class="phase-num">Phase 3.5</span>Fact-Check, Sanitation &amp; Quality Gate</div>
+      <div class="stage-meta">GPT-5.5 primary · deterministic aggregation</div>
+    </div>
+    <div class="stage-body">
+      GPT-5.5 checks summary and roadmap claims independently. If a medium-reasoning fact-check would otherwise create a hard strategy BLOCK, the Engine can retry with a high-reasoning GPT-5.5 fact-check profile before final aggregation. Unsupported roadmap actions, mismatched tactic IDs, and unsupported WHY/WHAT wording are removed, rewritten, or quarantined in the appendix before the final gate. The Quality Gate returns GO, WARN, or BLOCK. WARN keeps usable score and roadmap content visible; BLOCK means the visible report is unsafe or evidence is too weak. Fact-check and quality-gate details are retained for traceability, but the readable report keeps them in the appendix.
+    </div>
+    <div class="io-block">
+      <div class="io-label">Reliability layer</div>
+      <ul class="io-list">
+        <li>Model routing is centralized and each stage has fallbacks.</li>
+        <li>Internal model calls can recover completed results after response-stream closure.</li>
+        <li>Session recovery, safe report import, and editable privacy review reduce the risk of losing or leaking a completed assessment.</li>
+        <li>Detailed evidence-check, fact-check, tactic-grounding, and strategy-hygiene notes move to the Quality &amp; Strategy Hygiene Appendix.</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="connector">
+    <div class="connector-line"></div>
+    <div class="connector-tip"></div>
+  </div>
+
+  <div class="terminal-node">
+    <span class="terminal-eyebrow">Delivery</span>
+    Interactive Dashboard + Downloadable Summary / Master Data HTML Reports<br>
+    <a href="https://finops-engine-2026-production.up.railway.app/" target="_blank" rel="noopener">FinOps Assessment Engine - DEMO</a>
+  </div>
+
+  <div class="legend">
+    <div class="legend-item">
+      <div class="legend-swatch" style="background: var(--phase-0);"></div>
+      <div class="legend-text">
+        <strong>Input is not trusted as instruction.</strong>
+        Uploaded material can support evidence, but it cannot tell the engine how to behave.
+      </div>
+    </div>
+    <div class="legend-item">
+      <div class="legend-swatch" style="background: var(--phase-15);"></div>
+      <div class="legend-text">
+        <strong>Evidence is checked before math.</strong>
+        Candidate findings must survive independent verification before they affect scores.
+      </div>
+    </div>
+    <div class="legend-item">
+      <div class="legend-swatch" style="background: var(--phase-q);"></div>
+      <div class="legend-text">
+        <strong>Strategy is checked before delivery.</strong>
+        The Summary Report is readable and shareable; the Master Data report preserves the forensic evidence memo, appendices, and embedded JSON payload.
+      </div>
+    </div>
+  </div>
+
+  <footer>
+    Vivicta · FinOps Assessment Engine · Evidence-Gated Architecture
+  </footer>
+
+</div>
+</body>
+</html>
