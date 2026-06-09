@@ -3,7 +3,7 @@ import { generateBatchSystemInstruction, generateBatchUserPrompt, generateTarget
 import { BATCH_DEFINITIONS, BATCH_IDS, knowledgeBaseService } from './knowledge_base';
 import { runStage, serverLog, RunContext } from './services/modelRouter';
 import { StageId } from './models';
-import { EvidenceCheckItem, EvidenceCheckResult, ImageInput } from './types';
+import { EvidenceCheckItem, EvidenceCheckResult, ImageInput, RoutedSourcePacket } from './types';
 import {
   applyEvidenceCheckToBatch,
   BatchAuditResult,
@@ -30,6 +30,12 @@ const parseAiResponse = (text: string): any => {
     throw new Error("AI response was not valid JSON.");
   }
 };
+
+export interface Phase1SourcePackets {
+  packets: Record<string, RoutedSourcePacket>;
+  fullText: string;
+  fullImages: ImageInput[];
+}
 
 export interface Phase1Result {
   phase_1_audit_logs: {
@@ -73,6 +79,30 @@ const runSingleBatch = async (
   return { ...parsed, model_used: response.modelUsed.id };
 };
 
+const packetForBatch = (
+  batchId: string,
+  text: string,
+  images: ImageInput[],
+  sourcePackets?: Phase1SourcePackets
+): { text: string; images: ImageInput[]; packet?: RoutedSourcePacket; usedFallback: boolean } => {
+  const packet = sourcePackets?.packets?.[batchId];
+  if (!packet) return { text, images, usedFallback: false };
+  if (packet.weak_coverage) {
+    return {
+      text: `<SOURCE_PACKET_WEAK_COVERAGE domain="${batchId}">
+${packet.coverage_notes.join('\n')}
+The domain packet was too thin, so this batch receives broad-source fallback below. Continue to cite exact source/chunk/page markers where available.
+</SOURCE_PACKET_WEAK_COVERAGE>
+
+${text}`,
+      images,
+      packet,
+      usedFallback: true
+    };
+  }
+  return { text: packet.text, images: packet.images, packet, usedFallback: false };
+};
+
 const mergeBatchResult = (base: BatchAuditResult, patch: BatchAuditResult): BatchAuditResult => ({
   maturity: { ...(base.maturity || {}), ...(patch.maturity || {}) },
   antipattern: { ...(base.antipattern || {}), ...(patch.antipattern || {}) },
@@ -108,7 +138,8 @@ export const runPhase1Audit = async (
   text: string,
   images: ImageInput[],
   onProgress: (completed: number, total: number) => void,
-  ctx: RunContext
+  ctx: RunContext,
+  sourcePackets?: Phase1SourcePackets
 ): Promise<Phase1Result> => {
   const batches = BATCH_IDS;
   const totalBatches = batches.length;
@@ -135,13 +166,25 @@ export const runPhase1Audit = async (
     let lastError: unknown = null;
     for (let attempt = 1; attempt <= 2; attempt++) {
       try {
-        let batchResult = await runSingleBatch(batchId, text, images, ctx);
+        const packetInput = packetForBatch(batchId, text, images, sourcePackets);
+        serverLog(ctx.runId, packetInput.usedFallback ? 'warn' : 'info', 'source_packet_used', {
+          batch: batchId,
+          chunks: packetInput.packet?.included_chunk_count ?? 'n/a',
+          candidates: packetInput.packet?.total_candidate_chunks ?? 'n/a',
+          weak_coverage: packetInput.packet?.weak_coverage ? 'yes' : 'no',
+          fallback: packetInput.usedFallback ? 'broad_source' : 'packet',
+          chars: packetInput.text.length,
+          images: packetInput.images.length,
+        });
+
+        let batchResult = await runSingleBatch(batchId, packetInput.text, packetInput.images, ctx);
         if (!batchResult.maturity && !batchResult.antipattern) {
           throw new Error('Batch returned empty result (no maturity or antipattern keys).');
         }
         if (batchResult.model_used) modelsSeen.add(batchResult.model_used);
 
-        let evidenceCheck = await runEvidenceCheck(batchId, batchResult, text, images, ctx);
+        const verifierFallbackText = packetInput.usedFallback ? undefined : sourcePackets?.fullText;
+        let evidenceCheck = await runEvidenceCheck(batchId, batchResult, packetInput.text, packetInput.images, ctx, verifierFallbackText);
         if (evidenceCheck.model_used) evidenceModelsSeen.add(evidenceCheck.model_used);
         if (evidenceCheck.adjudication_model_used) evidenceAdjudicationModelsSeen.add(evidenceCheck.adjudication_model_used);
         const needsRescan = evidenceItemsNeedingRescan(evidenceCheck);
@@ -153,7 +196,7 @@ export const runPhase1Audit = async (
             batch: batchId,
             criteria: needsRescan.map(i => `${i.stream}.${i.id}`).join(','),
           });
-          const rescanResult = await runTargetedRescan(batchId, text, images, ctx, needsRescan);
+          const rescanResult = await runTargetedRescan(batchId, packetInput.text, packetInput.images, ctx, needsRescan);
           if (rescanResult.model_used) {
             targetedRescanModelsSeen.add(rescanResult.model_used);
             serverLog(ctx.runId, 'info', 'targeted_rescan_model_used', {
@@ -169,7 +212,7 @@ export const runPhase1Audit = async (
             preRescanCounts.set(key, i.original_count);
           });
 
-          evidenceCheck = await runEvidenceCheck(batchId, batchResult, text, images, ctx);
+          evidenceCheck = await runEvidenceCheck(batchId, batchResult, packetInput.text, packetInput.images, ctx, verifierFallbackText);
           if (evidenceCheck.model_used) evidenceModelsSeen.add(evidenceCheck.model_used);
           if (evidenceCheck.adjudication_model_used) evidenceAdjudicationModelsSeen.add(evidenceCheck.adjudication_model_used);
         }

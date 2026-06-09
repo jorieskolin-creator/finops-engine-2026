@@ -3,8 +3,8 @@
 // Call sites build a NormalizedPrompt and hand it to `runStage(stageId, prompt, ctx)`.
 // The router resolves the stage to its primary + fallbacks (see src/models.ts),
 // adapts the prompt to the active provider's request shape, and posts to the
-// matching server endpoint (/api/generate for Gemini, /api/anthropic-generate
-// for Anthropic). On failure it logs and falls forward to the next model.
+// matching server endpoint. On failure it logs and falls forward to the next
+// model.
 //
 // `stage` and `runId` ride along in the request body so the server endpoints
 // can emit correlated structured logs visible in Railway.
@@ -34,32 +34,6 @@ const newInternalCallId = (): string => {
   if (random) return random;
   return `internal-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`;
 };
-
-async function callGemini(profile: ModelProfile, prompt: NormalizedPrompt, stage: StageId, ctx: RunContext): Promise<{ text: string }> {
-  const parts: any[] = [{ text: prompt.userText }];
-  if (prompt.images?.length) {
-    parts.push({
-      text: `\n\nThe following ${prompt.images.length} image(s) are part of the source material. Treat their visible content as evidence on equal footing with text. Each image is identified by its source filename and (for PDF-derived images) page number; for those, set evidence_source: "image" and include page_number when citing.`,
-    });
-    for (const img of prompt.images) {
-      const label = img.page_number !== undefined
-        ? `[Image: ${img.source_name} — page ${img.page_number}]`
-        : `[Image: ${img.source_name}]`;
-      parts.push({ text: `\n${label}\n` });
-      parts.push({ inlineData: { mimeType: img.mimeType, data: img.data } });
-    }
-  }
-
-  return postWithTimeout('/api/generate', {
-    model: profile.id,
-    contents: [{ role: 'user', parts }],
-    systemInstruction: prompt.systemInstruction,
-    thinkingConfig: profile.thinkingConfig,
-    stage,
-    runId: ctx.runId,
-    internalPipelineCall: true,
-  });
-}
 
 async function callAnthropic(profile: ModelProfile, prompt: NormalizedPrompt, stage: StageId, ctx: RunContext): Promise<{ text: string }> {
   const content: any[] = [{ type: 'text', text: prompt.userText }];
@@ -127,7 +101,8 @@ async function callOpenAI(profile: ModelProfile, prompt: NormalizedPrompt, stage
   });
 }
 
-// Reads the NDJSON stream emitted by api/generate.js + api/anthropic-generate.js.
+// Reads the NDJSON stream emitted by api/anthropic-generate.js and
+// api/openai-generate.js.
 //
 // Wire frames:
 //   { type: 'text',      delta: string }    incremental text (accumulated)
@@ -272,7 +247,6 @@ async function postWithTimeout(url: string, body: any): Promise<{ text: string }
 }
 
 export async function callModel(profile: ModelProfile, prompt: NormalizedPrompt, stage: StageId, ctx: RunContext): Promise<{ text: string }> {
-  if (profile.provider === 'gemini') return callGemini(profile, prompt, stage, ctx);
   if (profile.provider === 'anthropic') return callAnthropic(profile, prompt, stage, ctx);
   if (profile.provider === 'openai') return callOpenAI(profile, prompt, stage, ctx);
   throw new Error(`Unknown provider: ${(profile as any).provider}`);

@@ -964,7 +964,7 @@
       <div class="stage" data-phase="0">
         <div class="stage-header">
           <div class="stage-title">Phase 0 — Pre-Flight</div>
-          <div class="stage-meta">Local parsing · DLP Officer · gemini-3.5-flash · deterministic redaction</div>
+          <div class="stage-meta">Local parsing · DLP Officer · gpt-5.5 low-reasoning · deterministic redaction</div>
         </div>
         <div class="stage-body">
           Client-side parsers extract source material before model analysis: PDF.js extracts embedded PDF text up to 100 pages with page markers, CSV/TSV/XLSX files become profiled table evidence packets, HTML is sanitized, JSON is normalized, and selected PDF/image pages are attached as visual evidence under an image budget. A deterministic parse-quality check marks PDFs as good, mixed, or poor extraction, prioritizing sparse/scanned pages for visual inclusion. A DLP LLM pass plus deterministic regex redaction scans for PII, secrets, and risky input. Low FinOps keyword signal is now a warning, not a hard rejection, when the material is technically parseable.
@@ -1001,7 +1001,7 @@
       <div class="stage" data-phase="1" style="border-style: dashed;">
         <div class="stage-header">
           <div class="stage-title">Phase 1.5 — Evidence Check</div>
-          <div class="stage-meta">gemini-3.1-pro-preview · independent verifier · targeted rescans</div>
+          <div class="stage-meta">gpt-5.5 · independent verifier · Opus/GPT targeted rescans</div>
         </div>
         <div class="stage-body">
           Each completed A-F batch is checked against the raw source material before Phase 2 can calculate metrics. The verifier classifies every maturity and anti-pattern item as <em>supported</em>, <em>weak</em>, <em>unsupported</em>, or <em>missing</em>, recommends a verified score, and identifies anti-pattern absence as <em>confirmed present</em>, <em>partial finding</em>, <em>tested absent</em>, or <em>not assessed</em>. Weak or over-scored criteria trigger one targeted rescan; if the rescan still fails, the score is deterministically downgraded.
@@ -1038,7 +1038,7 @@
             <li>Crawl-Walk-Run methodology framework</li>
             <li>Three persona definitions: FinOps Lead, CFO, Engineering Lead</li>
           </ol>
-          <p>Outputs depend on confidence. Evidence summary and diagnosis are generated separately from roadmap synthesis. The roadmap/planning substage uses <code style="font-family: var(--mono); font-size: 12px;">claude-opus-4-7</code> first, then <code style="font-family: var(--mono); font-size: 12px;">gpt-5.5</code>, then <code style="font-family: var(--mono); font-size: 12px;">gemini-3.1-pro-preview</code>; the non-Gemini operating mode can remove Gemini fallbacks while preserving the same stage boundaries. HIGH confidence can produce planning, scorecard, and a 4-phase roadmap with WHY, WHAT, and HOW layers. MEDIUM produces cautious planning with assumptions. LOW produces findings mode only: evidence-backed findings, missing evidence, validation plan, <strong>NO_GO</strong>, and an empty roadmap.</p>
+          <p>Outputs depend on confidence. Evidence summary and diagnosis are generated separately from roadmap synthesis. The roadmap/planning substage uses <code style="font-family: var(--mono); font-size: 12px;">claude-opus-4-7</code> first, then <code style="font-family: var(--mono); font-size: 12px;">gpt-5.5</code>, then <code style="font-family: var(--mono); font-size: 12px;">claude-sonnet-4-6</code>. HIGH confidence can produce planning, scorecard, and a 4-phase roadmap with WHY, WHAT, and HOW layers. MEDIUM produces cautious planning with assumptions. LOW produces findings mode only: evidence-backed findings, missing evidence, validation plan, <strong>NO_GO</strong>, and an empty roadmap.</p>
         </div>
       </div>
 
@@ -1181,7 +1181,7 @@
           <dt>Behaviour</dt>
           <dd>Paranoid about safety, conservative about relevance. Scans input documents for PII, secrets, and risky content, while local parsers preserve usable low-signal material for evidence-gated assessment instead of rejecting it too early.</dd>
           <dt>Model</dt>
-          <dd><code style="font-family: var(--mono); font-size: 12px;">gemini-3.5-flash</code> with deterministic redaction, PDF.js extraction, parse-quality checks, CSV/TSV parsing, and local HTML/JSON handling.</dd>
+          <dd><code style="font-family: var(--mono); font-size: 12px;">gpt-5.5</code> low-reasoning review with deterministic redaction, PDF.js extraction, parse-quality checks, CSV/TSV parsing, and local HTML/JSON handling.</dd>
           <dt>Decision</dt>
           <dd>Hard blocks are reserved for unsafe, unreadable, unsupported, over-limit, or corrupt files. Generic but parseable material becomes a low-relevance warning, then the evidence pipeline decides whether it supports FinOps findings.</dd>
         </dl>
@@ -1284,7 +1284,7 @@ metrics, vendor management, VP+ engagement</code></pre>
             Evidence-only persona summaries, an evidence summary object, diagnosis, planning decision, visual scorecard, and — only when confidence allows — a 4-phase remediation roadmap with WHY, WHAT, and HOW layers. LOW-confidence assessments produce findings mode, <strong>NO_GO</strong>, missing-evidence guidance, and an empty roadmap.
           </dd>
           <dt>Model</dt>
-          <dd><code style="font-family: var(--mono); font-size: 12px;">claude-sonnet-4-6</code> writes evidence summaries and diagnosis. The roadmap/planning substage uses <code style="font-family: var(--mono); font-size: 12px;">claude-opus-4-7</code> first, with <code style="font-family: var(--mono); font-size: 12px;">gpt-5.5</code> and <code style="font-family: var(--mono); font-size: 12px;">gemini-3.1-pro-preview</code> as fallbacks.</dd>
+          <dd><code style="font-family: var(--mono); font-size: 12px;">claude-sonnet-4-6</code> writes evidence summaries and diagnosis. The roadmap/planning substage uses <code style="font-family: var(--mono); font-size: 12px;">claude-opus-4-7</code> first, with <code style="font-family: var(--mono); font-size: 12px;">gpt-5.5</code> and <code style="font-family: var(--mono); font-size: 12px;">claude-sonnet-4-6</code> as fallbacks.</dd>
         </dl>
         <div class="persona-rules">
           <h4>Behavioural Rules (STRATEGY_GUARDRAILS)</h4>
@@ -2400,7 +2400,7 @@ OUTPUT RULES:
       <div class="metric-item">
         <div class="metric-name">Local Parsing<span>not model parsing</span></div>
         <div>
-          <div class="metric-interp">PDF, HTML, CSV/TSV/XLSX, JSON, and image inputs are parsed or encoded locally before analysis. Gemini, Claude, and GPT analyze the extracted material; they are not the primary parsers.</div>
+          <div class="metric-interp">PDF, HTML, CSV/TSV/XLSX, JSON, and image inputs are parsed or encoded locally before analysis. Claude and GPT analyze the extracted material; they are not the primary parsers.</div>
         </div>
       </div>
       <div class="metric-item">
@@ -2717,7 +2717,7 @@ else: "Run"</div>
       <li>The <strong>visual_scorecard and remediation phases come from Phase 2</strong> — the AI cannot change Maturity, Burden, or classification.</li>
       <li>The <strong>three persona summaries must agree on facts</strong>; they differ only in lens, vocabulary, and emphasis.</li>
       <li><strong>Evidence summary and diagnosis are separate from roadmap synthesis</strong>; the Knowledge Base is absent from evidence-only summary prompts.</li>
-      <li><strong>Roadmap synthesis is its own model stage</strong>; Opus 4.7 writes planning first, GPT-5.5 and Gemini 3.1 Pro are fallbacks, and the output must explain WHY, WHAT, and HOW for each phase.</li>
+      <li><strong>Roadmap synthesis is its own model stage</strong>; Opus 4.7 writes planning first, GPT-5.5 and Sonnet 4.6 are fallbacks, and the output must explain WHY, WHAT, and HOW for each phase.</li>
       <li><strong>Tactic IDs are optional but exact</strong>: prescribed tactic actions cite a verified database ID only when the KB problem pattern matches the locked finding. Invalid or mismatched tactic IDs are removed before fact-check spend.</li>
       <li>The <strong>roadmap structure is fixed</strong> (4 Crawl-Walk-Run phases) when a roadmap is allowed. LOW-confidence assessments return findings mode and an empty roadmap.</li>
       <li><strong>No weasel words allowed</strong> — the STRATEGY_GUARDRAILS enforce active, prescriptive language; the validator scans for forbidden phrases post-hoc.</li>
@@ -2838,7 +2838,7 @@ else: "Run"</div>
     <h2>The Difference Between 70% Accuracy and 99% Accuracy</h2>
 
     <p style="max-width: 820px; color: var(--ink-2); font-size: 16px;">
-      A natural question: <em>"Why not just paste the documents into Copilot, GPT, or Gemini and ask for a FinOps maturity summary?"</em>
+      A natural question: <em>"Why not just paste the documents into a general-purpose AI assistant and ask for a FinOps maturity summary?"</em>
     </p>
 
     <p style="max-width: 820px; color: var(--ink-2);">
@@ -2884,7 +2884,7 @@ else: "Run"</div>
       <div class="metric-item">
         <div class="metric-name">Strategy Synthesis (Phase 3)<span>bracketed outputs</span></div>
         <div>
-          <p style="font-size: 14px; color: var(--ink-2); margin: 0;">Three persona-tailored summaries from locked findings · Evidence summary separate from diagnosis · Dedicated Opus roadmap synthesis with GPT/Gemini fallbacks · Planning decision GO / CONDITIONAL_GO / NO_GO · Roadmap phases render WHY / WHAT / HOW · LOW produces findings mode and empty roadmap</p>
+          <p style="font-size: 14px; color: var(--ink-2); margin: 0;">Three persona-tailored summaries from locked findings · Evidence summary separate from diagnosis · Dedicated Opus roadmap synthesis with GPT/Sonnet fallbacks · Planning decision GO / CONDITIONAL_GO / NO_GO · Roadmap phases render WHY / WHAT / HOW · LOW produces findings mode and empty roadmap</p>
         </div>
       </div>
 
@@ -2998,7 +2998,7 @@ else: "Run"</div>
 <footer>
   <div class="container">
     <p class="footer-note">
-      This document describes the intellectual architecture of the FinOps Maturity Assessment Engine. The knowledge base criteria, guardrails, taxonomy registry, tactics database, evidence-check stage, validation rules, quality gates, and golden baselines defined here represent the domain-specific content layer that sits on top of the Engine's reusable technical infrastructure (React UI, local parsing and parse-quality checks, Gemini / Anthropic / OpenAI model routing, with provider-specific fallback chains and a non-Gemini operating path when policy requires it, internal-call protected model proxies, parallel batch processing, dedicated roadmap synthesis, fact-check pipeline, strategy sanitation, Quality Gate, drift detection suite, export system, and Railway deployment).
+      This document describes the intellectual architecture of the FinOps Maturity Assessment Engine. The knowledge base criteria, guardrails, taxonomy registry, tactics database, evidence-check stage, validation rules, quality gates, and golden baselines defined here represent the domain-specific content layer that sits on top of the Engine's reusable technical infrastructure (React UI, local parsing and parse-quality checks, Anthropic / OpenAI model routing, provider-specific fallback chains, internal-call protected model proxies, parallel batch processing, dedicated roadmap synthesis, fact-check pipeline, strategy sanitation, Quality Gate, drift detection suite, export system, and Railway deployment).
     </p>
     <p class="footer-note" style="margin-top: 24px;">
       <a href="https://finops-engine.vercel.app/" target="_blank" rel="noopener noreferrer">FinOps Assessment Engine - DEMO</a>

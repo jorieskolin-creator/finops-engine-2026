@@ -31,9 +31,9 @@ assert.equal(done.model, 'gpt-5.5');
 
 failInternalModelResult('call-error', 'upstream failed', {
   runId: 'run-3',
-  provider: 'gemini',
+  provider: 'anthropic',
   stage: 'evidence_check',
-  model: 'gemini-3.1-pro-preview',
+  model: 'claude-opus-4-7',
 });
 const error = getInternalModelResult('call-error');
 assert.equal(error.status, 'error');

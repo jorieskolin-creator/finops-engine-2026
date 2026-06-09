@@ -4,20 +4,20 @@ import { readFile } from 'node:fs/promises';
 const read = (path) => readFile(new URL(path, import.meta.url), 'utf8');
 
 const router = await read('../src/services/modelRouter.ts');
-const gemini = await read('../api/generate.js');
 const anthropic = await read('../api/anthropic-generate.js');
 const openai = await read('../api/openai-generate.js');
 const modelResult = await read('../api/model-result.js');
 const resultStore = await read('../lib/internalModelResults.js');
 
-assert.equal((router.match(/internalPipelineCall: true/g) || []).length, 3);
+assert.equal((router.match(/internalPipelineCall: true/g) || []).length, 2);
 assert.match(router, /internalCallId/);
 assert.match(router, /\/api\/model-result/);
 assert.match(router, /internal_result_recovered/);
 assert.match(router, /internal_result_timeout/);
+assert.doesNotMatch(router, /\/api\/generate/);
+assert.doesNotMatch(router, /provider === 'gemini'/);
 
 for (const [name, source] of [
-  ['gemini', gemini],
   ['anthropic', anthropic],
   ['openai', openai],
 ]) {

@@ -26,6 +26,13 @@ import { STAGE_MODELS, StageId } from "../models";
 import { runStage, serverLog, newRunId } from "./modelRouter";
 import { sanitizeRoadmapTacticGrounding } from "./tacticGroundingService";
 import { sanitizeStrategyAfterFactCheck } from "./strategySanitationService";
+import {
+  buildDlpReviewPacket,
+  buildDomainPackets,
+  buildSourceRegistry,
+  scanRegistryDlp,
+  sourceRegistryRuntimeStatus
+} from "./sourceRegistryService";
 
 const FACT_CHECK_MAX_RETRIES = 2;
 const ID_VALIDATION_MAX_REGENS = 2;
@@ -59,13 +66,8 @@ The COMPLETE list of valid tactic IDs is in the TACTIC IDS — LOOKUP TABLE sect
 Regenerate the full output with the same shape. Replace every invalid ID with a valid one (matching the underlying mechanism you intended), or remove the bracketed ID entirely if no valid one fits. Do NOT introduce any new invalid IDs.
 `;
 
-const ALL_CRITERIA_IDS = [
-  'A1', 'A2', 'A3', 'A4', 'A5',
-  'B1', 'B2', 'B3', 'B4', 'B5',
-  'C1', 'C2', 'C3', 'C4', 'C5',
-  'D1', 'D2', 'D3', 'D4', 'D5',
-  'E1', 'E2', 'E3', 'E4', 'E5'
-];
+const ALL_CRITERIA_IDS = Object.keys(BATCH_DEFINITIONS)
+  .flatMap(batchId => [1, 2, 3, 4, 5].map(n => `${batchId}${n}`));
 
 const DEFAULT_PERSONA: PersonaId = 'finops_lead';
 
@@ -158,7 +160,12 @@ const validateAndSanitizeLogs = (rawData: any): Phase1AuditLogs => {
           section: typeof q.section === 'string' ? q.section : undefined,
           category: EVIDENCE_CATEGORIES.includes(q.category) ? q.category as EvidenceCategory : undefined,
           evidence_source: q.evidence_source === 'image' ? 'image' : 'text',
-          page_number: typeof q.page_number === 'number' && q.page_number > 0 ? q.page_number : undefined
+          page_number: typeof q.page_number === 'number' && q.page_number > 0 ? q.page_number : undefined,
+          source_id: typeof q.source_id === 'string' ? q.source_id : undefined,
+          page_id: typeof q.page_id === 'string' ? q.page_id : undefined,
+          chunk_id: typeof q.chunk_id === 'string' ? q.chunk_id : undefined,
+          sheet_name: typeof q.sheet_name === 'string' ? q.sheet_name : undefined,
+          row_number: typeof q.row_number === 'number' && q.row_number > 0 ? q.row_number : undefined
         }));
     }
 
@@ -231,14 +238,56 @@ export const analyzeDocument = async (
       console.log(`[FinOps] Multimodal: ${images.length} image(s), ~${Math.round(imagePayloadBytes / 1024)} KB base64 payload.`);
     }
 
+    const sourceRegistry = buildSourceRegistry(text, images);
+    const sourcePackets = buildDomainPackets(sourceRegistry);
+    const dlpScan = scanRegistryDlp(sourceRegistry);
+    const dlpReview = buildDlpReviewPacket(sourceRegistry);
+    const sourceRegistryStatus = sourceRegistryRuntimeStatus(sourceRegistry, sourcePackets, dlpReview.selected_chunk_count, dlpScan);
+    const sourceParseWarnings = [
+      ...sourceRegistry.warnings,
+      ...dlpScan.caution_hits.map(hit => `DLP caution: ${hit.kind} detected in ${hit.chunk_ids.length} chunk(s).`),
+      ...Object.entries(sourcePackets)
+        .filter(([, packet]) => packet.weak_coverage)
+        .map(([domain, packet]) => `Source packet ${domain} has weak deterministic routing coverage (${packet.included_chunk_count}/${packet.total_candidate_chunks} chunks); broad-source fallback was used for that batch.`)
+    ];
+    serverLog(runId, 'info', 'source_registry_created', {
+      sources: sourceRegistry.source_count,
+      chunks: sourceRegistry.chunk_count,
+      dlp_review_chunks: dlpReview.selected_chunk_count,
+      images: images.length,
+    });
+    for (const [domain, packet] of Object.entries(sourcePackets)) {
+      serverLog(runId, packet.weak_coverage ? 'warn' : 'info', 'source_packet_created', {
+        domain,
+        chunks: packet.included_chunk_count,
+        candidates: packet.total_candidate_chunks,
+        weak_coverage: packet.weak_coverage ? 'yes' : 'no',
+        chars: packet.char_count,
+        images: packet.images.length,
+      });
+    }
+    serverLog(runId, dlpScan.blocked ? 'error' : dlpScan.caution_hits.length > 0 ? 'warn' : 'info', 'dlp_full_source_scan', {
+      chunks: dlpScan.scanned_chunk_count,
+      high_risk_hits: dlpScan.high_risk_hits.reduce((sum, hit) => sum + hit.count, 0),
+      caution_hits: dlpScan.caution_hits.reduce((sum, hit) => sum + hit.count, 0),
+      blocked: dlpScan.blocked ? 'yes' : 'no',
+    });
+    if (dlpScan.blocked) {
+      throw new Error(`Security Alert: high-risk secret material detected in source chunks (${dlpScan.high_risk_hits.map(hit => `${hit.kind}:${hit.count}`).join(', ')}). Remove or redact secrets before running the assessment.`);
+    }
+
     console.log(`[FinOps] [${runId}] Running Security Pre-Flight (DLP)...`);
     onProgress('audit', 1);
-    const dlpPrompt = generateSafetyAuditPrompt(text, images);
+    const dlpPrompt = generateSafetyAuditPrompt(dlpReview.text, dlpReview.images, {
+      scannedChunkCount: dlpScan.scanned_chunk_count,
+      selectedChunkCount: dlpReview.selected_chunk_count,
+      cautionNotes: dlpScan.warnings.filter(w => !/high-risk/i.test(w)).slice(0, 12),
+    });
 
     const dlpStarted = Date.now();
     const dlpResponse = await runStage('preflight', {
       userText: dlpPrompt,
-      images,
+      images: dlpReview.images,
     }, { runId });
     actuals.preflight = dlpResponse.modelUsed.id;
     serverLog(runId, 'info', 'stage_complete', {
@@ -248,8 +297,10 @@ export const analyzeDocument = async (
     });
     const dlpResult = parseAiResponse(dlpResponse.text);
 
-    if (dlpResult && dlpResult.safe === false) {
+    if (dlpResult && dlpResult.safe === false && dlpResult.risk_detected !== 'FinancialSensitivity') {
       throw new Error(`Security Alert: Document rejected due to ${dlpResult.risk_detected} content. (${dlpResult.reason})`);
+    } else if (dlpResult?.risk_detected === 'FinancialSensitivity') {
+      sourceParseWarnings.push(`DLP caution: model reviewer flagged financial sensitivity. ${dlpResult.caution_notes || dlpResult.reason || ''}`.trim());
     }
     console.log("[FinOps] DLP Scan Passed.");
 
@@ -265,11 +316,11 @@ export const analyzeDocument = async (
     });
 
     onProgress('audit', 5);
-    console.log(`[FinOps] [${runId}] Running Phase 1 Parallel Audit (5 batches)...`);
+    console.log(`[FinOps] [${runId}] Running Phase 1 Parallel Audit (${Object.keys(BATCH_DEFINITIONS).length} batches)...`);
     const phase1Started = Date.now();
     const aggregatedRawData = await runPhase1Audit(text, images, (completed, total) => {
       onProgress('audit', Math.round((completed / total) * 100));
-    }, { runId });
+    }, { runId }, { packets: sourcePackets, fullText: text, fullImages: images });
     if (aggregatedRawData.models_used.length > 0) {
       actuals.forensic_audit = aggregatedRawData.models_used.join(',');
     }
@@ -296,7 +347,7 @@ export const analyzeDocument = async (
 
     if (aggregatedRawData.failed_batches.length > 0) {
       throw new Error(
-        `Phase 1 audit incomplete: ${aggregatedRawData.failed_batches.length} of 5 batches (${aggregatedRawData.failed_batches.join(', ')}) failed after retry. ` +
+        `Phase 1 audit incomplete: ${aggregatedRawData.failed_batches.length} of ${Object.keys(BATCH_DEFINITIONS).length} batches (${aggregatedRawData.failed_batches.join(', ')}) failed after retry. ` +
         `${aggregatedRawData.failed_batches.length * 10} criteria are missing data. ` +
         `Re-run the assessment, or check the audit model's availability.`
       );
@@ -952,6 +1003,8 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => `  ${cat}
         document_analyzed: "Uploaded Text",
         timestamp: new Date().toISOString(),
         engine_version: "finops-1.0.0",
+        source_parse_warnings: sourceParseWarnings.length > 0 ? sourceParseWarnings : undefined,
+        source_registry: sourceRegistryStatus,
         knowledge_base: referenceKbIndex.status,
         model_config: {
           preflight: actuals.preflight,

@@ -1,0 +1,480 @@
+import { BATCH_TITLES } from '../knowledge_base';
+import type {
+  DlpPatternHit,
+  DlpScanResult,
+  ImageInput,
+  RoutedSourcePacket,
+  SourceChunk,
+  SourceChunkRoutingHint,
+  SourcePacketManifestItem,
+  SourceRegistry,
+  SourceRegistryRuntimeStatus,
+  SourceRelevanceTier
+} from '../types';
+
+const TARGET_PACKET_CHARS = 35000;
+const HARD_PACKET_CHARS = 45000;
+const CHUNK_TARGET_CHARS = 2200;
+const CHUNK_OVERLAP_CHARS = 200;
+
+const DOMAIN_TERMS: Record<string, string[]> = {
+  A: [
+    'allocation', 'tagging', 'tag', 'showback', 'chargeback', 'dashboard', 'reporting',
+    'cost visibility', 'unit economics', 'cost per', 'anomaly', 'alert', 'owner', 'cost center'
+  ],
+  B: [
+    'reservation', 'reserved instance', 'savings plan', 'commitment', 'rightsizing', 'right-size',
+    'utilization', 'waste', 'idle', 'orphaned', 'spot', 'preemptible', 'storage lifecycle', 'tiering'
+  ],
+  C: [
+    'policy', 'governance', 'budget', 'forecast', 'approval', 'guardrail', 'procurement',
+    'vendor', 'compliance', 'regulatory', 'raci', 'operating model', 'finops operating'
+  ],
+  D: [
+    'architecture', 'engineering', 'infrastructure as code', 'terraform', 'pulumi', 'cloudformation',
+    'autoscaling', 'auto scaling', 'serverless', 'container', 'kubernetes', 'multi-cloud', 'hybrid',
+    'design review'
+  ],
+  E: [
+    'culture', 'organization', 'team', 'finance', 'engineering accountability', 'platform team',
+    'finops team', 'enabling team', 'training', 'kpi', 'incentive', 'collaboration', 'community'
+  ],
+  F: [
+    'genai', 'generative ai', 'llm', 'token', 'tokens', 'model routing', 'prompt', 'context window',
+    'rag', 'embedding', 'openai', 'anthropic', 'gemini', 'inference', 'ai cost', 'model spend',
+    'api usage', 'ai budget'
+  ]
+};
+
+const GAP_TERMS = [
+  'missing', 'not available', 'not implemented', 'not yet', 'planned', 'manual', 'ad hoc',
+  'no evidence', 'no process', 'gap', 'lacks', 'without', 'unknown', 'not tracked'
+];
+
+const CONTRADICTION_TERMS = [
+  'contradiction', 'conflict', 'inconsistent', 'unclear', 'exception', 'override', 'manual override'
+];
+
+const escapeXml = (value: string): string => value
+  .replace(/&/g, '&amp;')
+  .replace(/</g, '&lt;')
+  .replace(/>/g, '&gt;')
+  .replace(/"/g, '&quot;');
+
+const normalize = (value: string): string => value.replace(/\s+/g, ' ').trim();
+
+const splitLongText = (text: string): Array<{ text: string; start: number; end: number }> => {
+  const normalized = text.trim();
+  if (normalized.length <= CHUNK_TARGET_CHARS) return [{ text: normalized, start: 0, end: normalized.length }];
+
+  const chunks: Array<{ text: string; start: number; end: number }> = [];
+  let cursor = 0;
+  while (cursor < normalized.length) {
+    let end = Math.min(cursor + CHUNK_TARGET_CHARS, normalized.length);
+    if (end < normalized.length) {
+      const boundary = normalized.lastIndexOf('\n', end);
+      const sentence = normalized.lastIndexOf('. ', end);
+      const best = Math.max(boundary, sentence);
+      if (best > cursor + 800) end = best + 1;
+    }
+    const part = normalized.slice(cursor, end).trim();
+    if (part.length > 0) chunks.push({ text: part, start: cursor, end });
+    if (end >= normalized.length) break;
+    cursor = Math.max(0, end - CHUNK_OVERLAP_CHARS);
+  }
+  return chunks;
+};
+
+const sourceIdFor = (index: number): string => `src-${String(index + 1).padStart(3, '0')}`;
+const chunkIdFor = (sourceId: string, index: number, pageNumber?: number): string => (
+  pageNumber
+    ? `${sourceId}-p${String(pageNumber).padStart(3, '0')}-c${String(index + 1).padStart(3, '0')}`
+    : `${sourceId}-c${String(index + 1).padStart(3, '0')}`
+);
+
+const inferType = (sourceName: string, text: string, pageNumber?: number): SourceChunk['type'] => {
+  if (pageNumber) return 'pdf_page';
+  if (/\[TABLE_SAMPLE\]|^Format:\s*(CSV|TSV)/im.test(text)) return 'table_profile';
+  if (/^\s*\{[\s\S]*\}\s*$/.test(text) || /\.json$/i.test(sourceName)) return 'metadata';
+  return 'text';
+};
+
+const parseDocuments = (text: string): Array<{ name: string; body: string }> => {
+  const docs: Array<{ name: string; body: string }> = [];
+  const rx = /<DOCUMENT\s+name="([^"]+)">\s*([\s\S]*?)\s*<\/DOCUMENT>/g;
+  let match: RegExpExecArray | null;
+  while ((match = rx.exec(text)) !== null) {
+    docs.push({ name: match[1], body: match[2] });
+  }
+  if (docs.length === 0 && text.trim().length > 0) {
+    docs.push({ name: 'Uploaded source material', body: text });
+  }
+  return docs;
+};
+
+const parsePdfPages = (body: string): Array<{ pageNumber?: number; text: string }> => {
+  const pages: Array<{ pageNumber?: number; text: string }> = [];
+  const rx = /\[PDF_PAGE\s+source="[^"]*"\s+page="(\d+)"\]\s*([\s\S]*?)\s*\[\/PDF_PAGE\]/g;
+  let match: RegExpExecArray | null;
+  while ((match = rx.exec(body)) !== null) {
+    pages.push({ pageNumber: Number(match[1]), text: match[2] });
+  }
+  if (pages.length === 0) pages.push({ text: body });
+  return pages;
+};
+
+const tableRowChunks = (text: string): Array<{ rowNumber: number; text: string }> => {
+  const match = text.match(/\[TABLE_SAMPLE\]\s*([\s\S]*?)\s*\[\/TABLE_SAMPLE\]/);
+  if (!match) return [];
+  const lines = match[1]
+    .split(/\n+/)
+    .map(line => normalize(line))
+    .filter(Boolean);
+  const header = lines[0] || '';
+  return lines.slice(1, 31).map((row, idx) => ({
+    rowNumber: idx + 1,
+    text: `Table evidence sample row ${idx + 1}\nHeaders: ${header}\nValues: ${row}`
+  }));
+};
+
+const scoreDomain = (haystack: string, domain: string): SourceChunkRoutingHint => {
+  const terms = DOMAIN_TERMS[domain] || [];
+  const reasons: string[] = [];
+  let score = 0;
+  for (const term of terms) {
+    if (haystack.includes(term)) {
+      score += term.length > 8 ? 3 : 2;
+      if (reasons.length < 4) reasons.push(term);
+    }
+  }
+  const tier: SourceRelevanceTier = score >= 6 ? 'high' : score >= 2 ? 'medium' : 'low';
+  return { domain, score, tier, reasons };
+};
+
+const routeChunk = (sourceName: string, text: string): SourceChunkRoutingHint[] => {
+  const haystack = `${sourceName}\n${text}`.toLowerCase();
+  const hints = Object.keys(BATCH_TITLES).map(domain => scoreDomain(haystack, domain));
+  const anySignal = hints.some(h => h.score > 0);
+  if (!anySignal) {
+    return Object.keys(BATCH_TITLES).map(domain => ({ domain, score: 0, tier: 'unknown' as const, reasons: [] }));
+  }
+  return hints;
+};
+
+export const buildSourceRegistry = (text: string, images: ImageInput[] = []): SourceRegistry => {
+  const chunks: SourceChunk[] = [];
+  const warnings: string[] = [];
+  const docs = parseDocuments(text);
+
+  docs.forEach((doc, docIndex) => {
+    const sourceId = sourceIdFor(docIndex);
+    const pages = parsePdfPages(doc.body);
+    let chunkIndex = 0;
+    for (const page of pages) {
+      const isTable = !page.pageNumber && /\[TABLE_SAMPLE\]/.test(page.text);
+      if (isTable) {
+        const chunkId = chunkIdFor(sourceId, chunkIndex, page.pageNumber);
+        chunks.push({
+          chunk_id: chunkId,
+          source_id: sourceId,
+          source_name: doc.name,
+          type: 'table_profile',
+          text: page.text,
+          char_start: 0,
+          char_end: page.text.length,
+          routing: routeChunk(doc.name, page.text)
+        });
+        chunkIndex++;
+        for (const row of tableRowChunks(page.text)) {
+          const rowChunkId = chunkIdFor(sourceId, chunkIndex);
+          chunks.push({
+            chunk_id: rowChunkId,
+            source_id: sourceId,
+            source_name: doc.name,
+            type: 'table_row',
+            text: row.text,
+            row_number: row.rowNumber,
+            routing: routeChunk(doc.name, row.text)
+          });
+          chunkIndex++;
+        }
+        continue;
+      }
+      const split = splitLongText(page.text);
+      for (const part of split) {
+        const chunkId = chunkIdFor(sourceId, chunkIndex, page.pageNumber);
+        const chunkText = part.text;
+        chunks.push({
+          chunk_id: chunkId,
+          source_id: sourceId,
+          source_name: doc.name,
+          type: inferType(doc.name, chunkText, page.pageNumber),
+          text: chunkText,
+          page_id: page.pageNumber ? `${sourceId}-p${String(page.pageNumber).padStart(3, '0')}` : undefined,
+          page_number: page.pageNumber,
+          char_start: part.start,
+          char_end: part.end,
+          routing: routeChunk(doc.name, chunkText)
+        });
+        chunkIndex++;
+      }
+    }
+  });
+
+  const sourceByName = new Map(docs.map((doc, idx) => [doc.name, sourceIdFor(idx)]));
+  images.forEach((image, idx) => {
+    const sourceId = sourceByName.get(image.source_name) || sourceIdFor(docs.length + idx);
+    const pageId = image.page_number ? `${sourceId}-p${String(image.page_number).padStart(3, '0')}` : undefined;
+    const chunkId = `${pageId || sourceId}-img${String(idx + 1).padStart(3, '0')}`;
+    const textLabel = `Visual source page/image: ${image.source_name}${image.page_number ? ` page ${image.page_number}` : ''}`;
+    chunks.push({
+      chunk_id: chunkId,
+      source_id: sourceId,
+      source_name: image.source_name,
+      type: 'image',
+      text: textLabel,
+      page_id: pageId,
+      page_number: image.page_number,
+      routing: routeChunk(image.source_name, textLabel),
+      image: { ...image, source_id: sourceId, page_id: pageId, chunk_id: chunkId }
+    });
+  });
+
+  return {
+    source_count: new Set(chunks.map(chunk => chunk.source_id)).size,
+    chunk_count: chunks.length,
+    chunks,
+    warnings
+  };
+};
+
+const tierForDomain = (chunk: SourceChunk, domain: string): SourceRelevanceTier => {
+  return chunk.routing.find(r => r.domain === domain)?.tier || 'unknown';
+};
+
+const scoreForDomain = (chunk: SourceChunk, domain: string): number => {
+  return chunk.routing.find(r => r.domain === domain)?.score || 0;
+};
+
+const routedDomains = (chunk: SourceChunk): string[] => chunk.routing
+  .filter(r => r.tier === 'high' || r.tier === 'medium')
+  .map(r => r.domain);
+
+const hasGapOrContradictionSignal = (chunk: SourceChunk): boolean => {
+  const lower = chunk.text.toLowerCase();
+  return GAP_TERMS.some(term => lower.includes(term)) || CONTRADICTION_TERMS.some(term => lower.includes(term));
+};
+
+const renderChunk = (chunk: SourceChunk, relevance: SourceRelevanceTier): string => {
+  const attrs = [
+    `id="${escapeXml(chunk.chunk_id)}"`,
+    `source_id="${escapeXml(chunk.source_id)}"`,
+    `source="${escapeXml(chunk.source_name)}"`,
+    chunk.page_number ? `page="${chunk.page_number}"` : '',
+    `type="${chunk.type}"`,
+    `relevance="${relevance}"`,
+    `routed_domains="${escapeXml(routedDomains(chunk).join(','))}"`
+  ].filter(Boolean).join(' ');
+  return `<CHUNK ${attrs}>\n${chunk.text}\n</CHUNK>`;
+};
+
+const manifestFor = (chunk: SourceChunk, relevance: SourceRelevanceTier): SourcePacketManifestItem => ({
+  chunk_id: chunk.chunk_id,
+  source_id: chunk.source_id,
+  source_name: chunk.source_name,
+  page_id: chunk.page_id,
+  page_number: chunk.page_number,
+  type: chunk.type,
+  relevance,
+  routed_domains: routedDomains(chunk)
+});
+
+export const buildDomainPacket = (registry: SourceRegistry, domainId: string): RoutedSourcePacket => {
+  const title = BATCH_TITLES[domainId] || domainId;
+  const candidates = registry.chunks
+    .map(chunk => ({ chunk, tier: tierForDomain(chunk, domainId), score: scoreForDomain(chunk, domainId) }))
+    .filter(item => item.tier === 'high' || item.tier === 'medium' || hasGapOrContradictionSignal(item.chunk))
+    .sort((a, b) => {
+      const tierWeight = (tier: SourceRelevanceTier) => tier === 'high' ? 3 : tier === 'medium' ? 2 : tier === 'unknown' ? 1 : 0;
+      return tierWeight(b.tier) - tierWeight(a.tier) || b.score - a.score || a.chunk.chunk_id.localeCompare(b.chunk.chunk_id);
+    });
+
+  const included: Array<{ chunk: SourceChunk; tier: SourceRelevanceTier }> = [];
+  let chars = 0;
+  for (const item of candidates) {
+    const nextLen = item.chunk.text.length + 260;
+    const target = included.length < 3 ? HARD_PACKET_CHARS : TARGET_PACKET_CHARS;
+    if (chars + nextLen > target) continue;
+    included.push({ chunk: item.chunk, tier: item.tier });
+    chars += nextLen;
+    if (chars >= TARGET_PACKET_CHARS) break;
+  }
+
+  const imageChunks = included.filter(item => item.chunk.image).map(item => item.chunk.image!) as ImageInput[];
+  const weakCoverage = included.length < 2 || included.every(item => item.tier !== 'high');
+  const coverageNotes = [
+    weakCoverage
+      ? `Packet ${domainId} has weak deterministic coverage; broad-source fallback is allowed for this batch.`
+      : `Packet ${domainId} includes high/medium relevance source chunks for ${title}.`,
+    `Candidate chunks: ${candidates.length}; included chunks: ${included.length}; full source registry remains available for verification fallback.`
+  ];
+
+  const manifest = included.map(item => manifestFor(item.chunk, item.tier));
+  const body = included.length > 0
+    ? included.map(item => renderChunk(item.chunk, item.tier)).join('\n\n')
+    : '<NO_ROUTED_CHUNKS>Deterministic routing found no domain-specific chunks. Treat source coverage as weak unless broad-source fallback provides evidence.</NO_ROUTED_CHUNKS>';
+  const manifestText = manifest.map(item => [
+    item.chunk_id,
+    item.source_name,
+    item.page_number ? `page ${item.page_number}` : '',
+    item.type,
+    item.relevance,
+    item.routed_domains.join(',')
+  ].filter(Boolean).join(' | ')).join('\n');
+
+  const text = `<SOURCE_PACKET domain="${escapeXml(domainId)}" title="${escapeXml(title)}">
+<PACKET_RULES>
+This packet controls attention, not truth. Use only cited source chunks as customer evidence. If coverage is weak, say so; do not infer maturity from routing.
+Evidence quotes should include chunk_id/source_id/page_number when available.
+</PACKET_RULES>
+<COVERAGE_NOTES>
+${coverageNotes.join('\n')}
+</COVERAGE_NOTES>
+<CHUNK_MANIFEST>
+${manifestText}
+</CHUNK_MANIFEST>
+${body}
+</SOURCE_PACKET>`;
+
+  return {
+    domain_id: domainId,
+    title,
+    text,
+    images: imageChunks,
+    manifest,
+    included_chunk_count: included.length,
+    total_candidate_chunks: candidates.length,
+    weak_coverage: weakCoverage,
+    coverage_notes: coverageNotes,
+    char_count: text.length
+  };
+};
+
+export const buildDomainPackets = (registry: SourceRegistry): Record<string, RoutedSourcePacket> => {
+  return Object.fromEntries(Object.keys(BATCH_TITLES).map(domain => [domain, buildDomainPacket(registry, domain)]));
+};
+
+const countMatches = (text: string, rx: RegExp): number => {
+  const matches = text.match(rx);
+  return matches ? matches.length : 0;
+};
+
+export const scanRegistryDlp = (registry: SourceRegistry): DlpScanResult => {
+  const patterns: Array<{ kind: DlpPatternHit['kind']; severity: DlpPatternHit['severity']; rx: RegExp }> = [
+    { kind: 'cloud_key', severity: 'block', rx: /\b(?:AKIA[0-9A-Z]{16}|\[AWS_KEY_REDACTED\])\b/g },
+    { kind: 'secret', severity: 'block', rx: /\b(?:sk-[a-zA-Z0-9]{20,}|pk_[a-zA-Z0-9]{20,}|\[API_KEY_REDACTED\])\b/g },
+    { kind: 'private_key', severity: 'block', rx: /-----BEGIN [A-Z ]*PRIVATE KEY-----/g },
+    { kind: 'email', severity: 'caution', rx: /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}|\[EMAIL_REDACTED\]/g },
+    { kind: 'phone', severity: 'caution', rx: /(?:\+?\d{1,3}[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}|\[PHONE_REDACTED\]/g },
+    { kind: 'ip', severity: 'caution', rx: /\b\d{1,3}(?:\.\d{1,3}){3}\b|\[IP_REDACTED\]/g },
+    { kind: 'financial_caution', severity: 'caution', rx: /\b(?:contract value|discount rate|edp pricing|negotiated rate|billing account|invoice number)\b/gi }
+  ];
+
+  const byKind = new Map<string, DlpPatternHit>();
+  for (const chunk of registry.chunks) {
+    for (const pattern of patterns) {
+      const count = countMatches(chunk.text, pattern.rx);
+      if (count === 0) continue;
+      const existing = byKind.get(pattern.kind) || {
+        kind: pattern.kind,
+        severity: pattern.severity,
+        count: 0,
+        chunk_ids: []
+      };
+      existing.count += count;
+      if (!existing.chunk_ids.includes(chunk.chunk_id)) existing.chunk_ids.push(chunk.chunk_id);
+      byKind.set(pattern.kind, existing);
+    }
+  }
+
+  const hits = Array.from(byKind.values());
+  const high = hits.filter(hit => hit.severity === 'block');
+  const caution = hits.filter(hit => hit.severity === 'caution');
+  return {
+    scanned_chunk_count: registry.chunk_count,
+    high_risk_hits: high,
+    caution_hits: caution,
+    blocked: high.length > 0,
+    warnings: [
+      ...caution.map(hit => `${hit.kind}: ${hit.count} caution-level hit(s) across ${hit.chunk_ids.length} chunk(s).`),
+      ...high.map(hit => `${hit.kind}: ${hit.count} high-risk hit(s) across ${hit.chunk_ids.length} chunk(s).`)
+    ]
+  };
+};
+
+const hasDlpRiskText = (chunk: SourceChunk): boolean => {
+  return /\[EMAIL_REDACTED\]|\[PHONE_REDACTED\]|\[IP_REDACTED\]|\[AWS_KEY_REDACTED\]|\[API_KEY_REDACTED\]|AKIA[0-9A-Z]{16}|sk-[a-zA-Z0-9]{20,}|PRIVATE KEY|billing account|contract value|discount rate|edp pricing/i.test(chunk.text);
+};
+
+export const buildDlpReviewPacket = (registry: SourceRegistry): { text: string; images: ImageInput[]; selected_chunk_count: number } => {
+  const selected = new Map<string, SourceChunk>();
+  const chunks = registry.chunks.filter(chunk => chunk.type !== 'image');
+  const add = (chunk?: SourceChunk) => {
+    if (chunk) selected.set(chunk.chunk_id, chunk);
+  };
+
+  add(chunks[0]);
+  add(chunks[chunks.length - 1]);
+  chunks.filter(hasDlpRiskText).forEach(add);
+  chunks.filter(chunk => chunk.type === 'table_profile').slice(0, 8).forEach(add);
+  chunks.filter(chunk => (chunk.parse_warnings || []).length > 0).forEach(add);
+
+  const representativeCount = Math.min(8, chunks.length);
+  for (let i = 0; i < representativeCount; i++) {
+    const idx = Math.floor((i / Math.max(1, representativeCount - 1)) * Math.max(0, chunks.length - 1));
+    add(chunks[idx]);
+  }
+
+  const rendered: string[] = [];
+  let chars = 0;
+  for (const chunk of selected.values()) {
+    const renderedChunk = renderChunk(chunk, 'medium');
+    if (chars + renderedChunk.length > 32000) continue;
+    rendered.push(renderedChunk);
+    chars += renderedChunk.length;
+  }
+
+  const imageChunks = registry.chunks.filter(chunk => chunk.image).slice(0, 24);
+  const text = `<DLP_REVIEW_PACKET>
+<DLP_PACKET_SCOPE>
+Distributed safety review packet built from the full source registry: first/last chunks, high-risk regex-hit chunks, table headers/profile chunks, parse-warning chunks, and representative later-page chunks.
+Full deterministic DLP scanned ${registry.chunk_count} chunk(s); this model review packet contains ${selected.size} text chunk(s) plus ${imageChunks.length} image part(s).
+</DLP_PACKET_SCOPE>
+${rendered.join('\n\n')}
+</DLP_REVIEW_PACKET>`;
+
+  return {
+    text,
+    images: imageChunks.map(chunk => chunk.image!) as ImageInput[],
+    selected_chunk_count: selected.size
+  };
+};
+
+export const sourceRegistryRuntimeStatus = (
+  registry: SourceRegistry,
+  packets: Record<string, RoutedSourcePacket>,
+  dlpReviewChunkCount: number,
+  dlpScan: DlpScanResult
+): SourceRegistryRuntimeStatus => ({
+  source_count: registry.source_count,
+  chunk_count: registry.chunk_count,
+  dlp_review_chunk_count: dlpReviewChunkCount,
+  dlp_high_risk_hits: dlpScan.high_risk_hits.reduce((sum, hit) => sum + hit.count, 0),
+  dlp_caution_hits: dlpScan.caution_hits.reduce((sum, hit) => sum + hit.count, 0),
+  packets: Object.fromEntries(Object.entries(packets).map(([domain, packet]) => [domain, {
+    included_chunk_count: packet.included_chunk_count,
+    total_candidate_chunks: packet.total_candidate_chunks,
+    weak_coverage: packet.weak_coverage,
+    char_count: packet.char_count
+  }]))
+});

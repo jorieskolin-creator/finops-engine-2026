@@ -6,7 +6,7 @@
     "alert_threshold_per_criterion": 2,
     "alert_threshold_aggregate": 15,
     "aggregate_explanation": "If total absolute deviation across all maturity and anti-pattern criteria exceeds this number, flag as model drift.",
-    "recommended_cadence": "After every Gemini model update, before every release, and quarterly as baseline",
+    "recommended_cadence": "After every model-routing update, before every release, and quarterly as baseline",
     "phase2_drift_check": "Phase 2 is deterministic math. If Phase 2 metrics drift, the bug is in Phase 1 scores, not Phase 2 code."
   },
   "golden_packs": {

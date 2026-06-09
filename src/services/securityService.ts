@@ -10,12 +10,20 @@ export const forensicSanitizeImport = (dirtyHtml: string): string => {
   });
 };
 
-export const generateSafetyAuditPrompt = (textSample: string, images?: ImageInput[]) => {
+export const generateSafetyAuditPrompt = (
+  reviewPacket: string,
+  images?: ImageInput[],
+  metadata?: { scannedChunkCount?: number; selectedChunkCount?: number; cautionNotes?: string[] }
+) => {
   const imageCount = images?.length ?? 0;
+  const scanned = metadata?.scannedChunkCount ?? 0;
+  const selected = metadata?.selectedChunkCount ?? 0;
   return `
 <task>
 You are a **Data Loss Prevention (DLP) Officer** for a FinOps Assessment Engine.
-Scan the following text sample (first 1500 chars)${imageCount > 0 ? ` AND the ${imageCount} attached image part(s)` : ''} for High-Risk Content.
+Scan the following distributed source-review packet${imageCount > 0 ? ` AND the ${imageCount} attached image part(s)` : ''} for High-Risk Content.
+
+The deterministic pre-scan has already inspected the full source registry${scanned ? ` (${scanned} chunk(s))` : ''}. This packet contains distributed review samples${selected ? ` (${selected} text chunk(s))` : ''}: first/last chunks, high-risk regex-hit chunks, table headers, parse warnings, and representative later pages/appendices. Do not assume only the beginning of the source was reviewed.
 
 **HIGH-RISK CATEGORIES:**
 1. **PII:** Social Security Numbers, Passport Numbers, Home Addresses, Personal Financial Data${imageCount > 0 ? ', faces of individuals in screenshots with names visible, employee photos' : ''}.
@@ -26,6 +34,7 @@ Scan the following text sample (first 1500 chars)${imageCount > 0 ? ` AND the ${
 
 **IMPORTANT:** Documents about cloud costs, budgets, and FinOps strategies are EXPECTED and should pass even if they mention dollar amounts in a business context. Only flag raw financial instruments or personal financial data.
 ${imageCount > 0 ? `\n**IMAGE-SPECIFIC GUIDANCE:** Dashboard screenshots, architecture diagrams, org charts, and PDF pages rendered as images are all EXPECTED FinOps content. Pass them unless they visibly contain one of the HIGH-RISK CATEGORIES above. A redacted dashboard or one showing percentages without raw dollar amounts is safe.\n` : ''}
+${metadata?.cautionNotes?.length ? `\n**DETERMINISTIC CAUTION NOTES:**\n${metadata.cautionNotes.map(note => `- ${note}`).join('\n')}\n` : ''}
 **OUTPUT FORMAT:**
 Return a JSON object ONLY:
 {
@@ -36,9 +45,9 @@ Return a JSON object ONLY:
 }
 </task>
 
-<text_sample>
-${textSample.substring(0, 1500)}...
-</text_sample>
+<distributed_review_packet>
+${reviewPacket.substring(0, 36000)}
+</distributed_review_packet>
 `;
 };
 

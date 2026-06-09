@@ -5,9 +5,6 @@
 //
 // Provider-specific notes
 // -----------------------
-// Gemini 3 (flash/pro):   thinkingConfig.thinkingLevel: 'low' | 'medium' | 'high'
-// Gemini 2.5 (flash/pro): thinkingConfig.thinkingBudget: number
-//                         (-1 dynamic, 0 disables on Flash only, positive = budget)
 // Anthropic (Sonnet/Opus/Haiku): maxTokens, optional extended thinking budget
 // OpenAI (GPT-5.x): reasoning.effort, maxTokens
 //
@@ -15,11 +12,7 @@
 // reads `id` verbatim and forwards it to the provider, so a typo here is the
 // only thing that breaks a swap.
 
-export type Provider = 'gemini' | 'anthropic' | 'openai';
-
-export type GeminiThinkingConfig =
-  | { thinkingLevel: 'low' | 'medium' | 'high' }
-  | { thinkingBudget: number };
+export type Provider = 'anthropic' | 'openai';
 
 export interface AnthropicThinkingConfig {
   type: 'enabled';
@@ -33,7 +26,6 @@ export interface OpenAIReasoningConfig {
 export interface ModelProfile {
   id: string;
   provider: Provider;
-  thinkingConfig?: GeminiThinkingConfig;
   anthropicThinking?: AnthropicThinkingConfig;
   openaiReasoning?: OpenAIReasoningConfig;
   maxTokens?: number;
@@ -58,37 +50,6 @@ export type StageId =
 // ============================================================================
 
 export const PROFILES = {
-  // Gemini family
-  GEMINI_35_FLASH: {
-    id: 'gemini-3.5-flash',
-    provider: 'gemini',
-    thinkingConfig: { thinkingLevel: 'low' },
-  } satisfies ModelProfile,
-
-  GEMINI_35_FLASH_MEDIUM: {
-    id: 'gemini-3.5-flash',
-    provider: 'gemini',
-    thinkingConfig: { thinkingLevel: 'medium' },
-  } satisfies ModelProfile,
-
-  GEMINI_31_PRO: {
-    id: 'gemini-3.1-pro-preview',
-    provider: 'gemini',
-    thinkingConfig: { thinkingLevel: 'high' },
-  } satisfies ModelProfile,
-
-  GEMINI_25_FLASH: {
-    id: 'gemini-2.5-flash',
-    provider: 'gemini',
-    thinkingConfig: { thinkingBudget: -1 },
-  } satisfies ModelProfile,
-
-  GEMINI_25_PRO: {
-    id: 'gemini-2.5-pro',
-    provider: 'gemini',
-    thinkingConfig: { thinkingBudget: -1 },
-  } satisfies ModelProfile,
-
   // Anthropic family
   SONNET_46: {
     id: 'claude-sonnet-4-6',
@@ -171,10 +132,10 @@ export const PROFILES = {
 // ============================================================================
 
 export const STAGE_MODELS: Record<StageId, ModelProfile> = {
-  preflight:            PROFILES.GEMINI_35_FLASH,
+  preflight:            PROFILES.GPT_55_PREFLIGHT,
   forensic_audit:       PROFILES.SONNET_46,
   targeted_rescan:      PROFILES.OPUS_47,
-  evidence_check:       PROFILES.GEMINI_31_PRO,
+  evidence_check:       PROFILES.GPT_55_EVIDENCE_CHECK,
   evidence_adjudication: PROFILES.GPT_55_FACT_CHECK,
   synthesis:            PROFILES.SONNET_46,
   roadmap_synthesis:    PROFILES.OPUS_47,
@@ -188,21 +149,21 @@ export const STAGE_MODELS: Record<StageId, ModelProfile> = {
 // Fallback chains — tried in order if primary fails
 //
 // Tiering rule: order fallbacks by task fit, not only provider family.
-// Fast safety checks retain Gemini first; independent verification keeps
-// a Gemini Pro primary; high-stakes synthesis and validation route through
-// Claude Opus/Sonnet and GPT-5.5 before lower-cost Gemini fallbacks.
+// This deployment intentionally excludes Gemini providers. Fast safety checks,
+// independent verification, synthesis, and validation route through GPT-5.5
+// and Claude profiles only.
 // ============================================================================
 
 export const FALLBACK_CHAIN: Record<StageId, ModelProfile[]> = {
-  preflight:            [PROFILES.GEMINI_25_PRO, PROFILES.GPT_55_PREFLIGHT],
-  forensic_audit:       [PROFILES.GPT_55_AUDIT, PROFILES.GEMINI_25_PRO],
-  targeted_rescan:      [PROFILES.GPT_55_ROADMAP, PROFILES.SONNET_46, PROFILES.GEMINI_25_PRO],
-  evidence_check:       [PROFILES.SONNET_46, PROFILES.GPT_55_EVIDENCE_CHECK],
+  preflight:            [PROFILES.SONNET_46],
+  forensic_audit:       [PROFILES.GPT_55_AUDIT, PROFILES.OPUS_47],
+  targeted_rescan:      [PROFILES.GPT_55_ROADMAP, PROFILES.SONNET_46],
+  evidence_check:       [PROFILES.SONNET_46, PROFILES.OPUS_47],
   evidence_adjudication: [PROFILES.OPUS_47],
-  synthesis:            [PROFILES.GPT_55_SYNTHESIS, PROFILES.GEMINI_25_PRO],
-  roadmap_synthesis:    [PROFILES.GPT_55_ROADMAP, PROFILES.GEMINI_31_PRO],
-  synthesis_escalation: [PROFILES.GPT_55_SYNTHESIS, PROFILES.GEMINI_31_PRO],
-  fact_check:           [PROFILES.SONNET_46, PROFILES.GEMINI_25_PRO],
+  synthesis:            [PROFILES.GPT_55_SYNTHESIS, PROFILES.OPUS_47],
+  roadmap_synthesis:    [PROFILES.GPT_55_ROADMAP, PROFILES.SONNET_46],
+  synthesis_escalation: [PROFILES.GPT_55_SYNTHESIS, PROFILES.SONNET_46],
+  fact_check:           [PROFILES.SONNET_46],
   fact_check_high:      [PROFILES.SONNET_46],
   quality_gate:         [PROFILES.SONNET_46],
 };

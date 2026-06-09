@@ -135,7 +135,7 @@ export const NeuralLoadingGrid: React.FC<{ progress: number; stage: string }> = 
           <div className="inline-flex items-center gap-2 px-6 py-2 rounded-full bg-slate-800/50 border border-slate-700/50 shadow-sm backdrop-blur-sm">
             <span className={`w-2 h-2 rounded-full ${stage === 'strategy' ? 'bg-violet-500 animate-pulse shadow-[0_0_15px_rgba(139,92,246,0.5)]' : 'bg-emerald-400 animate-pulse shadow-[0_0_15px_rgba(52,211,153,0.5)]'}`}></span>
             <span className="text-xs font-bold uppercase tracking-[0.2em] text-slate-300">
-              {stage === 'strategy' ? 'PHASE 3: STRATEGIC SYNTHESIS (Opus 4.7)' : 'PHASE 1: FORENSIC AUDIT (Gemini Pro)'}
+              {stage === 'strategy' ? 'PHASE 3: STRATEGIC SYNTHESIS (Opus 4.7)' : 'PHASE 1: FORENSIC AUDIT (Sonnet 4.6)'}
             </span>
           </div>
         </div>
@@ -144,7 +144,7 @@ export const NeuralLoadingGrid: React.FC<{ progress: number; stage: string }> = 
             {stage === 'strategy' ? 'Synthesizing Roadmap...' : 'Analyzing FinOps Streams...'}
           </h2>
           <p className="text-slate-300 font-medium text-lg">
-            {stage === 'strategy' ? 'Claude Opus 4.7 - Strategy Engine Active' : 'Gemini 2.5 Pro - Parallel Batching Active'}
+            {stage === 'strategy' ? 'Claude Opus 4.7 - Strategy Engine Active' : 'Claude Sonnet 4.6 - Parallel Batching Active'}
           </p>
         </div>
         <div className="flex justify-center gap-4 md:gap-8 mb-20 relative">

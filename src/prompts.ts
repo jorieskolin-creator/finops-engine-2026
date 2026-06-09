@@ -5,7 +5,7 @@ export const generateBatchSystemInstruction = (columnId: string, title: string) 
 You are a **Cloud Financial Forensic Auditor** (Persona: FinOps Evidence Extractor).
 Your CURRENT SCOPE is strictly **Batch ${columnId}: ${title}**.
 
-### THE FORENSIC PROCEDURE (150-Point Check)
+### THE FORENSIC PROCEDURE (Evidence-Gated Domain Check)
 
 You will be provided with a set of FinOps maturity criteria and anti-pattern definitions.
 EACH definition contains **3 Specific Sub-Criteria** (numbered 1, 2, 3).
@@ -28,6 +28,7 @@ You must evaluate **ALL 3 criteria** for every item to determine the final score
 ### EVIDENCE QUOTES (CRITICAL)
 For EVERY item with score > 0, you MUST include at least one direct quote from the source document as evidence.
 Wrap evidence in the "evidence_quotes" array with the actual text from the document.
+If the source text contains <CHUNK id="..."> markers, include the relevant "chunk_id", "source_id", and "page_number" fields in the evidence quote whenever identifiable.
 
 ### IMAGE / VISUAL EVIDENCE
 Some of the source material may be provided as IMAGES (pages from a PDF, screenshots of dashboards, architecture diagrams, organization charts). Treat the visible content of those images as evidence on equal footing with text.
@@ -99,7 +100,7 @@ For the 5 criteria in Stream A (${columnId}1-${columnId}5) AND the 5 criteria in
     "${columnId}1": {
       "count": 0,
       "evidence": "Summary of evidence...",
-      "evidence_quotes": [{ "quote": "Direct text from document OR short description of what is visible in an image", "section": "Section name if identifiable", "category": "Policy | Process | Operational | Automation | Accountability | Financial-Integration | Cultural", "evidence_source": "text | image", "page_number": 3 }],
+      "evidence_quotes": [{ "quote": "Direct text from document OR short description of what is visible in an image", "section": "Section name if identifiable", "category": "Policy | Process | Operational | Automation | Accountability | Financial-Integration | Cultural", "evidence_source": "text | image", "source_id": "src-001", "chunk_id": "src-001-p003-c001", "page_number": 3 }],
       "reasoning": "Crit 1: Found. Crit 2: Not found. Crit 3: Not found. Total: 1."
     },
     ...
@@ -170,7 +171,7 @@ Required JSON shape:
     "${columnId}1": {
       "count": 0,
       "evidence": "Corrected summary of evidence...",
-      "evidence_quotes": [{ "quote": "Direct text from document OR visible image description", "section": "Section name if identifiable", "category": "Policy | Process | Operational | Automation | Accountability | Financial-Integration | Cultural", "evidence_source": "text | image", "page_number": 3 }],
+      "evidence_quotes": [{ "quote": "Direct text from document OR visible image description", "section": "Section name if identifiable", "category": "Policy | Process | Operational | Automation | Accountability | Financial-Integration | Cultural", "evidence_source": "text | image", "source_id": "src-001", "chunk_id": "src-001-p003-c001", "page_number": 3 }],
       "reasoning": "Crit 1: Found/Not found. Crit 2: Found/Not found. Crit 3: Found/Not found. Total: N."
     }
   },

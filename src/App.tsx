@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { analyzeDocument } from './services/geminiService';
+import { analyzeDocument } from './services/analysisService';
 import { scanInputText, sanitizeInput } from './services/preFlightService';
 import { extractPagesFromPdf, imageFileToInput } from './services/pdfService';
 import type { PdfParseQuality } from './services/pdfService';
@@ -1820,7 +1820,7 @@ const App: React.FC = () => {
               <span className="font-display font-bold text-slate-300">FinOps Assessment Engine</span>
             </div>
             <p className="text-xs text-slate-400 leading-relaxed max-w-xs mx-auto md:mx-0">
-              Assessment Suite v1.0<br />Multi-Model Architecture (Gemini Pro + Claude Opus)
+              Assessment Suite v1.0<br />Multi-Model Architecture (GPT-5.5 + Claude Sonnet/Opus)
             </p>
           </div>
 
