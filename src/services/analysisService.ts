@@ -22,7 +22,7 @@ import {
   parseFactCheckResponse
 } from "./factCheckService";
 import { FactCheckClaim, FactCheckResult, FactCheckPassSnapshot } from "../types";
-import { STAGE_MODELS, StageId } from "../models";
+import { MODEL_ROUTING_MODE, STAGE_MODELS, StageId } from "../models";
 import { runStage, serverLog, newRunId } from "./modelRouter";
 import { sanitizeRoadmapTacticGrounding, TacticGroundingAdjustment } from "./tacticGroundingService";
 import { sanitizeStrategyAfterFactCheck } from "./strategySanitationService";
@@ -223,6 +223,7 @@ export const analyzeDocument = async (
     image_count: images.length,
     image_kb: Math.round(images.reduce((s, i) => s + i.data.length, 0) / 1024),
     deep_mode: !!options.deepMode,
+    model_mode: MODEL_ROUTING_MODE,
     preflight: STAGE_MODELS.preflight.id,
     forensic_audit: STAGE_MODELS.forensic_audit.id,
     targeted_rescan: STAGE_MODELS.targeted_rescan.id,
@@ -1000,6 +1001,7 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => `  ${cat}
       fact_check_supported: factCheck.supported_count,
       fact_check_total: factCheck.total_claims,
       models: actuals,
+      model_mode: MODEL_ROUTING_MODE,
     });
 
     const finalResult: DiagnosticResult = {
@@ -1011,6 +1013,7 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => `  ${cat}
         source_parse_warnings: sourceParseWarnings.length > 0 ? sourceParseWarnings : undefined,
         source_registry: sourceRegistryStatus,
         knowledge_base: referenceKbIndex.status,
+        model_mode: MODEL_ROUTING_MODE,
         model_config: {
           preflight: actuals.preflight,
           forensic_audit: actuals.forensic_audit,
@@ -1071,6 +1074,7 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => `  ${cat}
       duration_ms: duration,
       error: error?.message || String(error),
       models: actuals,
+      model_mode: MODEL_ROUTING_MODE,
     });
     throw error;
   }

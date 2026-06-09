@@ -31,6 +31,8 @@ export interface ModelProfile {
   maxTokens?: number;
 }
 
+export type ModelRoutingMode = 'normal' | 'cheap_test';
+
 // Stage IDs — every LLM call in the pipeline belongs to exactly one stage.
 export type StageId =
   | 'preflight'           // Phase 0: DLP / safety scan
@@ -125,13 +127,69 @@ export const PROFILES = {
     openaiReasoning: { effort: 'medium' },
     maxTokens: 12000,
   } satisfies ModelProfile,
+
+  GPT_54_MINI_PREFLIGHT: {
+    id: 'gpt-5.4-mini',
+    provider: 'openai',
+    openaiReasoning: { effort: 'low' },
+    maxTokens: 4096,
+  } satisfies ModelProfile,
+
+  GPT_54_MINI_AUDIT: {
+    id: 'gpt-5.4-mini',
+    provider: 'openai',
+    openaiReasoning: { effort: 'medium' },
+    maxTokens: 12000,
+  } satisfies ModelProfile,
+
+  GPT_54_MINI_EVIDENCE_CHECK: {
+    id: 'gpt-5.4-mini',
+    provider: 'openai',
+    openaiReasoning: { effort: 'medium' },
+    maxTokens: 12000,
+  } satisfies ModelProfile,
+
+  GPT_54_MINI_SYNTHESIS: {
+    id: 'gpt-5.4-mini',
+    provider: 'openai',
+    openaiReasoning: { effort: 'medium' },
+    maxTokens: 12000,
+  } satisfies ModelProfile,
+
+  GPT_54_MINI_ROADMAP: {
+    id: 'gpt-5.4-mini',
+    provider: 'openai',
+    openaiReasoning: { effort: 'medium' },
+    maxTokens: 12000,
+  } satisfies ModelProfile,
+
+  GPT_54_MINI_FACT_CHECK: {
+    id: 'gpt-5.4-mini',
+    provider: 'openai',
+    openaiReasoning: { effort: 'medium' },
+    maxTokens: 12000,
+  } satisfies ModelProfile,
+
+  GPT_54_MINI_FACT_CHECK_HIGH: {
+    id: 'gpt-5.4-mini',
+    provider: 'openai',
+    openaiReasoning: { effort: 'high' },
+    maxTokens: 12000,
+  } satisfies ModelProfile,
+
+  GPT_54_MINI_QUALITY_GATE: {
+    id: 'gpt-5.4-mini',
+    provider: 'openai',
+    openaiReasoning: { effort: 'medium' },
+    maxTokens: 8192,
+  } satisfies ModelProfile,
 } as const;
 
 // ============================================================================
 // Stage assignments — change a stage's primary by editing the value here
 // ============================================================================
 
-export const STAGE_MODELS: Record<StageId, ModelProfile> = {
+export const NORMAL_STAGE_MODELS: Record<StageId, ModelProfile> = {
   preflight:            PROFILES.GPT_55_PREFLIGHT,
   forensic_audit:       PROFILES.SONNET_46,
   targeted_rescan:      PROFILES.OPUS_47,
@@ -145,6 +203,20 @@ export const STAGE_MODELS: Record<StageId, ModelProfile> = {
   quality_gate:         PROFILES.GPT_55_QUALITY_GATE,
 };
 
+export const CHEAP_TEST_STAGE_MODELS: Record<StageId, ModelProfile> = {
+  preflight:            PROFILES.GPT_54_MINI_PREFLIGHT,
+  forensic_audit:       PROFILES.HAIKU_45,
+  targeted_rescan:      PROFILES.GPT_54_MINI_AUDIT,
+  evidence_check:       PROFILES.GPT_54_MINI_EVIDENCE_CHECK,
+  evidence_adjudication: PROFILES.GPT_54_MINI_FACT_CHECK,
+  synthesis:            PROFILES.HAIKU_45,
+  roadmap_synthesis:    PROFILES.GPT_54_MINI_ROADMAP,
+  synthesis_escalation: PROFILES.GPT_54_MINI_SYNTHESIS,
+  fact_check:           PROFILES.GPT_54_MINI_FACT_CHECK,
+  fact_check_high:      PROFILES.GPT_54_MINI_FACT_CHECK_HIGH,
+  quality_gate:         PROFILES.GPT_54_MINI_QUALITY_GATE,
+};
+
 // ============================================================================
 // Fallback chains — tried in order if primary fails
 //
@@ -154,7 +226,7 @@ export const STAGE_MODELS: Record<StageId, ModelProfile> = {
 // and Claude profiles only.
 // ============================================================================
 
-export const FALLBACK_CHAIN: Record<StageId, ModelProfile[]> = {
+export const NORMAL_FALLBACK_CHAIN: Record<StageId, ModelProfile[]> = {
   preflight:            [PROFILES.SONNET_46],
   forensic_audit:       [PROFILES.GPT_55_AUDIT, PROFILES.OPUS_47],
   targeted_rescan:      [PROFILES.GPT_55_ROADMAP, PROFILES.SONNET_46],
@@ -167,6 +239,35 @@ export const FALLBACK_CHAIN: Record<StageId, ModelProfile[]> = {
   fact_check_high:      [PROFILES.SONNET_46],
   quality_gate:         [PROFILES.SONNET_46],
 };
+
+export const CHEAP_TEST_FALLBACK_CHAIN: Record<StageId, ModelProfile[]> = {
+  preflight:            [PROFILES.SONNET_46],
+  forensic_audit:       [PROFILES.SONNET_46],
+  targeted_rescan:      [PROFILES.SONNET_46],
+  evidence_check:       [PROFILES.SONNET_46],
+  evidence_adjudication: [PROFILES.SONNET_46],
+  synthesis:            [PROFILES.SONNET_46],
+  roadmap_synthesis:    [PROFILES.SONNET_46],
+  synthesis_escalation: [PROFILES.SONNET_46],
+  fact_check:           [PROFILES.SONNET_46],
+  fact_check_high:      [PROFILES.SONNET_46],
+  quality_gate:         [PROFILES.SONNET_46],
+};
+
+const configuredRoutingMode = (): ModelRoutingMode => {
+  const override = (globalThis as any).__FINOPS_MODEL_MODE__;
+  const meta = import.meta as any;
+  const mode = override || meta?.env?.VITE_FINOPS_MODEL_MODE;
+  return mode === 'cheap_test' ? 'cheap_test' : 'normal';
+};
+
+export const MODEL_ROUTING_MODE: ModelRoutingMode = configuredRoutingMode();
+
+export const STAGE_MODELS: Record<StageId, ModelProfile> =
+  MODEL_ROUTING_MODE === 'cheap_test' ? CHEAP_TEST_STAGE_MODELS : NORMAL_STAGE_MODELS;
+
+export const FALLBACK_CHAIN: Record<StageId, ModelProfile[]> =
+  MODEL_ROUTING_MODE === 'cheap_test' ? CHEAP_TEST_FALLBACK_CHAIN : NORMAL_FALLBACK_CHAIN;
 
 export function modelsFor(stage: StageId): ModelProfile[] {
   return [STAGE_MODELS[stage], ...FALLBACK_CHAIN[stage]];

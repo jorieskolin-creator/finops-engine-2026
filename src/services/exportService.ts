@@ -758,6 +758,7 @@ const generateSummaryReportHtml = (result: DiagnosticResult): string => {
         <span class="pill">Classification ${escapeHtml(cwrClass)}</span>
         <span class="pill pill-${qgTone}">Quality Gate ${escapeHtml(result.quality_gate.decision)}</span>
         <span class="pill">Evidence ${Math.round(m.evidence_density)}%</span>
+        ${result.meta.model_mode ? `<span class="pill">Model mode ${escapeHtml(result.meta.model_mode)}</span>` : ''}
         ${kbStatus ? `<span class="pill">${escapeHtml(kbStatus)}</span>` : ''}
       </div>
       ${sourceNote}
@@ -986,6 +987,7 @@ const generateReportHtml = (result: DiagnosticResult): string => {
   <h1>FinOps Maturity Assessment</h1>
   <div class="meta">
     <p>Generated ${escapeHtml(result.meta.timestamp)} · Engine ${escapeHtml(result.meta.engine_version)}</p>
+    ${result.meta.model_mode ? `<p>Model routing mode: ${escapeHtml(result.meta.model_mode)}</p>` : ''}
     <p>Models: ${escapeHtml(result.meta.model_config.preflight)} (Pre-Flight) · ${escapeHtml(result.meta.model_config.forensic_audit)} (Audit) · ${escapeHtml(result.meta.model_config.evidence_check)} (Evidence Check) · ${escapeHtml(result.meta.model_config.synthesis)} (Summary/Diagnosis)${result.meta.model_config.roadmap_synthesis ? ` · ${escapeHtml(result.meta.model_config.roadmap_synthesis)} (Roadmap)` : ''} · ${escapeHtml(result.meta.model_config.fact_check)} (Fact-Check)</p>
     ${result.meta.knowledge_base ? `<p>Knowledge Base: ${result.meta.knowledge_base.source === 'remote_blob'
       ? `Remote PDF KB loaded (${escapeHtml(String(result.meta.knowledge_base.document_count))} PDFs${result.meta.knowledge_base.failure_count ? `, ${escapeHtml(String(result.meta.knowledge_base.failure_count))} issue(s)` : ''})`

@@ -255,6 +255,7 @@ export interface AnalysisMeta {
   knowledge_base?: KnowledgeBaseRuntimeStatus;
   run_trace?: RunTrace;
   run_trace_summary?: RunTraceSummary;
+  model_mode?: 'normal' | 'cheap_test';
   model_config: {
     preflight: string;
     forensic_audit: string;

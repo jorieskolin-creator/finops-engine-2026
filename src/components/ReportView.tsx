@@ -889,6 +889,7 @@ export const ReportView: React.FC<ReportViewProps> = ({ result, onBack, onDownlo
 
         <div className="text-center py-8 border-t border-slate-200 text-sm text-slate-400">
           <p>FinOps Assessment Engine v{result.meta.engine_version}</p>
+          {result.meta.model_mode && <p>Model routing mode: {result.meta.model_mode}</p>}
           <p>
             Models: {result.meta.model_config.preflight} (Pre-Flight) | {result.meta.model_config.forensic_audit} (Audit) | {result.meta.model_config.evidence_check} (Evidence Check) | {result.meta.model_config.synthesis} (Summary/Diagnosis)
             {result.meta.model_config.roadmap_synthesis ? ` | ${result.meta.model_config.roadmap_synthesis} (Roadmap)` : ''} | {result.meta.model_config.fact_check} (Fact-Check)

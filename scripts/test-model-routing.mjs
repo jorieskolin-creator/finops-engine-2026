@@ -8,7 +8,24 @@ try {
   const mod = await import('../node_modules/typescript/lib/typescript.js');
   ts = mod.default ?? mod;
 } catch {
-  console.warn('model routing tests skipped: TypeScript compiler is unavailable in this local dependency tree');
+  ts = null;
+}
+
+const source = await readFile(new URL('../src/models.ts', import.meta.url), 'utf8');
+const analysisServiceSource = await readFile(new URL('../src/services/analysisService.ts', import.meta.url), 'utf8');
+const orchestratorSource = await readFile(new URL('../src/orchestrator.ts', import.meta.url), 'utf8');
+
+if (!ts) {
+  assert.match(source, /export const NORMAL_STAGE_MODELS[\s\S]*?preflight:\s+PROFILES\.GPT_55_PREFLIGHT/);
+  assert.match(source, /export const CHEAP_TEST_STAGE_MODELS[\s\S]*?preflight:\s+PROFILES\.GPT_54_MINI_PREFLIGHT/);
+  assert.match(source, /forensic_audit:\s+PROFILES\.HAIKU_45/);
+  assert.match(source, /roadmap_synthesis:\s+PROFILES\.GPT_54_MINI_ROADMAP/);
+  assert.match(source, /export const CHEAP_TEST_FALLBACK_CHAIN[\s\S]*?quality_gate:\s+\[PROFILES\.SONNET_46\]/);
+  assert.match(source, /MODEL_ROUTING_MODE === 'cheap_test' \? CHEAP_TEST_STAGE_MODELS : NORMAL_STAGE_MODELS/);
+  assert.match(source, /MODEL_ROUTING_MODE === 'cheap_test' \? CHEAP_TEST_FALLBACK_CHAIN : NORMAL_FALLBACK_CHAIN/);
+  assert.match(analysisServiceSource, /model_mode: MODEL_ROUTING_MODE/);
+  assert.doesNotMatch(source, /provider:\s*'gemini'/);
+  console.log('model routing textual tests passed (TypeScript compiler unavailable)');
   process.exit(0);
 }
 
@@ -21,12 +38,13 @@ const compile = (source) => ts.transpileModule(source, {
 }).outputText;
 
 const dir = await mkdtemp(join(tmpdir(), 'finops-model-routing-'));
-const source = await readFile(new URL('../src/models.ts', import.meta.url), 'utf8');
 const modulePath = join(dir, 'models.mjs');
 await writeFile(modulePath, compile(source), 'utf8');
 
-const { STAGE_MODELS, modelsFor } = await import(`file://${modulePath}`);
+const normal = await import(`file://${modulePath}`);
+const { MODEL_ROUTING_MODE, STAGE_MODELS, modelsFor } = normal;
 
+assert.equal(MODEL_ROUTING_MODE, 'normal');
 assert.equal(STAGE_MODELS.preflight.provider, 'openai');
 assert.equal(STAGE_MODELS.preflight.id, 'gpt-5.5');
 assert.deepEqual(STAGE_MODELS.preflight.openaiReasoning, { effort: 'low' });
@@ -114,7 +132,42 @@ for (const stage of Object.keys(STAGE_MODELS)) {
   );
 }
 
-const analysisServiceSource = await readFile(new URL('../src/services/analysisService.ts', import.meta.url), 'utf8');
+const cheapModulePath = join(dir, 'models-cheap.mjs');
+await writeFile(cheapModulePath, compile(source), 'utf8');
+globalThis.__FINOPS_MODEL_MODE__ = 'cheap_test';
+const cheap = await import(`file://${cheapModulePath}`);
+delete globalThis.__FINOPS_MODEL_MODE__;
+
+assert.equal(cheap.MODEL_ROUTING_MODE, 'cheap_test');
+assert.equal(cheap.STAGE_MODELS.preflight.id, 'gpt-5.4-mini');
+assert.deepEqual(cheap.STAGE_MODELS.preflight.openaiReasoning, { effort: 'low' });
+assert.equal(cheap.STAGE_MODELS.forensic_audit.id, 'claude-haiku-4-5-20251001');
+assert.equal(cheap.STAGE_MODELS.synthesis.id, 'claude-haiku-4-5-20251001');
+assert.equal(cheap.STAGE_MODELS.targeted_rescan.id, 'gpt-5.4-mini');
+assert.equal(cheap.STAGE_MODELS.evidence_check.id, 'gpt-5.4-mini');
+assert.equal(cheap.STAGE_MODELS.evidence_adjudication.id, 'gpt-5.4-mini');
+assert.equal(cheap.STAGE_MODELS.roadmap_synthesis.id, 'gpt-5.4-mini');
+assert.equal(cheap.STAGE_MODELS.synthesis_escalation.id, 'gpt-5.4-mini');
+assert.equal(cheap.STAGE_MODELS.fact_check.id, 'gpt-5.4-mini');
+assert.equal(cheap.STAGE_MODELS.fact_check_high.id, 'gpt-5.4-mini');
+assert.deepEqual(cheap.STAGE_MODELS.fact_check_high.openaiReasoning, { effort: 'high' });
+assert.equal(cheap.STAGE_MODELS.quality_gate.id, 'gpt-5.4-mini');
+
+for (const stage of Object.keys(cheap.STAGE_MODELS)) {
+  const chain = cheap.modelsFor(stage);
+  assert.equal(chain.at(-1).id, 'claude-sonnet-4-6', `${stage} should use Sonnet as the one cheap-mode backup`);
+  assert.equal(
+    chain.some((profile) => profile.id === 'claude-opus-4-7'),
+    false,
+    `${stage} should not include Opus in cheap_test mode`,
+  );
+  assert.equal(
+    chain.some((profile) => profile.provider === 'gemini' || profile.id.includes('gemini')),
+    false,
+    `${stage} should not include Gemini in cheap_test mode`,
+  );
+}
+
 assert.match(
   analysisServiceSource,
   /substage: 'evidence_summary'[\s\S]*?actuals\.synthesis = resp\.modelUsed\.id|actuals\.synthesis = resp\.modelUsed\.id[\s\S]*?substage: 'evidence_summary'/,
@@ -126,7 +179,6 @@ assert.match(
   'roadmap model should be recorded as roadmap_synthesis metadata'
 );
 
-const orchestratorSource = await readFile(new URL('../src/orchestrator.ts', import.meta.url), 'utf8');
 assert.match(
   orchestratorSource,
   /runSingleBatch\(batchId, text, images, ctx, prompt, 'targeted_rescan'\)/,
@@ -137,6 +189,12 @@ assert.match(
   analysisServiceSource,
   /runFactCheck\(strategyData, factCheck\.attempts \+ 1, 'fact_check_high'\)/,
   'fact-check should have a high-reasoning escalation path'
+);
+
+assert.match(
+  analysisServiceSource,
+  /model_mode: MODEL_ROUTING_MODE/,
+  'pipeline metadata should record active model routing mode'
 );
 
 console.log('model routing unit tests passed');
