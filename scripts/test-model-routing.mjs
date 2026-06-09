@@ -134,9 +134,17 @@ for (const stage of Object.keys(STAGE_MODELS)) {
 
 const cheapModulePath = join(dir, 'models-cheap.mjs');
 await writeFile(cheapModulePath, compile(source), 'utf8');
-globalThis.__FINOPS_MODEL_MODE__ = 'cheap_test';
+globalThis.window = {
+  location: { search: '?model_mode=cheap_test' },
+  sessionStorage: {
+    value: undefined,
+    setItem(_key, value) { this.value = value; },
+    getItem() { return this.value; },
+    removeItem() { this.value = undefined; },
+  },
+};
 const cheap = await import(`file://${cheapModulePath}`);
-delete globalThis.__FINOPS_MODEL_MODE__;
+delete globalThis.window;
 
 assert.equal(cheap.MODEL_ROUTING_MODE, 'cheap_test');
 assert.equal(cheap.STAGE_MODELS.preflight.id, 'gpt-5.4-mini');
@@ -195,6 +203,17 @@ assert.match(
   analysisServiceSource,
   /model_mode: MODEL_ROUTING_MODE/,
   'pipeline metadata should record active model routing mode'
+);
+
+assert.match(
+  source,
+  /new URLSearchParams\(window\.location\.search\)/,
+  'cheap mode should be activatable from the browser URL'
+);
+assert.match(
+  source,
+  /sessionStorage\?\.setItem\(RUNTIME_MODEL_MODE_KEY, 'cheap_test'\)/,
+  'cheap mode URL activation should persist for the browser session'
 );
 
 console.log('model routing unit tests passed');

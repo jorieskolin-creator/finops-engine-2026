@@ -254,10 +254,39 @@ export const CHEAP_TEST_FALLBACK_CHAIN: Record<StageId, ModelProfile[]> = {
   quality_gate:         [PROFILES.SONNET_46],
 };
 
+const RUNTIME_MODEL_MODE_KEY = 'finops_model_mode';
+
+const runtimeRoutingMode = (): ModelRoutingMode | undefined => {
+  const globalOverride = (globalThis as any).__FINOPS_MODEL_MODE__;
+  if (globalOverride === 'cheap_test' || globalOverride === 'normal') return globalOverride;
+
+  if (typeof window === 'undefined') return undefined;
+
+  try {
+    const params = new URLSearchParams(window.location.search);
+    const queryMode = params.get('model_mode') || params.get('modelMode');
+    const cheapFlag = params.get('cheap_test');
+    if (queryMode === 'cheap_test' || cheapFlag === '1' || cheapFlag === 'true') {
+      window.sessionStorage?.setItem(RUNTIME_MODEL_MODE_KEY, 'cheap_test');
+      return 'cheap_test';
+    }
+    if (queryMode === 'normal' || cheapFlag === '0' || cheapFlag === 'false') {
+      window.sessionStorage?.removeItem(RUNTIME_MODEL_MODE_KEY);
+      return 'normal';
+    }
+
+    const storedMode = window.sessionStorage?.getItem(RUNTIME_MODEL_MODE_KEY);
+    if (storedMode === 'cheap_test') return 'cheap_test';
+  } catch {
+    return undefined;
+  }
+
+  return undefined;
+};
+
 const configuredRoutingMode = (): ModelRoutingMode => {
-  const override = (globalThis as any).__FINOPS_MODEL_MODE__;
   const meta = import.meta as any;
-  const mode = override || meta?.env?.VITE_FINOPS_MODEL_MODE;
+  const mode = runtimeRoutingMode() || meta?.env?.VITE_FINOPS_MODEL_MODE;
   return mode === 'cheap_test' ? 'cheap_test' : 'normal';
 };
 
