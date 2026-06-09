@@ -186,7 +186,7 @@ export const PROFILES = {
 } as const;
 
 // ============================================================================
-// Stage assignments — change a stage's primary by editing the value here
+// Stage assignments — VITE_FINOPS_MODEL_MODE=cheap_test
 // ============================================================================
 
 export const NORMAL_STAGE_MODELS: Record<StageId, ModelProfile> = {
