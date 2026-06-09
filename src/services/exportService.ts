@@ -28,6 +28,8 @@ const qualityGateStatusText = (gate: QualityGateResult): string => {
   return 'Assessment is unsafe to act on until blocking issues are resolved.';
 };
 
+const formatNumber = (value: number): string => Number.isFinite(value) ? value.toLocaleString('en-US') : '0';
+
 const factCheckStatusText = (gate: QualityGateResult): string => {
   const fc = gate.fact_check;
   if (!fc) return 'fact-check unavailable';
@@ -101,6 +103,91 @@ const renderQualityGateAppendix = (gate: QualityGateResult): string => {
     ${hasFactCheckNotes ? `<div class="gate-label">Remaining fact-check notes</div><ul class="appendix-list">${gate.fact_check!.unsupported_claims.map(c => `<li><strong>${escapeHtml(c.source_location || 'unknown')}</strong>: <em>&ldquo;${escapeHtml(c.claim)}&rdquo;</em>${c.rationale ? `<div class="gate-rationale">${escapeHtml(c.rationale)}</div>` : ''}</li>`).join('')}</ul>` : ''}
     ${llm?.failed ? `<p class="gate-llm-failed">Reviewer narrative unavailable: ${escapeHtml(llm.failure_reason || '')}</p>` : ''}
   </div>`;
+};
+
+const renderSourceRegistryPacketSummary = (result: DiagnosticResult): string => {
+  const trace = result.meta.run_trace;
+  const registry = result.meta.source_registry;
+  if (!trace && !registry) return '';
+
+  const sourceCount = trace ? trace.input_manifest.length : registry?.source_count || 0;
+  const chunkCount = trace
+    ? trace.input_manifest.reduce((sum, source) => sum + source.chunk_count, 0)
+    : registry?.chunk_count || 0;
+  const dlpReviewChunks = trace?.dlp.model_review_chunk_count ?? registry?.dlp_review_chunk_count ?? 0;
+  const highRiskHits = trace?.dlp.high_risk_hit_count ?? registry?.dlp_high_risk_hits ?? 0;
+  const cautionHits = trace?.dlp.caution_hit_count ?? registry?.dlp_caution_hits ?? 0;
+  const packets = trace
+    ? Object.fromEntries(trace.context_packets.map(packet => [packet.domain_id, packet]))
+    : registry?.packets || {};
+  const packetRows = BATCHES
+    .map(domain => {
+      const packet = packets[domain];
+      if (!packet) return null;
+      return {
+        domain,
+        title: BATCH_TITLES[domain] || domain,
+        included: packet.included_chunk_count || 0,
+        candidates: packet.total_candidate_chunks || 0,
+        weakCoverage: !!packet.weak_coverage,
+        chars: packet.char_count || 0,
+        notes: 'coverage_notes' in packet ? packet.coverage_notes || [] : []
+      };
+    })
+    .filter((row): row is {
+      domain: string;
+      title: string;
+      included: number;
+      candidates: number;
+      weakCoverage: boolean;
+      chars: number;
+      notes: string[];
+    } => !!row);
+
+  if (sourceCount === 0 && chunkCount === 0 && packetRows.length === 0) return '';
+
+  const metricRows: Array<[string, string]> = [
+    ['Source documents', formatNumber(sourceCount)],
+    ['Parsed chunks', formatNumber(chunkCount)],
+    ['DLP review chunks', formatNumber(dlpReviewChunks)],
+    ['High-risk DLP hits', formatNumber(highRiskHits)],
+    ['Caution DLP hits', formatNumber(cautionHits)]
+  ];
+
+  return `
+  <section class="source-packet-section">
+    <h2>Source Registry &amp; Context Packets</h2>
+    <div class="source-packet-card">
+      <p class="source-packet-note">This snapshot shows how parsed source material was chunked, sampled for DLP review, and routed into A-F context packets before model audit. Packetization controls attention, not truth: findings still require verified source evidence.</p>
+      <div class="source-packet-tables">
+        <table class="source-packet-table source-packet-metrics-table">
+          <thead><tr><th>Metric</th><th>Value</th></tr></thead>
+          <tbody>
+            ${metricRows.map(([label, value]) => `<tr><td>${escapeHtml(label)}</td><td>${escapeHtml(value)}</td></tr>`).join('')}
+          </tbody>
+        </table>
+        ${packetRows.length > 0 ? `
+        <table class="source-packet-table">
+          <thead><tr><th>Packet</th><th>Included chunks</th><th>Candidate chunks</th><th>Coverage</th><th>Characters</th></tr></thead>
+          <tbody>
+            ${packetRows.map(row => `
+              <tr>
+                <td><strong>${escapeHtml(row.domain)}</strong><span>${escapeHtml(row.title)}</span></td>
+                <td>${formatNumber(row.included)}</td>
+                <td>${formatNumber(row.candidates)}</td>
+                <td><span class="packet-coverage ${row.weakCoverage ? 'packet-coverage-weak' : 'packet-coverage-ok'}">${row.weakCoverage ? 'Weak coverage' : 'OK'}</span></td>
+                <td>${formatNumber(row.chars)}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>` : ''}
+      </div>
+      ${packetRows.some(row => row.notes.length > 0) ? `
+        <ul class="source-packet-notes">
+          ${packetRows.filter(row => row.notes.length > 0).map(row => `<li><strong>${escapeHtml(row.domain)}:</strong> ${escapeHtml(row.notes[0])}</li>`).join('')}
+        </ul>` : ''}
+    </div>
+  </section>`;
 };
 
 const renderRunTraceAppendix = (result: DiagnosticResult): string => {
@@ -630,6 +717,20 @@ const generateSummaryReportHtml = (result: DiagnosticResult): string => {
     .heat-silent { background: #f1f5f9; border-color: #e2e8f0; color: #64748b; }
     .footer { text-align: center; color: #94a3b8; font-size: 0.85rem; padding: 34px 0 10px; }
     .trace-note { background: #f8fafc; border: 1px solid #e2e8f0; color: #475569; border-radius: 12px; padding: 12px 14px; font-size: 0.85rem; }
+    .source-packet-section { margin: 28px 0; }
+    .source-packet-card { background: #fff; border: 1px solid #e2e8f0; border-radius: 16px; padding: 22px; box-shadow: 0 12px 35px rgba(15,23,42,0.05); }
+    .source-packet-note { margin: 0 0 16px; color: #64748b; font-size: 0.92rem; }
+    .source-packet-tables { display: grid; gap: 16px; }
+    .source-packet-table { width: 100%; border-collapse: collapse; overflow: hidden; border-radius: 12px; font-size: 0.88rem; }
+    .source-packet-table th { background: #f8fafc; color: #475569; text-align: left; text-transform: uppercase; letter-spacing: 0.08em; font-size: 0.68rem; }
+    .source-packet-table th, .source-packet-table td { border: 1px solid #e2e8f0; padding: 10px 12px; vertical-align: top; }
+    .source-packet-table td:first-child span { display: block; color: #64748b; font-size: 0.76rem; margin-top: 2px; }
+    .source-packet-metrics-table { max-width: 620px; }
+    .source-packet-metrics-table td:last-child { font-weight: 800; color: #0f172a; }
+    .packet-coverage { display: inline-flex; align-items: center; min-height: 24px; border-radius: 999px; padding: 3px 8px; font-size: 0.72rem; font-weight: 800; }
+    .packet-coverage-ok { background: #d1fae5; color: #065f46; }
+    .packet-coverage-weak { background: #fef3c7; color: #92400e; }
+    .source-packet-notes { margin: 14px 0 0; padding-left: 1.15rem; color: #475569; font-size: 0.82rem; }
     ${SVG_CSS}
     @media (max-width: 760px) {
       .page { padding: 24px 16px 44px; }
@@ -694,6 +795,7 @@ const generateSummaryReportHtml = (result: DiagnosticResult): string => {
     ${renderAssessmentHeatmapSummary(result)}
     ${renderSummaryPlanningDecision(result)}
     ${renderSummaryRoadmap(result)}
+    ${renderSourceRegistryPacketSummary(result)}
 
     <footer class="footer">
       <p>FinOps Assessment Engine v${escapeHtml(result.meta.engine_version)} · Summary Report</p>
@@ -841,6 +943,20 @@ const generateReportHtml = (result: DiagnosticResult): string => {
     .appendix-note { font-size: 0.875rem; color: #64748b; margin: 0.4rem 0 1rem; }
     .appendix-list { padding-left: 1.25rem; color: #334155; }
     .appendix-list li { margin: 0.6rem 0; font-size: 0.875rem; }
+    .source-packet-section { margin: 2rem 0; }
+    .source-packet-card { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 1rem; padding: 1.25rem; }
+    .source-packet-note { margin: 0 0 1rem; color: #64748b; font-size: 0.875rem; }
+    .source-packet-tables { display: grid; gap: 1rem; }
+    .source-packet-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; background: #fff; }
+    .source-packet-table th { background: #f1f5f9; color: #475569; text-align: left; text-transform: uppercase; letter-spacing: 0.08em; font-size: 0.65rem; }
+    .source-packet-table th, .source-packet-table td { border: 1px solid #e2e8f0; padding: 0.65rem 0.75rem; vertical-align: top; }
+    .source-packet-table td:first-child span { display: block; color: #64748b; font-size: 0.72rem; margin-top: 0.1rem; }
+    .source-packet-metrics-table { max-width: 620px; }
+    .source-packet-metrics-table td:last-child { font-weight: 800; color: #0f172a; }
+    .packet-coverage { display: inline-flex; align-items: center; min-height: 1.5rem; border-radius: 999px; padding: 0.15rem 0.5rem; font-size: 0.68rem; font-weight: 800; }
+    .packet-coverage-ok { background: #d1fae5; color: #065f46; }
+    .packet-coverage-weak { background: #fef3c7; color: #92400e; }
+    .source-packet-notes { margin: 1rem 0 0; padding-left: 1.15rem; color: #475569; font-size: 0.82rem; }
     .gate { padding: 1.25rem 1.5rem; border-radius: 0.875rem; margin: 1rem 0 2rem; border-left: 4px solid; }
     .gate.gate-go { background: #ecfdf5; border-color: #10b981; color: #065f46; font-size: 0.875rem; }
     .gate.gate-warn { background: #fffbeb; border-color: #f59e0b; color: #92400e; }
@@ -1073,6 +1189,7 @@ const generateReportHtml = (result: DiagnosticResult): string => {
   ${renderForensicSection('Forensic Audit: FinOps Maturity', 'maturity', result.phase_1_audit_logs.maturity)}
   ${renderForensicSection('Forensic Audit: Anti-Patterns', 'antipattern', result.phase_1_audit_logs.antipattern)}
   ${renderQualityGateAppendix(result.quality_gate)}
+  ${renderSourceRegistryPacketSummary(result)}
   ${renderRunTraceAppendix(result)}
 
   <div class="footer">
