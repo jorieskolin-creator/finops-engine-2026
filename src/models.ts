@@ -257,7 +257,7 @@ export const CHEAP_TEST_FALLBACK_CHAIN: Record<StageId, ModelProfile[]> = {
 const configuredRoutingMode = (): ModelRoutingMode => {
   const override = (globalThis as any).__FINOPS_MODEL_MODE__;
   const meta = import.meta as any;
-  const mode = override || meta?.env?.VITE_FINOPS_MODEL_MODE;'cheap_test'
+  const mode = override || meta?.env?.VITE_FINOPS_MODEL_MODE;
   return mode === 'cheap_test' ? 'cheap_test' : 'normal';
 };
 
