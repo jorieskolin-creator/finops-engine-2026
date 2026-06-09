@@ -7,6 +7,7 @@ import { isInsufficientEvidenceReport, renderInlineMarkdownHtml, renderMarkdownS
 import { antiPatternStatusLabel, inferAntiPatternAbsenceStatus } from './antiPatternSemantics';
 import { displayQualityGateDiagnostic, isReportableSourceCoverageGap, splitQualityGateDiagnostics } from './reportDiagnosticsService';
 import { serializeDiagnosticResultForHtml } from './reportImportService';
+import { computeDomainSignalRows, DomainSignalTone } from './domainSignalService';
 
 const BATCHES = Object.keys(BATCH_TITLES);
 const PERSONA_SUMMARY_LABELS = {
@@ -594,6 +595,43 @@ const renderAssessmentHeatmapSummary = (result: DiagnosticResult): string => `
     </div>
   </section>`;
 
+const signalToneClass = (tone: DomainSignalTone): string => `signal-${tone}`;
+
+const renderDomainSignalOverview = (result: DiagnosticResult): string => {
+  const rows = computeDomainSignalRows(result);
+  if (rows.length === 0) return '';
+  return `
+  <section class="domain-signal-section">
+    <h2>Domain Signal Overview</h2>
+    <p class="section-lead">Maturity target is high; anti-pattern finding rate target is low. Grey means the source did not provide enough assessable coverage.</p>
+    <div class="domain-signal-grid">
+      ${rows.map(row => `
+        <article class="domain-signal-card">
+          <div class="domain-signal-head">
+            <div>
+              <span class="domain-signal-id">${escapeHtml(row.domain)}</span>
+              <h3>${escapeHtml(row.title)}</h3>
+            </div>
+            ${row.coverageNote ? `<span class="domain-signal-chip">Coverage note</span>` : ''}
+          </div>
+          <div class="domain-signal-metrics">
+            <div class="domain-signal-metric">
+              <div class="signal-label"><i class="${signalToneClass(row.maturityTone)}"></i><span>Maturity signal</span></div>
+              <strong class="${signalToneClass(row.maturityTone)}">${row.maturityPercent}%</strong>
+              <p>${row.maturityAssessed}/${row.maturityTotal} criteria assessed</p>
+            </div>
+            <div class="domain-signal-metric">
+              <div class="signal-label"><i class="${signalToneClass(row.antiPatternTone)}"></i><span>Anti-pattern finding rate</span></div>
+              <strong class="${signalToneClass(row.antiPatternTone)}">${row.antiPatternPercent}%</strong>
+              <p>${row.antiPatternFindings} finding${row.antiPatternFindings === 1 ? '' : 's'}, ${row.antiPatternPartialFindings} partial, ${row.antiPatternNotAssessed} not assessed</p>
+            </div>
+          </div>
+          ${row.coverageNote ? `<p class="domain-signal-note">${escapeHtml(row.coverageNote)}</p>` : ''}
+        </article>`).join('')}
+    </div>
+  </section>`;
+};
+
 const generateSummaryReportHtml = (result: DiagnosticResult): string => {
   const m = result.phase_2_validation.metrics;
   const summaryPayload = resultWithoutRunTrace(result);
@@ -663,6 +701,26 @@ const generateSummaryReportHtml = (result: DiagnosticResult): string => {
     .chart-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 18px; }
     .chart-desc { color: #64748b; font-size: 0.88rem; margin: 0 0 12px; }
     .two-col { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 18px; }
+    .domain-signal-section { margin: 28px 0; }
+    .domain-signal-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; }
+    .domain-signal-card { background: #fff; border: 1px solid #e2e8f0; border-radius: 16px; padding: 18px; box-shadow: 0 12px 35px rgba(15,23,42,0.05); }
+    .domain-signal-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
+    .domain-signal-id { display: block; color: #94a3b8; font-family: ui-monospace, SFMono-Regular, monospace; font-size: 0.75rem; font-weight: 800; }
+    .domain-signal-chip { border-radius: 999px; background: #f1f5f9; color: #64748b; padding: 4px 8px; font-size: 0.62rem; font-weight: 900; text-transform: uppercase; letter-spacing: 0.08em; white-space: nowrap; }
+    .domain-signal-metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px; }
+    .domain-signal-metric { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 12px; }
+    .signal-label { display: flex; align-items: center; gap: 7px; color: #64748b; font-size: 0.68rem; font-weight: 900; text-transform: uppercase; letter-spacing: 0.08em; }
+    .signal-label i { width: 11px; height: 11px; border-radius: 999px; display: inline-block; }
+    .domain-signal-metric strong { display: block; font-size: 1.75rem; line-height: 1; margin-top: 9px; }
+    .domain-signal-metric p, .domain-signal-note { margin: 6px 0 0; color: #64748b; font-size: 0.78rem; }
+    .signal-green { color: #047857; }
+    .signal-yellow { color: #b45309; }
+    .signal-red { color: #be123c; }
+    .signal-grey { color: #64748b; }
+    .signal-label i.signal-green { background: #10b981; }
+    .signal-label i.signal-yellow { background: #f59e0b; }
+    .signal-label i.signal-red { background: #f43f5e; }
+    .signal-label i.signal-grey { background: #cbd5e1; }
     .diagnosis-lead { border-left: 3px solid #10b981; padding-left: 14px; margin-bottom: 18px; }
     .diagnosis-lead span, .decision-card span, .roadmap-context span, .how-list span, .phase-kicker { display: block; color: #64748b; text-transform: uppercase; letter-spacing: 0.1em; font-size: 0.68rem; font-weight: 800; }
     .diagnosis-lead p { margin: 4px 0 0; color: #334155; }
@@ -792,6 +850,7 @@ const generateSummaryReportHtml = (result: DiagnosticResult): string => {
       </div>
     </section>
 
+    ${renderDomainSignalOverview(result)}
     ${renderSummaryDiagnosis(result)}
     ${renderAssessmentHeatmapSummary(result)}
     ${renderSummaryPlanningDecision(result)}
@@ -868,6 +927,26 @@ const generateReportHtml = (result: DiagnosticResult): string => {
     .gauge-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 1.25rem; margin: 1.5rem 0 2rem; align-items: stretch; }
     .gauge-grid > .gauge-large { grid-column: span 2; }
     .chart-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); gap: 1.25rem; }
+    .domain-signal-section { margin: 2rem 0; }
+    .domain-signal-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1rem; }
+    .domain-signal-card { background: #fff; border: 1px solid #e2e8f0; border-radius: 1rem; padding: 1.1rem; }
+    .domain-signal-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 0.75rem; margin-bottom: 0.85rem; }
+    .domain-signal-id { display: block; color: #94a3b8; font-family: ui-monospace, SFMono-Regular, monospace; font-size: 0.72rem; font-weight: 800; }
+    .domain-signal-chip { border-radius: 999px; background: #f1f5f9; color: #64748b; padding: 0.25rem 0.5rem; font-size: 0.6rem; font-weight: 900; text-transform: uppercase; letter-spacing: 0.08em; white-space: nowrap; }
+    .domain-signal-metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 0.65rem; }
+    .domain-signal-metric { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 0.75rem; padding: 0.75rem; }
+    .signal-label { display: flex; align-items: center; gap: 0.45rem; color: #64748b; font-size: 0.65rem; font-weight: 900; text-transform: uppercase; letter-spacing: 0.08em; }
+    .signal-label i { width: 0.68rem; height: 0.68rem; border-radius: 999px; display: inline-block; }
+    .domain-signal-metric strong { display: block; font-size: 1.65rem; line-height: 1; margin-top: 0.55rem; }
+    .domain-signal-metric p, .domain-signal-note { margin: 0.4rem 0 0; color: #64748b; font-size: 0.76rem; }
+    .signal-green { color: #047857; }
+    .signal-yellow { color: #b45309; }
+    .signal-red { color: #be123c; }
+    .signal-grey { color: #64748b; }
+    .signal-label i.signal-green { background: #10b981; }
+    .signal-label i.signal-yellow { background: #f59e0b; }
+    .signal-label i.signal-red { background: #f43f5e; }
+    .signal-label i.signal-grey { background: #cbd5e1; }
     .summary { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 1rem; padding: 2rem; line-height: 1.75; color: #334155; margin-bottom: 1.5rem; }
     .summary strong { color: #0f172a; }
     .summary em { color: #047857; font-style: normal; font-weight: 600; }
@@ -1055,6 +1134,8 @@ const generateReportHtml = (result: DiagnosticResult): string => {
       ${svgScatter(m.maturity_depth, m.antipattern_burden, isInsufficientEvidence)}
     </div>
   </div>
+
+  ${renderDomainSignalOverview(result)}
 
   <h2>Evidence Summary</h2>
   ${(() => {

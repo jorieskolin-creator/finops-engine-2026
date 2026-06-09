@@ -7,6 +7,7 @@ import { SVG_CSS, svgGaugeCard, svgRadar, svgScatter } from '../services/svgChar
 import { isInsufficientEvidenceReport, renderInlineMarkdownHtml, strengthsSectionTitle } from '../services/reportTextService';
 import { antiPatternStatusLabel, inferAntiPatternAbsenceStatus } from '../services/antiPatternSemantics';
 import { displayQualityGateDiagnostic, isReportableSourceCoverageGap, splitQualityGateDiagnostics } from '../services/reportDiagnosticsService';
+import { computeDomainSignalRows, DomainSignalTone } from '../services/domainSignalService';
 
 const InlineSvg: React.FC<{ html: string; className?: string }> = ({ html, className }) => (
   <div className={className} dangerouslySetInnerHTML={{ __html: html }} />
@@ -148,6 +149,71 @@ const QualityGateBlock: React.FC<{ gate: QualityGateResult }> = ({ gate }) => {
         <p className="text-sm mt-1">{statusText}</p>
       </div>
       <span className="text-xs font-bold uppercase tracking-wider">{supported}</span>
+    </div>
+  );
+};
+
+const toneDotClass: Record<DomainSignalTone, string> = {
+  green: 'bg-emerald-500',
+  yellow: 'bg-amber-400',
+  red: 'bg-rose-500',
+  grey: 'bg-slate-300'
+};
+
+const toneTextClass: Record<DomainSignalTone, string> = {
+  green: 'text-emerald-700',
+  yellow: 'text-amber-700',
+  red: 'text-rose-700',
+  grey: 'text-slate-500'
+};
+
+const DomainSignalOverview: React.FC<{ result: DiagnosticResult }> = ({ result }) => {
+  const rows = computeDomainSignalRows(result);
+  if (rows.length === 0) return null;
+  return (
+    <div className="mb-12">
+      <h2 className="text-2xl font-display font-bold text-slate-900 mb-2">Domain Signal Overview</h2>
+      <p className="text-sm text-slate-500 mb-5">
+        Maturity target is high; anti-pattern finding rate target is low. Grey means the source did not provide enough assessable coverage.
+      </p>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {rows.map(row => (
+          <div key={row.domain} className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+            <div className="flex items-start justify-between gap-3 mb-4">
+              <div>
+                <p className="font-mono text-xs font-bold text-slate-400">{row.domain}</p>
+                <h3 className="font-display font-bold text-slate-900 leading-tight">{row.title}</h3>
+              </div>
+              {row.coverageNote && (
+                <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[0.65rem] font-bold uppercase tracking-wider text-slate-500">
+                  Coverage note
+                </span>
+              )}
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="rounded-lg bg-slate-50 border border-slate-200 p-3">
+                <div className="flex items-center gap-2">
+                  <span className={`h-3 w-3 rounded-full ${toneDotClass[row.maturityTone]}`}></span>
+                  <span className="text-xs font-bold uppercase tracking-wider text-slate-500">Maturity signal</span>
+                </div>
+                <p className={`mt-2 text-3xl font-bold ${toneTextClass[row.maturityTone]}`}>{row.maturityPercent}%</p>
+                <p className="text-xs text-slate-500 mt-1">{row.maturityAssessed}/{row.maturityTotal} criteria assessed</p>
+              </div>
+              <div className="rounded-lg bg-slate-50 border border-slate-200 p-3">
+                <div className="flex items-center gap-2">
+                  <span className={`h-3 w-3 rounded-full ${toneDotClass[row.antiPatternTone]}`}></span>
+                  <span className="text-xs font-bold uppercase tracking-wider text-slate-500">Anti-pattern finding rate</span>
+                </div>
+                <p className={`mt-2 text-3xl font-bold ${toneTextClass[row.antiPatternTone]}`}>{row.antiPatternPercent}%</p>
+                <p className="text-xs text-slate-500 mt-1">
+                  {row.antiPatternFindings} finding{row.antiPatternFindings === 1 ? '' : 's'}, {row.antiPatternPartialFindings} partial, {row.antiPatternNotAssessed} not assessed
+                </p>
+              </div>
+            </div>
+            {row.coverageNote && <p className="mt-3 text-xs text-slate-500">{row.coverageNote}</p>}
+          </div>
+        ))}
+      </div>
     </div>
   );
 };
@@ -649,6 +715,8 @@ export const ReportView: React.FC<ReportViewProps> = ({ result, onBack, onDownlo
             </div>
           </div>
         </div>
+
+        <DomainSignalOverview result={result} />
 
         <div className="mb-12">
           <h2 className="text-2xl font-display font-bold text-slate-900 mb-6 pb-3 border-b border-slate-200">Evidence Summary</h2>
