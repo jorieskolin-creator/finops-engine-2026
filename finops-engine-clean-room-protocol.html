@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FinOps Engine — Clean-Room Evidence Protocol</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --paper: #f5efe6;
+    --paper-2: #ede5d6;
+    --paper-3: #e4dac5;
+    --ink: #2b2823;
+    --ink-2: #5a544b;
+    --ink-3: #8a8276;
+    --rule: #cdc3ad;
+    --rule-soft: #ddd3bd;
+    --sienna: #a04a2a;
+    --ochre: #b78a3c;
+    --olive: #6b7a3a;
+    --teal: #3d6e6a;
+    --plum: #5e3a5c;
+    --blue: #405f8a;
+    --rose: #b84b62;
+    --shadow: 0 1px 2px rgba(43, 40, 35, 0.06), 0 12px 28px rgba(43, 40, 35, 0.08);
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html, body {
+    background: var(--paper);
+    color: var(--ink);
+    font-family: "Inter", -apple-system, BlinkMacSystemFont, sans-serif;
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  body {
+    background-image:
+      radial-gradient(ellipse at top left, rgba(160, 74, 42, 0.055), transparent 56%),
+      radial-gradient(ellipse at bottom right, rgba(61, 110, 106, 0.045), transparent 58%);
+    background-attachment: fixed;
+    padding: 56px 24px 80px;
+  }
+
+  .page {
+    max-width: 1500px;
+    margin: 0 auto;
+  }
+
+  header {
+    border-bottom: 1px solid var(--rule);
+    margin-bottom: 34px;
+    padding-bottom: 30px;
+  }
+
+  .eyebrow {
+    color: var(--sienna);
+    font-family: "JetBrains Mono", monospace;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0;
+    margin-bottom: 14px;
+    text-transform: uppercase;
+  }
+
+  h1 {
+    color: var(--ink);
+    font-family: "Fraunces", Georgia, serif;
+    font-size: clamp(46px, 5vw, 78px);
+    font-weight: 500;
+    letter-spacing: 0;
+    line-height: 1.04;
+    margin-bottom: 18px;
+    max-width: 980px;
+  }
+
+  .subtitle {
+    color: var(--ink-2);
+    font-size: 17px;
+    line-height: 1.65;
+    max-width: 1020px;
+  }
+
+  .diagram-card {
+    background: rgba(237, 229, 214, 0.58);
+    border: 1px solid var(--rule);
+    border-radius: 4px;
+    box-shadow: var(--shadow);
+    overflow-x: auto;
+    padding: 22px;
+  }
+
+  svg {
+    background: #f8f3ea;
+    border: 1px solid var(--rule-soft);
+    border-radius: 4px;
+    display: block;
+    height: auto;
+    min-width: 1400px;
+    width: 100%;
+  }
+
+  .note {
+    color: var(--ink-3);
+    font-family: "JetBrains Mono", monospace;
+    font-size: 11px;
+    letter-spacing: 0;
+    margin-top: 16px;
+    text-transform: uppercase;
+  }
+
+  .serif-title { font-family: "Fraunces", Georgia, serif; font-weight: 500; fill: var(--ink); }
+  .mono { font-family: "JetBrains Mono", monospace; }
+  .stage-title { font: 700 15px "Inter", sans-serif; fill: var(--ink); }
+  .stage-body { font: 500 12.5px "Inter", sans-serif; fill: var(--ink-2); }
+  .tiny { font: 600 10.5px "JetBrains Mono", monospace; letter-spacing: 0; fill: var(--ink-3); }
+  .tiny-dark { font: 600 10.5px "JetBrains Mono", monospace; letter-spacing: 0; fill: var(--ink); }
+  .tiny-teal { font: 600 10.5px "JetBrains Mono", monospace; letter-spacing: 0; fill: var(--teal); }
+  .tiny-rose { font: 600 10.5px "JetBrains Mono", monospace; letter-spacing: 0; fill: var(--rose); }
+  .lane-label { font: 600 11px "JetBrains Mono", monospace; letter-spacing: 0; fill: var(--sienna); }
+  .boundary-text { font: 600 12px "Inter", sans-serif; fill: var(--ink-2); }
+  .flow { stroke: var(--ink); stroke-width: 2; fill: none; marker-end: url(#arrow-dark); }
+  .soft-flow { stroke: var(--ink-3); stroke-width: 1.5; fill: none; marker-end: url(#arrow-muted); }
+  .ref-flow { stroke: var(--teal); stroke-width: 2; fill: none; marker-end: url(#arrow-teal); }
+  .ref-link { stroke: var(--teal); stroke-width: 1.7; fill: none; opacity: 0.72; }
+  .blocked-flow { stroke: var(--rose); stroke-width: 2; fill: none; stroke-dasharray: 8 8; marker-end: url(#arrow-rose); }
+
+  @media (max-width: 760px) {
+    body { padding: 34px 14px 60px; }
+    .diagram-card { padding: 12px; }
+  }
+</style>
+</head>
+<body>
+<main class="page">
+  <header>
+    <div class="eyebrow">FinOps Assessment Engine · Clean-Room Evidence Protocol</div>
+    <h1>How the Engine thinks without trusting itself too early.</h1>
+    <p class="subtitle">A governed enterprise-grade assessment engine with deterministic, evidence-gated reasoning. Source material is parsed into a source registry and A-F packets, findings are independently verified against chunk IDs, scores are calculated through deterministic logic, and outputs pass through strict quality gates. Knowledge Base material guides interpretation and planning, but only customer source evidence can prove current state.</p>
+  </header>
+
+  <section class="diagram-card">
+    <svg viewBox="0 0 1680 1120" role="img" aria-label="Clean-room evidence protocol architecture diagram">
+      <defs>
+        <marker id="arrow-dark" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+          <path d="M0,0 L0,6 L9,3 z" fill="#2b2823" />
+        </marker>
+        <marker id="arrow-muted" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+          <path d="M0,0 L0,6 L9,3 z" fill="#8a8276" />
+        </marker>
+        <marker id="arrow-teal" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+          <path d="M0,0 L0,6 L9,3 z" fill="#3d6e6a" />
+        </marker>
+        <marker id="arrow-rose" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+          <path d="M0,0 L0,6 L9,3 z" fill="#b84b62" />
+        </marker>
+        <filter id="card-shadow" x="-12%" y="-18%" width="124%" height="136%">
+          <feDropShadow dx="0" dy="8" stdDeviation="9" flood-color="#2b2823" flood-opacity="0.10"/>
+        </filter>
+      </defs>
+
+      <text x="48" y="58" class="serif-title" style="font-size: 34px;">FinOps Engine: clean-room evidence protocol</text>
+      <text x="48" y="88" class="stage-body" style="font-size: 14px;">Governed enterprise-grade assessment engine: source registry, A-F evidence packets, verified findings, deterministic scoring, and quality gates.</text>
+      <text x="48" y="108" class="stage-body" style="font-size: 14px;">Knowledge Base material can guide interpretation and planning, but only uploaded source evidence can prove current state.</text>
+
+      <rect x="42" y="132" width="1188" height="906" rx="10" fill="#f5efe6" stroke="#cdc3ad" stroke-width="2"/>
+      <text x="76" y="176" class="lane-label">CLEAN ROOM · CUSTOMER-SOURCE EVIDENCE PATH</text>
+      <text x="76" y="202" class="stage-body">Only uploaded material, extracted text, visual pages, and verified quotes can prove current-state findings.</text>
+
+      <rect x="1280" y="132" width="354" height="906" rx="10" fill="#ede5d6" stroke="#cdc3ad" stroke-width="2"/>
+      <text x="1314" y="176" class="lane-label">REFERENCE LIBRARY · CONTROLLED USE</text>
+      <text x="1314" y="202" class="stage-body">Reference material may guide questions</text>
+      <text x="1314" y="221" class="stage-body">and roadmap mechanisms, not evidence.</text>
+
+      <!-- main process row 1 -->
+      <g filter="url(#card-shadow)">
+        <rect x="90" y="266" width="196" height="122" rx="6" fill="#ede5d6" stroke="#cdc3ad"/>
+        <text x="112" y="300" class="tiny-dark">01 · INPUT</text>
+        <text x="112" y="328" class="stage-title">Untrusted material</text>
+        <text x="112" y="352" class="stage-body">PDF, HTML, CSV/XLSX, JSON,</text>
+        <text x="112" y="371" class="stage-body">dashboards and screenshots.</text>
+
+        <rect x="344" y="266" width="212" height="122" rx="6" fill="#e4dac5" stroke="#cdc3ad"/>
+        <text x="366" y="300" class="tiny-dark">02 · LOCAL-FIRST</text>
+        <text x="366" y="328" class="stage-title">Extraction zone</text>
+        <text x="366" y="352" class="stage-body">PDF.js text, page images,</text>
+        <text x="366" y="371" class="stage-body">source registry + chunks.</text>
+
+        <rect x="614" y="266" width="212" height="122" rx="6" fill="#e8ecd9" stroke="#bdc79e"/>
+        <text x="636" y="300" class="tiny-dark">03 · SAFETY</text>
+        <text x="636" y="328" class="stage-title">Pre-flight scan</text>
+        <text x="636" y="352" class="stage-body">Full-source DLP scan;</text>
+        <text x="636" y="371" class="stage-body">distributed review packet.</text>
+
+        <rect x="884" y="266" width="270" height="122" rx="6" fill="#f1e2d7" stroke="#d6aa91"/>
+        <text x="906" y="300" class="tiny-dark">04 · PHASE 1</text>
+        <text x="906" y="328" class="stage-title">Forensic audit batches A-F</text>
+        <text x="906" y="352" class="stage-body">Domain packets: 30 maturity</text>
+        <text x="906" y="371" class="stage-body">+ 30 anti-pattern criteria.</text>
+      </g>
+      <path d="M286 327 H344" class="flow"/>
+      <path d="M556 327 H614" class="flow"/>
+      <path d="M826 327 H884" class="flow"/>
+
+      <!-- verification row -->
+      <g filter="url(#card-shadow)">
+        <rect x="132" y="500" width="260" height="132" rx="6" fill="#f2e5c9" stroke="#d8b76b"/>
+        <text x="154" y="534" class="tiny-dark">05 · PHASE 1.5</text>
+        <text x="154" y="562" class="stage-title">Independent evidence check</text>
+        <text x="154" y="586" class="stage-body">Supported, weak, unsupported</text>
+        <text x="154" y="605" class="stage-body">or missing against chunk IDs.</text>
+
+        <rect x="456" y="500" width="270" height="132" rx="6" fill="#f2e5c9" stroke="#d8b76b"/>
+        <text x="478" y="534" class="tiny-dark">06 · REPAIR LOOP</text>
+        <text x="478" y="562" class="stage-title">Rescan + AP adjudication</text>
+        <text x="478" y="586" class="stage-body">Opus/GPT second opinion for</text>
+        <text x="478" y="605" class="stage-body">weak evidence and absence logic.</text>
+
+        <rect x="792" y="500" width="280" height="132" rx="6" fill="#dfecea" stroke="#9fbeb9"/>
+        <text x="814" y="534" class="tiny-dark">07 · PHASE 2</text>
+        <text x="814" y="562" class="stage-title">Deterministic scoring</text>
+        <text x="814" y="586" class="stage-body">Verified source coverage, depth,</text>
+        <text x="814" y="605" class="stage-body">AP burden, clearance, coverage.</text>
+      </g>
+      <path d="M1019 388 V448 H262 V500" class="flow"/>
+      <path d="M392 566 H456" class="flow"/>
+      <path d="M726 566 H792" class="flow"/>
+
+      <!-- synthesis row -->
+      <g filter="url(#card-shadow)">
+        <rect x="90" y="754" width="250" height="142" rx="6" fill="#e3e5ef" stroke="#b5bdd4"/>
+        <text x="112" y="788" class="tiny-dark">08 · CONFIDENCE-BRACKETED</text>
+        <text x="112" y="816" class="stage-title">Evidence summary + diagnosis</text>
+        <text x="112" y="840" class="stage-body">Persona summaries and diagnosis</text>
+        <text x="112" y="859" class="stage-body">from verified source coverage.</text>
+
+        <rect x="406" y="754" width="250" height="142" rx="6" fill="#eaddea" stroke="#c2a6c0"/>
+        <text x="428" y="788" class="tiny-dark">09 · WHEN ALLOWED</text>
+        <text x="428" y="816" class="stage-title">Roadmap synthesis</text>
+        <text x="428" y="840" class="stage-body">Opus roadmap with WHY, WHAT,</text>
+        <text x="428" y="859" class="stage-body">HOW and tactic grounding.</text>
+
+        <rect x="722" y="754" width="250" height="142" rx="6" fill="#f2dfe4" stroke="#d9a6b2"/>
+        <text x="744" y="788" class="tiny-dark">10 · INDEPENDENT CHECK</text>
+        <text x="744" y="816" class="stage-title">Fact-check + sanitation</text>
+        <text x="744" y="840" class="stage-body">GPT verifies claims; unsupported</text>
+        <text x="744" y="859" class="stage-body">strategy is removed or quarantined.</text>
+
+        <rect x="1038" y="754" width="152" height="142" rx="6" fill="#dfecea" stroke="#9fbeb9"/>
+        <text x="1060" y="788" class="tiny-dark">11 · OUTPUT</text>
+        <text x="1060" y="816" class="stage-title">Reports</text>
+        <text x="1060" y="840" class="stage-body">Summary Report</text>
+        <text x="1060" y="859" class="stage-body">Master Data</text>
+        <text x="1060" y="878" class="stage-body">Recovery JSON</text>
+      </g>
+      <path d="M932 632 V700 H215 V754" class="flow"/>
+      <path d="M340 825 H406" class="flow"/>
+      <path d="M656 825 H722" class="flow"/>
+      <path d="M972 825 H1038" class="flow"/>
+
+      <!-- quality gate -->
+      <g filter="url(#card-shadow)">
+        <rect x="814" y="944" width="300" height="72" rx="6" fill="#dbe2ed" stroke="#a7b4cc"/>
+        <text x="836" y="974" class="stage-title">Quality Gate aggregation</text>
+        <text x="836" y="997" class="stage-body">GO / WARN / BLOCK from evidence,</text>
+        <text x="836" y="1014" class="stage-body">grounding, sanitation and fact-check.</text>
+      </g>
+      <path d="M847 896 V944" class="soft-flow"/>
+      <path d="M1114 896 V944" class="soft-flow"/>
+
+      <!-- reference library -->
+      <g filter="url(#card-shadow)">
+        <rect x="1320" y="266" width="268" height="114" rx="6" fill="#f2dfe4" stroke="#d9a6b2"/>
+        <text x="1342" y="300" class="tiny-dark">REFERENCE RUBRICS</text>
+        <text x="1342" y="328" class="stage-title">Remote PDF Knowledge Base</text>
+        <text x="1342" y="352" class="stage-body">A-F criteria, evidence requirements,</text>
+        <text x="1342" y="371" class="stage-body">false-positive checks.</text>
+
+        <rect x="1320" y="454" width="268" height="114" rx="6" fill="#f2dfe4" stroke="#d9a6b2"/>
+        <text x="1342" y="488" class="tiny-dark">APPROVED IDS</text>
+        <text x="1342" y="516" class="stage-title">Tactics Database</text>
+        <text x="1342" y="540" class="stage-body">Stable TAC-* mechanisms used</text>
+        <text x="1342" y="559" class="stage-body">only when findings match.</text>
+
+        <rect x="1320" y="642" width="268" height="114" rx="6" fill="#f2dfe4" stroke="#d9a6b2"/>
+        <text x="1342" y="676" class="tiny-dark">ACTIVITY DEPTH</text>
+        <text x="1342" y="704" class="stage-title">Tactic Activity Playbook</text>
+        <text x="1342" y="728" class="stage-body">When to use, activities,</text>
+        <text x="1342" y="747" class="stage-body">artifacts and controls.</text>
+
+        <rect x="1320" y="846" width="268" height="122" rx="6" fill="#f8f3ea" stroke="#cdc3ad"/>
+        <text x="1342" y="880" class="tiny-dark">BOUNDARY RULE</text>
+        <text x="1342" y="908" class="boundary-text">Allowed: rubric interpretation</text>
+        <text x="1342" y="928" class="boundary-text">Allowed: roadmap planning</text>
+        <text x="1342" y="948" class="boundary-text">Forbidden: current-state proof</text>
+      </g>
+
+      <!-- reference guidance rail: branches stay between rows so they do not cross output cards -->
+      <path d="M1260 300 V736" stroke="#3d6e6a" stroke-width="1.5" fill="none" opacity="0.52"/>
+      <path d="M1320 323 H1260 V327 H1154" class="ref-flow"/>
+      <text x="1160" y="306" class="tiny-teal">rubric guidance</text>
+      <path d="M1260 566 H1072" class="ref-flow"/>
+      <text x="1084" y="544" class="tiny-teal">validation questions</text>
+      <path d="M1260 686 H215 V754" class="ref-flow"/>
+      <text x="786" y="674" class="tiny-teal">diagnosis framing, no proof</text>
+      <path d="M1260 724 H531 V754" class="ref-flow"/>
+      <text x="820" y="712" class="tiny-teal">KB + tactics + playbook: roadmap guidance</text>
+      <path d="M1320 511 H1260" class="ref-link"/>
+      <path d="M1320 699 H1260" class="ref-link"/>
+
+      <!-- forbidden proof line stops at the clean-room wall instead of crossing the evidence path -->
+      <path d="M1320 918 H1232" class="blocked-flow"/>
+      <rect x="1158" y="895" width="116" height="34" rx="17" fill="#f8f3ea" stroke="#d9a6b2"/>
+      <text x="1172" y="916" class="tiny-rose">blocked at wall</text>
+
+      <!-- model routing ribbon -->
+      <rect x="90" y="928" width="554" height="106" rx="6" fill="#f8f3ea" stroke="#ddd3bd"/>
+      <text x="114" y="960" class="tiny-dark">MODEL ROUTING</text>
+      <text x="114" y="984" class="stage-body">GPT-5.5: preflight, evidence check, fact-check and Quality Gate.</text>
+      <text x="114" y="1002" class="stage-body">Sonnet 4.6: forensic audit, evidence summaries and fallback checks.</text>
+      <text x="114" y="1020" class="stage-body">Opus 4.7: targeted rescans, escalation and roadmap synthesis.</text>
+    </svg>
+  </section>
+
+  <p class="note">Draft candidate · no source evidence may originate from the reference library · all report claims must survive independent checking.</p>
+</main>
+</body>
+</html>

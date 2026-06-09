@@ -939,7 +939,7 @@
     <div class="eyebrow">Vivicta · Engine Architecture · Internal Document</div>
     <h1>FinOps Maturity Assessment Engine — <em>Evidence-Gated Scanner Architecture</em></h1>
     <p class="lede">
-      The FinOps Engine is not a chatbot with instructions. It is a <strong>structured analytical pipeline</strong> where local parsing, parse-quality checks, forensic scanning, independent evidence-checking, deterministic scoring, synthesis, strategy sanitation, and quality gates each constrain the next step. AI can propose findings, but it cannot make them true. Evidence is verified before mathematics scores it; summary, diagnosis, and strategy are written only inside the confidence levels the evidence allows.
+      A governed enterprise-grade assessment engine with deterministic, evidence-gated reasoning, designed to produce trusted and actionable decisions in complex enterprise environments. Unlike traditional AI agents that rely on autonomous generation, the FinOps Engine operates through a <strong>controlled reasoning pipeline</strong>: source material is parsed into a source registry and A-F evidence packets, evidence is extracted, findings are independently verified, scores are calculated through deterministic logic, and outputs pass through strict quality gates. Every maturity claim must trace back to real source evidence, while Knowledge Base material can guide interpretation and planning without becoming proof of current state.
     </p>
   </div>
 </section>
@@ -952,7 +952,7 @@
     <div class="section-tag"><span class="num">01</span><span>How the Engine Thinks</span></div>
     <h2>The Forensic Analysis Pipeline</h2>
     <p style="max-width: 760px; color: var(--ink-2); font-size: 16px;">
-      Local deterministic parsing, four primary analytical phases, one evidence-check stage, and multiple verification layers. Each one is constrained by what came before. The chain-of-thinking is deliberate: AI cannot decide alone, mathematics cannot strategize, and strategy cannot rewrite the evidence. Every claim is fact-checked, every unsafe survivor is removed, quarantined, or surfaced, and every material gap is named.
+      Local deterministic parsing, source registry construction, A-F context packetization, four primary analytical phases, one evidence-check stage, and multiple verification layers. Each one is constrained by what came before. The chain-of-thinking is deliberate: AI cannot decide alone, mathematics cannot strategize, and strategy cannot rewrite the evidence. Every claim is fact-checked, every unsafe survivor is removed, quarantined, or surfaced, and every material gap is named.
     </p>
 
     <div class="pipeline">
@@ -967,7 +967,7 @@
           <div class="stage-meta">Local parsing · DLP Officer · gpt-5.5 low-reasoning · deterministic redaction</div>
         </div>
         <div class="stage-body">
-          Client-side parsers extract source material before model analysis: PDF.js extracts embedded PDF text up to 100 pages with page markers, CSV/TSV/XLSX files become profiled table evidence packets, HTML is sanitized, JSON is normalized, and selected PDF/image pages are attached as visual evidence under an image budget. A deterministic parse-quality check marks PDFs as good, mixed, or poor extraction, prioritizing sparse/scanned pages for visual inclusion. A DLP LLM pass plus deterministic regex redaction scans for PII, secrets, and risky input. Low FinOps keyword signal is now a warning, not a hard rejection, when the material is technically parseable.
+          Client-side parsers extract source material before model analysis: PDF.js extracts embedded PDF text up to 100 pages with page markers, CSV/TSV/XLSX files become profiled table evidence packets, HTML is sanitized, JSON is normalized, and selected PDF/image pages are attached as visual evidence under an image budget. A deterministic parse-quality check marks PDFs as good, mixed, or poor extraction, prioritizing sparse/scanned pages for visual inclusion. The Engine then creates a source registry with stable source, page, sheet, row, and chunk IDs, applies full-source deterministic DLP scanning/redaction, and sends distributed high-risk samples for low-reasoning DLP review. Low FinOps keyword signal is now a warning, not a hard rejection, when the material is technically parseable.
         </div>
       </div>
 
@@ -980,7 +980,7 @@
           <div class="stage-meta">6 parallel AI calls · claude-sonnet-4-6 primary · fallback chain in src/models.ts</div>
         </div>
         <div class="stage-body">
-          Six batches run simultaneously. Each batch evaluates 10 criteria (5 maturity + 5 anti-pattern). Each criterion has 3 sub-criteria. Evidence scale 0–3. Every captured evidence quote is tagged with one of <strong>seven evidence categories</strong> (Policy / Process / Operational / Automation / Accountability / Financial-Integration / Cultural). Phase 1 produces candidate audit logs; it does not get the final word.
+          Six batches run simultaneously. Each batch receives its own A-F context packet: high- and medium-relevance chunks, source/page IDs, table profile evidence, parse-quality notes, and absence-test coverage hints. Each batch evaluates 10 criteria (5 maturity + 5 anti-pattern). Each criterion has 3 sub-criteria. Evidence scale 0–3. Every captured evidence quote is tagged with one of <strong>seven evidence categories</strong> (Policy / Process / Operational / Automation / Accountability / Financial-Integration / Cultural). Phase 1 produces candidate audit logs; it does not get the final word.
           <div class="batch-grid">
             <div class="batch-chip"><strong>Batch A</strong><span>Visibility &amp; Allocation</span></div>
             <div class="batch-chip"><strong>Batch B</strong><span>Rate &amp; Usage</span></div>
@@ -1004,7 +1004,7 @@
           <div class="stage-meta">gpt-5.5 · independent verifier · Opus/GPT targeted rescans</div>
         </div>
         <div class="stage-body">
-          Each completed A-F batch is checked against the raw source material before Phase 2 can calculate metrics. The verifier classifies every maturity and anti-pattern item as <em>supported</em>, <em>weak</em>, <em>unsupported</em>, or <em>missing</em>, recommends a verified score, and identifies anti-pattern absence as <em>confirmed present</em>, <em>partial finding</em>, <em>tested absent</em>, or <em>not assessed</em>. Weak or over-scored criteria trigger one targeted rescan; if the rescan still fails, the score is deterministically downgraded.
+          Each completed A-F batch is checked against the cited source chunks before Phase 2 can calculate metrics. The verifier classifies every maturity and anti-pattern item as <em>supported</em>, <em>weak</em>, <em>unsupported</em>, or <em>missing</em>, recommends a verified score, and identifies anti-pattern absence as <em>confirmed present</em>, <em>partial finding</em>, <em>tested absent</em>, or <em>not assessed</em>. Weak or over-scored criteria trigger one targeted rescan; if the citation is unclear, the verifier can fall back to the full source registry instead of trusting packet context alone.
         </div>
       </div>
 
@@ -2470,6 +2470,8 @@ OUTPUT RULES:
       <li><strong>Safety</strong> — no PII, credentials, or API keys in submitted documents.</li>
       <li><strong>Parseability</strong> — supported format, readable content, and source set within file-count and total-size limits.</li>
       <li><strong>Parse Quality</strong> — PDFs with sparse or scanned pages receive good / mixed / poor extraction status and visual-page warnings before model analysis.</li>
+      <li><strong>Source Registry</strong> — source, page, sheet, row, and chunk IDs are created before packetization so later findings can be verified against exact source locations.</li>
+      <li><strong>Distributed DLP Review</strong> — the full source is scanned deterministically; high-risk chunks, table headers, later-page samples, and visual candidates are reviewed instead of relying on the first page only.</li>
       <li><strong>Relevance Warning</strong> — FinOps keyword signal estimates expected evidence quality, but generic safe material can still run.</li>
       <li><strong>Signal Score</strong> — 0–100 indicating expected signal quality based on keyword density and structural markers; low scores become confidence warnings rather than automatic rejection.</li>
     </ol>
@@ -2856,7 +2858,7 @@ else: "Run"</div>
       <div class="metric-item">
         <div class="metric-name">Pre-Flight + Parsing<span>local + model stages</span></div>
         <div>
-          <p style="font-size: 14px; color: var(--ink-2); margin: 0;">Local PDF.js / HTML / CSV / TSV / JSON parsing · PDF text to 100 pages · parse-quality check · sparse-page visual prioritization · DLP scan for PII / secrets · Deterministic regex redaction · FinOps keyword density warning across three vocabulary tiers</p>
+          <p style="font-size: 14px; color: var(--ink-2); margin: 0;">Local PDF.js / HTML / CSV / TSV / XLSX / JSON parsing · PDF text to 100 pages · parse-quality check · sparse-page visual prioritization · source registry and chunk IDs · deterministic full-source DLP scan for PII / secrets · distributed DLP review packet · FinOps keyword density warning across three vocabulary tiers</p>
         </div>
       </div>
 
