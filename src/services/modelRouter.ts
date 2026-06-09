@@ -11,6 +11,7 @@
 
 import { ImageInput } from '../types';
 import { ModelProfile, StageId, modelsFor } from '../models';
+import { estimateTokens, hashString, recordStageTrace } from './runTraceService';
 
 export interface NormalizedPrompt {
   userText: string;
@@ -35,7 +36,7 @@ const newInternalCallId = (): string => {
   return `internal-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`;
 };
 
-async function callAnthropic(profile: ModelProfile, prompt: NormalizedPrompt, stage: StageId, ctx: RunContext): Promise<{ text: string }> {
+async function callAnthropic(profile: ModelProfile, prompt: NormalizedPrompt, stage: StageId, ctx: RunContext): Promise<{ text: string; usage?: any }> {
   const content: any[] = [{ type: 'text', text: prompt.userText }];
   if (prompt.images?.length) {
     content.push({
@@ -70,7 +71,7 @@ async function callAnthropic(profile: ModelProfile, prompt: NormalizedPrompt, st
   return postWithTimeout('/api/anthropic-generate', body);
 }
 
-async function callOpenAI(profile: ModelProfile, prompt: NormalizedPrompt, stage: StageId, ctx: RunContext): Promise<{ text: string }> {
+async function callOpenAI(profile: ModelProfile, prompt: NormalizedPrompt, stage: StageId, ctx: RunContext): Promise<{ text: string; usage?: any }> {
   const content: any[] = [{ type: 'input_text', text: prompt.userText }];
   if (prompt.images?.length) {
     content.push({
@@ -114,7 +115,7 @@ async function callOpenAI(profile: ModelProfile, prompt: NormalizedPrompt, stage
 // crashed), we throw — the router catches it and falls forward to the
 // next model in the chain. Returning partial text would corrupt downstream
 // JSON.parse, which is worse than retrying.
-async function pollInternalResult(body: any, cause: unknown): Promise<{ text: string } | null> {
+async function pollInternalResult(body: any, cause: unknown): Promise<{ text: string; usage?: any } | null> {
   const internalCallId = body?.internalCallId;
   if (!body?.internalPipelineCall || !internalCallId) return null;
 
@@ -154,7 +155,7 @@ async function pollInternalResult(body: any, cause: unknown): Promise<{ text: st
           duration_ms: Date.now() - started,
           response_chars: typeof data.text === 'string' ? data.text.length : 0,
         });
-        return { text: typeof data.text === 'string' ? data.text : '' };
+        return { text: typeof data.text === 'string' ? data.text : '', usage: data.usage };
       }
       if (data?.status === 'error') {
         await serverLog(body.runId, 'error', 'internal_result_error', {
@@ -184,7 +185,7 @@ async function pollInternalResult(body: any, cause: unknown): Promise<{ text: st
   return null;
 }
 
-async function postWithTimeout(url: string, body: any): Promise<{ text: string }> {
+async function postWithTimeout(url: string, body: any): Promise<{ text: string; usage?: any }> {
   if (body?.internalPipelineCall && !body.internalCallId) {
     body.internalCallId = newInternalCallId();
   }
@@ -209,6 +210,7 @@ async function postWithTimeout(url: string, body: any): Promise<{ text: string }
     const decoder = new TextDecoder('utf-8');
     let buffer = '';
     let finalText: string | null = null;
+    let finalUsage: any = null;
     let streamError: string | null = null;
 
     while (true) {
@@ -226,6 +228,7 @@ async function postWithTimeout(url: string, body: any): Promise<{ text: string }
         if (frame.type === 'text') continue; // accumulated server-side
         if (frame.type === 'done') {
           finalText = typeof frame.text === 'string' ? frame.text : '';
+          finalUsage = frame.usage || null;
         } else if (frame.type === 'error') {
           streamError = typeof frame.message === 'string' ? frame.message : 'stream error';
         }
@@ -236,7 +239,7 @@ async function postWithTimeout(url: string, body: any): Promise<{ text: string }
     if (finalText === null) {
       throw new Error(`${url} → stream ended without 'done' frame`);
     }
-    return { text: finalText };
+    return { text: finalText, usage: finalUsage };
   } catch (err) {
     const recovered = await pollInternalResult(body, err);
     if (recovered) return recovered;
@@ -246,7 +249,7 @@ async function postWithTimeout(url: string, body: any): Promise<{ text: string }
   }
 }
 
-export async function callModel(profile: ModelProfile, prompt: NormalizedPrompt, stage: StageId, ctx: RunContext): Promise<{ text: string }> {
+export async function callModel(profile: ModelProfile, prompt: NormalizedPrompt, stage: StageId, ctx: RunContext): Promise<{ text: string; usage?: any }> {
   if (profile.provider === 'anthropic') return callAnthropic(profile, prompt, stage, ctx);
   if (profile.provider === 'openai') return callOpenAI(profile, prompt, stage, ctx);
   throw new Error(`Unknown provider: ${(profile as any).provider}`);
@@ -258,12 +261,51 @@ export interface RunStageResult {
   attempts: Array<{ profile: ModelProfile; error: string }>;
 }
 
+const tokenUsageFromProvider = (usage: any) => ({
+  input_tokens: typeof usage?.input_tokens === 'number' ? usage.input_tokens : undefined,
+  output_tokens: typeof usage?.output_tokens === 'number' ? usage.output_tokens : undefined,
+  reasoning_tokens: typeof usage?.output_tokens_details?.reasoning_tokens === 'number'
+    ? usage.output_tokens_details.reasoning_tokens
+    : typeof usage?.reasoning_tokens === 'number'
+      ? usage.reasoning_tokens
+      : undefined
+});
+
 export async function runStage(stage: StageId, prompt: NormalizedPrompt, ctx: RunContext): Promise<RunStageResult> {
   const chain = modelsFor(stage);
   const failures: Array<{ profile: ModelProfile; error: string }> = [];
+  const stageStarted = Date.now();
+  const startedAt = new Date(stageStarted).toISOString();
+  const inputChars = (prompt.systemInstruction || '').length + prompt.userText.length;
+  const promptHash = hashString(`${stage}\n${prompt.systemInstruction || ''}\n${prompt.userText}`);
+  const contextPacketHash = hashString(prompt.userText);
+  const fallbackChain = chain.map(profile => profile.id);
   for (const profile of chain) {
     try {
       const result = await callModel(profile, prompt, stage, ctx);
+      const providerUsage = tokenUsageFromProvider(result.usage);
+      recordStageTrace(ctx.runId, {
+        stage_id: stage,
+        provider: profile.provider,
+        model: profile.id,
+        fallback_chain: fallbackChain,
+        attempt_count: failures.length + 1,
+        prompt_hash: promptHash,
+        context_packet_hash: contextPacketHash,
+        input_char_count: inputChars,
+        output_char_count: result.text.length,
+        input_tokens: providerUsage.input_tokens,
+        output_tokens: providerUsage.output_tokens,
+        reasoning_tokens: providerUsage.reasoning_tokens,
+        input_token_estimate: estimateTokens(inputChars),
+        output_token_estimate: estimateTokens(result.text.length),
+        duration_ms: Date.now() - stageStarted,
+        status: 'ok',
+        fallback_reason: failures.length > 0 ? `Recovered after ${failures.length} failed fallback attempt(s).` : undefined,
+        failed_attempts: failures.map(f => ({ model: f.profile.id, provider: f.profile.provider, error: f.error })),
+        started_at: startedAt,
+        completed_at: new Date().toISOString()
+      });
       if (failures.length > 0) {
         await serverLog(ctx.runId, 'warn', 'stage_fallback_used', {
           stage,
@@ -280,6 +322,21 @@ export async function runStage(stage: StageId, prompt: NormalizedPrompt, ctx: Ru
     }
   }
   const summary = failures.map((f) => `${f.profile.id}: ${f.error}`).join(' | ');
+  recordStageTrace(ctx.runId, {
+    stage_id: stage,
+    fallback_chain: fallbackChain,
+    attempt_count: failures.length,
+    prompt_hash: promptHash,
+    context_packet_hash: contextPacketHash,
+    input_char_count: inputChars,
+    input_token_estimate: estimateTokens(inputChars),
+    duration_ms: Date.now() - stageStarted,
+    status: 'error',
+    error: summary,
+    failed_attempts: failures.map(f => ({ model: f.profile.id, provider: f.profile.provider, error: f.error })),
+    started_at: startedAt,
+    completed_at: new Date().toISOString()
+  });
   await serverLog(ctx.runId, 'error', 'stage_exhausted', { stage, summary });
   throw new Error(`All models exhausted for stage '${stage}'. ${summary}`);
 }

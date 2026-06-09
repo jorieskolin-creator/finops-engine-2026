@@ -103,6 +103,35 @@ const renderQualityGateAppendix = (gate: QualityGateResult): string => {
   </div>`;
 };
 
+const renderRunTraceAppendix = (result: DiagnosticResult): string => {
+  const trace = result.meta.run_trace;
+  const summary = result.meta.run_trace_summary;
+  if (!trace || !summary) return '';
+  return `
+  <h2>RunTrace Provenance</h2>
+  <div class="appendix-card">
+    <p class="appendix-note">RunTrace is a client-side provenance artifact. It records source/chunk references, hashes, model-stage metadata, evidence paths, score paths, tactic paths, and Quality Gate decisions without embedding full raw source documents or full prompts.</p>
+    <div class="evidence-check-grid">
+      <div class="evidence-check-stat"><span>Run ID</span><strong style="font-size:0.95rem">${escapeHtml(trace.run_id)}</strong></div>
+      <div class="evidence-check-stat"><span>Sources</span><strong>${summary.source_count}</strong></div>
+      <div class="evidence-check-stat"><span>Chunks</span><strong>${summary.chunk_count}</strong></div>
+      <div class="evidence-check-stat"><span>Model Stages</span><strong>${summary.stage_count}</strong></div>
+      <div class="evidence-check-stat"><span>Evidence Paths</span><strong>${summary.evidence_path_count}</strong></div>
+      <div class="evidence-check-stat"><span>Score Paths</span><strong>${summary.score_path_count}</strong></div>
+      <div class="evidence-check-stat"><span>Tactic Paths</span><strong>${summary.tactic_path_count}</strong></div>
+      <div class="evidence-check-stat"><span>DLP Chunks</span><strong>${trace.dlp.scanned_chunk_count}</strong></div>
+      <div class="evidence-check-stat"><span>Gate</span><strong>${escapeHtml(summary.quality_gate_decision)}</strong></div>
+    </div>
+    <div class="gate-label">Trace boundaries</div>
+    <ul class="appendix-list">
+      <li><strong>Raw source included:</strong> ${String(trace.privacy.raw_source_included)}</li>
+      <li><strong>Full prompts included:</strong> ${String(trace.privacy.full_prompts_included)}</li>
+      <li><strong>API keys included:</strong> ${String(trace.privacy.api_keys_included)}</li>
+      <li>${escapeHtml(trace.privacy.note)}</li>
+    </ul>
+  </div>`;
+};
+
 const statusBadgeClass = (status: string): string => {
   if (status === 'OK') return 'badge-ok';
   if (status === 'NOK') return 'badge-nok';
@@ -248,6 +277,27 @@ const downloadHtml = (html: string, filename: string) => {
   URL.revokeObjectURL(url);
 };
 
+const downloadJson = (payload: unknown, filename: string) => {
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+};
+
+const cloneResult = (result: DiagnosticResult): DiagnosticResult =>
+  typeof structuredClone === 'function'
+    ? structuredClone(result)
+    : JSON.parse(JSON.stringify(result));
+
+const resultWithoutRunTrace = (result: DiagnosticResult): DiagnosticResult => {
+  const next = cloneResult(result);
+  if (next.meta) delete next.meta.run_trace;
+  return next;
+};
+
 export const downloadMasterDataReport = (result: DiagnosticResult) => {
   downloadHtml(
     generateReportHtml(result),
@@ -259,6 +309,14 @@ export const downloadSummaryReport = (result: DiagnosticResult) => {
   downloadHtml(
     generateSummaryReportHtml(result),
     `FinOps_Summary_Report_${new Date().toISOString().split('T')[0]}.html`
+  );
+};
+
+export const downloadRunTraceJson = (result: DiagnosticResult) => {
+  const trace = result.meta.run_trace;
+  downloadJson(
+    trace || { available: false, reason: 'RunTrace was not present on this assessment result.' },
+    `FinOps_RunTrace_${new Date().toISOString().split('T')[0]}.json`
   );
 };
 
@@ -451,6 +509,7 @@ const renderAssessmentHeatmapSummary = (result: DiagnosticResult): string => `
 
 const generateSummaryReportHtml = (result: DiagnosticResult): string => {
   const m = result.phase_2_validation.metrics;
+  const summaryPayload = resultWithoutRunTrace(result);
   const cwrClass = result.phase_2_validation.crawl_walk_run;
   const isBlocked = result.quality_gate.decision === 'BLOCK';
   const isInsufficientEvidence = isBlocked || m.evidence_density < 30 || m.antipattern_coverage < 60;
@@ -471,6 +530,9 @@ const generateSummaryReportHtml = (result: DiagnosticResult): string => {
     : '';
   const sourceNote = (result.meta.source_parse_warnings?.length ?? 0) > 0
     ? `<p class="source-note">Source parse note: ${escapeHtml(result.meta.source_parse_warnings![0])}${result.meta.source_parse_warnings!.length > 1 ? ` (+${result.meta.source_parse_warnings!.length - 1} more)` : ''}</p>`
+    : '';
+  const traceNote = result.meta.run_trace_summary
+    ? `<p class="trace-note">RunTrace available in the Master Data report and as a separate JSON download: ${result.meta.run_trace_summary.stage_count} model stage(s), ${result.meta.run_trace_summary.evidence_path_count} evidence path(s), ${result.meta.run_trace_summary.score_path_count} score path(s).</p>`
     : '';
 
   return `<!DOCTYPE html>
@@ -567,6 +629,7 @@ const generateSummaryReportHtml = (result: DiagnosticResult): string => {
     .heat-gap { background: #ffe4e6; border-color: #fecdd3; color: #9f1239; }
     .heat-silent { background: #f1f5f9; border-color: #e2e8f0; color: #64748b; }
     .footer { text-align: center; color: #94a3b8; font-size: 0.85rem; padding: 34px 0 10px; }
+    .trace-note { background: #f8fafc; border: 1px solid #e2e8f0; color: #475569; border-radius: 12px; padding: 12px 14px; font-size: 0.85rem; }
     ${SVG_CSS}
     @media (max-width: 760px) {
       .page { padding: 24px 16px 44px; }
@@ -635,9 +698,10 @@ const generateSummaryReportHtml = (result: DiagnosticResult): string => {
     <footer class="footer">
       <p>FinOps Assessment Engine v${escapeHtml(result.meta.engine_version)} · Summary Report</p>
       <p>This report is generated deterministically from the validated assessment output. Full audit details are available in the Master Data report.</p>
+      ${traceNote}
     </footer>
   </main>
-  <script id="finops-data" type="application/json">${serializeDiagnosticResultForHtml(result)}</script>
+  <script id="finops-data" type="application/json">${serializeDiagnosticResultForHtml(summaryPayload)}</script>
 </body>
 </html>`;
 };
@@ -1009,6 +1073,7 @@ const generateReportHtml = (result: DiagnosticResult): string => {
   ${renderForensicSection('Forensic Audit: FinOps Maturity', 'maturity', result.phase_1_audit_logs.maturity)}
   ${renderForensicSection('Forensic Audit: Anti-Patterns', 'antipattern', result.phase_1_audit_logs.antipattern)}
   ${renderQualityGateAppendix(result.quality_gate)}
+  ${renderRunTraceAppendix(result)}
 
   <div class="footer">
     <p>FinOps Assessment Engine v${escapeHtml(result.meta.engine_version)}</p>

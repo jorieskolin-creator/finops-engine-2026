@@ -24,7 +24,7 @@ import {
 import { FactCheckClaim, FactCheckResult, FactCheckPassSnapshot } from "../types";
 import { STAGE_MODELS, StageId } from "../models";
 import { runStage, serverLog, newRunId } from "./modelRouter";
-import { sanitizeRoadmapTacticGrounding } from "./tacticGroundingService";
+import { sanitizeRoadmapTacticGrounding, TacticGroundingAdjustment } from "./tacticGroundingService";
 import { sanitizeStrategyAfterFactCheck } from "./strategySanitationService";
 import {
   buildDlpReviewPacket,
@@ -33,9 +33,11 @@ import {
   scanRegistryDlp,
   sourceRegistryRuntimeStatus
 } from "./sourceRegistryService";
+import { buildRunTrace, clearStageTraces, consumeStageTraces, summarizeRunTrace } from "./runTraceService";
 
 const FACT_CHECK_MAX_RETRIES = 2;
 const ID_VALIDATION_MAX_REGENS = 2;
+const ENGINE_VERSION = "finops-1.0.0";
 
 // Pull every [TAC-XXX-NNN] (or [TAC-XXX-NNN-XXX]) reference out of the raw
 // strategy JSON and check each against the verified DB. Returns the list of
@@ -808,6 +810,7 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => `  ${cat}
     // obvious tactic-ID errors.
     const validIds = validTacticIdSet();
     let tacticGroundingWarnings: string[] = [];
+    let tacticGroundingAdjustments: TacticGroundingAdjustment[] = [];
     const callPhase3Validated = async (correctionAppendix?: string): Promise<any> => {
       let data = normalizeStrategy(await callPhase3(correctionAppendix));
       let invalid = findInvalidTacticIds(data, validIds);
@@ -832,6 +835,7 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => `  ${cat}
       }
       const grounding = sanitizeRoadmapTacticGrounding(data, validationData);
       tacticGroundingWarnings = grounding.warnings;
+      tacticGroundingAdjustments = grounding.adjustments;
       if (grounding.adjustments.length > 0) {
         console.warn(`[FinOps] [${runId}] Roadmap tactic grounding adjusted ${grounding.adjustments.length} tactic reference(s) before fact-check.`);
         serverLog(runId, 'warn', 'roadmap_tactic_grounding_adjusted', {
@@ -998,11 +1002,12 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => `  ${cat}
       models: actuals,
     });
 
-    return {
+    const finalResult: DiagnosticResult = {
       meta: {
+        run_id: runId,
         document_analyzed: "Uploaded Text",
         timestamp: new Date().toISOString(),
-        engine_version: "finops-1.0.0",
+        engine_version: ENGINE_VERSION,
         source_parse_warnings: sourceParseWarnings.length > 0 ? sourceParseWarnings : undefined,
         source_registry: sourceRegistryStatus,
         knowledge_base: referenceKbIndex.status,
@@ -1038,8 +1043,28 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => `  ${cat}
       },
       quality_gate: qualityGate
     };
+    const runTrace = buildRunTrace({
+      runId,
+      engineVersion: ENGINE_VERSION,
+      sourceRegistry,
+      sourcePackets,
+      dlpScan,
+      dlpReviewChunkCount: dlpReview.selected_chunk_count,
+      referenceKbIndex,
+      stageTraces: consumeStageTraces(runId),
+      auditLogs,
+      evidenceCheck: aggregatedRawData.evidence_check,
+      phase2: validationData,
+      strategy: finalResult.phase_3_strategy,
+      qualityGate,
+      tacticGroundingAdjustments
+    });
+    finalResult.meta.run_trace = runTrace;
+    finalResult.meta.run_trace_summary = summarizeRunTrace(runTrace);
+    return finalResult;
 
   } catch (error: any) {
+    clearStageTraces(runId);
     const duration = Date.now() - pipelineStarted;
     console.error(`[FinOps] [${runId}] === Pipeline FAILED === duration_ms=${duration} error="${error?.message || error}"`);
     serverLog(runId, 'error', 'pipeline_failed', {

@@ -510,9 +510,10 @@ interface ReportViewProps {
   onBack: () => void;
   onDownloadSummary: () => void;
   onDownloadMaster: () => void;
+  onDownloadTrace: () => void;
 }
 
-export const ReportView: React.FC<ReportViewProps> = ({ result, onBack, onDownloadSummary, onDownloadMaster }) => {
+export const ReportView: React.FC<ReportViewProps> = ({ result, onBack, onDownloadSummary, onDownloadMaster, onDownloadTrace }) => {
   const m = result.phase_2_validation.metrics;
   const cwrClass = result.phase_2_validation.crawl_walk_run;
   const isBlocked = result.quality_gate.decision === 'BLOCK';
@@ -548,6 +549,11 @@ export const ReportView: React.FC<ReportViewProps> = ({ result, onBack, onDownlo
             <button onClick={onDownloadMaster} className="px-4 py-2 bg-slate-900 text-white rounded-lg font-bold text-sm hover:bg-slate-700 transition-colors">
               Download Master Data
             </button>
+            {result.meta.run_trace && (
+              <button onClick={onDownloadTrace} className="px-4 py-2 bg-slate-100 text-slate-900 rounded-lg font-bold text-sm hover:bg-slate-200 transition-colors">
+                RunTrace JSON
+              </button>
+            )}
           </div>
         </div>
       </div>

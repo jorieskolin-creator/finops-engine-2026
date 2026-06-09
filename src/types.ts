@@ -246,12 +246,15 @@ export interface Phase3Strategy {
 }
 
 export interface AnalysisMeta {
+  run_id?: string;
   document_analyzed: string;
   timestamp: string;
   engine_version: string;
   source_parse_warnings?: string[];
   source_registry?: SourceRegistryRuntimeStatus;
   knowledge_base?: KnowledgeBaseRuntimeStatus;
+  run_trace?: RunTrace;
+  run_trace_summary?: RunTraceSummary;
   model_config: {
     preflight: string;
     forensic_audit: string;
@@ -359,6 +362,179 @@ export interface SourceRegistryRuntimeStatus {
     total_candidate_chunks: number;
     weak_coverage: boolean;
     char_count: number;
+  }>;
+}
+
+export interface RunTraceSummary {
+  stage_count: number;
+  source_count: number;
+  chunk_count: number;
+  evidence_path_count: number;
+  score_path_count: number;
+  tactic_path_count: number;
+  quality_gate_decision: QualityGateDecision;
+}
+
+export interface RunTrace {
+  run_id: string;
+  engine_version: string;
+  taxonomy_version?: string;
+  taxonomy_hash: string;
+  kb_index_hash?: string;
+  kb_version_hashes: Record<string, string>;
+  tactic_db_version: string;
+  tactic_db_hash: string;
+  playbook_hash: string;
+  created_at: string;
+  input_manifest: SourceManifestTrace[];
+  context_packets: ContextPacketTrace[];
+  dlp: {
+    scanned_chunk_count: number;
+    model_review_chunk_count: number;
+    high_risk_hit_count: number;
+    caution_hit_count: number;
+    blocked: boolean;
+    warnings: string[];
+  };
+  stages: StageTrace[];
+  evidence_paths: EvidencePathTrace[];
+  score_paths: ScorePathTrace[];
+  tactic_paths: TacticPathTrace[];
+  quality_gate: QualityGateTrace;
+  usage_summary: ModelUsageSummary;
+  privacy: {
+    raw_source_included: false;
+    full_prompts_included: false;
+    api_keys_included: false;
+    note: string;
+  };
+}
+
+export interface SourceManifestTrace {
+  source_id: string;
+  source_name: string;
+  source_hash: string;
+  chunk_count: number;
+  chunk_ids: string[];
+  page_count?: number;
+  sheet_count?: number;
+  row_count?: number;
+  types: SourceChunkType[];
+  parse_warnings?: string[];
+}
+
+export interface ContextPacketTrace {
+  packet_id: string;
+  domain_id: string;
+  title: string;
+  context_packet_hash: string;
+  included_chunk_ids: string[];
+  included_chunk_count: number;
+  total_candidate_chunks: number;
+  char_count: number;
+  image_count: number;
+  weak_coverage: boolean;
+  coverage_notes: string[];
+  manifest: SourcePacketManifestItem[];
+}
+
+export interface StageTrace {
+  stage_id: string;
+  provider?: string;
+  model?: string;
+  fallback_chain: string[];
+  attempt_count: number;
+  prompt_hash?: string;
+  context_packet_hash?: string;
+  input_char_count?: number;
+  output_char_count?: number;
+  input_tokens?: number;
+  output_tokens?: number;
+  reasoning_tokens?: number;
+  input_token_estimate?: number;
+  output_token_estimate?: number;
+  duration_ms?: number;
+  status: 'ok' | 'error';
+  fallback_reason?: string;
+  error?: string;
+  failed_attempts?: Array<{ model: string; provider: string; error: string }>;
+  started_at?: string;
+  completed_at?: string;
+}
+
+export interface EvidencePathTrace {
+  path_id: string;
+  stream: 'maturity' | 'antipattern';
+  criterion_id: string;
+  evidence_check_status?: EvidenceCheckStatus;
+  antipattern_absence_status?: AntiPatternAbsenceStatus;
+  source_id?: string;
+  page_id?: string;
+  chunk_id?: string;
+  source_document?: string;
+  page_number?: number;
+  sheet_name?: string;
+  row_number?: number;
+  evidence_category?: EvidenceCategory;
+  quote_snippet: string;
+  original_count?: number;
+  verified_count?: number;
+  final_count: number;
+  score_effect: string;
+}
+
+export interface ScorePathTrace {
+  stream: 'maturity' | 'antipattern';
+  criterion_id: string;
+  final_count: number;
+  status: AuditItem['status'];
+  evidence_check_status?: EvidenceCheckStatus;
+  antipattern_absence_status?: AntiPatternAbsenceStatus;
+  has_quote_backed_coverage: boolean;
+  metric_effect: string;
+}
+
+export interface TacticPathTrace {
+  phase?: string;
+  action_index: number;
+  action_snippet: string;
+  tactic_ids: string[];
+  linked_findings: string[];
+  reference_kind: 'tactic_reference' | 'playbook_reference' | 'kb_reference' | 'customer_evidence';
+  grounding_status: 'grounded' | 'withheld' | 'quarantined' | 'unknown';
+  notes?: string[];
+}
+
+export interface QualityGateTrace {
+  decision: QualityGateDecision;
+  blocking_reasons: string[];
+  warnings: string[];
+  fact_check?: {
+    attempts: number;
+    supported_count: number;
+    total_claims: number;
+    unsupported_count: number;
+    failed: boolean;
+    trajectory?: FactCheckPassSnapshot[];
+  };
+  sanitation?: {
+    removed: number;
+    rewritten: number;
+    quarantined: number;
+    remaining_unsupported: number;
+  };
+  final_export_status: 'available';
+}
+
+export interface ModelUsageSummary {
+  stage_calls: number;
+  estimated_input_tokens: number;
+  estimated_output_tokens: number;
+  by_model: Record<string, {
+    calls: number;
+    estimated_input_tokens: number;
+    estimated_output_tokens: number;
+    output_chars: number;
   }>;
 }
 

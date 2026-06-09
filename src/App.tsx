@@ -4,7 +4,7 @@ import { scanInputText, sanitizeInput } from './services/preFlightService';
 import { extractPagesFromPdf, imageFileToInput } from './services/pdfService';
 import type { PdfParseQuality } from './services/pdfService';
 import { renderDelimitedTableForAnalysis } from './services/tableService';
-import { downloadMasterDataReport, downloadSummaryReport } from './services/exportService';
+import { downloadMasterDataReport, downloadRunTraceJson, downloadSummaryReport } from './services/exportService';
 import { forensicSanitizeImport } from './services/securityService';
 import { extractDiagnosticResultFromHtmlReport, isDiagnosticResultPayload, parseDiagnosticResultJson, serializeDiagnosticResultForHtml } from './services/reportImportService';
 import { findGeneratedReportPrivacyFindings, scrubDiagnosticResultForPrivacy } from './services/privacyService';
@@ -537,13 +537,19 @@ const App: React.FC = () => {
     setResult(prepareResultForDisplay(next, source));
   };
 
+  const clearTraceAfterLocalEdit = (draft: DiagnosticResult) => {
+    delete draft.meta.run_trace;
+    delete draft.meta.run_trace_summary;
+  };
+
   const updateCurrentResult = (updater: (draft: DiagnosticResult) => void) => {
     setResult(prev => {
       if (!prev) return prev;
       const draft = cloneResult(prev);
       updater(draft);
+      clearTraceAfterLocalEdit(draft);
       setPrivacyEdited(true);
-      setPrivacyNotice('Report text edited locally. Exports will use this edited version.');
+      setPrivacyNotice('Report text edited locally. Exports will use this edited version; RunTrace was removed because provenance no longer matches the edited wording.');
       return draft;
     });
   };
@@ -551,11 +557,12 @@ const App: React.FC = () => {
   const applyPersonRedaction = () => {
     if (!result) return;
     const scrubbed = scrubDiagnosticResultForPrivacy(result, { redactPersonNames: true });
+    clearTraceAfterLocalEdit(scrubbed.result);
     setResult(scrubbed.result);
     setPrivacyEdited(prev => prev || scrubbed.changed);
     setPrivacyNotice(scrubbed.replacements > 0
-      ? `Redacted ${scrubbed.replacements} detected item(s) in generated report text.`
-      : 'No additional deterministic person-name patterns were found.');
+      ? `Redacted ${scrubbed.replacements} detected item(s) in generated report text. RunTrace was removed because provenance no longer matches the redacted wording.`
+      : 'No additional deterministic person-name patterns were found. RunTrace was removed because privacy review was applied.');
   };
 
   const applyOrganizationRedaction = () => {
@@ -564,11 +571,12 @@ const App: React.FC = () => {
       redactPersonNames: false,
       redactOrganizationName: organizationRedactionTerm.trim()
     });
+    clearTraceAfterLocalEdit(scrubbed.result);
     setResult(scrubbed.result);
     setPrivacyEdited(prev => prev || scrubbed.changed);
     setPrivacyNotice(scrubbed.replacements > 0
-      ? `Redacted ${scrubbed.replacements} organization-name occurrence(s) in generated report text.`
-      : 'That organization name was not found in generated report text.');
+      ? `Redacted ${scrubbed.replacements} organization-name occurrence(s) in generated report text. RunTrace was removed because provenance no longer matches the redacted wording.`
+      : 'That organization name was not found in generated report text. RunTrace was removed because privacy review was applied.');
   };
 
   useEffect(() => {
@@ -1128,6 +1136,15 @@ const App: React.FC = () => {
     downloadMasterDataReport(saved);
   };
 
+  const downloadRecoveredRunTrace = () => {
+    const saved = safeRecoveryResult || readSavedAssessment();
+    if (!saved) {
+      setHasSavedAssessment(false);
+      return;
+    }
+    downloadRunTraceJson(saved);
+  };
+
   const recordUiCrash = (error: Error, info: React.ErrorInfo) => {
     const message = error?.message || 'Unknown render error';
     saveLastCrash(message, info.componentStack || undefined);
@@ -1181,6 +1198,15 @@ const App: React.FC = () => {
             >
               Download Recovered JSON
             </button>
+            {safeRecoveryResult.meta.run_trace && (
+              <button
+                type="button"
+                onClick={downloadRecoveredRunTrace}
+                className="px-5 py-3 rounded-xl font-bold bg-slate-800 text-slate-200 hover:bg-slate-700 transition-colors"
+              >
+                Download RunTrace JSON
+              </button>
+            )}
             <button
               type="button"
               onClick={openRecoveredDashboard}
@@ -1231,6 +1257,7 @@ const App: React.FC = () => {
           onBack={() => setViewMode('dashboard')}
           onDownloadSummary={() => downloadSummaryReport(result)}
           onDownloadMaster={() => downloadMasterDataReport(result)}
+          onDownloadTrace={() => downloadRunTraceJson(result)}
         />
       </AppErrorBoundary>
     );
@@ -1643,6 +1670,19 @@ const App: React.FC = () => {
                         </div>
                       </div>
                     </button>
+                    {result.meta.run_trace && (
+                      <button onClick={() => downloadRunTraceJson(result)} className="group relative px-8 py-4 rounded-2xl bg-slate-900 hover:bg-slate-800 border border-white/10 shadow-[0_0_20px_rgba(15,23,42,0.2)] transition-all duration-300">
+                        <div className="relative flex items-center gap-4">
+                          <div className="w-10 h-10 rounded-full bg-emerald-500/15 text-emerald-300 flex items-center justify-center border border-emerald-500/30 group-hover:bg-emerald-500 group-hover:text-slate-950 transition-colors">
+                            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707v13a2 2 0 01-2 2z" /></svg>
+                          </div>
+                          <div className="text-left">
+                            <span className="block text-[10px] font-bold uppercase tracking-widest text-emerald-300">Provenance</span>
+                            <span className="block text-sm font-bold text-white">Download RunTrace JSON</span>
+                          </div>
+                        </div>
+                      </button>
+                    )}
                   </div>
                 </div>
 
