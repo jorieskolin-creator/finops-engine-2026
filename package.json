@@ -31,7 +31,6 @@
     "node": ">=18"
   },
   "dependencies": {
-    "@google/genai": "^1.0.0",
     "dompurify": "^3.1.0",
     "express": "^4.19.0",
     "pdfjs-dist": "^4.0.0",

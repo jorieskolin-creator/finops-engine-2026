@@ -16,7 +16,7 @@ const apiDir = path.join(__dirname, 'api');
 
 const app = express();
 
-// Body limit must accommodate base64-encoded PDF pages sent to /api/generate.
+// Body limit must accommodate base64-encoded PDF pages sent to the model proxies.
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 

@@ -1,104 +1,131 @@
 # FinOps Engine
 
-Evidence-gated FinOps Maturity Assessment scanner. React + TypeScript + Vite frontend; Gemini and Anthropic providers proxied through Vercel serverless functions under `api/`.
+Evidence-gated FinOps Maturity Assessment prototype. The React, TypeScript, and Vite client parses source documents in the browser and orchestrates a multi-stage assessment through authenticated OpenAI and Anthropic proxy endpoints under `api/`.
+
+The repository is currently intended for solution development, structural validation, and accuracy/reproducibility testing. It is not yet a production-ready multi-user service.
 
 ## Local development
 
-The client always calls `/api/generate` and `/api/anthropic-generate`, so local
-dev needs the serverless functions running too. Use `vercel dev` (it serves
-the Vite frontend and the `api/*.js` functions together):
+Install the locked dependencies and create a local environment file:
 
 ```bash
-npm install
-cp .env.example .env.local   # fill in API_KEY and ANTHROPIC_API_KEY
-npx vercel dev               # http://localhost:3000
+npm ci
+cp .env.example .env.local
 ```
 
-`npm run dev` (plain Vite) still works for UI-only work, but any audit run will
-fail because `/api/*` won't be served.
+Set `SECRET_KEY`, `OPENAI_API_KEY` (or `GPT_API_KEY`), and `ANTHROPIC_API_KEY`. Provider keys remain server-side and are never included in the Vite client bundle.
 
-## Deployment (Vercel)
+For the simplest full-stack development environment, use Vercel's local runtime, which loads `.env.local` and serves Vite together with the API handlers:
 
-1. Import the repo into Vercel.
-2. Set environment variables in **Project Settings → Environment Variables**:
-   - `GEMINI_API_KEY` — Google Gemini key (server-side only, never exposed to browser)
-   - `SECRET_KEY` — access password for running assessments; also the HMAC key for session cookies. Pick a long random string (>= 32 chars).
-   - `VITE_FINOPS_TACTICS_URL` — optional public Blob URL for the tactics DB
-   - `ANTHROPIC_API_KEY` — optional, only if you re-enable the Anthropic path
-3. Build command: `npm run build` (default). Output: `dist/`.
-4. The serverless functions in `api/` are auto-registered by Vercel; `vercel.json` grants them up to 600s execution.
+```bash
+npx --yes vercel dev
+```
 
-Secrets are **not** inlined into the client bundle — `vite.config.ts` only exposes `VITE_*` vars. All Gemini/Anthropic traffic from the browser goes through `/api/generate` and `/api/anthropic-generate`.
+For UI-only work, run `npm run dev`. The UI will load, but assessments cannot complete unless `/api/*` is also available. To use the repository's Node adapter instead, export the required environment variables, run `npm run build && npm start` on port 3000, and run `npm run dev` separately for Vite and its `/api` proxy.
 
-### Access control
+## Active model architecture
 
-The UI loads for anyone, but **running an assessment requires logging in.** Login is a single shared password held in `SECRET_KEY`.
+Model profiles, stage assignments, and fallback chains are centralized in `src/models.ts`. The active providers are OpenAI and Anthropic; Gemini is not part of the current runtime.
+
+| Stage group | Normal primary provider/profile |
+|-------------|---------------------------------|
+| Preflight / DLP | OpenAI GPT-5.5, low reasoning |
+| Forensic audit | Anthropic Claude Sonnet 4.6 |
+| Targeted rescan | Anthropic Claude Opus 4.7 |
+| Evidence check and adjudication | OpenAI GPT-5.5 |
+| Evidence synthesis | Anthropic Claude Sonnet 4.6 |
+| Roadmap synthesis | Anthropic Claude Opus 4.7 |
+| Fact check and quality-gate explanation | OpenAI GPT-5.5 |
+
+Every stage has an ordered fallback chain. Treat `src/models.ts`, rather than this summary, as the source of truth when changing model routing. The optional `cheap_test` mode is a development cost-control mode, not an authorization boundary.
+
+## Environment variables
+
+| Variable | Required | Purpose |
+|----------|----------|---------|
+| `SECRET_KEY` | Yes | Shared assessment password and HMAC key for session cookies. Use at least 32 random characters. Rotation invalidates active sessions. |
+| `OPENAI_API_KEY` or `GPT_API_KEY` | Yes for OpenAI stages | Server-side OpenAI credential. `GPT_API_KEY` takes precedence when both are set. |
+| `ANTHROPIC_API_KEY` | Yes for Anthropic stages | Server-side Anthropic credential. |
+| `VITE_FINOPS_TACTICS_URL` | No | Public remote tactics database URL exposed to the browser. |
+| `BLOB_READ_WRITE_TOKEN` | No | Vercel Blob credential used by `/api/kb-index` for the remote PDF knowledge base. |
+| `FINOPS_KB_BLOB_PREFIX` | No | Blob path prefix; defaults to `Knowledge Base/`. |
+| `VITE_FINOPS_MODEL_MODE` | No | Set to `cheap_test` only for development runs. |
+| `PORT` | No | Node server port; defaults to 3000. Hosting platforms normally provide it. |
+
+Do not commit populated `.env` or `.env.local` files.
+
+## Access control and API surface
+
+The UI is public, but assessment and supporting API operations require an HMAC-signed `fe_session` cookie. Authentication currently uses one shared password; model/stage/token allowlists and per-user authorization are not yet enforced server-side.
 
 | Endpoint | Method | Purpose |
 |----------|--------|---------|
-| `/api/login` | POST `{password}` | Verifies password (timing-safe), sets an HMAC-signed `fe_session` cookie (HttpOnly, SameSite=Lax, 8h TTL). |
-| `/api/logout` | POST | Clears the cookie. |
-| `/api/session` | GET | Returns 200 if the cookie is valid, 401 otherwise. |
-| `/api/generate`, `/api/anthropic-generate` | POST | Reject with 401 if the cookie is missing or invalid. |
+| `/api/login` | POST | Verify the shared password and issue an eight-hour HttpOnly, Secure, SameSite=Lax session cookie. |
+| `/api/logout` | POST | Clear the session cookie. |
+| `/api/session` | GET | Check the current session. |
+| `/api/openai-generate` | POST | Authenticated OpenAI Responses API proxy. |
+| `/api/anthropic-generate` | POST | Authenticated Anthropic Messages API proxy. |
+| `/api/model-result` | POST | Recover a completed model response from transient process memory. |
+| `/api/kb-index` | GET | Build or return the cached remote reference-KB index. |
+| `/api/log` | POST | Write authenticated client pipeline events to server logs. |
 
-Implementation lives in `lib/auth.js` (`node:crypto` only — no external deps, no Vercel-specific code, so it ports cleanly to any Node host). The cookie is signed with HMAC-SHA256 keyed by `SECRET_KEY`, so rotating `SECRET_KEY` invalidates all active sessions.
+The authentication implementation lives in `lib/auth.js`. The current shared-password design is suitable only for a controlled prototype audience.
 
-### Model configuration
+## Data handling and privacy boundaries
 
-Model IDs **and thinking config** are centralized in `src/models.ts` as `ModelProfile` objects. During technical testing the engine uses Gemini only:
+The current implementation provides the following controls and limitations:
 
-| Phase | Constant | Model ID | Thinking config |
-|-------|----------|----------|-----------------|
-| Phase 0 (DLP) + Phase 1 (5 parallel batch audits) | `MODEL_PHASE1` | `gemini-3-flash-preview` | `{ thinkingLevel: 'low' }` |
-| Phase 3 (strategy synthesis) | `MODEL_PHASE3` | `gemini-2.5-pro` | `{ thinkingBudget: -1 }` (dynamic) |
+- Source files are parsed in the browser; the original files are not uploaded as files by this application.
+- Parsed source text and base64-encoded source images are sent through the server proxies to the configured OpenAI and Anthropic services. Provider-side storage and retention depend on the configured provider account and contract terms.
+- A deterministic text scan blocks recognized high-risk secret patterns before the main assessment. A model-assisted review checks distributed text samples and a bounded set of images. This is risk reduction, not comprehensive PII, image-secret, or data-classification prevention; source material must be reviewed before upload.
+- The completed report, including report-visible evidence, is stored in browser `sessionStorage` for crash recovery until the tab/session data is cleared.
+- Model output may be retained in process memory for up to 15 minutes to recover interrupted response streams. No durable server-side assessment database is implemented.
+- RunTrace excludes raw source documents, full prompts, and API keys, but it includes hashes, source references, and report-visible quote snippets.
+- Generated report text is privacy-scrubbed for known token, contact, and selected name patterns before display. Automated redaction is not a substitute for human review before sharing.
 
-Gemini 3 uses `thinkingLevel` (`'low' | 'medium' | 'high'`); Gemini 2.5 uses `thinkingBudget` (integer; `-1` dynamic, `0` off-Flash-only). The two cannot be combined in one request. The `thinkingConfig` object is plumbed from `src/models.ts` → `callGeminiGenerate` → `/api/generate` → the SDK's `generateContent({ config: { thinkingConfig } })`.
+Do not describe the current system as zero-retention. Deployment-platform logs, model-provider policies, browser session storage, and transient response recovery are separate retention boundaries.
 
-The Anthropic path (`src/services/anthropicService.ts`, `api/anthropic-generate.js`) is left dormant. Re-enable by swapping the Phase 3 call in `src/services/geminiService.ts` back to `callOpusStrategy` and adding `ANTHROPIC_API_KEY` to the platform env vars.
+## Deployment status
 
-### Drift Test (MVP)
+The final hosting and authorization model is still an open design decision. The checked-in configurations support experimentation on Vercel and Railway, but they are not behaviorally identical.
 
-A **Drift Test** button appears in the header once you're logged in. Click it to run the assessment pipeline against the three bundled golden fixtures (`test/golden-{crawl,walk,run}.txt`) combined into a single document set. The result shows on the normal report screen; download the HTML via "Review & Download Report" and diff against previous runs manually.
+### Railway / long-lived Node process
 
-This MVP intentionally does not store results anywhere. The plan once the procedure is validated:
-1. Persist each drift run (Vercel Blob → Postgres) and add a history view.
-2. Add per-criterion count-delta + score-delta computation against `src/knowledge_base/golden_baselines.json`.
-3. Add embedding-based similarity on the Phase 3 executive summary.
-4. Add an `ADMIN_SECRET` gate for write/destructive operations once admin actions exist.
+`railway.json` builds the Vite application and starts `server.js`. The Node adapter dynamically mounts `api/*.js`, accepts larger JSON bodies for base64 image payloads, serves `dist/`, and provides process-local model-result recovery.
 
-The golden fixtures are bundled via Vite `?raw` imports in `src/App.tsx`, so the client ships them — no static-asset route needed.
+Current limitation: recovery state and the remote-KB cache are in memory. They are not shared across multiple processes or replicas and disappear on restart.
 
-## Deployment (Railway)
+### Vercel
 
-Railway can host the same build via its Vite preset; configure the same env vars in the service settings. Note that `api/*.js` are written for the Vercel function runtime — running on Railway as a Node server would require a small adapter.
+`vercel.json` builds the Vite client and registers `api/*.js` as functions. Normal streamed responses can work, but two limitations matter:
 
----
+1. `/api/model-result` uses module-local memory, which is not a reliable shared store across separate function invocations or instances.
+2. The application-level upload allowance can produce inline JSON/image requests larger than serverless request-body limits.
 
-## Golden Test Corpus for Drift Detection
+Until shared result storage and reference-based image transport are implemented, Vercel should be treated as a constrained prototype target rather than equivalent to the long-lived Node deployment.
 
-Synthetic FinOps documents with known maturity profiles. Used to detect when Gemini model updates silently change scoring behavior.
+## Build and focused tests
 
-## Documents
+```bash
+npm run build
+npm run test:evidence-check
+npm run test:model-routing
+npm run test:privacy
+```
 
-| File | Profile | Expected Classification | Purpose |
-|------|---------|------------------------|---------|
-| `golden-crawl.txt` | Immature org | Crawl | Low maturity, high anti-patterns |
-| `golden-walk.txt` | Partially mature | Walk | Mix of signals |
-| `golden-run.txt` | Mature org | Run | High maturity, low anti-patterns |
+The repository currently exposes focused `test:*` scripts rather than one aggregate `npm test` command.
 
-## How to Use
+## Drift and golden fixtures
 
-1. Upload each golden document pair (you need 2+ files per assessment) to the engine
-2. Run assessment
-3. Compare Phase 1 scores against `knowledge_base/golden_baselines.json`
-4. Use `services/driftDetectionService.ts` to automate the comparison
+The synthetic fixtures under `test/` represent separate organizations and must be assessed separately. The per-pack drift suite is the meaningful comparison against `src/knowledge_base/golden_baselines.json`.
 
-## When to Run
+The older combined Drift Test runs Crawl, Walk, and Run fixtures as one document set. Treat that only as a pipeline simulation, not as a valid maturity or model-drift result.
 
-- After every Gemini model update
-- Before every production release
-- Quarterly as a baseline check
+Run the per-pack suite:
 
-## Important
+- after model-routing or prompt changes;
+- before a release candidate;
+- after scoring, taxonomy, or evidence-gate changes;
+- periodically to monitor provider-model behavior.
 
-These are **synthetic** documents. Do not modify them — their content is calibrated to the expected score ranges in `golden_baselines.json`. If you change the criteria definitions, update the baselines accordingly.
+Do not modify calibrated golden fixtures without reviewing and versioning their expected baselines.

@@ -183,14 +183,14 @@ const PrivacyProtocolCard = () => (
   <div className="max-w-[85rem] mx-auto mt-12 mb-20 animate-fade-in relative z-10 px-4">
     <div className="flex items-center justify-center gap-2 mb-8 opacity-90">
       <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_10px_rgba(16,185,129,0.8)]"></span>
-      <span className="text-[10px] font-bold uppercase tracking-[0.25em] text-emerald-400">Zero-Retention Protocol Active</span>
+      <span className="text-[10px] font-bold uppercase tracking-[0.25em] text-emerald-400">Data Handling Overview</span>
     </div>
     <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
       {[
-        { icon: 'M13 10V3L4 14h7v7l9-11h-7z', title: "Ephemeral", desc: "RAM Only" },
-        { icon: 'M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z', title: "Local-First", desc: "Client Parsing" },
-        { icon: 'M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z', title: "No Retention", desc: "Stateless API" },
-        { icon: 'M3.98 8.223A10.477 10.477 0 001.934 12C3.226 16.338 7.244 19.5 12 19.5c.993 0 1.953-.138 2.863-.395M6.228 6.228A10.45 10.45 0 0112 4.5c4.756 0 8.773 3.162 10.065 7.498a10.523 10.523 0 01-4.293 5.774M6.228 6.228L3 3m3.228 3.228l3.65 3.65m7.894 7.894L21 21m-3.228-3.228l-3.65-3.65m0 0a3 3 0 10-4.243-4.243m4.242 4.242L9.88 9.88', title: "Financial Safety", desc: "DLP Scanning" }
+        { icon: 'M13 10V3L4 14h7v7l9-11h-7z', title: "Browser Parsing", desc: "Files parsed on this device" },
+        { icon: 'M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z', title: "Provider Processing", desc: "Parsed content sent to configured LLMs" },
+        { icon: 'M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z', title: "Session Recovery", desc: "Report saved in this browser tab" },
+        { icon: 'M3.98 8.223A10.477 10.477 0 001.934 12C3.226 16.338 7.244 19.5 12 19.5c.993 0 1.953-.138 2.863-.395M6.228 6.228A10.45 10.45 0 0112 4.5c4.756 0 8.773 3.162 10.065 7.498a10.523 10.523 0 01-4.293 5.774M6.228 6.228L3 3m3.228 3.228l3.65 3.65m7.894 7.894L21 21m-3.228-3.228l-3.65-3.65m0 0a3 3 0 10-4.243-4.243m4.242 4.242L9.88 9.88', title: "DLP Screening", desc: "Known patterns; review before upload" }
       ].map((item, idx) => (
         <div key={idx} className="bg-slate-900/70 backdrop-blur-sm p-4 rounded-2xl border border-white/10 flex items-center gap-4 shadow-sm hover:shadow-[0_0_15px_rgba(255,255,255,0.05)] transition-all hover:bg-slate-800/70">
           <div className="w-10 h-10 rounded-xl bg-slate-800 flex items-center justify-center text-slate-400 border border-white/5">
@@ -203,6 +203,9 @@ const PrivacyProtocolCard = () => (
         </div>
       ))}
     </div>
+    <p className="mt-5 text-center text-[11px] leading-relaxed text-slate-400 max-w-4xl mx-auto">
+      Parsed text and images are transmitted to the configured OpenAI and Anthropic services for assessment. Provider retention depends on the configured account terms. Generated reports are kept in browser session storage for crash recovery, and model output may be cached briefly in server memory.
+    </p>
   </div>
 );
 
@@ -1879,7 +1882,7 @@ const App: React.FC = () => {
           <div className="flex flex-col items-center md:items-end gap-3">
             <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-950/40 border border-emerald-900/60 text-[10px] font-bold text-emerald-400 uppercase tracking-widest cursor-default">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_5px_rgba(16,185,129,0.8)]"></span>
-              Zero-Retention Protocol
+              Provider-Backed Processing
             </div>
           </div>
         </div>
