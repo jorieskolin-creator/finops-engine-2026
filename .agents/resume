@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$repo_root"
+
+echo "[resume] Checking persisted Node.js dependencies"
+command -v node >/dev/null 2>&1 || {
+  echo "[resume] Node.js is unavailable; create a fresh orb to rerun .agents/setup" >&2
+  exit 1
+}
+[[ -d node_modules ]] || {
+  echo "[resume] node_modules is missing; create a fresh orb to rerun .agents/setup" >&2
+  exit 1
+}
+
+echo "[resume] Ready; this repository has no backing services to reconnect"

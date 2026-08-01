@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$repo_root"
+
+echo "[setup] Checking Node.js toolchain"
+command -v node >/dev/null 2>&1 || {
+  echo "[setup] Node.js is required but was not found" >&2
+  exit 1
+}
+command -v npm >/dev/null 2>&1 || {
+  echo "[setup] npm is required but was not found" >&2
+  exit 1
+}
+node -e 'const major = Number(process.versions.node.split(".")[0]); if (major < 18) { console.error(`[setup] Node.js >=18 is required; found ${process.version}`); process.exit(1) }'
+
+echo "[setup] Installing locked npm dependencies"
+npm ci --no-audit --no-fund
+
+if [[ ! -f .env.local ]]; then
+  echo "[setup] Creating .env.local from .env.example"
+  cp -- .env.example .env.local
+else
+  echo "[setup] Preserving existing .env.local"
+fi
+
+echo "[setup] Complete (Node $(node --version), npm $(npm --version))"
+echo "[setup] Add local credentials to .env.local before running provider-backed assessments"
