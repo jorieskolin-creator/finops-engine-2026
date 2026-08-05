@@ -26,7 +26,8 @@ import {
 } from "./factCheckService";
 import { FactCheckClaim, FactCheckResult, FactCheckPassSnapshot } from "../types";
 import { MODEL_ROUTING_MODE, STAGE_MODELS, StageId } from "../models";
-import { runStage, serverLog, newRunId } from "./modelRouter";
+import { runStage, serverLog } from "./modelRouter";
+import { completeRun, createRun, failRun, getRun } from "./runLifecycleService";
 import { sanitizeRoadmapTacticGrounding, TacticGroundingAdjustment } from "./tacticGroundingService";
 import { sanitizeBlockedStrategy, sanitizeStrategyAfterFactCheck } from "./strategySanitationService";
 import {
@@ -207,7 +208,11 @@ export const analyzeDocument = async (
   options: AnalyzeOptions = {}
 ): Promise<DiagnosticResult> => {
   const images: never[] = [];
-  const runId = newRunId();
+  // This is deliberately the first content-processing action: PostgreSQL owns
+  // the UUID and deadlines before source text is inspected or packetized.
+  const authoritativeRun = await createRun();
+  const runId = authoritativeRun.run_id;
+  let completionIntent = false;
   const pipelineStarted = Date.now();
   const actuals: Record<string, string> = {
     preflight: STAGE_MODELS.preflight.id,
@@ -1036,10 +1041,17 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => `  ${cat}
     });
     finalResult.meta.run_trace = runTrace;
     finalResult.meta.run_trace_summary = summarizeRunTrace(runTrace);
+    completionIntent = true;
+    await completeRun(runId);
     return finalResult;
 
   } catch (error: any) {
     clearStageTraces(runId);
+    if (!completionIntent) await failRun(runId).catch(() => undefined);
+    else {
+      const authoritative = await getRun(runId).catch(() => null);
+      if (authoritative?.state === 'active') await failRun(runId).catch(() => undefined);
+    }
     const duration = Date.now() - pipelineStarted;
     console.error(`[FinOps] [${runId}] === Pipeline FAILED === duration_ms=${duration} error_code=PIPELINE_FAILED`);
     serverLog(runId, 'error', 'pipeline_failed', {

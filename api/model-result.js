@@ -1,35 +1,8 @@
-import { requireSession } from "../lib/auth.js";
-import { getInternalModelResult } from "../lib/internalModelResults.js";
-import { GovernanceError } from "../lib/governance.js";
-
-export default async function handler(req, res) {
-  if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method not allowed' });
-  }
-  if (!requireSession(req)) {
-    return res.status(401).json({ error: 'Authentication required' });
-  }
-
-  const { internalCallId } = req.body || {};
-  if (!internalCallId || typeof internalCallId !== 'string') {
-    return res.status(400).json({ error: 'Missing required field: internalCallId' });
-  }
-
-  let result;
-  try { result = getInternalModelResult(internalCallId); }
-  catch (error) { if (error instanceof GovernanceError) return res.status(409).json({ status:'error', message:'INVALID_GOVERNED_OUTPUT' }); throw error; }
-  if (!result) {
-    return res.status(404).json({ status: 'missing' });
-  }
-  if (result.status === 'pending') {
-    return res.status(200).json({ status: 'pending' });
-  }
-  if (result.status === 'error') {
-    return res.status(200).json({ status: 'error', message: result.message || 'model call failed' });
-  }
-  return res.status(200).json({
-    status: 'done',
-    output: result.output || null,
-    usage: result.usage || null,
-  });
-}
+import { requireSession } from '../lib/auth.js';
+import { getInfrastructure } from '../lib/infrastructure.js';
+import { validateGovernedOutput } from '../lib/governance.js';
+const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const status=s=>s==='succeeded'?'done':s==='queued'?'queued':['dispatch_intent','send_authorized'].includes(s)?'running':s;
+export function modelResultHandler(repository,redis){return async(req,res)=>{if(req.method!=='POST')return res.status(405).json({error:'METHOD_NOT_ALLOWED'});if(!requireSession(req))return res.status(401).json({error:'AUTHENTICATION_REQUIRED'});const id=req.body?.internalCallId;if(typeof id!=='string'||!UUID.test(id))return res.status(400).json({error:'INVALID_REQUEST'});
+  try{const attempt=await repository.getAttemptByInternalCallId(id);if(!attempt)return res.status(404).json({status:'missing'});const state=status(attempt.state);if(state!=='done')return res.status(200).json({status:state});const raw=await redis.getResult(attempt.run_id,attempt.attempt_id);if(!raw)return res.status(200).json({status:'result_unavailable'});const value=JSON.parse(raw);validateGovernedOutput(value.output,{source_packet_id:attempt.packet_id,source_packet_hash:attempt.packet_hash,run_id:attempt.run_id,stage:attempt.stage,provider:attempt.provider,model:attempt.model});return res.status(200).json({status:'done',output:value.output,usage:value.usage||null});}catch{return res.status(503).json({status:'result_unavailable'});}};}
+export default async function handler(req,res){try{const {repository,redis}=getInfrastructure();return await modelResultHandler(repository,redis)(req,res);}catch{return res.status(503).json({error:'VERCEL_GOVERNED_DISPATCH_UNSUPPORTED'});}}

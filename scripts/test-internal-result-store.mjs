@@ -1,21 +1,20 @@
 import assert from 'node:assert/strict';
-import { clearInternalModelResultsForTests,completeInternalModelResult,failInternalModelResult,getInternalModelResult,registerInternalModelResult } from '../lib/internalModelResults.js';
+import { modelResultHandler } from '../api/model-result.js';
+import { issueCookie } from '../lib/auth.js';
 import { inspectOutput } from '../lib/governance.js';
-
-clearInternalModelResultsForTests();
-const packet={packet_id:'packet-1',packet_hash:'a'.repeat(64),run_id:'run-1',stage:'synthesis',provider:'anthropic',model:'claude-sonnet-4-6'};
-const metadata={runId:packet.run_id,provider:packet.provider,stage:packet.stage,model:packet.model,packetId:packet.packet_id,packetHash:packet.packet_hash};
-registerInternalModelResult('call-1',metadata);
-assert.throws(()=>registerInternalModelResult('call-1',metadata),/COLLISION/);
-const output=inspectOutput('final text',packet,1000);
-completeInternalModelResult('call-1',output,{output_tokens:12},metadata);
-assert.equal(getInternalModelResult('call-1').output.text,'final text');
-assert.equal(getInternalModelResult('call-1').packetId,'packet-1');
-registerInternalModelResult('call-stale',metadata);
-assert.throws(()=>completeInternalModelResult('call-stale',{...output,run_id:'other'},null,metadata),/INVALID_GOVERNED_OUTPUT/);
-registerInternalModelResult('call-hash',metadata);
-assert.throws(()=>completeInternalModelResult('call-hash',{...output,text:'tampered'},null,metadata),/INVALID_GOVERNED_OUTPUT/);
-registerInternalModelResult('call-error',metadata);failInternalModelResult('call-error','upstream failed',metadata);assert.equal(getInternalModelResult('call-error').status,'error');
-assert.equal(getInternalModelResult('missing'),null);
-clearInternalModelResultsForTests();
-console.log('internal result integrity tests passed');
+process.env.SECRET_KEY='test-secret-key-that-is-long-enough-123';
+const attempt={attempt_id:'a',internal_call_id:'123e4567-e89b-12d3-a456-426614174000',run_id:'r',packet_id:'p',packet_hash:'h',provider:'openai',model:'m',stage:'preflight',state:'outcome_unknown'};
+const req={method:'POST',headers:{cookie:''},body:{internalCallId:attempt.internal_call_id}};const res={status(n){this.statusCode=n;return this;},json(v){this.body=v;return this;}};
+// Auth is deliberately tested elsewhere; inject a malformed cookie and verify closed authentication.
+await modelResultHandler({getAttemptByInternalCallId:async()=>attempt},{getResult:async()=>null})(req,res);assert.equal(res.statusCode,401);
+const source=await (await import('node:fs/promises')).readFile(new URL('../api/model-result.js',import.meta.url),'utf8');assert.match(source,/result_unavailable/);assert.doesNotMatch(source,/internalModelResults/);
+const cookie=issueCookie().split(';')[0];
+const response=()=>({status(n){this.statusCode=n;return this;},json(v){this.body=v;return this;}});
+const call=async(repository,redis={getResult:async()=>null})=>{const out=response();await modelResultHandler(repository,redis)({...req,headers:{cookie}},out);return out;};
+assert.equal((await call({getAttemptByInternalCallId:async()=>null})).statusCode,404);
+for(const state of ['queued','send_authorized']){const out=await call({getAttemptByInternalCallId:async()=>({...attempt,state})});assert.equal(out.body.status,state==='queued'?'queued':'running');}
+const missing=await call({getAttemptByInternalCallId:async()=>({...attempt,state:'succeeded'})});assert.equal(missing.body.status,'result_unavailable');
+const invalid=await call({getAttemptByInternalCallId:async()=>({...attempt,state:'succeeded'})},{getResult:async()=>'{"output":{}}'});assert.equal(invalid.statusCode,503);assert.equal(invalid.body.status,'result_unavailable');
+const governed=inspectOutput('governed result',{packet_id:attempt.packet_id,packet_hash:attempt.packet_hash,run_id:attempt.run_id,provider:attempt.provider,model:attempt.model,stage:attempt.stage});
+const done=await call({getAttemptByInternalCallId:async()=>({...attempt,state:'succeeded'})},{getResult:async()=>JSON.stringify({status:'done',output:governed,usage:{output_tokens:2}})});assert.equal(done.statusCode,200);assert.equal(done.body.status,'done');assert.equal(done.body.output.text,'governed result');
+console.log('shared result integrity tests passed');

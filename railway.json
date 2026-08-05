@@ -4,8 +4,9 @@
     "buildCommand": "npm run build"
   },
   "deploy": {
+    "preDeployCommand": "npm run migrate",
     "startCommand": "npm start",
-    "healthcheckPath": "/",
+    "healthcheckPath": "/readyz",
     "restartPolicyType": "ON_FAILURE",
     "restartPolicyMaxRetries": 3
   }

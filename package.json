@@ -7,6 +7,8 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
+    "migrate": "node scripts/migrate.mjs",
+    "integration": "node scripts/integration-infrastructure.mjs",
     "test": "node scripts/run-tests.mjs",
     "test:evidence-check": "node scripts/test-evidence-check.mjs",
     "test:antipattern-semantics": "node scripts/test-antipattern-semantics.mjs",
@@ -29,6 +31,9 @@
     "test:source-registry": "node scripts/test-source-registry-packetizer.mjs",
     "test:governance": "node scripts/test-governance.mjs",
     "test:dlp-distributed": "node scripts/test-dlp-distributed-sampling.mjs",
+    "test:control-plane": "node scripts/test-control-plane.mjs",
+    "test:execution-worker": "node scripts/test-execution-worker.mjs",
+    "test:run-lifecycle": "node scripts/test-run-lifecycle.mjs",
     "preview": "vite preview",
     "start": "node server.js"
   },
@@ -39,9 +44,11 @@
     "dompurify": "^3.1.0",
     "express": "^4.19.0",
     "pdfjs-dist": "^4.0.0",
+    "pg": "^8.22.0",
     "react": "^18.3.0",
     "react-dom": "^18.3.0",
-    "recharts": "^2.12.0"
+    "recharts": "^2.12.0",
+    "redis": "5.8.2"
   },
   "devDependencies": {
     "@types/dompurify": "^3.0.5",

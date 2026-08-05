@@ -17,6 +17,7 @@ import { ReportView } from './components/ReportView';
 import { LoginModal } from './components/LoginModal';
 import { AppErrorBoundary } from './components/AppErrorBoundary';
 import { checkSession, logout } from './services/authService';
+import { deleteRun } from './services/runLifecycleService';
 import goldenCrawl from '../test/golden-crawl.txt?raw';
 import goldenWalk from '../test/golden-walk.txt?raw';
 import goldenRun from '../test/golden-run.txt?raw';
@@ -203,7 +204,7 @@ const PrivacyProtocolCard = () => (
       ))}
     </div>
     <p className="mt-5 text-center text-[11px] leading-relaxed text-slate-400 max-w-4xl mx-auto">
-      Only extracted text that passes the governed packet policy is transmitted to the configured OpenAI and Anthropic services. Direct images and scanned PDF pages are not processed because local OCR is unavailable. Provider retention depends on the configured account terms. Generated reports are kept in browser session storage for crash recovery, and model output may be cached briefly in server memory.
+      Only extracted text that passes the governed packet policy is transmitted to the configured OpenAI and Anthropic services. Direct images and scanned PDF pages are not processed because local OCR is unavailable. Provider retention depends on the configured account terms. Generated reports are kept in browser session storage for crash recovery. Sanitized packets and governed model results may remain in Redis for up to 30 minutes and are tombstoned for logical deletion when the run completes, fails, expires, or is deleted.
     </p>
   </div>
 );
@@ -986,6 +987,8 @@ const App: React.FC = () => {
   };
 
   const reset = () => {
+    const runId = result?.meta?.run_id || safeRecoveryResult?.meta?.run_id || readSavedAssessment()?.meta?.run_id;
+    if (runId) void deleteRun(runId).catch(() => setRecoveryNotice('Browser data was cleared; backend deletion will be retried by expiry cleanup.'));
     setResult(null);
     setFiles([]);
     setAggregatedText('');
@@ -1028,7 +1031,7 @@ const App: React.FC = () => {
   };
 
   const clearSavedAssessmentAndRestart = () => {
-    clearSavedAssessment();
+    // reset captures the saved/recovery run before browser storage is removed.
     setHasSavedAssessment(false);
     setRecoveryNotice(null);
     setSafeRecoveryResult(null);

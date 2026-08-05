@@ -46,6 +46,8 @@ Every stage has an ordered fallback chain. Treat `src/models.ts`, rather than th
 | `SECRET_KEY` | Yes | Shared assessment password and HMAC key for session cookies. Use at least 32 random characters. Rotation invalidates active sessions. |
 | `OPENAI_API_KEY` or `GPT_API_KEY` | Yes for OpenAI stages | Server-side OpenAI credential. `GPT_API_KEY` takes precedence when both are set. |
 | `ANTHROPIC_API_KEY` | Yes for Anthropic stages | Server-side Anthropic credential. |
+| `DATABASE_URL` | Yes for the Node server | PostgreSQL control-plane connection. Startup fails closed if unavailable or unmigrated. |
+| `REDIS_URL` | Yes for the Node server | Redis execution-plane connection. Startup fails closed if unavailable. |
 | `VITE_FINOPS_TACTICS_URL` | No | Public remote tactics database URL exposed to the browser. |
 | `BLOB_READ_WRITE_TOKEN` | No | Vercel Blob credential used by `/api/kb-index` for the remote PDF knowledge base. |
 | `FINOPS_KB_BLOB_PREFIX` | No | Blob path prefix; defaults to `Knowledge Base/`. |
@@ -67,8 +69,9 @@ The UI is public, but assessment and supporting API operations require an HMAC-s
 | `/api/openai-generate` | POST | Packet-ID-only governed OpenAI dispatch. |
 | `/api/anthropic-generate` | POST | Packet-ID-only governed Anthropic dispatch. |
 
-Milestone B uses structured source/page records and blocks image processing until local OCR/redaction is available. Approval is deterministic pattern-based risk reduction and an explicit policy decision; it is not proof that arbitrary source content is public. Approved packets record their classification method and approval basis. Approved packets and model recovery results are short-lived, bounded, process-local state: they are not durable or exactly-once. Redis/Postgres and durable workers remain explicitly deferred to Milestone C.
-| `/api/model-result` | POST | Recover a completed model response from transient process memory. |
+Milestone C uses structured source/page records and blocks image processing until local OCR/redaction is available. Approval is deterministic pattern-based risk reduction, not proof that arbitrary source content is public. PostgreSQL stores only content-free control metadata; Redis holds transient packets and governed results for at most 30 minutes and never beyond the immutable 24-hour run deadline.
+| `/api/model-result` | POST | Recover a completed governed result from Redis. |
+| `/api/run` | GET/POST/DELETE | Create, inspect, complete, fail, or delete an authoritative run. |
 | `/api/kb-index` | GET | Build or return the cached remote reference-KB index. |
 | `/api/log` | POST | Write authenticated client pipeline events to server logs. |
 
@@ -82,7 +85,7 @@ The current implementation provides the following controls and limitations:
 - Only browser-extracted text is sent through the server proxies to the configured OpenAI and Anthropic services. Direct images are rejected, PDF pages are not rasterized, and scanned/visual-only pages are not processed because local OCR is unavailable. Provider-side storage and retention depend on the configured provider account and contract terms.
 - A deterministic pattern scan blocks recognized high-risk secret and contextual financial-value patterns before the main assessment. A model-assisted review checks distributed text samples. This is policy approval and risk reduction, not proof of public classification or comprehensive PII/data-classification prevention; source material must be reviewed before upload.
 - The completed report, including report-visible evidence, is stored in browser `sessionStorage` for crash recovery until the tab/session data is cleared.
-- Model output may be retained in process memory for up to 15 minutes to recover interrupted response streams. No durable server-side assessment database is implemented.
+- Transient packets and model output may be retained in Redis for up to 30 minutes for dispatch/recovery. Completion, failure, expiry, and user deletion synchronously tombstone the run and logically delete indexed transient keys; retryable cleanup is resumed by the worker. Content-free operational metadata expires after 90 days.
 - RunTrace excludes raw source documents, full prompts, and API keys, but it includes hashes, source references, and report-visible quote snippets.
 - Generated report text is privacy-scrubbed for known token, contact, and selected name patterns before display. Automated redaction is not a substitute for human review before sharing.
 
@@ -94,18 +97,17 @@ The final hosting and authorization model is still an open design decision. The 
 
 ### Railway / long-lived Node process
 
-`railway.json` builds the Vite application and starts `server.js`. The Node adapter dynamically mounts `api/*.js`, serves `dist/`, and provides process-local model-result recovery.
+`railway.json` builds the Vite application, runs `npm run migrate` once as a pre-deploy command, and starts `server.js`. The server requires migrated PostgreSQL and Redis, exposes `/livez` and dependency-aware `/readyz`, and drains HTTP before closing infrastructure pools on SIGTERM/SIGINT.
 
-Milestone B governed assessments require the operator to configure one long-lived, single-process, single-replica Railway instance. The repository does not enforce replica count. Recovery state and the remote-KB cache are in memory; they are not shared and disappear on restart.
+Milestone C uses a content-free PostgreSQL ledger for runs, packet metadata, attempts, an opaque leased dispatch outbox, and cleanup evidence. Redis holds indexed, deadline-capped transient packets, send-authorization fences, and governed results. A long-lived worker reloads ledger state for every stream message. Provider invocation is at-most-once after the Redis `SEND_AUTHORIZED` boundary: crashes or transport uncertainty after that boundary become `outcome_unknown` and are never automatically retried or used for fallback. This is an explicit ambiguity state, not a claim of exactly-once invocation.
+
+The browser creates an authoritative server-UUID run before governed packet or model processing and awaits verified transient cleanup before returning a completed report. Active runs expire after two hours without authoritative activity and always within an immutable 24-hour deadline. Deletion invalidates execution immediately; `deleted` is recorded only after verified cleanup. Cleanup evidence contains fixed codes, counts, and timestamps—never content. This does not claim deletion from platform or database backups. Generated HTML remains browser-controlled and is not stored by the backend.
+
+Railway is the supported governed-dispatch target. PostgreSQL claims use fencing and Redis atomically records `SEND_AUTHORIZED`; this is not exactly-once delivery. A crash after authorization is intentionally `outcome_unknown`, with late governed-result recovery but no automatic provider retry/fallback.
 
 ### Vercel
 
-`vercel.json` builds the Vite client and registers `api/*.js` as functions. The Milestone B governance flow is not compatible with independent function instances:
-
-1. Packet approval and packet-ID-only provider dispatch use a shared process-local packet store.
-2. `/api/model-result` uses module-local recovery memory; neither store is reliable across separate function invocations or instances.
-
-Vercel and any multi-process or multi-replica deployment are unsupported for Milestone B governed assessment dispatch. They may serve UI/prototype work, but governed assessments require the single-process Railway topology above until Milestone C adds shared durable state.
+Vercel governed dispatch remains explicitly unsupported. Its independent API functions do not initialize the Railway worker lifecycle, so `/api/run` and governed packet/model routes fail closed rather than bypassing PostgreSQL, Redis, or the dispatch ledger. Vercel may still serve UI/prototype work that does not execute governed assessments.
 
 ## Build and focused tests
 
@@ -116,7 +118,7 @@ npm run test:model-routing
 npm run test:privacy
 ```
 
-The repository currently exposes focused `test:*` scripts rather than one aggregate `npm test` command.
+`npm test` discovers and runs all focused `test:*` scripts, including the injected-adapter control-plane tests.
 
 ## Drift and golden fixtures
 

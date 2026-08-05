@@ -30,17 +30,14 @@ const GATEWAY_DEADLINE_MS = 540_000;
 const RECOVERY_PROPAGATION_MS = 15_000;
 const INTERNAL_RESULT_POLL_INTERVAL_MS = 2_000;
 const INTERNAL_RESULT_MISSING_GRACE_MS = 10_000;
-const INTERNAL_ERROR_CODES = new Set([
-  'upstream_http_error', 'upstream_stream_error', 'transport_error',
-  'incomplete_response', 'empty_output', 'model_request_failed',
-]);
+class StageExecutionError extends Error { constructor(public code:string,public fallbackAllowed=false){super(code);} }
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 const newInternalCallId = (): string => {
   const random = globalThis.crypto?.randomUUID?.();
   if (random) return random;
-  return `internal-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`;
+  throw new StageExecutionError('SECURE_RANDOM_UNAVAILABLE');
 };
 
 const REQUEST_SCHEMA = 'stage_packet_request_v1';
@@ -119,7 +116,7 @@ async function pollInternalResult(body: any, approval: any, cause: unknown, disp
         throw new Error(`/api/model-result → ${res.status}`);
       }
       const data = await res.json();
-      if (data?.status === 'pending') {
+      if (data?.status === 'queued' || data?.status === 'running') {
         await sleep(INTERNAL_RESULT_POLL_INTERVAL_MS);
         continue;
       }
@@ -135,19 +132,10 @@ async function pollInternalResult(body: any, approval: any, cause: unknown, disp
         if (!await validOutput(output, body, approval)) return null;
         return { text: output.text, usage: data.usage };
       }
-      if (data?.status === 'error') {
-        const errorCode = typeof data.message === 'string' && INTERNAL_ERROR_CODES.has(data.message)
-          ? data.message
-          : 'model_request_failed';
-        await serverLog(body.run_id, 'error', 'internal_result_error', {
-          stage,
-          model,
-          internal_call_id: internalCallId,
-          error_code: errorCode,
-        });
-        return null;
-      }
+      if (data?.status === 'fallback_allowed') throw new StageExecutionError('FALLBACK_ALLOWED',true);
+      if (['outcome_unknown','cancelled','expired','result_unavailable'].includes(data?.status)) throw new StageExecutionError(String(data.status).toUpperCase());
     } catch (err: any) {
+      if (err instanceof StageExecutionError) throw err;
       await sleep(INTERNAL_RESULT_POLL_INTERVAL_MS);
     }
   }
@@ -212,7 +200,7 @@ async function postWithTimeout(url: string, body: any, approval: any): Promise<{
       }
     }
 
-    if (streamError) throw new Error(streamError);
+    if (streamError) throw new StageExecutionError(streamError,streamError==='FALLBACK_ALLOWED');
     if (finalText === null) {
       throw new Error(`${url} → stream ended without 'done' frame`);
     }
@@ -220,7 +208,8 @@ async function postWithTimeout(url: string, body: any, approval: any): Promise<{
   } catch (err) {
     const recovered = await pollInternalResult(body, approval, err, dispatchStarted);
     if (recovered) return recovered;
-    throw err;
+    if(err instanceof StageExecutionError)throw err;
+    throw new StageExecutionError('DEPENDENCY_UNCERTAINTY');
   } finally {
     clearTimeout(timer);
   }
@@ -293,9 +282,10 @@ export async function runStage(stage: StageId, prompt: NormalizedPrompt, ctx: Ru
       }
       return { text: result.text, modelUsed: profile, attempts: failures };
     } catch (err: any) {
+      if(err instanceof StageExecutionError&&!err.fallbackAllowed)throw err;
       const errorCode = err instanceof DOMException && err.name === 'AbortError'
         ? 'request_timeout'
-        : 'model_request_failed';
+        : err instanceof StageExecutionError ? err.code.toLowerCase() : 'model_request_failed';
       console.warn(`[modelRouter] stage=${stage} provider=${profile.provider} id=${profile.id} error_code=${errorCode}`);
       failures.push({ profile, error: errorCode });
     }
@@ -334,20 +324,4 @@ export async function serverLog(runId: string, level: 'info' | 'warn' | 'error',
   } catch {
     // intentionally swallow
   }
-}
-
-export function newRunId(): string {
-  // Compact, sortable, human-grep-able. 9 chars random suffix is enough for
-  // unique-per-day given low volume.
-  const d = new Date();
-  const pad = (n: number, w = 2) => String(n).padStart(w, '0');
-  const ts =
-    d.getUTCFullYear().toString() +
-    pad(d.getUTCMonth() + 1) +
-    pad(d.getUTCDate()) +
-    pad(d.getUTCHours()) +
-    pad(d.getUTCMinutes()) +
-    pad(d.getUTCSeconds());
-  const rand = Math.random().toString(36).slice(2, 11);
-  return `${ts}-${rand}`;
 }
