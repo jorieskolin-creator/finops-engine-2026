@@ -16,7 +16,10 @@ const dir = await mkdtemp(join(tmpdir(), 'finops-metrics-'));
 const semanticsSource = await readFile(new URL('../src/services/antiPatternSemantics.ts', import.meta.url), 'utf8');
 await writeFile(join(dir, 'antiPatternSemantics.mjs'), compile(semanticsSource), 'utf8');
 const sourcePath = new URL('../src/services/metricsService.ts', import.meta.url);
-const source = await readFile(sourcePath, 'utf8');
+const source = (await readFile(sourcePath, 'utf8')).replace(
+  "import { BATCH_TITLES, FINOPS_ANTIPATTERNS, FINOPS_CRITERIA } from '../knowledge_base';",
+  "const BATCH_TITLES = { A: '', B: '', C: '', D: '', E: '', F: '' }; const FINOPS_ANTIPATTERNS = Array(30); const FINOPS_CRITERIA = Array(30);"
+);
 const modulePath = join(dir, 'metricsService.mjs');
 await writeFile(modulePath, compile(source).replace('./antiPatternSemantics', './antiPatternSemantics.mjs'), 'utf8');
 
@@ -59,7 +62,7 @@ const logs = (maturityFactory, antiFactory) => ({
   assert.equal(result.metrics.antipattern_burden_confidence, 'unknown');
   assert.equal(result.metrics.antipattern_clearance, 0);
   assert.equal(result.metrics.antipattern_coverage, 0);
-  assert.equal(result.unknown_antipattern_absences.length, 25);
+  assert.equal(result.unknown_antipattern_absences.length, 30);
 }
 
 {
@@ -72,7 +75,7 @@ const logs = (maturityFactory, antiFactory) => ({
   assert.equal(result.metrics.antipattern_burden_confidence, 'confirmed');
   assert.equal(result.metrics.antipattern_clearance, 100);
   assert.equal(result.metrics.antipattern_coverage, 100);
-  assert.equal(result.verified_antipattern_absences.length, 25);
+  assert.equal(result.verified_antipattern_absences.length, 30);
 }
 
 {
@@ -111,7 +114,7 @@ const logs = (maturityFactory, antiFactory) => ({
   ));
   assert.equal(result.metrics.evidence_density, 50, 'quote-backed maturity gaps should count as verified source coverage');
   assert.equal(result.metrics.maturity_depth, 0, 'gap evidence must not improve maturity score');
-  assert.equal(result.maturity_gaps.length, 25);
+  assert.equal(result.maturity_gaps.length, 30);
   assert.equal(result.silent_areas.length, 0, 'quote-backed maturity gaps should not be treated as silent');
   assert.match(result.maturity_gaps[0], /Confirmed gap/, 'quote-backed maturity gaps should be labelled as confirmed gaps');
 }
@@ -122,7 +125,7 @@ const logs = (maturityFactory, antiFactory) => ({
     () => anti(0, false)
   ));
   assert.equal(result.metrics.evidence_density, 0, 'silent maturity gaps should not count as source coverage');
-  assert.equal(result.silent_areas.length, 25, 'silent maturity gaps should remain silent areas');
+  assert.equal(result.silent_areas.length, 30, 'silent maturity gaps should remain silent areas');
   assert.match(result.maturity_gaps[0], /Missing/, 'silent maturity gaps should remain missing, not confirmed');
 }
 

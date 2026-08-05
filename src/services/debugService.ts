@@ -17,10 +17,10 @@ export const PerformanceMonitor = {
   },
 
   logEvent(name: string, data?: any) {
-    console.log(`[Event] ${name}`, data || '');
+    console.log(`[Event] ${name} metadata_omitted=${data !== undefined}`);
   },
 
   logError(context: string, error: any) {
-    console.error(`[Error] ${context}:`, error?.message || error);
+    console.error(`[Error] ${context} error_code=CLIENT_OPERATION_FAILED has_error=${Boolean(error)}`);
   }
 };

@@ -9,7 +9,7 @@ import {
   AntiPatternAbsenceStatus
 } from '../types';
 import { runStage, RunContext, serverLog } from './modelRouter';
-import { verifyTextEvidenceSupport } from './evidenceSupport';
+import { isValidEvidenceVerifierItem, verifyTextEvidenceSupport } from './evidenceSupport';
 import {
   antiPatternStatusDescription,
   normalizeAntiPatternAbsenceStatus,
@@ -96,8 +96,7 @@ const buildEvidenceCheckPrompt = (
   definitions: any,
   batch: BatchAuditResult,
   text: string,
-  referenceKbContext: string,
-  fallbackText?: string
+  referenceKbContext: string
 ): string => `
 <role>
 You are an independent FinOps evidence verifier. Your job is NOT to rescan the whole document. Your job is to verify whether the scanner's forwarded findings and scores are actually supported by the raw source material.
@@ -112,10 +111,6 @@ ${referenceKbContext}
 <source_material>
 ${text.substring(0, 50000)}
 </source_material>
-
-${fallbackText ? `<fallback_source_material use="only_if_chunk_or_quote_location_is_unclear">
-${fallbackText.substring(0, 50000)}
-</fallback_source_material>` : ''}
 
 <batch_definitions>
 === MATURITY ===
@@ -248,9 +243,21 @@ const applyAntiPatternAdjudication = async (
     const parsed = parseAiResponse(resp.text);
     const decisions = new Map<string, any>();
     for (const raw of flattenVerifierItems(parsed)) {
-      if (raw && typeof raw === 'object' && typeof raw.id === 'string') {
+      if (
+        raw && typeof raw === 'object'
+        && typeof raw.id === 'string'
+        && candidates.some(item => item.id === raw.id)
+        && (raw.antipattern_absence_status === 'partially_present' || raw.antipattern_absence_status === 'unknown_absent')
+        && typeof raw.rationale === 'string'
+        && raw.rationale.trim().length > 0
+        && typeof raw.coverage_reason === 'string'
+        && raw.coverage_reason.trim().length > 0
+      ) {
         decisions.set(raw.id, raw);
       }
+    }
+    if (decisions.size !== candidates.length) {
+      throw new Error(`Anti-pattern adjudication returned ${decisions.size}/${candidates.length} required decisions.`);
     }
     const next = items.map(item => {
       if (!needsAntiPatternAdjudication(item)) return item;
@@ -276,16 +283,16 @@ const applyAntiPatternAdjudication = async (
     await serverLog(ctx.runId, 'info', 'evidence_adjudication_used', {
       batch: batchId,
       model: resp.modelUsed.id,
-      criteria: candidates.map(i => `antipattern.${i.id}`).join(','),
+      criteria_count: candidates.length,
     });
     return { items: next, model_used: resp.modelUsed.id };
   } catch (error: any) {
     await serverLog(ctx.runId, 'warn', 'evidence_adjudication_failed', {
       batch: batchId,
-      criteria: candidates.map(i => `antipattern.${i.id}`).join(','),
-      error: error?.message || String(error),
+      criteria_count: candidates.length,
+      error_code: 'ADJUDICATION_FAILED',
     });
-    return { items };
+    throw error;
   }
 };
 
@@ -294,8 +301,7 @@ export const runEvidenceCheck = async (
   batch: BatchAuditResult,
   text: string,
   images: ImageInput[],
-  ctx: RunContext,
-  fallbackText?: string
+  ctx: RunContext
 ): Promise<EvidenceCheckResult> => {
   const definitions = BATCH_DEFINITIONS[batchId];
   const expectedIds = idsForBatch(batchId);
@@ -308,17 +314,33 @@ export const runEvidenceCheck = async (
       label: 'evidence_check',
     });
     const resp = await runStage('evidence_check', {
-      userText: buildEvidenceCheckPrompt(batchId, definitions, batch, text, referenceKbContext, fallbackText),
+      userText: buildEvidenceCheckPrompt(batchId, definitions, batch, text, referenceKbContext),
       images,
     }, ctx);
     const parsed = parseAiResponse(resp.text);
     const byKey = new Map<string, any>();
-    for (const raw of flattenVerifierItems(parsed)) {
+    const verifierItems = flattenVerifierItems(parsed);
+    for (const raw of verifierItems) {
       if (!raw || typeof raw !== 'object') continue;
       const stream = raw.stream === 'antipattern' ? 'antipattern' : raw.stream === 'maturity' ? 'maturity' : null;
       const id = typeof raw.id === 'string' ? raw.id : '';
-      if (!stream || !expectedIds.includes(id)) continue;
+      const scannerCount = stream && expectedIds.includes(id)
+        ? clampScore((batch as any)[stream]?.[id]?.count)
+        : -1;
+      if (
+        !stream
+        || !expectedIds.includes(id)
+        || !isValidEvidenceVerifierItem({
+          raw,
+          stream,
+          scannerCount,
+          duplicate: byKey.has(`${stream}.${id}`)
+        })
+      ) continue;
       byKey.set(`${stream}.${id}`, raw);
+    }
+    if (verifierItems.length === 0 || byKey.size !== expectedTotal) {
+      throw new Error(`Evidence verifier returned ${byKey.size}/${expectedTotal} valid unique item verdicts.`);
     }
 
     const items: EvidenceCheckItem[] = [];
@@ -327,8 +349,7 @@ export const runEvidenceCheck = async (
         const original = clampScore((batch as any)[stream]?.[id]?.count);
         const raw = byKey.get(`${stream}.${id}`);
         const scannerItem = (batch as any)[stream]?.[id] as Partial<AuditItem> | undefined;
-        const verificationText = fallbackText ? `${text}\n\n${fallbackText}` : text;
-        const localStatus = verifyTextEvidenceSupport(scannerItem, verificationText);
+        const localStatus = verifyTextEvidenceSupport(scannerItem, text);
         let status = original === 0
           ? (raw && statusFor(raw?.status) !== 'missing' ? statusFor(raw?.status) : 'supported')
           : statusFor(raw?.status);

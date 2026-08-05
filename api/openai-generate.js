@@ -4,6 +4,7 @@ import {
   failInternalModelResult,
   registerInternalModelResult
 } from "../lib/internalModelResults.js";
+import { safeOperationalIdentifier } from "../lib/operationalLogPolicy.js";
 
 // Non-streaming OpenAI Responses proxy.
 //
@@ -24,8 +25,9 @@ const extractOutputText = (payload) => {
   return parts.join('');
 };
 
+const INCOMPLETE_REASON_CODES = new Set(['max_output_tokens', 'content_filter']);
 const compactReason = (value) =>
-  typeof value === 'string' && value.length > 0 ? value : 'unknown';
+  typeof value === 'string' && INCOMPLETE_REASON_CODES.has(value) ? value : 'unknown';
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -38,9 +40,13 @@ export default async function handler(req, res) {
   const started = Date.now();
   const { model, input, instructions, reasoning, maxOutputTokens, stage, runId, internalPipelineCall, internalCallId } = req.body || {};
   const isInternalPipelineCall = internalPipelineCall === true;
-  const tag = `[run=${runId || '?'}] provider=openai stage=${stage || '?'} model=${model || '?'}`;
-  const metadata = { runId, provider: 'openai', stage, model };
-  const callIdLog = internalCallId ? ` internal_call_id=${internalCallId}` : '';
+  const safeRunId = safeOperationalIdentifier(runId);
+  const safeStage = safeOperationalIdentifier(stage);
+  const safeModel = safeOperationalIdentifier(model);
+  const safeInternalCallId = safeOperationalIdentifier(internalCallId, '');
+  const tag = `[run=${safeRunId}] provider=openai stage=${safeStage} model=${safeModel}`;
+  const metadata = { runId: safeRunId, provider: 'openai', stage: safeStage, model: safeModel };
+  const callIdLog = safeInternalCallId ? ` internal_call_id=${safeInternalCallId}` : '';
 
   if (!model || !input) {
     console.warn(`${tag} status=bad_request msg="missing model or input"`);
@@ -121,11 +127,11 @@ export default async function handler(req, res) {
 
     const duration = Date.now() - started;
     if (!upstreamResp.ok) {
-      const errorText = await upstreamResp.text().catch(() => '');
-      console.error(`${tag} status=upstream_error http=${upstreamResp.status} duration_ms=${duration} msg="${errorText.replace(/"/g, "'").substring(0, 500)}"`);
-      failInternalModelResult(internalCallId, `OpenAI API Error (${upstreamResp.status}): ${errorText.substring(0, 500)}`, metadata);
-      console.error(`${tag} event=internal_result_error message="OpenAI API Error (${upstreamResp.status})"${callIdLog}`);
-      writeFrame({ type: 'error', message: `OpenAI API Error (${upstreamResp.status}): ${errorText.substring(0, 500)}` });
+      const errorCode = 'upstream_http_error';
+      console.error(`${tag} status=upstream_error error_code=${errorCode} http=${upstreamResp.status} duration_ms=${duration}`);
+      failInternalModelResult(internalCallId, errorCode, metadata);
+      console.error(`${tag} event=internal_result_error error_code=${errorCode} http=${upstreamResp.status}${callIdLog}`);
+      writeFrame({ type: 'error', code: errorCode, message: `OpenAI request failed (HTTP ${upstreamResp.status})` });
       clearInterval(keepalive);
       if (!res.writableEnded && !res.destroyed) res.end();
       return;
@@ -141,17 +147,17 @@ export default async function handler(req, res) {
     if (clientGone) {
       console.warn(`${tag} status=aborted_before_write duration_ms=${duration} openai_status=${payload?.status || 'unknown'} incomplete_reason=${incompleteReason || 'none'} response_chars=${text.length} reasoning_tokens=${reasoningTokens}`);
     } else if (payload?.status === 'incomplete') {
-      const msg = `OpenAI response incomplete: ${incompleteReason || 'unknown'}`;
+      const msg = 'OpenAI response incomplete';
       console.warn(`${tag} status=incomplete duration_ms=${duration} incomplete_reason=${incompleteReason || 'unknown'} response_chars=${text.length} input_tokens=${usage?.input_tokens || 0} output_tokens=${usage?.output_tokens || 0} reasoning_tokens=${reasoningTokens}`);
-      failInternalModelResult(internalCallId, msg, metadata);
-      console.error(`${tag} event=internal_result_error message="${msg}"${callIdLog}`);
-      writeFrame({ type: 'error', message: msg });
+      failInternalModelResult(internalCallId, 'incomplete_response', metadata);
+      console.error(`${tag} event=internal_result_error error_code=incomplete_response${callIdLog}`);
+      writeFrame({ type: 'error', code: 'incomplete_response', message: msg });
     } else if (text.trim().length === 0) {
       const msg = 'OpenAI response contained no visible output text';
       console.warn(`${tag} status=empty_output duration_ms=${duration} openai_status=${payload?.status || 'unknown'} input_tokens=${usage?.input_tokens || 0} output_tokens=${usage?.output_tokens || 0} reasoning_tokens=${reasoningTokens}`);
-      failInternalModelResult(internalCallId, msg, metadata);
-      console.error(`${tag} event=internal_result_error message="${msg}"${callIdLog}`);
-      writeFrame({ type: 'error', message: msg });
+      failInternalModelResult(internalCallId, 'empty_output', metadata);
+      console.error(`${tag} event=internal_result_error error_code=empty_output${callIdLog}`);
+      writeFrame({ type: 'error', code: 'empty_output', message: msg });
     } else if (responseClosed) {
       completeInternalModelResult(internalCallId, text, usage, metadata);
       console.warn(`${tag} status=completed_after_response_closed duration_ms=${duration} openai_status=${payload?.status || 'unknown'} incomplete_reason=${incompleteReason || 'none'} response_chars=${text.length} input_tokens=${usage?.input_tokens || 0} output_tokens=${usage?.output_tokens || 0} reasoning_tokens=${reasoningTokens} internal_pipeline_call=${isInternalPipelineCall}${callIdLog}`);
@@ -169,11 +175,10 @@ export default async function handler(req, res) {
     if (error?.name === 'AbortError' || clientGone) {
       console.warn(`${tag} status=aborted duration_ms=${duration}`);
     } else {
-      const msg = (error?.message || '').replace(/"/g, "'");
-      console.error(`${tag} status=error duration_ms=${duration} msg="${msg}"`);
-      failInternalModelResult(internalCallId, error?.message || 'Internal server error', metadata);
-      console.error(`${tag} event=internal_result_error message="${msg}"${callIdLog}`);
-      writeFrame({ type: 'error', message: error?.message || 'Internal server error' });
+      console.error(`${tag} status=error error_code=transport_error duration_ms=${duration}`);
+      failInternalModelResult(internalCallId, 'transport_error', metadata);
+      console.error(`${tag} event=internal_result_error error_code=transport_error${callIdLog}`);
+      writeFrame({ type: 'error', code: 'transport_error', message: 'OpenAI request failed (transport error)' });
     }
     if (!res.writableEnded && !res.destroyed) res.end();
   }

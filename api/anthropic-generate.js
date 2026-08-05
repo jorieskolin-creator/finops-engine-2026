@@ -4,6 +4,7 @@ import {
   failInternalModelResult,
   registerInternalModelResult
 } from "../lib/internalModelResults.js";
+import { safeOperationalIdentifier } from "../lib/operationalLogPolicy.js";
 
 // Streaming Anthropic proxy.
 //
@@ -33,9 +34,13 @@ export default async function handler(req, res) {
   const started = Date.now();
   const { model, messages, systemPrompt, maxTokens, thinking, stage, runId, internalPipelineCall, internalCallId } = req.body || {};
   const isInternalPipelineCall = internalPipelineCall === true;
-  const tag = `[run=${runId || '?'}] provider=anthropic stage=${stage || '?'} model=${model || '?'}`;
-  const metadata = { runId, provider: 'anthropic', stage, model };
-  const callIdLog = internalCallId ? ` internal_call_id=${internalCallId}` : '';
+  const safeRunId = safeOperationalIdentifier(runId);
+  const safeStage = safeOperationalIdentifier(stage);
+  const safeModel = safeOperationalIdentifier(model);
+  const safeInternalCallId = safeOperationalIdentifier(internalCallId, '');
+  const tag = `[run=${safeRunId}] provider=anthropic stage=${safeStage} model=${safeModel}`;
+  const metadata = { runId: safeRunId, provider: 'anthropic', stage: safeStage, model: safeModel };
+  const callIdLog = safeInternalCallId ? ` internal_call_id=${safeInternalCallId}` : '';
 
   if (!model || !messages) {
     console.warn(`${tag} status=bad_request msg="missing model or messages"`);
@@ -123,12 +128,12 @@ export default async function handler(req, res) {
     });
 
     if (!upstreamResp.ok) {
-      const errorText = await upstreamResp.text().catch(() => '');
       const duration = Date.now() - started;
-      console.error(`${tag} status=upstream_error http=${upstreamResp.status} duration_ms=${duration} msg="${errorText.replace(/"/g, "'").substring(0, 500)}"`);
-      failInternalModelResult(internalCallId, `Anthropic API Error (${upstreamResp.status}): ${errorText.substring(0, 500)}`, metadata);
-      console.error(`${tag} event=internal_result_error message="Anthropic API Error (${upstreamResp.status})"${callIdLog}`);
-      writeFrame({ type: 'error', message: `Anthropic API Error (${upstreamResp.status}): ${errorText.substring(0, 500)}` });
+      const errorCode = 'upstream_http_error';
+      console.error(`${tag} status=upstream_error error_code=${errorCode} http=${upstreamResp.status} duration_ms=${duration}`);
+      failInternalModelResult(internalCallId, errorCode, metadata);
+      console.error(`${tag} event=internal_result_error error_code=${errorCode} http=${upstreamResp.status}${callIdLog}`);
+      writeFrame({ type: 'error', code: errorCode, message: `Anthropic request failed (HTTP ${upstreamResp.status})` });
       clearInterval(keepalive);
       if (!res.writableEnded && !res.destroyed) res.end();
       return;
@@ -168,11 +173,10 @@ export default async function handler(req, res) {
           } else if (parsed.type === 'message_delta' && parsed.usage) {
             usage = { ...(usage || {}), ...parsed.usage };
           } else if (parsed.type === 'error') {
-            const msg = parsed.error?.message || 'upstream error';
-            console.error(`${tag} status=stream_error duration_ms=${Date.now() - started} msg="${msg.replace(/"/g, "'")}"`);
-            failInternalModelResult(internalCallId, msg, metadata);
-            console.error(`${tag} event=internal_result_error message="${msg.replace(/"/g, "'")}"${callIdLog}`);
-            writeFrame({ type: 'error', message: msg });
+            console.error(`${tag} status=stream_error error_code=upstream_stream_error duration_ms=${Date.now() - started}`);
+            failInternalModelResult(internalCallId, 'upstream_stream_error', metadata);
+            console.error(`${tag} event=internal_result_error error_code=upstream_stream_error${callIdLog}`);
+            writeFrame({ type: 'error', code: 'upstream_stream_error', message: 'Anthropic stream failed' });
             clearInterval(keepalive);
             if (!res.writableEnded && !res.destroyed) res.end();
             return;
@@ -201,11 +205,10 @@ export default async function handler(req, res) {
     if (error?.name === 'AbortError' || clientGone) {
       console.warn(`${tag} status=aborted duration_ms=${duration}`);
     } else {
-      const msg = (error?.message || '').replace(/"/g, "'");
-      console.error(`${tag} status=error duration_ms=${duration} msg="${msg}"`);
-      failInternalModelResult(internalCallId, error?.message || 'Internal server error', metadata);
-      console.error(`${tag} event=internal_result_error message="${msg}"${callIdLog}`);
-      writeFrame({ type: 'error', message: error?.message || 'Internal server error' });
+      console.error(`${tag} status=error error_code=transport_error duration_ms=${duration}`);
+      failInternalModelResult(internalCallId, 'transport_error', metadata);
+      console.error(`${tag} event=internal_result_error error_code=transport_error${callIdLog}`);
+      writeFrame({ type: 'error', code: 'transport_error', message: 'Anthropic request failed (transport error)' });
     }
     if (!res.writableEnded && !res.destroyed) res.end();
   }

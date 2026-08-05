@@ -19,22 +19,20 @@ const parseAiResponse = (text: string): any => {
   cleaned = cleaned.replace(/```json/gi, '').replace(/```/g, '');
   const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
   if (!jsonMatch) {
-    console.warn("[FinOps Orchestrator] AI Response contained no JSON braces. Raw:", text.substring(0, 200));
+    console.warn("[FinOps Orchestrator] AI response contained no JSON object; content omitted by logging policy.");
     return {};
   }
   const jsonString = jsonMatch[0];
   try {
     return JSON.parse(jsonString);
   } catch (e) {
-    console.error("[FinOps Orchestrator] JSON Parse Failed. Raw Text:", text.substring(0, 500));
+    console.error("[FinOps Orchestrator] JSON parse failed; response content omitted by logging policy.");
     throw new Error("AI response was not valid JSON.");
   }
 };
 
 export interface Phase1SourcePackets {
   packets: Record<string, RoutedSourcePacket>;
-  fullText: string;
-  fullImages: ImageInput[];
 }
 
 export interface Phase1Result {
@@ -81,26 +79,16 @@ const runSingleBatch = async (
 
 const packetForBatch = (
   batchId: string,
-  text: string,
-  images: ImageInput[],
   sourcePackets?: Phase1SourcePackets
-): { text: string; images: ImageInput[]; packet?: RoutedSourcePacket; usedFallback: boolean } => {
-  const packet = sourcePackets?.packets?.[batchId];
-  if (!packet) return { text, images, usedFallback: false };
-  if (packet.weak_coverage) {
-    return {
-      text: `<SOURCE_PACKET_WEAK_COVERAGE domain="${batchId}">
-${packet.coverage_notes.join('\n')}
-The domain packet was too thin, so this batch receives broad-source fallback below. Continue to cite exact source/chunk/page markers where available.
-</SOURCE_PACKET_WEAK_COVERAGE>
-
-${text}`,
-      images,
-      packet,
-      usedFallback: true
-    };
+): { text: string; images: ImageInput[]; packet: RoutedSourcePacket } => {
+  if (!sourcePackets) {
+    throw new Error(`Governed source packets are required for batch ${batchId}.`);
   }
-  return { text: packet.text, images: packet.images, packet, usedFallback: false };
+  const packet = sourcePackets?.packets?.[batchId];
+  if (!packet) {
+    throw new Error(`Governed source packet is missing for batch ${batchId}.`);
+  }
+  return { text: packet.text, images: packet.images, packet };
 };
 
 const mergeBatchResult = (base: BatchAuditResult, patch: BatchAuditResult): BatchAuditResult => ({
@@ -166,13 +154,13 @@ export const runPhase1Audit = async (
     let lastError: unknown = null;
     for (let attempt = 1; attempt <= 2; attempt++) {
       try {
-        const packetInput = packetForBatch(batchId, text, images, sourcePackets);
-        serverLog(ctx.runId, packetInput.usedFallback ? 'warn' : 'info', 'source_packet_used', {
+        const packetInput = packetForBatch(batchId, sourcePackets);
+        serverLog(ctx.runId, packetInput.packet.weak_coverage ? 'warn' : 'info', 'source_packet_used', {
           batch: batchId,
-          chunks: packetInput.packet?.included_chunk_count ?? 'n/a',
-          candidates: packetInput.packet?.total_candidate_chunks ?? 'n/a',
-          weak_coverage: packetInput.packet?.weak_coverage ? 'yes' : 'no',
-          fallback: packetInput.usedFallback ? 'broad_source' : 'packet',
+          chunks: packetInput.packet.included_chunk_count,
+          candidates: packetInput.packet.total_candidate_chunks,
+          weak_coverage: packetInput.packet.weak_coverage,
+          fallback: 'none',
           chars: packetInput.text.length,
           images: packetInput.images.length,
         });
@@ -183,8 +171,7 @@ export const runPhase1Audit = async (
         }
         if (batchResult.model_used) modelsSeen.add(batchResult.model_used);
 
-        const verifierFallbackText = packetInput.usedFallback ? undefined : sourcePackets?.fullText;
-        let evidenceCheck = await runEvidenceCheck(batchId, batchResult, packetInput.text, packetInput.images, ctx, verifierFallbackText);
+        let evidenceCheck = await runEvidenceCheck(batchId, batchResult, packetInput.text, packetInput.images, ctx);
         if (evidenceCheck.model_used) evidenceModelsSeen.add(evidenceCheck.model_used);
         if (evidenceCheck.adjudication_model_used) evidenceAdjudicationModelsSeen.add(evidenceCheck.adjudication_model_used);
         const needsRescan = evidenceItemsNeedingRescan(evidenceCheck);
@@ -194,7 +181,7 @@ export const runPhase1Audit = async (
         if (!evidenceCheck.failed && needsRescan.length > 0) {
           serverLog(ctx.runId, 'warn', 'evidence_check_targeted_rescan', {
             batch: batchId,
-            criteria: needsRescan.map(i => `${i.stream}.${i.id}`).join(','),
+            criteria_count: needsRescan.length,
           });
           const rescanResult = await runTargetedRescan(batchId, packetInput.text, packetInput.images, ctx, needsRescan);
           if (rescanResult.model_used) {
@@ -202,7 +189,7 @@ export const runPhase1Audit = async (
             serverLog(ctx.runId, 'info', 'targeted_rescan_model_used', {
               batch: batchId,
               model: rescanResult.model_used,
-              criteria: needsRescan.map(i => `${i.stream}.${i.id}`).join(','),
+              criteria_count: needsRescan.length,
             });
           }
           batchResult = mergeBatchResult(batchResult, rescanResult) as BatchAuditResult & { model_used?: string };
@@ -212,24 +199,24 @@ export const runPhase1Audit = async (
             preRescanCounts.set(key, i.original_count);
           });
 
-          evidenceCheck = await runEvidenceCheck(batchId, batchResult, packetInput.text, packetInput.images, ctx, verifierFallbackText);
+          evidenceCheck = await runEvidenceCheck(batchId, batchResult, packetInput.text, packetInput.images, ctx);
           if (evidenceCheck.model_used) evidenceModelsSeen.add(evidenceCheck.model_used);
           if (evidenceCheck.adjudication_model_used) evidenceAdjudicationModelsSeen.add(evidenceCheck.adjudication_model_used);
         }
 
-        const checked = applyEvidenceCheckToBatch(batchResult, evidenceCheck, rescannedKeys);
-        batchResult = checked.batch as BatchAuditResult & { model_used?: string };
-        const adjustments = checked.adjustments.map(a => {
-          const original = preRescanCounts.get(`${a.stream}.${a.id}`);
-          return original === undefined ? a : { ...a, original_count: original };
-        });
-        evidenceCheck = {
-          ...summarizeEvidenceCheck(batchId, evidenceCheck.items, adjustments),
-          model_used: evidenceCheck.model_used,
-          adjudication_model_used: evidenceCheck.adjudication_model_used,
-          failed: evidenceCheck.failed,
-          failure_reason: evidenceCheck.failure_reason,
-        };
+        if (!evidenceCheck.failed) {
+          const checked = applyEvidenceCheckToBatch(batchResult, evidenceCheck, rescannedKeys);
+          batchResult = checked.batch as BatchAuditResult & { model_used?: string };
+          const adjustments = checked.adjustments.map(a => {
+            const original = preRescanCounts.get(`${a.stream}.${a.id}`);
+            return original === undefined ? a : { ...a, original_count: original };
+          });
+          evidenceCheck = {
+            ...summarizeEvidenceCheck(batchId, evidenceCheck.items, adjustments),
+            model_used: evidenceCheck.model_used,
+            adjudication_model_used: evidenceCheck.adjudication_model_used,
+          };
+        }
         evidenceResults.push(evidenceCheck);
 
         if (batchResult.maturity) Object.assign(aggregated.phase_1_audit_logs.maturity, batchResult.maturity);
@@ -248,11 +235,11 @@ export const runPhase1Audit = async (
         break;
       } catch (error: any) {
         lastError = error;
-        console.warn(`[FinOps] [${ctx.runId}] Batch ${batchId} attempt ${attempt} failed:`, error);
+        console.warn(`[FinOps] [${ctx.runId}] Batch ${batchId} attempt ${attempt} failed with error_code=BATCH_ATTEMPT_FAILED.`);
         serverLog(ctx.runId, 'warn', 'batch_attempt_failed', {
           batch: batchId,
           attempt,
-          error: error?.message || String(error),
+          error_code: 'BATCH_ATTEMPT_FAILED',
         });
       }
     }

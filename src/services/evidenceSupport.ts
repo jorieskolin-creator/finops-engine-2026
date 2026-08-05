@@ -1,4 +1,7 @@
-import type { AuditItem, EvidenceCheckStatus } from '../types';
+import type { AntiPatternAbsenceStatus, AuditItem, EvidenceCheckStatus } from '../types';
+
+const EVIDENCE_CHECK_STATUSES: EvidenceCheckStatus[] = ['supported', 'weak', 'unsupported', 'missing'];
+const ANTIPATTERN_ABSENCE_STATUSES: AntiPatternAbsenceStatus[] = ['confirmed_present', 'partially_present', 'tested_absent', 'unknown_absent'];
 
 const clampScore = (value: unknown): number => {
   if (typeof value !== 'number' || !Number.isFinite(value)) return 0;
@@ -7,6 +10,31 @@ const clampScore = (value: unknown): number => {
 
 export const normalizeEvidenceText = (value: string): string =>
   value.toLowerCase().replace(/\s+/g, ' ').replace(/[“”]/g, '"').replace(/[‘’]/g, "'").trim();
+
+export const isValidEvidenceVerifierItem = (input: {
+  raw: any;
+  stream: 'maturity' | 'antipattern';
+  scannerCount: number;
+  duplicate: boolean;
+}): boolean => {
+  const { raw, stream, scannerCount, duplicate } = input;
+  if (!raw || typeof raw !== 'object' || duplicate) return false;
+  if (!EVIDENCE_CHECK_STATUSES.includes(raw.status)) return false;
+  if (!Number.isInteger(raw.original_count) || raw.original_count !== scannerCount) return false;
+  if (!Number.isInteger(raw.verified_count) || raw.verified_count < 0 || raw.verified_count > scannerCount) return false;
+  if (typeof raw.rationale !== 'string' || raw.rationale.trim().length === 0) return false;
+  if (typeof raw.quote_supported !== 'boolean' || typeof raw.rescan_recommended !== 'boolean') return false;
+  if (stream === 'maturity') return true;
+  if (!ANTIPATTERN_ABSENCE_STATUSES.includes(raw.antipattern_absence_status)) return false;
+  if (raw.antipattern_absence_status === 'confirmed_present' && raw.verified_count === 0) return false;
+  if (raw.antipattern_absence_status === 'tested_absent' && (scannerCount !== 0 || raw.verified_count !== 0 || raw.status !== 'supported')) return false;
+  if (raw.antipattern_absence_status === 'unknown_absent' && raw.verified_count !== 0) return false;
+  if (
+    (raw.antipattern_absence_status === 'tested_absent' || raw.antipattern_absence_status === 'unknown_absent')
+    && (typeof raw.coverage_reason !== 'string' || raw.coverage_reason.trim().length === 0)
+  ) return false;
+  return true;
+};
 
 export const verifyTextEvidenceSupport = (item: Partial<AuditItem> | undefined, sourceText: string): EvidenceCheckStatus => {
   const count = clampScore(item?.count);

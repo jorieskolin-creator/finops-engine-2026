@@ -15,7 +15,10 @@ const compile = (source) => ts.transpileModule(source, {
 const dir = await mkdtemp(join(tmpdir(), 'finops-strategy-sanitation-'));
 await writeFile(join(dir, 'modelRouter.mjs'), 'export const runStage = async () => ({ text: "{}", modelUsed: { id: "stub" } });\n', 'utf8');
 
-const qualityGateSource = await readFile(new URL('../src/services/qualityGateService.ts', import.meta.url), 'utf8');
+const qualityGateSource = (await readFile(new URL('../src/services/qualityGateService.ts', import.meta.url), 'utf8')).replace(
+  "import { FINOPS_CRITERIA } from '../knowledge_base';",
+  'const FINOPS_CRITERIA = Array(30);'
+);
 await writeFile(
   join(dir, 'qualityGateService.mjs'),
   compile(qualityGateSource).replace("from './modelRouter'", "from './modelRouter.mjs'"),
@@ -30,7 +33,7 @@ await writeFile(
 );
 
 const { runQualityGate } = await import(`file://${join(dir, 'qualityGateService.mjs')}`);
-const { sanitizeStrategyAfterFactCheck } = await import(`file://${join(dir, 'strategySanitationService.mjs')}`);
+const { sanitizeBlockedStrategy, sanitizeStrategyAfterFactCheck } = await import(`file://${join(dir, 'strategySanitationService.mjs')}`);
 
 const ids = ['A', 'B', 'C', 'D', 'E', 'F'].flatMap(batch => [1, 2, 3, 4, 5].map(n => `${batch}${n}`));
 const emptyItem = {
@@ -45,6 +48,18 @@ const phase1 = {
   antipattern: Object.fromEntries(ids.map(id => [id, { ...emptyItem, status: 'OK' }]))
 };
 const validationOk = { valid: true, errors: [], warnings: [] };
+const evidenceCheckOk = {
+  total_items: 60,
+  supported_count: 60,
+  weak_count: 0,
+  unsupported_count: 0,
+  missing_count: 0,
+  downgraded_count: 0,
+  rescan_count: 0,
+  items: [],
+  adjustments: [],
+  failed: false
+};
 const strongPhase2 = {
   metrics: { evidence_density: 92, antipattern_coverage: 92 },
   silent_areas: [],
@@ -203,7 +218,7 @@ assert.deepEqual(caseMismatch.strategyData.phase_3_strategy.remediation_roadmap[
   'Enforce object storage lifecycle tiering for product telemetry.'
 ]);
 
-const warnGate = runQualityGate(phase1, strongPhase2, validationOk, validationOk, undefined, sanitized.factCheck);
+const warnGate = runQualityGate(phase1, strongPhase2, validationOk, validationOk, evidenceCheckOk, sanitized.factCheck);
 assert.equal(warnGate.decision, 'WARN');
 assert.equal(warnGate.blocking_reasons.length, 0);
 assert.ok(warnGate.warnings.some(w => w.startsWith('Strategy sanitation removed')));
@@ -223,15 +238,24 @@ const unsanitizable = sanitizeStrategyAfterFactCheck(strategyData, {
   }]
 });
 assert.equal(unsanitizable.factCheck.unsupported_claims.length, 1);
-const blockGate = runQualityGate(phase1, strongPhase2, validationOk, validationOk, undefined, unsanitizable.factCheck);
+const blockGate = runQualityGate(phase1, strongPhase2, validationOk, validationOk, evidenceCheckOk, unsanitizable.factCheck);
 assert.equal(blockGate.decision, 'BLOCK');
+const blockedStrategy = sanitizeBlockedStrategy(strategyData, blockGate.blocking_reasons);
+assert.deepEqual(blockedStrategy.phase_3_strategy.remediation_roadmap, []);
+assert.equal(blockedStrategy.phase_3_strategy.effective_bracket, 'LOW');
+assert.equal(blockedStrategy.phase_3_strategy.planning_decision.decision, 'NO_GO');
+assert.deepEqual(blockedStrategy.phase_3_strategy.planning_decision.safe_to_act_on, []);
+const missingBlockedStrategy = sanitizeBlockedStrategy({}, ['Required fact-check result is missing.']);
+assert.equal(missingBlockedStrategy.phase_3_strategy.planning_decision.decision, 'NO_GO');
+assert.equal(missingBlockedStrategy.phase_3_strategy.effective_bracket, 'LOW');
+assert.deepEqual(missingBlockedStrategy.phase_3_strategy.remediation_roadmap, []);
 
 const lowEvidenceGate = runQualityGate(
   phase1,
   { metrics: { evidence_density: 10, antipattern_coverage: 10 }, silent_areas: ids },
   validationOk,
   validationOk,
-  undefined,
+  evidenceCheckOk,
   sanitized.factCheck,
 );
 assert.equal(lowEvidenceGate.decision, 'BLOCK');

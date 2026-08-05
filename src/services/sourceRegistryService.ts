@@ -311,18 +311,21 @@ export const buildDomainPacket = (registry: SourceRegistry, domainId: string): R
   }
 
   const imageChunks = included.filter(item => item.chunk.image).map(item => item.chunk.image!) as ImageInput[];
-  const weakCoverage = included.length < 2 || included.every(item => item.tier !== 'high');
+  const omittedRelevantChunks = Math.max(0, candidates.length - included.length);
+  const weakCoverage = included.length < 2
+    || included.every(item => item.tier !== 'high')
+    || omittedRelevantChunks > 0;
   const coverageNotes = [
     weakCoverage
-      ? `Packet ${domainId} has weak deterministic coverage; broad-source fallback is allowed for this batch.`
+      ? `Packet ${domainId} has incomplete deterministic coverage; no broad-source fallback is permitted.`
       : `Packet ${domainId} includes high/medium relevance source chunks for ${title}.`,
-    `Candidate chunks: ${candidates.length}; included chunks: ${included.length}; full source registry remains available for verification fallback.`
+    `Candidate chunks: ${candidates.length}; included chunks: ${included.length}; omitted relevant chunks: ${omittedRelevantChunks}.`
   ];
 
   const manifest = included.map(item => manifestFor(item.chunk, item.tier));
   const body = included.length > 0
     ? included.map(item => renderChunk(item.chunk, item.tier)).join('\n\n')
-    : '<NO_ROUTED_CHUNKS>Deterministic routing found no domain-specific chunks. Treat source coverage as weak unless broad-source fallback provides evidence.</NO_ROUTED_CHUNKS>';
+    : '<NO_ROUTED_CHUNKS>Deterministic routing found no domain-specific chunks. Treat source coverage as insufficient and do not infer findings or absence.</NO_ROUTED_CHUNKS>';
   const manifestText = manifest.map(item => [
     item.chunk_id,
     item.source_name,

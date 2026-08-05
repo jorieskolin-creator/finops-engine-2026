@@ -91,7 +91,7 @@ async function buildRemoteIndex() {
   const prefix = normalizePrefix(process.env.FINOPS_KB_BLOB_PREFIX || DEFAULT_PREFIX);
   if (!token) {
     const failures = [{ pathname: prefix, reason: 'BLOB_READ_WRITE_TOKEN is not configured' }];
-    console.info(`[FinOps KnowledgeBase] kb_index_fallback reason=no_blob_token prefix="${prefix}"`);
+    console.info('[FinOps KnowledgeBase] event=kb_index_fallback error_code=BLOB_TOKEN_MISSING');
     return {
       status: buildKbStatus([], failures, 'fallback', prefix),
       documents: [],
@@ -119,16 +119,16 @@ async function buildRemoteIndex() {
     } catch (error) {
       const reason = error?.message || String(error);
       failures.push({ pathname: blob.pathname || '(unknown)', reason });
-      console.warn(`[FinOps KnowledgeBase] kb_document_invalid file="${blob.pathname || '(unknown)'}" reason="${reason}"`);
+      console.warn('[FinOps KnowledgeBase] event=kb_document_invalid error_code=KB_DOCUMENT_INVALID');
     }
   }
 
   documents.sort((a, b) => String(a.criterion_id).localeCompare(String(b.criterion_id)));
   const status = buildKbStatus(documents, failures, documents.length > 0 ? 'remote_blob' : 'fallback', prefix);
   if (documents.length > 0) {
-    console.info(`[FinOps KnowledgeBase] kb_index_loaded documents=${documents.length} failures=${failures.length} prefix="${prefix}"`);
+    console.info(`[FinOps KnowledgeBase] event=kb_index_loaded documents=${documents.length} failures=${failures.length}`);
   } else {
-    console.info(`[FinOps KnowledgeBase] kb_index_fallback reason=no_valid_documents failures=${failures.length} prefix="${prefix}"`);
+    console.info(`[FinOps KnowledgeBase] event=kb_index_fallback error_code=NO_VALID_DOCUMENTS failures=${failures.length}`);
   }
   return { status, documents, failures };
 }
@@ -152,7 +152,7 @@ export default async function handler(req, res) {
     return res.status(200).json({ ...payload, cached: false });
   } catch (error) {
     const reason = error?.message || String(error);
-    console.error(`[FinOps KnowledgeBase] kb_index_fallback reason="${reason}"`);
+    console.error('[FinOps KnowledgeBase] event=kb_index_fallback error_code=KB_INDEX_FAILED');
     const prefix = normalizePrefix(process.env.FINOPS_KB_BLOB_PREFIX || DEFAULT_PREFIX);
     const failures = [{ pathname: prefix, reason }];
     const payload = {

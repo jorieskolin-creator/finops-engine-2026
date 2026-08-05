@@ -4,6 +4,25 @@ import { AuditItem, FactCheckClaim, FactCheckResult, Phase1AuditLogs, Phase2Vali
 const VALID_FAILURE_TYPES: ClaimFailureType[] = ['fabricated_number', 'unverifiable_entity', 'unsupported_org_claim', 'out_of_scope', 'other'];
 const VALID_SEVERITIES: ClaimSeverity[] = ['BLOCKING_UNSUPPORTED_FACT', 'BLOCKING_UNSAFE_ROADMAP', 'WARN_MISCLASSIFIED_BUT_REAL', 'WARN_TACTIC_HYGIENE', 'SUPPORTED'];
 const VALID_SOURCE_LOCATIONS: ClaimSourceLocation[] = ['finops_lead', 'cfo', 'engineering_lead', 'diagnosis', 'planning_decision', 'roadmap'];
+const VALID_CLASSIFICATIONS = ['supported_by_source', 'supported_by_audit', 'supported_by_tactics_db', 'unsupported'] as const;
+
+export interface FactCheckParseContract {
+  allowedClassifications: readonly string[];
+  allowedSourceLocations: readonly ClaimSourceLocation[];
+  allowedUnsupportedSeverities: readonly ClaimSeverity[];
+}
+
+export const SUMMARY_FACT_CHECK_CONTRACT: FactCheckParseContract = {
+  allowedClassifications: ['supported_by_source', 'supported_by_audit', 'unsupported'],
+  allowedSourceLocations: ['finops_lead', 'cfo', 'engineering_lead', 'diagnosis'],
+  allowedUnsupportedSeverities: ['BLOCKING_UNSUPPORTED_FACT', 'WARN_MISCLASSIFIED_BUT_REAL', 'WARN_TACTIC_HYGIENE']
+};
+
+export const ROADMAP_FACT_CHECK_CONTRACT: FactCheckParseContract = {
+  allowedClassifications: VALID_CLASSIFICATIONS,
+  allowedSourceLocations: ['planning_decision', 'roadmap'],
+  allowedUnsupportedSeverities: VALID_SEVERITIES.filter(severity => severity !== 'SUPPORTED')
+};
 
 export interface FactCheckInputs {
   contentToCheck: string;
@@ -184,7 +203,15 @@ ${inputs.remediationRoadmapText}
 </strategy_output_to_check>
 `;
 
-export const parseFactCheckResponse = (text: string, attempts: number): FactCheckResult => {
+export const parseFactCheckResponse = (
+  text: string,
+  attempts: number,
+  contract: FactCheckParseContract = {
+    allowedClassifications: VALID_CLASSIFICATIONS,
+    allowedSourceLocations: VALID_SOURCE_LOCATIONS,
+    allowedUnsupportedSeverities: VALID_SEVERITIES.filter(severity => severity !== 'SUPPORTED')
+  }
+): FactCheckResult => {
   const cleaned = text.replace(/```json/gi, '').replace(/```/g, '').trim();
   const match = cleaned.match(/\{[\s\S]*\}/);
   if (!match) {
@@ -199,36 +226,53 @@ export const parseFactCheckResponse = (text: string, attempts: number): FactChec
   }
   try {
     const parsed = JSON.parse(match[0]);
-    const claims = Array.isArray(parsed.claims) ? parsed.claims : [];
-    const validClaims: FactCheckClaim[] = claims
-      .filter((c: any) => c && typeof c.claim === 'string' && typeof c.classification === 'string')
-      .map((c: any) => {
-        const classification = ['supported_by_source', 'supported_by_audit', 'supported_by_tactics_db', 'unsupported'].includes(c.classification)
-          ? c.classification
-          : 'unsupported';
-        const claim: FactCheckClaim = {
-          claim: c.claim,
-          classification,
-          rationale: typeof c.rationale === 'string' ? c.rationale : ''
-        };
-        if (typeof c.source_location === 'string' && VALID_SOURCE_LOCATIONS.includes(c.source_location)) {
-          claim.source_location = c.source_location;
-        }
-        if (classification === 'unsupported') {
-          if (typeof c.failure_type === 'string' && VALID_FAILURE_TYPES.includes(c.failure_type)) {
-            claim.failure_type = c.failure_type;
-          }
-          if (typeof c.severity === 'string' && VALID_SEVERITIES.includes(c.severity)) {
-            claim.severity = c.severity;
-          }
-          if (typeof c.missing_material === 'string' && c.missing_material.length > 0) {
-            claim.missing_material = c.missing_material;
-          }
-        } else {
-          claim.severity = 'SUPPORTED';
-        }
-        return claim;
-      });
+    if (!Array.isArray(parsed?.claims) || parsed.claims.length === 0) {
+      return {
+        attempts,
+        total_claims: 0,
+        supported_count: 0,
+        unsupported_claims: [],
+        failed: true,
+        failure_reason: 'Fact-check response contained no claim verdicts for non-empty strategy content.'
+      };
+    }
+
+    const invalidIndex = parsed.claims.findIndex((c: any) => {
+      if (!c || typeof c !== 'object') return true;
+      if (typeof c.claim !== 'string' || c.claim.trim().length === 0) return true;
+      if (!contract.allowedClassifications.includes(c.classification)) return true;
+      if (typeof c.rationale !== 'string' || c.rationale.trim().length === 0) return true;
+      if (typeof c.source_location !== 'string' || !contract.allowedSourceLocations.includes(c.source_location)) return true;
+      if (c.classification !== 'unsupported') return c.severity != null && c.severity !== 'SUPPORTED';
+      return typeof c.failure_type !== 'string'
+        || !VALID_FAILURE_TYPES.includes(c.failure_type)
+        || typeof c.severity !== 'string'
+        || !contract.allowedUnsupportedSeverities.includes(c.severity)
+        || typeof c.missing_material !== 'string'
+        || c.missing_material.trim().length === 0;
+    });
+    if (invalidIndex >= 0) {
+      return {
+        attempts,
+        total_claims: 0,
+        supported_count: 0,
+        unsupported_claims: [],
+        failed: true,
+        failure_reason: `Fact-check response contained a malformed claim verdict at index ${invalidIndex}.`
+      };
+    }
+
+    const validClaims: FactCheckClaim[] = parsed.claims.map((c: any) => ({
+      claim: c.claim.trim(),
+      classification: c.classification,
+      rationale: c.rationale.trim(),
+      source_location: c.source_location,
+      severity: c.classification === 'unsupported' ? c.severity : 'SUPPORTED',
+      ...(c.classification === 'unsupported' ? {
+        failure_type: c.failure_type,
+        missing_material: c.missing_material.trim(),
+      } : {})
+    }));
     const unsupported = validClaims.filter(c => c.classification === 'unsupported');
     return {
       attempts,
@@ -247,6 +291,36 @@ export const parseFactCheckResponse = (text: string, attempts: number): FactChec
       failure_reason: 'Fact-check response was not valid JSON.'
     };
   }
+};
+
+export const mergeRequiredFactChecks = (
+  summary: FactCheckResult,
+  roadmap: FactCheckResult,
+  attemptNumber: number
+): FactCheckResult => {
+  const failureReason = [
+    summary.failed ? `summary: ${summary.failure_reason || 'verification failed'}` : '',
+    roadmap.failed ? `roadmap: ${roadmap.failure_reason || 'verification failed'}` : ''
+  ].filter(Boolean).join(' | ');
+
+  if (summary.failed || roadmap.failed) {
+    return {
+      attempts: attemptNumber,
+      total_claims: 0,
+      supported_count: 0,
+      unsupported_claims: [],
+      failed: true,
+      failure_reason: failureReason
+    };
+  }
+
+  return {
+    attempts: attemptNumber,
+    total_claims: summary.total_claims + roadmap.total_claims,
+    supported_count: summary.supported_count + roadmap.supported_count,
+    unsupported_claims: [...summary.unsupported_claims, ...roadmap.unsupported_claims],
+    failed: false
+  };
 };
 
 const FAILURE_TYPE_GUIDANCE: Record<ClaimFailureType, string> = {

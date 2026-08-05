@@ -19,13 +19,16 @@ import {
   buildRegenerateAppendix,
   buildRoadmapFactCheckPrompt,
   buildSummaryFactCheckPrompt,
-  parseFactCheckResponse
+  mergeRequiredFactChecks,
+  parseFactCheckResponse,
+  ROADMAP_FACT_CHECK_CONTRACT,
+  SUMMARY_FACT_CHECK_CONTRACT
 } from "./factCheckService";
 import { FactCheckClaim, FactCheckResult, FactCheckPassSnapshot } from "../types";
 import { MODEL_ROUTING_MODE, STAGE_MODELS, StageId } from "../models";
 import { runStage, serverLog, newRunId } from "./modelRouter";
 import { sanitizeRoadmapTacticGrounding, TacticGroundingAdjustment } from "./tacticGroundingService";
-import { sanitizeStrategyAfterFactCheck } from "./strategySanitationService";
+import { sanitizeBlockedStrategy, sanitizeStrategyAfterFactCheck } from "./strategySanitationService";
 import {
   buildDlpReviewPacket,
   buildDomainPackets,
@@ -111,7 +114,7 @@ const parseAiResponse = (text: string): any => {
   try {
     return JSON.parse(jsonMatch[0]);
   } catch (e) {
-    console.error("[FinOps Pipeline] JSON Parse Error:", text.substring(0, 500));
+    console.error("[FinOps Pipeline] JSON Parse Error: response content omitted by logging policy.");
     throw new Error("AI response was malformed and could not be repaired safely.");
   }
 };
@@ -219,20 +222,9 @@ export const analyzeDocument = async (
 
   console.log(`[FinOps] === Pipeline start === run=${runId} deepMode=${!!options.deepMode}`);
   serverLog(runId, 'info', 'pipeline_start', {
-    text_chars: text.length,
-    image_count: images.length,
-    image_kb: Math.round(images.reduce((s, i) => s + i.data.length, 0) / 1024),
-    deep_mode: !!options.deepMode,
+    source_chars: text.length,
+    images: images.length,
     model_mode: MODEL_ROUTING_MODE,
-    preflight: STAGE_MODELS.preflight.id,
-    forensic_audit: STAGE_MODELS.forensic_audit.id,
-    targeted_rescan: STAGE_MODELS.targeted_rescan.id,
-    evidence_check: STAGE_MODELS.evidence_check.id,
-    evidence_adjudication: STAGE_MODELS.evidence_adjudication.id,
-    synthesis: STAGE_MODELS.synthesis.id,
-    roadmap_synthesis: STAGE_MODELS.roadmap_synthesis.id,
-    fact_check: STAGE_MODELS.fact_check.id,
-    fact_check_high: STAGE_MODELS.fact_check_high.id,
   });
 
   try {
@@ -251,7 +243,7 @@ export const analyzeDocument = async (
       ...dlpScan.caution_hits.map(hit => `DLP caution: ${hit.kind} detected in ${hit.chunk_ids.length} chunk(s).`),
       ...Object.entries(sourcePackets)
         .filter(([, packet]) => packet.weak_coverage)
-        .map(([domain, packet]) => `Source packet ${domain} has weak deterministic routing coverage (${packet.included_chunk_count}/${packet.total_candidate_chunks} chunks); broad-source fallback was used for that batch.`)
+        .map(([domain, packet]) => `Source packet ${domain} has incomplete deterministic routing coverage (${packet.included_chunk_count}/${packet.total_candidate_chunks} relevant chunks); no broad-source fallback was used.`)
     ];
     serverLog(runId, 'info', 'source_registry_created', {
       sources: sourceRegistry.source_count,
@@ -314,7 +306,6 @@ export const analyzeDocument = async (
     serverLog(runId, referenceKbIndex.status.source === 'remote_blob' ? 'info' : 'warn', referenceKbIndex.status.source === 'remote_blob' ? 'kb_index_loaded' : 'kb_index_fallback', {
       documents: referenceKbIndex.status.document_count,
       failures: referenceKbIndex.status.failure_count,
-      prefix: referenceKbIndex.status.prefix || 'Knowledge Base/',
       source: referenceKbIndex.status.source,
     });
 
@@ -323,7 +314,7 @@ export const analyzeDocument = async (
     const phase1Started = Date.now();
     const aggregatedRawData = await runPhase1Audit(text, images, (completed, total) => {
       onProgress('audit', Math.round((completed / total) * 100));
-    }, { runId }, { packets: sourcePackets, fullText: text, fullImages: images });
+    }, { runId }, { packets: sourcePackets });
     if (aggregatedRawData.models_used.length > 0) {
       actuals.forensic_audit = aggregatedRawData.models_used.join(',');
     }
@@ -364,7 +355,7 @@ export const analyzeDocument = async (
       );
     }
     if (phase1Validation.warnings.length > 0) {
-      console.warn("[FinOps] Phase 1 validation warnings:", phase1Validation.warnings);
+      console.warn(`[FinOps] Phase 1 validation produced ${phase1Validation.warnings.length} warning(s); content omitted by logging policy.`);
     }
 
     const auditLogs = validateAndSanitizeLogs(aggregatedRawData);
@@ -412,7 +403,7 @@ export const analyzeDocument = async (
     console.log(`[FinOps] [${runId}] Synthesis stage: ${synthesisStage} (${escalationReason})`);
     serverLog(runId, 'info', 'synthesis_routing', {
       stage: synthesisStage,
-      reason: escalationReason,
+      reason_code: options.deepMode ? 'USER_DEEP_MODE' : autoEscalate ? 'AUTO_ESCALATION' : 'STANDARD',
       readiness: Math.round(validationData.metrics.finops_readiness),
       burden: Math.round(validationData.metrics.antipattern_burden),
       antipatterns: validationData.antipattern_findings.length,
@@ -613,31 +604,6 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => `  ${cat}
       return mergePhase3Outputs(normalizedSummary, roadmapData);
     };
 
-    const mergeFactChecks = (summary: FactCheckResult, roadmap: FactCheckResult, attemptNumber: number): FactCheckResult => {
-      const partialFailureReason = [summary.failed ? `summary: ${summary.failure_reason}` : '', roadmap.failed ? `roadmap: ${roadmap.failure_reason}` : '']
-        .filter(Boolean)
-        .join(' | ');
-      const hasUsablePartial = summary.total_claims + roadmap.total_claims > 0;
-      if ((summary.failed || roadmap.failed) && !hasUsablePartial) {
-        return {
-          attempts: attemptNumber,
-          total_claims: 0,
-          supported_count: 0,
-          unsupported_claims: [],
-          failed: true,
-          failure_reason: partialFailureReason
-        };
-      }
-      return {
-        attempts: attemptNumber,
-        total_claims: summary.total_claims + roadmap.total_claims,
-        supported_count: summary.supported_count + roadmap.supported_count,
-        unsupported_claims: [...summary.unsupported_claims, ...roadmap.unsupported_claims],
-        failed: false,
-        partial_failure_reason: partialFailureReason || undefined
-      };
-    };
-
     const runFactCheck = async (data: any, attemptNumber: number, stage: Extract<StageId, 'fact_check' | 'fact_check_high'> = 'fact_check'): Promise<FactCheckResult> => {
       const strategy = data?.phase_3_strategy || {};
       const roadmap = strategy.remediation_roadmap || [];
@@ -664,7 +630,7 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => `  ${cat}
           duration_ms: Date.now() - summaryStarted,
           attempt: attemptNumber,
         });
-        const summaryCheck = parseFactCheckResponse(summaryResp.text, attemptNumber);
+        const summaryCheck = parseFactCheckResponse(summaryResp.text, attemptNumber, SUMMARY_FACT_CHECK_CONTRACT);
 
         const roadmapPrompt = buildRoadmapFactCheckPrompt({
           contentToCheck: buildRoadmapCheckText(strategy),
@@ -690,8 +656,8 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => `  ${cat}
           duration_ms: Date.now() - roadmapStarted,
           attempt: attemptNumber,
         });
-        const roadmapCheck = parseFactCheckResponse(roadmapResp.text, attemptNumber);
-        return mergeFactChecks(summaryCheck, roadmapCheck, attemptNumber);
+        const roadmapCheck = parseFactCheckResponse(roadmapResp.text, attemptNumber, ROADMAP_FACT_CHECK_CONTRACT);
+        return mergeRequiredFactChecks(summaryCheck, roadmapCheck, attemptNumber);
       } catch (e: any) {
         return {
           attempts: attemptNumber,
@@ -818,9 +784,9 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => `  ${cat}
       let regen = 0;
       while (invalid.length > 0 && regen < ID_VALIDATION_MAX_REGENS) {
         regen++;
-        console.warn(`[FinOps] [${runId}] Strategy cites ${invalid.length} invalid tactic IDs (${invalid.join(', ')}); regen ${regen}/${ID_VALIDATION_MAX_REGENS}`);
+        console.warn(`[FinOps] [${runId}] Strategy cites ${invalid.length} invalid tactic ID(s); regen ${regen}/${ID_VALIDATION_MAX_REGENS}.`);
         serverLog(runId, 'warn', 'invalid_tactic_ids', {
-          invalid_ids: invalid.join(','),
+          invalid_count: invalid.length,
           regen,
         });
         const idAppendix = buildInvalidIdAppendix(invalid, validIds);
@@ -829,9 +795,9 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => `  ${cat}
         invalid = findInvalidTacticIds(data, validIds);
       }
       if (invalid.length > 0) {
-        console.error(`[FinOps] [${runId}] Strategy STILL contains invalid tactic IDs after ${ID_VALIDATION_MAX_REGENS} regens: ${invalid.join(', ')}`);
+        console.error(`[FinOps] [${runId}] Strategy still contains ${invalid.length} invalid tactic ID(s) after ${ID_VALIDATION_MAX_REGENS} regens.`);
         serverLog(runId, 'error', 'invalid_tactic_ids_persisted', {
-          invalid_ids: invalid.join(','),
+          invalid_count: invalid.length,
         });
       }
       const grounding = sanitizeRoadmapTacticGrounding(data, validationData);
@@ -879,7 +845,7 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => `  ${cat}
     factCheck.trajectory = trajectory;
 
     if (factCheck.failed) {
-      console.warn(`[FinOps] Fact-check unavailable: ${factCheck.failure_reason}`);
+      console.warn('[FinOps] Fact-check unavailable; failure details retained in the governed result, not operational logs.');
     } else {
       console.log(`[FinOps] Fact-check complete after ${factCheck.attempts} pass(es): ${factCheck.supported_count}/${factCheck.total_claims} claims supported, ${lastUnsupported.length} unsupported.`);
       if (trajectory.length > 1) {
@@ -907,7 +873,7 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => `  ${cat}
       return sanitation;
     };
 
-    let sanitation = applySanitation(strategyData, factCheck);
+    let sanitation = applySanitation(strategyData, factCheck, 'claims_sanitized');
     strategyData = sanitation.strategyData;
     factCheck = sanitation.factCheck;
 
@@ -916,13 +882,13 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => `  ${cat}
     let groundingValidation = validatePhase3Grounding(strategyData, validationData, text);
     groundingValidation.warnings.push(...tacticGroundingWarnings);
     if (groundingValidation.errors.length > 0) {
-      console.error("[FinOps] Phase 3 grounding errors:", groundingValidation.errors);
+      console.error(`[FinOps] Phase 3 grounding produced ${groundingValidation.errors.length} error(s); content omitted by logging policy.`);
     }
     if (groundingValidation.warnings.length > 0) {
-      console.warn("[FinOps] Phase 3 grounding warnings:", groundingValidation.warnings);
+      console.warn(`[FinOps] Phase 3 grounding produced ${groundingValidation.warnings.length} warning(s); content omitted by logging policy.`);
     }
 
-    let qualityGate = runQualityGate(auditLogs, validationData, phase1Validation, groundingValidation, aggregatedRawData.evidence_check, factCheck);
+    let qualityGate = runQualityGate(auditLogs, validationData, phase1Validation, groundingValidation, aggregatedRawData.evidence_check, factCheck, sourceRegistryStatus);
     const factCheckOnlyBlock = qualityGate.decision === 'BLOCK'
       && qualityGate.blocking_reasons.length > 0
       && qualityGate.blocking_reasons.every(reason => reason.startsWith('Fact-check:'));
@@ -936,12 +902,12 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => `  ${cat}
       const highFactCheck = await runFactCheck(strategyData, factCheck.attempts + 1, 'fact_check_high');
       if (!highFactCheck.failed) {
         highFactCheck.trajectory = [...(factCheck.trajectory || []), snapshot(highFactCheck)];
-        sanitation = applySanitation(strategyData, highFactCheck, 'strategy_sanitized_after_high_fact_check');
+        sanitation = applySanitation(strategyData, highFactCheck, 'claims_quarantined');
         strategyData = sanitation.strategyData;
         factCheck = sanitation.factCheck;
         groundingValidation = validatePhase3Grounding(strategyData, validationData, text);
         groundingValidation.warnings.push(...tacticGroundingWarnings);
-        qualityGate = runQualityGate(auditLogs, validationData, phase1Validation, groundingValidation, aggregatedRawData.evidence_check, factCheck);
+        qualityGate = runQualityGate(auditLogs, validationData, phase1Validation, groundingValidation, aggregatedRawData.evidence_check, factCheck, sourceRegistryStatus);
       }
       serverLog(runId, highFactCheck.failed ? 'warn' : 'info', 'fact_check_escalation_result', {
         ok: !highFactCheck.failed,
@@ -950,7 +916,7 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => `  ${cat}
         supported: highFactCheck.supported_count,
         total: highFactCheck.total_claims,
         unsupported: highFactCheck.unsupported_claims.length,
-        ...(highFactCheck.failed ? { failure_reason: highFactCheck.failure_reason } : {}),
+        ...(highFactCheck.failed ? { error_code: 'FACT_CHECK_FAILED' } : {}),
       });
     }
     console.log(`[FinOps] [${runId}] Quality Gate decision: ${qualityGate.decision}`);
@@ -966,7 +932,7 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => `  ${cat}
         model: explanation.model_used || 'n/a',
         duration_ms: Date.now() - qgExplainStarted,
         ok: !explanation.failed,
-        ...(explanation.failed ? { failure_reason: explanation.failure_reason } : {}),
+        ...(explanation.failed ? { error_code: 'QUALITY_GATE_EXPLANATION_FAILED' } : {}),
       });
     }
 
@@ -978,6 +944,9 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => `  ${cat}
     if (strategyData?.phase_3_strategy && typeof strategyData.phase_3_strategy === 'object') {
       strategyData.phase_3_strategy.confidence_bracket = confidenceBracket;
       strategyData.phase_3_strategy.effective_bracket = effectiveBracket;
+    }
+    if (qualityGate.decision === 'BLOCK') {
+      strategyData = sanitizeBlockedStrategy(strategyData, qualityGate.blocking_reasons);
     }
     if (effectiveBracket !== confidenceBracket) {
       console.warn(`[FinOps] [${runId}] Strategy downgraded by QG: ${confidenceBracket} → ${effectiveBracket} (decision=${qualityGate.decision})`);
@@ -1003,6 +972,25 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => `  ${cat}
       models: actuals,
       model_mode: MODEL_ROUTING_MODE,
     });
+
+    const fallbackStrategy = {
+      executive_summary: "Strategy incomplete.",
+      executive_summaries: {
+        finops_lead: "Strategy incomplete.",
+        cfo: "Strategy incomplete.",
+        engineering_lead: "Strategy incomplete."
+      },
+      active_persona: DEFAULT_PERSONA,
+      evidence_summary: buildFallbackEvidenceSummary(),
+      diagnosis: buildFallbackDiagnosis(),
+      planning_decision: buildFallbackPlanningDecision(),
+      visual_scorecard: { headline: "Error", maturity_score: "N/A", burden_score: "N/A" },
+      remediation_roadmap: []
+    };
+    const resolvedStrategy = strategyData.phase_3_strategy || fallbackStrategy;
+    const finalStrategy = qualityGate.decision === 'BLOCK'
+      ? sanitizeBlockedStrategy({ phase_3_strategy: resolvedStrategy }, qualityGate.blocking_reasons).phase_3_strategy
+      : resolvedStrategy;
 
     const finalResult: DiagnosticResult = {
       meta: {
@@ -1030,20 +1018,7 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => `  ${cat}
       phase_1_audit_logs: auditLogs,
       evidence_check: aggregatedRawData.evidence_check,
       phase_2_validation: validationData,
-      phase_3_strategy: strategyData.phase_3_strategy || {
-        executive_summary: "Strategy incomplete.",
-        executive_summaries: {
-          finops_lead: "Strategy incomplete.",
-          cfo: "Strategy incomplete.",
-          engineering_lead: "Strategy incomplete."
-        },
-        active_persona: DEFAULT_PERSONA,
-        evidence_summary: buildFallbackEvidenceSummary(),
-        diagnosis: buildFallbackDiagnosis(),
-        planning_decision: buildFallbackPlanningDecision(),
-        visual_scorecard: { headline: "Error", maturity_score: "N/A", burden_score: "N/A" },
-        remediation_roadmap: []
-      },
+      phase_3_strategy: finalStrategy,
       quality_gate: qualityGate
     };
     const runTrace = buildRunTrace({
@@ -1069,10 +1044,10 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => `  ${cat}
   } catch (error: any) {
     clearStageTraces(runId);
     const duration = Date.now() - pipelineStarted;
-    console.error(`[FinOps] [${runId}] === Pipeline FAILED === duration_ms=${duration} error="${error?.message || error}"`);
+    console.error(`[FinOps] [${runId}] === Pipeline FAILED === duration_ms=${duration} error_code=PIPELINE_FAILED`);
     serverLog(runId, 'error', 'pipeline_failed', {
       duration_ms: duration,
-      error: error?.message || String(error),
+      error_code: 'PIPELINE_FAILED',
       models: actuals,
       model_mode: MODEL_ROUTING_MODE,
     });

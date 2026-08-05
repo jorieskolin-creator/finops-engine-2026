@@ -1,5 +1,5 @@
 
-import { AuditItem, EvidenceCheckResult, FactCheckClaim, FactCheckResult, Phase1AuditLogs, Phase2Validation, QualityGateResult, QualityGateLlmExplanation, ValidationResult } from '../types';
+import { AuditItem, EvidenceCheckResult, FactCheckClaim, FactCheckResult, Phase1AuditLogs, Phase2Validation, QualityGateResult, QualityGateLlmExplanation, SourceRegistryRuntimeStatus, ValidationResult } from '../types';
 import { FINOPS_CRITERIA } from '../knowledge_base';
 import { runStage, RunContext } from './modelRouter';
 
@@ -116,7 +116,8 @@ export const runQualityGate = (
   phase1Validation: ValidationResult,
   phase3Validation: ValidationResult,
   evidenceCheck?: EvidenceCheckResult,
-  factCheck?: FactCheckResult
+  factCheck?: FactCheckResult,
+  sourceRegistry?: SourceRegistryRuntimeStatus
 ): QualityGateResult => {
   const blocking_reasons: string[] = [];
   const warnings: string[] = [];
@@ -142,9 +143,18 @@ export const runQualityGate = (
     blocking_reasons.push(`Phase 3: ${err}`);
   }
 
-  if (evidenceCheck?.failed) {
-    warnings.push(
-      `Evidence-check did not complete (${evidenceCheck.failure_reason}). Phase 2 may still include unverified scanner evidence.`
+  const weakPackets = Object.entries(sourceRegistry?.packets || {}).filter(([, packet]) => packet.weak_coverage);
+  if (weakPackets.length > 0) {
+    blocking_reasons.push(
+      `Source routing coverage is incomplete for ${weakPackets.length} domain packet(s) (${weakPackets.map(([domain]) => domain).join(', ')}). No broad-source fallback was used; collect or route sufficient evidence before acting on recommendations.`
+    );
+  }
+
+  if (!evidenceCheck) {
+    blocking_reasons.push('Required evidence-check result is missing. Scanner findings remain diagnostic only.');
+  } else if (evidenceCheck.failed) {
+    blocking_reasons.push(
+      `Required evidence-check did not complete (${evidenceCheck.failure_reason || 'verification failed'}). Scanner findings remain diagnostic only.`
     );
   } else if (evidenceCheck) {
     if (evidenceCheck.downgraded_count > 0) {
@@ -169,7 +179,9 @@ export const runQualityGate = (
     const blockingUnsupported = factCheck.unsupported_claims.filter(isBlockingUnsupportedClaim);
     const hygieneUnsupported = factCheck.unsupported_claims.filter(c => !isBlockingUnsupportedClaim(c));
     const highRiskUnsupported = blockingUnsupported.filter(c =>
-      c.failure_type === 'fabricated_number' || c.severity === 'BLOCKING_UNSAFE_ROADMAP'
+      c.failure_type === 'fabricated_number'
+      || c.severity === 'BLOCKING_UNSUPPORTED_FACT'
+      || c.severity === 'BLOCKING_UNSAFE_ROADMAP'
     );
     if (sanitizedCount > 0) {
       warnings.push(
@@ -192,13 +204,15 @@ export const runQualityGate = (
     }
   }
 
-  if (factCheck?.failed) {
-    warnings.push(
-      `Fact-check pass did not complete (${factCheck.failure_reason}). Strategy was not deeply verified — treat specific claims with caution.`
+  if (!factCheck) {
+    blocking_reasons.push('Required fact-check result is missing. Strategy is not actionable.');
+  } else if (factCheck.failed) {
+    blocking_reasons.push(
+      `Required fact-check did not complete (${factCheck.failure_reason || 'verification failed'}). Strategy is not actionable.`
     );
   } else if (factCheck?.partial_failure_reason) {
-    warnings.push(
-      `Fact-check partially completed (${factCheck.partial_failure_reason}). Completed subchecks still contributed ${factCheck.supported_count}/${factCheck.total_claims} claim verdicts.`
+    blocking_reasons.push(
+      `Required fact-check only partially completed (${factCheck.partial_failure_reason}). Strategy is not actionable.`
     );
   }
 

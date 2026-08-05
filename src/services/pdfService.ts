@@ -143,14 +143,14 @@ export const extractPagesFromPdf = async (
       });
     } catch (e) {
       skippedVisualCandidates++;
-      console.warn(`[pdfService] Page ${pageNumber} of ${file.name} failed to rasterize:`, e);
+      console.warn(`[pdfService] Page ${pageNumber} failed to rasterize (error_code=PDF_RASTERIZATION_FAILED); filename and error content omitted.`);
     }
   }
 
   if (pdf.numPages > maxTextPages) {
     const warning = `${file.name} has ${pdf.numPages} pages; text extraction was capped at the first ${maxTextPages} pages.`;
     warnings.push(warning);
-    console.warn(`[pdfService] ${warning}`);
+    console.warn(`[pdfService] Text extraction capped pages=${pdf.numPages} max_text_pages=${maxTextPages}; filename omitted.`);
   }
 
   const parseQuality = assessPdfParseQuality({

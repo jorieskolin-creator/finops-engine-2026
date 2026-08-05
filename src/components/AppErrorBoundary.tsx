@@ -28,7 +28,7 @@ export class AppErrorBoundary extends React.Component<AppErrorBoundaryProps, App
   }
 
   componentDidCatch(error: Error, info: React.ErrorInfo) {
-    console.error('[FinOps] UI render failed', error, info);
+    console.error(`[FinOps] UI render failed (error_code=UI_RENDER_FAILED has_error=${Boolean(error)} has_component_info=${Boolean(info)}).`);
     this.props.onError?.(error, info);
   }
 

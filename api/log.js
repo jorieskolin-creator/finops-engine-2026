@@ -3,6 +3,7 @@
 // Session-gated so random scanners can't pollute the logs.
 
 import { requireSession } from "../lib/auth.js";
+import { filterOperationalMetadata, isKnownOperationalEvent, safeOperationalIdentifier } from "../lib/operationalLogPolicy.js";
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -15,8 +16,11 @@ export default async function handler(req, res) {
   const { runId, level, event, ...rest } = req.body || {};
   const normalizedLevel = level === 'error' || level === 'warn' ? level : 'info';
   const ts = new Date().toISOString();
-  const tag = `[${ts}] [run=${runId || '?'}]`;
-  const line = `${tag} level=${normalizedLevel} event=${event || 'unknown'} ${formatFields(rest)}`;
+  const safeRunId = safeOperationalIdentifier(runId);
+  const safeEvent = isKnownOperationalEvent(event) ? event : 'unknown';
+  const fields = filterOperationalMetadata(safeEvent, rest);
+  const tag = `[${ts}] [run=${safeRunId}]`;
+  const line = `${tag} level=${normalizedLevel} event=${safeEvent} ${formatFields(fields)}`;
 
   if (normalizedLevel === 'error') console.error(line);
   else console.log(line);

@@ -77,7 +77,7 @@ const saveAssessmentToSession = (result: DiagnosticResult, source: SavedAssessme
       documentAnalyzed: result.meta?.document_analyzed
     } satisfies SavedAssessmentMeta));
   } catch (error) {
-    console.warn('[FinOps] Could not save assessment recovery payload', error);
+    console.warn('[FinOps] Could not save assessment recovery payload (error_code=RECOVERY_SAVE_FAILED).');
   }
 };
 
@@ -767,7 +767,7 @@ const App: React.FC = () => {
             clearFileInput();
             return;
           }
-        } catch (e) { console.error("Failed to parse JSON file", e); }
+        } catch (e) { console.error("Failed to parse JSON file (error_code=JSON_IMPORT_FAILED); filename and error content omitted."); }
       }
     }
 

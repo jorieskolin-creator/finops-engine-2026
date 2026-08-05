@@ -12,6 +12,8 @@
 import { ImageInput } from '../types';
 import { ModelProfile, StageId, modelsFor } from '../models';
 import { estimateTokens, hashString, recordStageTrace } from './runTraceService';
+// @ts-expect-error Pure JS policy is also consumed by the serverless API.
+import { filterOperationalMetadata } from '../../lib/operationalLogPolicy.js';
 
 export interface NormalizedPrompt {
   userText: string;
@@ -27,6 +29,10 @@ const REQUEST_TIMEOUT_MS = 595_000;
 const INTERNAL_RESULT_POLL_MS = 120_000;
 const INTERNAL_RESULT_POLL_INTERVAL_MS = 2_000;
 const INTERNAL_RESULT_MISSING_GRACE_MS = 10_000;
+const INTERNAL_ERROR_CODES = new Set([
+  'upstream_http_error', 'upstream_stream_error', 'transport_error',
+  'incomplete_response', 'empty_output', 'model_request_failed',
+]);
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -122,7 +128,9 @@ async function pollInternalResult(body: any, cause: unknown): Promise<{ text: st
   const started = Date.now();
   const stage = body.stage || 'unknown';
   const model = body.model || 'unknown';
-  const causeMessage = cause instanceof Error ? cause.message : String(cause || 'unknown');
+  const recoveryErrorCode = cause instanceof DOMException && cause.name === 'AbortError'
+    ? 'request_timeout'
+    : 'model_request_failed';
   let firstMissingAt: number | null = null;
   while (Date.now() - started < INTERNAL_RESULT_POLL_MS) {
     try {
@@ -158,19 +166,18 @@ async function pollInternalResult(body: any, cause: unknown): Promise<{ text: st
         return { text: typeof data.text === 'string' ? data.text : '', usage: data.usage };
       }
       if (data?.status === 'error') {
+        const errorCode = typeof data.message === 'string' && INTERNAL_ERROR_CODES.has(data.message)
+          ? data.message
+          : 'model_request_failed';
         await serverLog(body.runId, 'error', 'internal_result_error', {
           stage,
           model,
           internal_call_id: internalCallId,
-          message: data.message || 'model call failed',
-          cause: causeMessage,
+          error_code: errorCode,
         });
         return null;
       }
     } catch (err: any) {
-      if (err?.message && err.message !== causeMessage) {
-        cause = err;
-      }
       await sleep(INTERNAL_RESULT_POLL_INTERVAL_MS);
     }
   }
@@ -180,7 +187,7 @@ async function pollInternalResult(body: any, cause: unknown): Promise<{ text: st
     model,
     internal_call_id: internalCallId,
     duration_ms: Date.now() - started,
-    cause: causeMessage,
+    error_code: recoveryErrorCode,
   });
   return null;
 }
@@ -199,8 +206,7 @@ async function postWithTimeout(url: string, body: any): Promise<{ text: string; 
       signal: controller.signal,
     });
     if (!res.ok) {
-      const errText = await res.text().catch(() => '');
-      throw new Error(`${url} → ${res.status}: ${errText || res.statusText}`);
+      throw new Error(`${url} request failed (HTTP ${res.status})`);
     }
     if (!res.body) {
       throw new Error(`${url} → no response body`);
@@ -316,9 +322,11 @@ export async function runStage(stage: StageId, prompt: NormalizedPrompt, ctx: Ru
       }
       return { text: result.text, modelUsed: profile, attempts: failures };
     } catch (err: any) {
-      const msg = err?.message || String(err);
-      console.warn(`[modelRouter] stage=${stage} provider=${profile.provider} id=${profile.id} failed: ${msg}`);
-      failures.push({ profile, error: msg });
+      const errorCode = err instanceof DOMException && err.name === 'AbortError'
+        ? 'request_timeout'
+        : 'model_request_failed';
+      console.warn(`[modelRouter] stage=${stage} provider=${profile.provider} id=${profile.id} error_code=${errorCode}`);
+      failures.push({ profile, error: errorCode });
     }
   }
   const summary = failures.map((f) => `${f.profile.id}: ${f.error}`).join(' | ');
@@ -337,7 +345,7 @@ export async function runStage(stage: StageId, prompt: NormalizedPrompt, ctx: Ru
     started_at: startedAt,
     completed_at: new Date().toISOString()
   });
-  await serverLog(ctx.runId, 'error', 'stage_exhausted', { stage, summary });
+  await serverLog(ctx.runId, 'error', 'stage_exhausted', { stage, attempt_count: failures.length, error_code: 'models_exhausted' });
   throw new Error(`All models exhausted for stage '${stage}'. ${summary}`);
 }
 
@@ -345,10 +353,11 @@ export async function runStage(stage: StageId, prompt: NormalizedPrompt, ctx: Ru
 // the per-call proxy logs. Never throws — logging failures must not break runs.
 export async function serverLog(runId: string, level: 'info' | 'warn' | 'error', event: string, fields: Record<string, any> = {}): Promise<void> {
   try {
+    const filteredFields = filterOperationalMetadata(event, fields);
     await fetch('/api/log', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ runId, level, event, ...fields }),
+      body: JSON.stringify({ runId, level, event, ...filteredFields }),
       keepalive: true,
     });
   } catch {

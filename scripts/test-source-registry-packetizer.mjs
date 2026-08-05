@@ -68,6 +68,7 @@ assert.ok(packets.A.text.includes('tagging ownership'), 'A packet should include
 assert.ok(packets.F.text.includes('LLM token usage'), 'F packet should include GenAI/token evidence');
 assert.ok(packets.F.text.length <= 45000, 'F packet should stay under hard cap');
 assert.ok(packets.F.manifest.some(m => m.page_number === 15), 'F packet should preserve page references');
+assert.doesNotMatch(JSON.stringify(packets), /fallback is allowed|full source registry remains available/i, 'packets must not authorize broad raw-source fallback');
 
 const dlp = buildDlpReviewPacket(registry);
 assert.match(dlp.text, /page="15"|p015/, 'DLP review packet should include distributed later-page material');

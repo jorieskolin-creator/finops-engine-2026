@@ -306,11 +306,11 @@ export const knowledgeBaseService = {
         if (index.status?.source === 'remote_blob') {
           console.info(`[FinOps KnowledgeBase] Remote PDF KB loaded: ${index.status.document_count} documents.`);
         } else {
-          console.info(`[FinOps KnowledgeBase] Using built-in KB fallback (${index.failures?.[0]?.reason || 'remote unavailable'}).`);
+          console.info('[FinOps KnowledgeBase] Using built-in KB fallback (error_code=REMOTE_KB_FALLBACK).');
         }
         return index;
       } catch (error: any) {
-        console.warn('[FinOps KnowledgeBase] Remote PDF KB unavailable, using built-in fallback:', error);
+        console.warn('[FinOps KnowledgeBase] Remote PDF KB unavailable; using built-in fallback (error_code=REMOTE_KB_UNAVAILABLE).');
         return emptyRemoteKbIndex(error?.message || String(error));
       }
     })();
@@ -354,7 +354,7 @@ export const knowledgeBaseService = {
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         tactics = await response.json();
       } catch (error) {
-        console.error("[FinOps KnowledgeBase] Remote fetch failed, using local DB:", error);
+        console.error("[FinOps KnowledgeBase] Remote fetch failed; using local DB (error_code=REMOTE_PLAYBOOK_UNAVAILABLE).");
         tactics = FINOPS_TACTICS_LOCAL;
       }
     } else {

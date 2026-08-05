@@ -66,6 +66,17 @@ const removeClaimFromString = (value: string, claim: string): { value: string; c
     return { value: next, changed: next !== before };
   }
 
+  const withoutTerminalPunctuation = exact.replace(/[.!?]+$/, '').trim();
+  const fragmentIndex = value.toLowerCase().indexOf(withoutTerminalPunctuation.toLowerCase());
+  if (withoutTerminalPunctuation.length >= 16 && fragmentIndex >= 0) {
+    const next = `${value.slice(0, fragmentIndex)}${value.slice(fragmentIndex + withoutTerminalPunctuation.length)}`
+      .replace(/^\s*[,;:]?\s*(?:and\s+)?/i, '')
+      .replace(/\s+([,.;:!?])/g, '$1')
+      .replace(/[ \t]{2,}/g, ' ')
+      .trim();
+    return { value: next, changed: next !== before };
+  }
+
   const normalizedValue = compact(value);
   const normalizedClaim = compact(exact);
   if (normalizedValue.includes(normalizedClaim)) {
@@ -207,4 +218,33 @@ export const sanitizeStrategyAfterFactCheck = (
     },
     sanitized,
   };
+};
+
+export const sanitizeBlockedStrategy = (strategyData: any, blockingReasons: string[]): any => {
+  const data = clone(strategyData || {});
+  const strategy = data.phase_3_strategy && typeof data.phase_3_strategy === 'object'
+    ? data.phase_3_strategy
+    : {
+      executive_summary: 'Strategy unavailable because required validation did not complete.',
+      executive_summaries: {
+        finops_lead: 'Strategy unavailable because required validation did not complete.',
+        cfo: 'Strategy unavailable because required validation did not complete.',
+        engineering_lead: 'Strategy unavailable because required validation did not complete.'
+      },
+      active_persona: 'finops_lead',
+      visual_scorecard: { headline: 'Validation required', maturity_score: 'N/A', burden_score: 'N/A' }
+    };
+  data.phase_3_strategy = strategy;
+
+  strategy.remediation_roadmap = [];
+  strategy.effective_bracket = 'LOW';
+  strategy.planning_decision = {
+    decision: 'NO_GO',
+    rationale: 'Required validation did not complete or the quality gate blocked actionability. Preserve the diagnostic findings, but do not execute recommendations until the blocking reasons are resolved.',
+    safe_to_act_on: [],
+    evidence_needed_before_action: blockingReasons.length > 0
+      ? [...blockingReasons]
+      : ['Resolve the quality-gate blockers and re-run required verification.']
+  };
+  return data;
 };
