@@ -46,11 +46,10 @@ assert.doesNotMatch(appSource, /Irrelevant File Detected/, 'low-relevance files 
 
 const pdfSource = await readFile(new URL('../src/services/pdfService.ts', import.meta.url), 'utf8');
 assert.match(pdfSource, /DEFAULT_MAX_TEXT_PAGES = 100/, 'PDF text extraction should cover up to 100 pages');
-assert.match(pdfSource, /PDF_PAGE source=/, 'PDF extraction should preserve page markers');
-assert.match(pdfSource, /Visual page extraction stopped/, 'PDF visual extraction should include an image budget warning');
+assert.match(pdfSource, /schema_version:'source_page_v1'/, 'PDF extraction should preserve structured page identity');
+assert.doesNotMatch(pdfSource, /canvas\.toDataURL|PDF_PAGE source=/, 'PDF extraction must not rasterize or create sentinel pages');
 assert.match(pdfSource, /assessPdfParseQuality/, 'PDF extraction should calculate deterministic parse quality');
-assert.match(pdfSource, /sparsePages/, 'PDF visual page selection should prioritize sparse pages');
-assert.match(pdfSource, /pageStats\.every\(stats => stats\.charCount === 0\) && images\.length === 0/, 'unreadable PDFs should be detected from extracted text stats, not page markers');
+assert.match(pdfSource, /pageStats\.every\(stats => stats\.charCount === 0\)/, 'unreadable PDFs should be detected from extracted text stats, not page markers');
 assert.doesNotMatch(pdfSource, /pageTexts\.join\(''\)\.trim\(\)\.length === 0/, 'page markers must not be used as the unreadable-PDF test');
 
 const goodParse = assessPdfParseQuality({
@@ -93,9 +92,9 @@ const budgetParse = assessPdfParseQuality({
 assert.match(budgetParse.warnings.join(' '), /image budget/);
 
 const appParseSource = appSource;
-assert.match(appParseSource, /SOURCE_PARSE_QUALITY/, 'mixed or poor PDF parse quality should be passed into source context');
+assert.match(appParseSource, /parse_warnings:file\.parseMetadata/, 'PDF parse quality should be carried structurally on source records');
 assert.match(appParseSource, /Good text extraction/, 'upload card should label good PDF extraction');
-assert.match(appParseSource, /Mixed extraction: some visual\/scanned pages included/, 'upload card should warn about mixed PDF extraction');
-assert.match(appParseSource, /Poor extraction: likely scanned\/image-heavy PDF/, 'upload card should warn about poor PDF extraction');
+assert.match(appParseSource, /Mixed extraction: sparse\/scanned pages were not visually inspected/, 'upload card should warn about sparse PDF extraction');
+assert.match(appParseSource, /Poor extraction: visual fallback is disabled/, 'upload card should warn about poor PDF extraction');
 
 console.log('input parsing regression tests passed');

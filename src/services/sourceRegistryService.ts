@@ -3,6 +3,7 @@ import type {
   DlpPatternHit,
   DlpScanResult,
   ImageInput,
+  SourceRecord,
   RoutedSourcePacket,
   SourceChunk,
   SourceChunkRoutingHint,
@@ -16,6 +17,8 @@ const TARGET_PACKET_CHARS = 35000;
 const HARD_PACKET_CHARS = 45000;
 const CHUNK_TARGET_CHARS = 2200;
 const CHUNK_OVERLAP_CHARS = 200;
+const SOURCE_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
+const SOURCE_KINDS = new Set(['text', 'pdf', 'html', 'csv', 'tsv', 'json']);
 
 const DOMAIN_TERMS: Record<string, string[]> = {
   A: [
@@ -99,30 +102,6 @@ const inferType = (sourceName: string, text: string, pageNumber?: number): Sourc
   return 'text';
 };
 
-const parseDocuments = (text: string): Array<{ name: string; body: string }> => {
-  const docs: Array<{ name: string; body: string }> = [];
-  const rx = /<DOCUMENT\s+name="([^"]+)">\s*([\s\S]*?)\s*<\/DOCUMENT>/g;
-  let match: RegExpExecArray | null;
-  while ((match = rx.exec(text)) !== null) {
-    docs.push({ name: match[1], body: match[2] });
-  }
-  if (docs.length === 0 && text.trim().length > 0) {
-    docs.push({ name: 'Uploaded source material', body: text });
-  }
-  return docs;
-};
-
-const parsePdfPages = (body: string): Array<{ pageNumber?: number; text: string }> => {
-  const pages: Array<{ pageNumber?: number; text: string }> = [];
-  const rx = /\[PDF_PAGE\s+source="[^"]*"\s+page="(\d+)"\]\s*([\s\S]*?)\s*\[\/PDF_PAGE\]/g;
-  let match: RegExpExecArray | null;
-  while ((match = rx.exec(body)) !== null) {
-    pages.push({ pageNumber: Number(match[1]), text: match[2] });
-  }
-  if (pages.length === 0) pages.push({ text: body });
-  return pages;
-};
-
 const tableRowChunks = (text: string): Array<{ rowNumber: number; text: string }> => {
   const match = text.match(/\[TABLE_SAMPLE\]\s*([\s\S]*?)\s*\[\/TABLE_SAMPLE\]/);
   if (!match) return [];
@@ -151,8 +130,8 @@ const scoreDomain = (haystack: string, domain: string): SourceChunkRoutingHint =
   return { domain, score, tier, reasons };
 };
 
-const routeChunk = (sourceName: string, text: string): SourceChunkRoutingHint[] => {
-  const haystack = `${sourceName}\n${text}`.toLowerCase();
+const routeChunk = (text: string): SourceChunkRoutingHint[] => {
+  const haystack = text.toLowerCase();
   const hints = Object.keys(BATCH_TITLES).map(domain => scoreDomain(haystack, domain));
   const anySignal = hints.some(h => h.score > 0);
   if (!anySignal) {
@@ -161,14 +140,53 @@ const routeChunk = (sourceName: string, text: string): SourceChunkRoutingHint[] 
   return hints;
 };
 
-export const buildSourceRegistry = (text: string, images: ImageInput[] = []): SourceRegistry => {
+const validateSourceRecords = (records: SourceRecord[]): void => {
+  if (!Array.isArray(records) || records.length === 0 || records.length > 100) {
+    throw new Error('INVALID_SOURCE_RECORDS');
+  }
+  const sourceIds = new Set<string>();
+  for (const record of records) {
+    if (!record || record.schema_version !== 'source_record_v1'
+      || typeof record.source_id !== 'string' || !SOURCE_ID_PATTERN.test(record.source_id)
+      || sourceIds.has(record.source_id)
+      || typeof record.source_name !== 'string' || record.source_name.length === 0 || record.source_name.length > 500
+      || !SOURCE_KINDS.has(record.kind)
+      || (record.text !== undefined && typeof record.text !== 'string')
+      || (record.parse_warnings !== undefined && (!Array.isArray(record.parse_warnings) || record.parse_warnings.some(warning => typeof warning !== 'string' || warning.length > 1000)))) {
+      throw new Error('INVALID_SOURCE_RECORD');
+    }
+    sourceIds.add(record.source_id);
+    const hasText = typeof record.text === 'string' && record.text.trim().length > 0;
+    const hasPages = Array.isArray(record.pages) && record.pages.length > 0;
+    if (hasText === hasPages) throw new Error('INVALID_SOURCE_CONTENT');
+    if (hasPages) {
+      const pageIds = new Set<string>();
+      let nonEmptyPageCount = 0;
+      for (const page of record.pages!) {
+        if (!page || page.schema_version !== 'source_page_v1'
+          || typeof page.page_id !== 'string' || !SOURCE_ID_PATTERN.test(page.page_id) || pageIds.has(page.page_id)
+          || !Number.isInteger(page.page_number) || page.page_number < 1
+          || typeof page.text !== 'string') {
+          throw new Error('INVALID_SOURCE_PAGE');
+        }
+        if (page.text.trim().length > 0) nonEmptyPageCount++;
+        pageIds.add(page.page_id);
+      }
+      if (nonEmptyPageCount === 0) throw new Error('INVALID_SOURCE_CONTENT');
+    }
+  }
+};
+
+export const buildSourceRegistry = (records: SourceRecord[]): SourceRegistry => {
+  validateSourceRecords(records);
   const chunks: SourceChunk[] = [];
   const warnings: string[] = [];
-  const docs = parseDocuments(text);
-
-  docs.forEach((doc, docIndex) => {
-    const sourceId = sourceIdFor(docIndex);
-    const pages = parsePdfPages(doc.body);
+  records.forEach((doc, docIndex) => {
+    const sourceId = doc.source_id || sourceIdFor(docIndex);
+    const pages: Array<{ pageNumber?: number; text: string }> = doc.pages?.length
+      ? doc.pages.filter(page => page.text.trim().length > 0).map(page => ({ pageNumber:page.page_number, text:page.text }))
+      : [{ text:doc.text || '' }];
+    warnings.push(...(doc.parse_warnings || []).map(warning => `${sourceId}: ${warning}`));
     let chunkIndex = 0;
     for (const page of pages) {
       const isTable = !page.pageNumber && /\[TABLE_SAMPLE\]/.test(page.text);
@@ -177,12 +195,12 @@ export const buildSourceRegistry = (text: string, images: ImageInput[] = []): So
         chunks.push({
           chunk_id: chunkId,
           source_id: sourceId,
-          source_name: doc.name,
+          source_name: doc.source_name,
           type: 'table_profile',
           text: page.text,
           char_start: 0,
           char_end: page.text.length,
-          routing: routeChunk(doc.name, page.text)
+          routing: routeChunk(page.text)
         });
         chunkIndex++;
         for (const row of tableRowChunks(page.text)) {
@@ -190,11 +208,11 @@ export const buildSourceRegistry = (text: string, images: ImageInput[] = []): So
           chunks.push({
             chunk_id: rowChunkId,
             source_id: sourceId,
-            source_name: doc.name,
+            source_name: doc.source_name,
             type: 'table_row',
             text: row.text,
             row_number: row.rowNumber,
-            routing: routeChunk(doc.name, row.text)
+            routing: routeChunk(row.text)
           });
           chunkIndex++;
         }
@@ -207,37 +225,19 @@ export const buildSourceRegistry = (text: string, images: ImageInput[] = []): So
         chunks.push({
           chunk_id: chunkId,
           source_id: sourceId,
-          source_name: doc.name,
-          type: inferType(doc.name, chunkText, page.pageNumber),
+          source_name: doc.source_name,
+          type: inferType(doc.source_name, chunkText, page.pageNumber),
           text: chunkText,
           page_id: page.pageNumber ? `${sourceId}-p${String(page.pageNumber).padStart(3, '0')}` : undefined,
           page_number: page.pageNumber,
           char_start: part.start,
           char_end: part.end,
-          routing: routeChunk(doc.name, chunkText)
+          routing: routeChunk(chunkText),
+          parse_warnings: doc.parse_warnings
         });
         chunkIndex++;
       }
     }
-  });
-
-  const sourceByName = new Map(docs.map((doc, idx) => [doc.name, sourceIdFor(idx)]));
-  images.forEach((image, idx) => {
-    const sourceId = sourceByName.get(image.source_name) || sourceIdFor(docs.length + idx);
-    const pageId = image.page_number ? `${sourceId}-p${String(image.page_number).padStart(3, '0')}` : undefined;
-    const chunkId = `${pageId || sourceId}-img${String(idx + 1).padStart(3, '0')}`;
-    const textLabel = `Visual source page/image: ${image.source_name}${image.page_number ? ` page ${image.page_number}` : ''}`;
-    chunks.push({
-      chunk_id: chunkId,
-      source_id: sourceId,
-      source_name: image.source_name,
-      type: 'image',
-      text: textLabel,
-      page_id: pageId,
-      page_number: image.page_number,
-      routing: routeChunk(image.source_name, textLabel),
-      image: { ...image, source_id: sourceId, page_id: pageId, chunk_id: chunkId }
-    });
   });
 
   return {
@@ -269,19 +269,17 @@ const renderChunk = (chunk: SourceChunk, relevance: SourceRelevanceTier): string
   const attrs = [
     `id="${escapeXml(chunk.chunk_id)}"`,
     `source_id="${escapeXml(chunk.source_id)}"`,
-    `source="${escapeXml(chunk.source_name)}"`,
     chunk.page_number ? `page="${chunk.page_number}"` : '',
     `type="${chunk.type}"`,
     `relevance="${relevance}"`,
     `routed_domains="${escapeXml(routedDomains(chunk).join(','))}"`
   ].filter(Boolean).join(' ');
-  return `<CHUNK ${attrs}>\n${chunk.text}\n</CHUNK>`;
+  return `<CHUNK ${attrs}>\n${escapeXml(chunk.text)}\n</CHUNK>`;
 };
 
 const manifestFor = (chunk: SourceChunk, relevance: SourceRelevanceTier): SourcePacketManifestItem => ({
   chunk_id: chunk.chunk_id,
   source_id: chunk.source_id,
-  source_name: chunk.source_name,
   page_id: chunk.page_id,
   page_number: chunk.page_number,
   type: chunk.type,
@@ -328,12 +326,11 @@ export const buildDomainPacket = (registry: SourceRegistry, domainId: string): R
     : '<NO_ROUTED_CHUNKS>Deterministic routing found no domain-specific chunks. Treat source coverage as insufficient and do not infer findings or absence.</NO_ROUTED_CHUNKS>';
   const manifestText = manifest.map(item => [
     item.chunk_id,
-    item.source_name,
     item.page_number ? `page ${item.page_number}` : '',
     item.type,
     item.relevance,
     item.routed_domains.join(',')
-  ].filter(Boolean).join(' | ')).join('\n');
+  ].filter(Boolean).map(value => escapeXml(String(value))).join(' | ')).join('\n');
 
   const text = `<SOURCE_PACKET domain="${escapeXml(domainId)}" title="${escapeXml(title)}">
 <PACKET_RULES>
@@ -365,6 +362,12 @@ ${body}
 
 export const buildDomainPackets = (registry: SourceRegistry): Record<string, RoutedSourcePacket> => {
   return Object.fromEntries(Object.keys(BATCH_TITLES).map(domain => [domain, buildDomainPacket(registry, domain)]));
+};
+
+export const renderPseudonymousSourceContext = (registry: SourceRegistry, maxChars = 45000): string => {
+  const rendered: string[]=[]; let chars=0;
+  for(const chunk of registry.chunks){const value=renderChunk(chunk,'unknown');if(chars+value.length>maxChars)break;rendered.push(value);chars+=value.length;}
+  return `<FULL_SOURCE_CONTEXT source_count="${registry.source_count}" chunk_count="${registry.chunk_count}">\n${rendered.join('\n\n')}\n</FULL_SOURCE_CONTEXT>`;
 };
 
 const countMatches = (text: string, rx: RegExp): number => {

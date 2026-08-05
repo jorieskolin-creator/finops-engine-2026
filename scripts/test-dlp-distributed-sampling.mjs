@@ -41,7 +41,7 @@ const laterSecret = `[PDF_PAGE source="Risky.pdf" page="15"]\nAppendix credentia
 const laterFinancialCaution = `[PDF_PAGE source="Risky.pdf" page="16"]\nAppendix mentions negotiated discount rate and EDP pricing review.\n[/PDF_PAGE]`;
 const text = `<DOCUMENT name="Risky.pdf">\n${safeIntro}\n\n${laterSecret}\n\n${laterFinancialCaution}\n</DOCUMENT>`;
 
-const registry = buildSourceRegistry(text, []);
+const registry = buildSourceRegistry([{schema_version:'source_record_v1',source_id:'src-001',source_name:'Risky.pdf',kind:'text',text}]);
 const dlp = scanRegistryDlp(registry);
 assert.equal(dlp.blocked, true, 'full-source deterministic DLP should block later-page cloud keys');
 assert.ok(dlp.high_risk_hits.some(hit => hit.kind === 'cloud_key'), 'cloud key should be classified as high-risk');

@@ -26,7 +26,8 @@ export interface RunContext {
 }
 
 const REQUEST_TIMEOUT_MS = 595_000;
-const INTERNAL_RESULT_POLL_MS = 120_000;
+const GATEWAY_DEADLINE_MS = 540_000;
+const RECOVERY_PROPAGATION_MS = 15_000;
 const INTERNAL_RESULT_POLL_INTERVAL_MS = 2_000;
 const INTERNAL_RESULT_MISSING_GRACE_MS = 10_000;
 const INTERNAL_ERROR_CODES = new Set([
@@ -42,71 +43,34 @@ const newInternalCallId = (): string => {
   return `internal-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`;
 };
 
-async function callAnthropic(profile: ModelProfile, prompt: NormalizedPrompt, stage: StageId, ctx: RunContext): Promise<{ text: string; usage?: any }> {
-  const content: any[] = [{ type: 'text', text: prompt.userText }];
-  if (prompt.images?.length) {
-    content.push({
-      type: 'text',
-      text: `\n\nThe following ${prompt.images.length} image(s) are part of the source material. Treat their visible content as evidence on equal footing with text. Each image is identified by its source filename and (for PDF-derived images) page number; for those, set evidence_source: "image" and include page_number when citing.`,
-    });
-    for (const img of prompt.images) {
-      const label = img.page_number !== undefined
-        ? `[Image: ${img.source_name} — page ${img.page_number}]`
-        : `[Image: ${img.source_name}]`;
-      content.push({ type: 'text', text: `\n${label}\n` });
-      content.push({
-        type: 'image',
-        source: { type: 'base64', media_type: img.mimeType, data: img.data },
-      });
-    }
-  }
-
-  const body: any = {
-    model: profile.id,
-    messages: [{ role: 'user', content }],
-    systemPrompt: prompt.systemInstruction,
-    maxTokens: profile.maxTokens ?? 4096,
-    stage,
-    runId: ctx.runId,
-    internalPipelineCall: true,
-  };
-  if (profile.anthropicThinking) {
-    body.thinking = profile.anthropicThinking;
-  }
-
-  return postWithTimeout('/api/anthropic-generate', body);
+const REQUEST_SCHEMA = 'stage_packet_request_v1';
+const APPROVED_SCHEMA = 'approved_stage_packet_v1';
+const OUTPUT_SCHEMA = 'governed_output_v1';
+const POLICY = 'llm_egress_policy_v1';
+async function governedCall(profile: ModelProfile, prompt: NormalizedPrompt, stage: StageId, ctx: RunContext): Promise<{ text: string; usage?: any }> {
+  if (prompt.images?.length) throw new Error('IMAGE_PAYLOAD_DISABLED: external image processing is disabled until local OCR/redaction exists');
+  const settings: any = { max_tokens: profile.maxTokens ?? 4096 };
+  if (profile.openaiReasoning) settings.reasoning_effort = profile.openaiReasoning.effort;
+  if (profile.anthropicThinking) settings.thinking_budget_tokens = profile.anthropicThinking.budget_tokens;
+  const approval = await fetch('/api/governed-packet', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ schema_version:REQUEST_SCHEMA, policy_version:POLICY, run_id:ctx.runId, stage, provider:profile.provider, model:profile.id, destination:`${profile.provider}:external_model`, system_instruction:prompt.systemInstruction || '', parts:[{type:'text',text:prompt.userText}], settings }) });
+  if (!approval.ok) throw new Error(`STAGE_PACKET_REJECTED HTTP ${approval.status}`);
+  const packet = await approval.json();
+  if (packet.classification_method !== 'deterministic_pattern_screen_v1' || packet.approval_basis !== 'policy_approved_after_pattern_screening' || packet.run_id !== ctx.runId || packet.stage !== stage || packet.provider !== profile.provider || packet.model !== profile.id) throw new Error('INVALID_PACKET_APPROVAL');
+  const body = { packet_id:packet.packet_id, packet_hash:packet.packet_hash, schema_version:APPROVED_SCHEMA, policy_version:POLICY, run_id:ctx.runId, stage, internal_pipeline_call:true, internal_call_id:newInternalCallId() };
+  return postWithTimeout(`/api/${profile.provider}-generate`, body, packet);
 }
 
-async function callOpenAI(profile: ModelProfile, prompt: NormalizedPrompt, stage: StageId, ctx: RunContext): Promise<{ text: string; usage?: any }> {
-  const content: any[] = [{ type: 'input_text', text: prompt.userText }];
-  if (prompt.images?.length) {
-    content.push({
-      type: 'input_text',
-      text: `\n\nThe following ${prompt.images.length} image(s) are part of the source material. Treat their visible content as evidence on equal footing with text. Each image is identified by its source filename and (for PDF-derived images) page number; for those, set evidence_source: "image" and include page_number when citing.`,
-    });
-    for (const img of prompt.images) {
-      const label = img.page_number !== undefined
-        ? `[Image: ${img.source_name} — page ${img.page_number}]`
-        : `[Image: ${img.source_name}]`;
-      content.push({ type: 'input_text', text: `\n${label}\n` });
-      content.push({
-        type: 'input_image',
-        image_url: `data:${img.mimeType};base64,${img.data}`,
-      });
-    }
-  }
-
-  return postWithTimeout('/api/openai-generate', {
-    model: profile.id,
-    input: [{ role: 'user', content }],
-    instructions: prompt.systemInstruction,
-    reasoning: profile.openaiReasoning,
-    maxOutputTokens: profile.maxTokens ?? 4096,
-    stage,
-    runId: ctx.runId,
-    internalPipelineCall: true,
-  });
-}
+const sha256Hex = async (text: string): Promise<string> => {
+  const digest = await globalThis.crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
+  return Array.from(new Uint8Array(digest), b => b.toString(16).padStart(2, '0')).join('');
+};
+const validOutput = async (output: any, body: any, approval: any): Promise<boolean> => Boolean(
+  output && output.schema_version === OUTPUT_SCHEMA && output.policy_version === POLICY && output.inspection_status === 'passed'
+  && output.inspection_method === 'deterministic_pattern_screen_and_contact_redaction_v1'
+  && output.run_id === body.run_id && output.stage === body.stage && output.provider === approval.provider && output.model === approval.model
+  && output.source_packet_id === approval.packet_id && output.source_packet_hash === approval.packet_hash
+  && typeof output.text === 'string' && output.char_count === output.text.length && output.output_hash === await sha256Hex(output.text)
+);
 
 // Reads the NDJSON stream emitted by api/anthropic-generate.js and
 // api/openai-generate.js.
@@ -121,18 +85,22 @@ async function callOpenAI(profile: ModelProfile, prompt: NormalizedPrompt, stage
 // crashed), we throw — the router catches it and falls forward to the
 // next model in the chain. Returning partial text would corrupt downstream
 // JSON.parse, which is worse than retrying.
-async function pollInternalResult(body: any, cause: unknown): Promise<{ text: string; usage?: any } | null> {
-  const internalCallId = body?.internalCallId;
-  if (!body?.internalPipelineCall || !internalCallId) return null;
+async function pollInternalResult(body: any, approval: any, cause: unknown, dispatchStarted: number): Promise<{ text: string; usage?: any } | null> {
+  const internalCallId = body?.internal_call_id;
+  if (!body?.internal_pipeline_call || !internalCallId) return null;
 
   const started = Date.now();
   const stage = body.stage || 'unknown';
-  const model = body.model || 'unknown';
+  const model = 'governed';
   const recoveryErrorCode = cause instanceof DOMException && cause.name === 'AbortError'
     ? 'request_timeout'
     : 'model_request_failed';
   let firstMissingAt: number | null = null;
-  while (Date.now() - started < INTERNAL_RESULT_POLL_MS) {
+  const recoveryDeadline = Math.max(
+    dispatchStarted + GATEWAY_DEADLINE_MS + RECOVERY_PROPAGATION_MS,
+    started + RECOVERY_PROPAGATION_MS
+  );
+  while (Date.now() < recoveryDeadline) {
     try {
       const res = await fetch('/api/model-result', {
         method: 'POST',
@@ -156,20 +124,22 @@ async function pollInternalResult(body: any, cause: unknown): Promise<{ text: st
         continue;
       }
       if (data?.status === 'done') {
-        await serverLog(body.runId, 'info', 'internal_result_recovered', {
+        await serverLog(body.run_id, 'info', 'internal_result_recovered', {
           stage,
           model,
           internal_call_id: internalCallId,
           duration_ms: Date.now() - started,
           response_chars: typeof data.text === 'string' ? data.text.length : 0,
         });
-        return { text: typeof data.text === 'string' ? data.text : '', usage: data.usage };
+        const output = data.output;
+        if (!await validOutput(output, body, approval)) return null;
+        return { text: output.text, usage: data.usage };
       }
       if (data?.status === 'error') {
         const errorCode = typeof data.message === 'string' && INTERNAL_ERROR_CODES.has(data.message)
           ? data.message
           : 'model_request_failed';
-        await serverLog(body.runId, 'error', 'internal_result_error', {
+        await serverLog(body.run_id, 'error', 'internal_result_error', {
           stage,
           model,
           internal_call_id: internalCallId,
@@ -182,7 +152,7 @@ async function pollInternalResult(body: any, cause: unknown): Promise<{ text: st
     }
   }
 
-  await serverLog(body.runId, 'warn', 'internal_result_timeout', {
+  await serverLog(body.run_id, 'warn', 'internal_result_timeout', {
     stage,
     model,
     internal_call_id: internalCallId,
@@ -192,10 +162,8 @@ async function pollInternalResult(body: any, cause: unknown): Promise<{ text: st
   return null;
 }
 
-async function postWithTimeout(url: string, body: any): Promise<{ text: string; usage?: any }> {
-  if (body?.internalPipelineCall && !body.internalCallId) {
-    body.internalCallId = newInternalCallId();
-  }
+async function postWithTimeout(url: string, body: any, approval: any): Promise<{ text: string; usage?: any }> {
+  const dispatchStarted = Date.now();
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
   try {
@@ -233,7 +201,10 @@ async function postWithTimeout(url: string, body: any): Promise<{ text: string; 
         if (frame.type === 'keepalive') continue;
         if (frame.type === 'text') continue; // accumulated server-side
         if (frame.type === 'done') {
-          finalText = typeof frame.text === 'string' ? frame.text : '';
+          const output = frame.output;
+          if (!await validOutput(output, body, approval)) {
+            streamError = 'INVALID_GOVERNED_OUTPUT';
+          } else finalText = output.text;
           finalUsage = frame.usage || null;
         } else if (frame.type === 'error') {
           streamError = typeof frame.message === 'string' ? frame.message : 'stream error';
@@ -247,7 +218,7 @@ async function postWithTimeout(url: string, body: any): Promise<{ text: string; 
     }
     return { text: finalText, usage: finalUsage };
   } catch (err) {
-    const recovered = await pollInternalResult(body, err);
+    const recovered = await pollInternalResult(body, approval, err, dispatchStarted);
     if (recovered) return recovered;
     throw err;
   } finally {
@@ -256,8 +227,7 @@ async function postWithTimeout(url: string, body: any): Promise<{ text: string; 
 }
 
 export async function callModel(profile: ModelProfile, prompt: NormalizedPrompt, stage: StageId, ctx: RunContext): Promise<{ text: string; usage?: any }> {
-  if (profile.provider === 'anthropic') return callAnthropic(profile, prompt, stage, ctx);
-  if (profile.provider === 'openai') return callOpenAI(profile, prompt, stage, ctx);
+  if (profile.provider === 'anthropic' || profile.provider === 'openai') return governedCall(profile, prompt, stage, ctx);
   throw new Error(`Unknown provider: ${(profile as any).provider}`);
 }
 
@@ -278,6 +248,7 @@ const tokenUsageFromProvider = (usage: any) => ({
 });
 
 export async function runStage(stage: StageId, prompt: NormalizedPrompt, ctx: RunContext): Promise<RunStageResult> {
+  if (prompt.images?.length) throw new Error('IMAGE_PAYLOAD_DISABLED: external image processing is disabled until local OCR/redaction exists');
   const chain = modelsFor(stage);
   const failures: Array<{ profile: ModelProfile; error: string }> = [];
   const stageStarted = Date.now();

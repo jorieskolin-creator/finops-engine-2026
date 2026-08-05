@@ -16,9 +16,9 @@ const apiDir = path.join(__dirname, 'api');
 
 const app = express();
 
-// Body limit must accommodate base64-encoded PDF pages sent to the model proxies.
-app.use(express.json({ limit: '50mb' }));
-app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+// Text-only stage approval intake. Images and base64 payloads are prohibited.
+app.use(express.json({ limit: '2mb' }));
+app.use(express.urlencoded({ extended: true, limit: '2mb' }));
 
 // Mount each api/*.js file at /api/<basename>. Dynamic import keeps the
 // Vercel handler signature intact — Express's (req, res) is compatible.

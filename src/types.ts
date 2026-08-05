@@ -282,6 +282,23 @@ export interface KnowledgeBaseRuntimeStatus {
 export type SourceChunkType = 'text' | 'pdf_page' | 'table_profile' | 'table_row' | 'image' | 'metadata';
 export type SourceRelevanceTier = 'high' | 'medium' | 'low' | 'unknown';
 
+export interface SourcePage {
+  schema_version: 'source_page_v1';
+  page_id: string;
+  page_number: number;
+  text: string;
+}
+
+export interface SourceRecord {
+  schema_version: 'source_record_v1';
+  source_id: string;
+  source_name: string;
+  kind: 'text' | 'pdf' | 'html' | 'csv' | 'tsv' | 'json';
+  text?: string;
+  pages?: SourcePage[];
+  parse_warnings?: string[];
+}
+
 export interface SourceChunkRoutingHint {
   domain: string;
   score: number;
@@ -316,7 +333,6 @@ export interface SourceRegistry {
 export interface SourcePacketManifestItem {
   chunk_id: string;
   source_id: string;
-  source_name: string;
   page_id?: string;
   page_number?: number;
   type: SourceChunkType;

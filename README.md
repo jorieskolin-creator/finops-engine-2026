@@ -63,8 +63,11 @@ The UI is public, but assessment and supporting API operations require an HMAC-s
 | `/api/login` | POST | Verify the shared password and issue an eight-hour HttpOnly, Secure, SameSite=Lax session cookie. |
 | `/api/logout` | POST | Clear the session cookie. |
 | `/api/session` | GET | Check the current session. |
-| `/api/openai-generate` | POST | Authenticated OpenAI Responses API proxy. |
-| `/api/anthropic-generate` | POST | Authenticated Anthropic Messages API proxy. |
+| `/api/governed-packet` | POST | Authenticated approval of versioned, sanitized text-only stage packets. |
+| `/api/openai-generate` | POST | Packet-ID-only governed OpenAI dispatch. |
+| `/api/anthropic-generate` | POST | Packet-ID-only governed Anthropic dispatch. |
+
+Milestone B uses structured source/page records and blocks image processing until local OCR/redaction is available. Approval is deterministic pattern-based risk reduction and an explicit policy decision; it is not proof that arbitrary source content is public. Approved packets record their classification method and approval basis. Approved packets and model recovery results are short-lived, bounded, process-local state: they are not durable or exactly-once. Redis/Postgres and durable workers remain explicitly deferred to Milestone C.
 | `/api/model-result` | POST | Recover a completed model response from transient process memory. |
 | `/api/kb-index` | GET | Build or return the cached remote reference-KB index. |
 | `/api/log` | POST | Write authenticated client pipeline events to server logs. |
@@ -76,8 +79,8 @@ The authentication implementation lives in `lib/auth.js`. The current shared-pas
 The current implementation provides the following controls and limitations:
 
 - Source files are parsed in the browser; the original files are not uploaded as files by this application.
-- Parsed source text and base64-encoded source images are sent through the server proxies to the configured OpenAI and Anthropic services. Provider-side storage and retention depend on the configured provider account and contract terms.
-- A deterministic text scan blocks recognized high-risk secret patterns before the main assessment. A model-assisted review checks distributed text samples and a bounded set of images. This is risk reduction, not comprehensive PII, image-secret, or data-classification prevention; source material must be reviewed before upload.
+- Only browser-extracted text is sent through the server proxies to the configured OpenAI and Anthropic services. Direct images are rejected, PDF pages are not rasterized, and scanned/visual-only pages are not processed because local OCR is unavailable. Provider-side storage and retention depend on the configured provider account and contract terms.
+- A deterministic pattern scan blocks recognized high-risk secret and contextual financial-value patterns before the main assessment. A model-assisted review checks distributed text samples. This is policy approval and risk reduction, not proof of public classification or comprehensive PII/data-classification prevention; source material must be reviewed before upload.
 - The completed report, including report-visible evidence, is stored in browser `sessionStorage` for crash recovery until the tab/session data is cleared.
 - Model output may be retained in process memory for up to 15 minutes to recover interrupted response streams. No durable server-side assessment database is implemented.
 - RunTrace excludes raw source documents, full prompts, and API keys, but it includes hashes, source references, and report-visible quote snippets.
@@ -91,18 +94,18 @@ The final hosting and authorization model is still an open design decision. The 
 
 ### Railway / long-lived Node process
 
-`railway.json` builds the Vite application and starts `server.js`. The Node adapter dynamically mounts `api/*.js`, accepts larger JSON bodies for base64 image payloads, serves `dist/`, and provides process-local model-result recovery.
+`railway.json` builds the Vite application and starts `server.js`. The Node adapter dynamically mounts `api/*.js`, serves `dist/`, and provides process-local model-result recovery.
 
-Current limitation: recovery state and the remote-KB cache are in memory. They are not shared across multiple processes or replicas and disappear on restart.
+Milestone B governed assessments require the operator to configure one long-lived, single-process, single-replica Railway instance. The repository does not enforce replica count. Recovery state and the remote-KB cache are in memory; they are not shared and disappear on restart.
 
 ### Vercel
 
-`vercel.json` builds the Vite client and registers `api/*.js` as functions. Normal streamed responses can work, but two limitations matter:
+`vercel.json` builds the Vite client and registers `api/*.js` as functions. The Milestone B governance flow is not compatible with independent function instances:
 
-1. `/api/model-result` uses module-local memory, which is not a reliable shared store across separate function invocations or instances.
-2. The application-level upload allowance can produce inline JSON/image requests larger than serverless request-body limits.
+1. Packet approval and packet-ID-only provider dispatch use a shared process-local packet store.
+2. `/api/model-result` uses module-local recovery memory; neither store is reliable across separate function invocations or instances.
 
-Until shared result storage and reference-based image transport are implemented, Vercel should be treated as a constrained prototype target rather than equivalent to the long-lived Node deployment.
+Vercel and any multi-process or multi-replica deployment are unsupported for Milestone B governed assessment dispatch. They may serve UI/prototype work, but governed assessments require the single-process Railway topology above until Milestone C adds shared durable state.
 
 ## Build and focused tests
 

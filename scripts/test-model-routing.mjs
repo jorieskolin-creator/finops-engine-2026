@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { authorizeDestination } from '../lib/governance.js';
 
 let ts;
 try {
@@ -125,6 +126,11 @@ assert.equal(roadmapChain[2].provider, 'anthropic');
 assert.equal(roadmapChain[2].id, 'claude-sonnet-4-6');
 
 for (const stage of Object.keys(STAGE_MODELS)) {
+  for (const profile of modelsFor(stage)) authorizeDestination(stage, profile.provider, profile.id, {
+    ...(profile.maxTokens ? { max_tokens: profile.maxTokens } : {}),
+    ...(profile.openaiReasoning ? { reasoning_effort: profile.openaiReasoning.effort } : {}),
+    ...(profile.anthropicThinking ? { thinking_budget_tokens: profile.anthropicThinking.budget_tokens } : {}),
+  });
   assert.equal(
     modelsFor(stage).some((profile) => profile.provider === 'gemini' || profile.id.includes('gemini')),
     false,
@@ -163,6 +169,11 @@ assert.equal(cheap.STAGE_MODELS.quality_gate.id, 'gpt-5.4-mini');
 
 for (const stage of Object.keys(cheap.STAGE_MODELS)) {
   const chain = cheap.modelsFor(stage);
+  for (const profile of chain) authorizeDestination(stage, profile.provider, profile.id, {
+    ...(profile.maxTokens ? { max_tokens: profile.maxTokens } : {}),
+    ...(profile.openaiReasoning ? { reasoning_effort: profile.openaiReasoning.effort } : {}),
+    ...(profile.anthropicThinking ? { thinking_budget_tokens: profile.anthropicThinking.budget_tokens } : {}),
+  });
   assert.equal(chain.at(-1).id, 'claude-sonnet-4-6', `${stage} should use Sonnet as the one cheap-mode backup`);
   assert.equal(
     chain.some((profile) => profile.id === 'claude-opus-4-7'),

@@ -10,7 +10,7 @@ import {
 import { bracketFromValidation, explainBracket } from "./confidenceBracket";
 import { runPhase1Audit } from "../orchestrator";
 import { knowledgeBaseService, BATCH_DEFINITIONS, FINOPS_TACTICS_LOCAL, FINOPS_TACTIC_ACTIVITY_PLAYBOOK, FINOPS_TAXONOMY_REGISTRY, buildTacticIdTable, validTacticIdSet } from "../knowledge_base";
-import { DiagnosticResult, Phase1AuditLogs, Phase2Validation, AuditItem, EvidenceQuote, EvidenceCategory, EVIDENCE_CATEGORIES, PersonaId, PERSONA_IDS, ImageInput } from "../types";
+import { DiagnosticResult, Phase1AuditLogs, Phase2Validation, AuditItem, EvidenceQuote, EvidenceCategory, EVIDENCE_CATEGORIES, PersonaId, PERSONA_IDS, SourceRecord } from "../types";
 import { generateSafetyAuditPrompt } from "./securityService";
 import { validatePhase1Output, validatePhase3Grounding } from "./validatorService";
 import { runQualityGate, runQualityGateExplanation } from "./qualityGateService";
@@ -33,6 +33,7 @@ import {
   buildDlpReviewPacket,
   buildDomainPackets,
   buildSourceRegistry,
+  renderPseudonymousSourceContext,
   scanRegistryDlp,
   sourceRegistryRuntimeStatus
 } from "./sourceRegistryService";
@@ -201,11 +202,11 @@ export interface AnalyzeOptions {
 }
 
 export const analyzeDocument = async (
-  text: string,
-  images: ImageInput[],
+  sources: SourceRecord[],
   onProgress: (stage: 'audit' | 'calc' | 'strategy', progress?: number) => void,
   options: AnalyzeOptions = {}
 ): Promise<DiagnosticResult> => {
+  const images: never[] = [];
   const runId = newRunId();
   const pipelineStarted = Date.now();
   const actuals: Record<string, string> = {
@@ -222,18 +223,14 @@ export const analyzeDocument = async (
 
   console.log(`[FinOps] === Pipeline start === run=${runId} deepMode=${!!options.deepMode}`);
   serverLog(runId, 'info', 'pipeline_start', {
-    source_chars: text.length,
-    images: images.length,
+    source_chars: sources.reduce((n,s) => n + (s.text?.length || 0) + (s.pages?.reduce((m,p)=>m+p.text.length,0) || 0), 0),
+    images: 0,
     model_mode: MODEL_ROUTING_MODE,
   });
 
   try {
-    const imagePayloadBytes = images.reduce((sum, img) => sum + img.data.length, 0);
-    if (images.length > 0) {
-      console.log(`[FinOps] Multimodal: ${images.length} image(s), ~${Math.round(imagePayloadBytes / 1024)} KB base64 payload.`);
-    }
-
-    const sourceRegistry = buildSourceRegistry(text, images);
+    const sourceRegistry = buildSourceRegistry(sources);
+    const text = renderPseudonymousSourceContext(sourceRegistry, 50000);
     const sourcePackets = buildDomainPackets(sourceRegistry);
     const dlpScan = scanRegistryDlp(sourceRegistry);
     const dlpReview = buildDlpReviewPacket(sourceRegistry);
@@ -249,7 +246,7 @@ export const analyzeDocument = async (
       sources: sourceRegistry.source_count,
       chunks: sourceRegistry.chunk_count,
       dlp_review_chunks: dlpReview.selected_chunk_count,
-      images: images.length,
+      images: 0,
     });
     for (const [domain, packet] of Object.entries(sourcePackets)) {
       serverLog(runId, packet.weak_coverage ? 'warn' : 'info', 'source_packet_created', {

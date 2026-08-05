@@ -1,5 +1,6 @@
 import { requireSession } from "../lib/auth.js";
 import { getInternalModelResult } from "../lib/internalModelResults.js";
+import { GovernanceError } from "../lib/governance.js";
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -14,7 +15,9 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'Missing required field: internalCallId' });
   }
 
-  const result = getInternalModelResult(internalCallId);
+  let result;
+  try { result = getInternalModelResult(internalCallId); }
+  catch (error) { if (error instanceof GovernanceError) return res.status(409).json({ status:'error', message:'INVALID_GOVERNED_OUTPUT' }); throw error; }
   if (!result) {
     return res.status(404).json({ status: 'missing' });
   }
@@ -26,7 +29,7 @@ export default async function handler(req, res) {
   }
   return res.status(200).json({
     status: 'done',
-    text: result.text || '',
+    output: result.output || null,
     usage: result.usage || null,
   });
 }

@@ -75,19 +75,19 @@ export const assessPdfParseQuality = (input: {
 
   const warnings: string[] = [];
   if (quality === 'mixed') {
-    warnings.push('Some PDF pages appeared image-heavy or sparse-text; visual pages were selectively included.');
+    warnings.push('Some PDF pages appeared image-heavy or sparse-text. Visual fallback is disabled; those pages were not visually inspected.');
   }
   if (quality === 'poor') {
-    warnings.push('PDF appears scanned or image-heavy; source coverage may depend on visual interpretation.');
+    warnings.push('PDF appears scanned or image-heavy. Visual fallback is disabled; sparse/scanned pages were not visually inspected.');
   }
   if (input.visualPagesSkipped > 0) {
-    warnings.push(`${input.visualPagesSkipped} visual candidate page(s) were not included because the image budget was reached or rendering failed.`);
+    warnings.push(`${input.visualPagesSkipped} visual candidate page(s) were not inspected because visual fallback is disabled.`);
   }
   if (input.truncatedTextPages) {
     warnings.push('PDF text extraction was capped before the end of the document.');
   }
   if (input.imageBudgetReached) {
-    warnings.push('PDF visual page extraction reached the encoded image budget.');
+    warnings.push('PDF image budget was not used because visual fallback is disabled.');
   }
 
   return {

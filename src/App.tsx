@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { analyzeDocument } from './services/analysisService';
 import { scanInputText, sanitizeInput } from './services/preFlightService';
-import { extractPagesFromPdf, imageFileToInput } from './services/pdfService';
+import { extractPagesFromPdf } from './services/pdfService';
 import type { PdfParseQuality } from './services/pdfService';
 import { renderDelimitedTableForAnalysis } from './services/tableService';
 import { downloadMasterDataReport, downloadRunTraceJson, downloadSummaryReport } from './services/exportService';
@@ -10,7 +10,7 @@ import { extractDiagnosticResultFromHtmlReport, isDiagnosticResultPayload, parse
 import { findGeneratedReportPrivacyFindings, scrubDiagnosticResultForPrivacy } from './services/privacyService';
 import { PerformanceMonitor } from './services/debugService';
 import { runFullDriftSuite } from './services/driftDetectionService';
-import { DiagnosticResult, ScanResult, PersonaId, PERSONA_IDS, PERSONA_LABELS, ImageInput } from './types';
+import { DiagnosticResult, ScanResult, PersonaId, PERSONA_IDS, PERSONA_LABELS, SourcePage, SourceRecord } from './types';
 import { METRIC_DESCRIPTIONS } from './constants';
 import { GaugeCard, AuditGrid, StrategicRoadmap, ComparisonChart, ReferenceLibrary, QualityGateBanner, BenchmarkingChart, TransferProtocol, MarkdownRenderer, NeuralLoadingGrid } from './components/DashboardComponents';
 import { ReportView } from './components/ReportView';
@@ -157,14 +157,13 @@ interface UploadedFile {
   name: string;
   size: number;
   text: string;
-  images?: ImageInput[];
-  kind?: 'pdf' | 'html' | 'image' | 'csv' | 'tsv' | 'json';
+  pages?: SourcePage[];
+  kind?: 'pdf' | 'html' | 'csv' | 'tsv' | 'json';
   status: 'parsed' | 'error';
   scan?: ScanResult;
   parseMetadata?: {
     totalPages?: number;
     parsedTextPages?: number;
-    renderedImagePages?: number;
     rowCount?: number;
     parseQuality?: PdfParseQuality;
     warnings: string[];
@@ -204,7 +203,7 @@ const PrivacyProtocolCard = () => (
       ))}
     </div>
     <p className="mt-5 text-center text-[11px] leading-relaxed text-slate-400 max-w-4xl mx-auto">
-      Parsed text and images are transmitted to the configured OpenAI and Anthropic services for assessment. Provider retention depends on the configured account terms. Generated reports are kept in browser session storage for crash recovery, and model output may be cached briefly in server memory.
+      Only extracted text that passes the governed packet policy is transmitted to the configured OpenAI and Anthropic services. Direct images and scanned PDF pages are not processed because local OCR is unavailable. Provider retention depends on the configured account terms. Generated reports are kept in browser session storage for crash recovery, and model output may be cached briefly in server memory.
     </p>
   </div>
 );
@@ -479,7 +478,6 @@ const App: React.FC = () => {
   const [files, setFiles] = useState<UploadedFile[]>([]);
   const [parsing, setParsing] = useState(false);
   const [aggregatedText, setAggregatedText] = useState('');
-  const [aggregatedImages, setAggregatedImages] = useState<ImageInput[]>([]);
   const [result, setResult] = useState<DiagnosticResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [loadingStage, setLoadingStage] = useState<'audit' | 'calc' | 'strategy' | null>(null);
@@ -613,7 +611,6 @@ const App: React.FC = () => {
   const MIN_FILES = 2;
   const MAX_FILES = 20;
   const MAX_TOTAL_UPLOAD_MB = 25;
-  const MAX_IMAGE_FILES = 5;
   const MAX_TOTAL_UPLOAD_BYTES = MAX_TOTAL_UPLOAD_MB * 1024 * 1024;
 
   const makeLowRelevanceWarning = (scan: ScanResult, kind?: UploadedFile['kind']): ScanResult => ({
@@ -637,28 +634,9 @@ const App: React.FC = () => {
 
   const parseQualityLabel = (quality?: PdfParseQuality['quality']): string | null => {
     if (quality === 'good') return 'Good text extraction';
-    if (quality === 'mixed') return 'Mixed extraction: some visual/scanned pages included';
-    if (quality === 'poor') return 'Poor extraction: likely scanned/image-heavy PDF';
+    if (quality === 'mixed') return 'Mixed extraction: sparse/scanned pages were not visually inspected';
+    if (quality === 'poor') return 'Poor extraction: visual fallback is disabled';
     return null;
-  };
-
-  const buildParseQualitySourceNote = (file: UploadedFile): string => {
-    const parseQuality = file.parseMetadata?.parseQuality;
-    if (!parseQuality || parseQuality.quality === 'good') return '';
-    const warnings = parseQuality.warnings.length > 0
-      ? parseQuality.warnings.join(' ')
-      : 'PDF text extraction may be incomplete.';
-    return [
-      '[SOURCE_PARSE_QUALITY]',
-      `PDF parse quality: ${parseQuality.quality}.`,
-      `Text coverage ratio: ${Math.round(parseQuality.textCoverageRatio * 100)}%.`,
-      `Sparse text pages: ${parseQuality.sparseTextPages}.`,
-      `Visual pages included: ${parseQuality.visualPagesIncluded}; visual candidates skipped: ${parseQuality.visualPagesSkipped}.`,
-      `Likely scanned PDF: ${parseQuality.likelyScannedPdf ? 'yes' : 'no'}.`,
-      `Warning: ${warnings}`,
-      'Use source evidence cautiously where PDF text extraction may be incomplete; do not treat this parse-quality note as a FinOps maturity finding.',
-      '[/SOURCE_PARSE_QUALITY]'
-    ].join('\n');
   };
 
   const sourceParseWarningsForFiles = (sourceFiles: UploadedFile[]): string[] => {
@@ -676,33 +654,20 @@ const App: React.FC = () => {
   useEffect(() => {
     const combined = files
       .filter(f => f.text && f.text.length > 0)
-      .map(f => {
-        const parseQualityNote = buildParseQualitySourceNote(f);
-        return `\n<DOCUMENT name="${f.name}">\n${parseQualityNote ? `${parseQualityNote}\n\n` : ''}${f.text}\n</DOCUMENT>\n`;
-      })
+      .map(f => f.text)
       .join('\n');
     setAggregatedText(combined);
-    const images = files.flatMap(f => f.images || []);
-    setAggregatedImages(images);
   }, [files]);
 
   useEffect(() => {
-    if (!aggregatedText && aggregatedImages.length === 0) {
+    if (!aggregatedText) {
       setScanResult({ score: 0, status: 'Insufficient', message: 'Upload Required', details: [], canRun: false });
       return;
     }
     const timer = setTimeout(() => {
       PerformanceMonitor.start('GlobalScan');
-      const hasImages = aggregatedImages.length > 0;
-      const globalScan = aggregatedText
-        ? scanInputText(aggregatedText)
-        : { score: 60, status: 'PassWithWarning' as const, message: 'Image-only input', details: [`${aggregatedImages.length} image(s) submitted; LLM DLP will validate relevance.`], canRun: true };
-      if (hasImages && !globalScan.canRun) {
-        globalScan.canRun = true;
-        globalScan.status = 'PassWithWarning';
-        globalScan.message = globalScan.message || 'Image content present';
-        globalScan.details = [...globalScan.details, `${aggregatedImages.length} image(s) attached; text keyword scan bypassed.`];
-      } else if (!globalScan.canRun && files.length > 0) {
+      const globalScan = scanInputText(aggregatedText);
+      if (!globalScan.canRun && files.length > 0) {
         globalScan.canRun = true;
         globalScan.status = 'PassWithWarning';
         globalScan.message = 'Low relevance warning';
@@ -717,7 +682,7 @@ const App: React.FC = () => {
         globalScan.canRun = false;
         globalScan.message = files.length < MIN_FILES ? "Need more files" : "Too many files";
       }
-      const lowSignalFiles = files.filter(f => f.kind !== 'image' && f.scan && (f.scan.status === 'Insufficient' || f.scan.status === 'PassWithWarning'));
+      const lowSignalFiles = files.filter(f => f.scan && (f.scan.status === 'Insufficient' || f.scan.status === 'PassWithWarning'));
       if (lowSignalFiles.length > 0) {
         globalScan.status = globalScan.status === 'Ready' ? 'PassWithWarning' : globalScan.status;
         globalScan.details.push(`${lowSignalFiles.length} file(s) have low FinOps keyword signal and will be assessed with evidence-gated confidence.`);
@@ -726,7 +691,7 @@ const App: React.FC = () => {
       PerformanceMonitor.end('GlobalScan');
     }, 300);
     return () => clearTimeout(timer);
-  }, [aggregatedText, aggregatedImages, files]);
+  }, [aggregatedText, files]);
 
   const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
     if (!event.target.files) return;
@@ -800,13 +765,8 @@ const App: React.FC = () => {
       return;
     }
 
-    // Cap on JPEG/PNG screenshot files (independent of PDF-derived images,
-    // which scale with the source document). Counted across existing +
-    // incoming images so a second upload can't sneak past the limit.
-    const existingImageCount = files.filter(f => f.kind === 'image').length;
-    const incomingImageCount = newFiles.filter(f => f.type.startsWith('image/')).length;
-    if (existingImageCount + incomingImageCount > MAX_IMAGE_FILES) {
-      setError(`Maximum ${MAX_IMAGE_FILES} image files (PNG/JPG) per assessment. You have ${existingImageCount}; trying to add ${incomingImageCount}.`);
+    if (newFiles.some(f => f.type.startsWith('image/') || /\.(png|jpe?g)$/i.test(f.name))) {
+      setError('Direct image uploads are disabled. Only extracted text is processed; local OCR is unavailable.');
       return;
     }
 
@@ -816,23 +776,21 @@ const App: React.FC = () => {
     try {
       for (const file of newFiles) {
         let text = "";
-        let images: ImageInput[] | undefined;
         let kind: UploadedFile['kind'] = undefined;
         let parseMetadata: UploadedFile['parseMetadata'] | undefined;
         const lowerName = file.name.toLowerCase();
 
         if (file.type === 'application/pdf' || lowerName.endsWith('.pdf')) {
-          const { text: pdfText, images: pdfImages, metadata } = await extractPagesFromPdf(file);
+          const { text: pdfText, pages, metadata } = await extractPagesFromPdf(file);
           text = pdfText;
-          images = pdfImages;
-          kind = 'pdf';
           parseMetadata = {
             totalPages: metadata.totalPages,
             parsedTextPages: metadata.parsedTextPages,
-            renderedImagePages: metadata.renderedImagePages,
             parseQuality: metadata.parseQuality,
             warnings: metadata.warnings
           };
+          (file as any).__structuredPages = pages;
+          kind = 'pdf';
         } else if (file.type === 'text/html' || lowerName.endsWith('.html')) {
           const rawHtml = await file.text();
           text = extractTextFromHtml(rawHtml);
@@ -853,13 +811,8 @@ const App: React.FC = () => {
           const raw = await file.text();
           text = `Format: JSON\n\n${raw}`;
           kind = 'json';
-        } else if (file.type.startsWith('image/')) {
-          const img = await imageFileToInput(file);
-          images = [img];
-          text = `[Image input: ${file.name}]`;
-          kind = 'image';
         } else {
-          throw new Error(`File ${file.name} is not a supported format (PDF, HTML, CSV, TSV, JSON, PNG, JPG).`);
+          throw new Error(`File ${file.name} is not a supported format (PDF, HTML, CSV, TSV, JSON).`);
         }
 
         processedFiles.push({
@@ -867,10 +820,10 @@ const App: React.FC = () => {
           name: file.name,
           size: file.size,
           text,
-          images,
+          pages: (file as any).__structuredPages,
           kind,
           status: 'parsed',
-          scan: scanParseableFile(text, kind, Boolean(images?.length)),
+          scan: scanParseableFile(text, kind, false),
           parseMetadata
         });
       }
@@ -885,16 +838,17 @@ const App: React.FC = () => {
 
   const removeFile = (id: string) => setFiles(files.filter(f => f.id !== id));
 
-  const runAnalyze = async (opts?: { textOverride?: string; imagesOverride?: ImageInput[]; label?: string }) => {
+  const runAnalyze = async (opts?: { textOverride?: string; sourcesOverride?: SourceRecord[]; label?: string }) => {
     setLoading(true);
     setLoadingStage('audit');
     setAuditProgress(0);
     setError(null);
     PerformanceMonitor.start('FullAnalysis');
     try {
-      const safeText = opts?.textOverride ?? sanitizeInput(aggregatedText);
-      const images = opts?.imagesOverride ?? aggregatedImages;
-      const data = await analyzeDocument(safeText, images, (stage, progress) => {
+      const sources: SourceRecord[] = opts?.sourcesOverride ?? (opts?.textOverride !== undefined
+        ? [{ schema_version:'source_record_v1', source_id:'src-001', source_name:opts.label || 'fixture', kind:'text', text:sanitizeInput(opts.textOverride) }]
+        : files.map((file,index) => ({ schema_version:'source_record_v1', source_id:`src-${String(index+1).padStart(3,'0')}`, source_name:file.name, kind:file.kind || 'text', parse_warnings:file.parseMetadata?.warnings || file.parseMetadata?.parseQuality?.warnings, ...(file.pages?.length ? {pages:file.pages} : {text:sanitizeInput(file.text)}) })));
+      const data = await analyzeDocument(sources, (stage, progress) => {
         setLoadingStage(stage);
         if (progress !== undefined) setAuditProgress(progress);
       }, { deepMode });
@@ -917,10 +871,8 @@ const App: React.FC = () => {
   };
 
   const startDriftTest = () => {
-    const combined = DRIFT_FIXTURES
-      .map(f => `\n<DOCUMENT name="${f.name}">\n${f.text}\n</DOCUMENT>\n`)
-      .join('\n');
-    runAnalyze({ textOverride: sanitizeInput(combined), imagesOverride: [], label: DRIFT_LABEL });
+    const sources = DRIFT_FIXTURES.map((f,index): SourceRecord => ({ schema_version:'source_record_v1', source_id:`src-${String(index+1).padStart(3,'0')}`, source_name:f.name, kind:'text', text:sanitizeInput(f.text) }));
+    runAnalyze({ sourcesOverride:sources, label: DRIFT_LABEL });
   };
 
   const startTier1Fixture = (packId: string) => {
@@ -932,8 +884,8 @@ const App: React.FC = () => {
       setShowLogin(true);
       return;
     }
-    const wrapped = `\n<DOCUMENT name="${fixture.name}">\n${fixture.text}\n</DOCUMENT>\n`;
-    runAnalyze({ textOverride: sanitizeInput(wrapped), imagesOverride: [], label: `Tier 1 Fixture — ${fixture.label}` });
+    const source: SourceRecord = { schema_version:'source_record_v1', source_id:'src-001', source_name:fixture.name, kind:'text', text:sanitizeInput(fixture.text) };
+    runAnalyze({ sourcesOverride:[source], label: `Tier 1 Fixture — ${fixture.label}` });
   };
 
   const startPerPackDrift = async () => {
@@ -957,8 +909,8 @@ const App: React.FC = () => {
         setPerPackCurrent(i + 1);
         setPerPackCurrentLabel(fixture.label);
         console.log(`[PerPackDrift] (${i + 1}/${PER_PACK_FIXTURES.length}) ${fixture.pack_id}`);
-        const safeText = sanitizeInput(`\n<DOCUMENT name="${fixture.name}">\n${fixture.text}\n</DOCUMENT>\n`);
-        const data = await analyzeDocument(safeText, [], () => {});
+        const source: SourceRecord = { schema_version:'source_record_v1', source_id:'src-001', source_name:fixture.name, kind:'text', text:sanitizeInput(fixture.text) };
+        const data = await analyzeDocument([source], () => {});
         if (!data.phase_2_validation?.metrics) {
           throw new Error(`Analysis for ${fixture.pack_id} returned incomplete data.`);
         }
@@ -997,7 +949,7 @@ const App: React.FC = () => {
   };
 
   const handleAnalyze = async () => {
-    if ((!aggregatedText && aggregatedImages.length === 0) || !scanResult.canRun) return;
+    if (!aggregatedText || !scanResult.canRun) return;
     if (!authenticated) {
       pendingAnalyzeRef.current = true;
       setShowLogin(true);
@@ -1019,7 +971,6 @@ const App: React.FC = () => {
   const startEngineSimulation = () => {
     runAnalyze({
       textOverride: sanitizeInput(demoSimulation),
-      imagesOverride: [],
       label: DEMO_SIMULATION_LABEL
     });
   };
@@ -1038,7 +989,6 @@ const App: React.FC = () => {
     setResult(null);
     setFiles([]);
     setAggregatedText('');
-    setAggregatedImages([]);
     setError(null);
     setLoadingStage(null);
     setActiveTab('overview');
@@ -1455,7 +1405,7 @@ const App: React.FC = () => {
                                 </div>
                                 {file.parseMetadata && (
                                   <div className="text-[10px] text-slate-500 mt-1 truncate max-w-[240px]">
-                                    {file.kind === 'pdf' && `${file.parseMetadata.parsedTextPages}/${file.parseMetadata.totalPages} pages parsed · ${file.parseMetadata.renderedImagePages} visual pages`}
+                                    {file.kind === 'pdf' && `${file.parseMetadata.parsedTextPages}/${file.parseMetadata.totalPages} pages parsed as text · visual fallback disabled`}
                                     {(file.kind === 'csv' || file.kind === 'tsv') && `${file.parseMetadata.rowCount} table rows parsed`}
                                     {file.parseMetadata.warnings.length > 0 && ` · ${file.parseMetadata.warnings[0]}`}
                                   </div>
@@ -1494,14 +1444,14 @@ const App: React.FC = () => {
                           Upload Cloud Cost Reports, FinOps Policies, Optimization Plans, Governance Docs, Architecture Reviews.
                         </p>
                         <div className="z-10 mt-4 flex flex-wrap justify-center gap-1.5 max-w-md">
-                          {['PDF', 'HTML', 'CSV', 'TSV', 'JSON', 'PNG', 'JPG'].map(fmt => (
+                          {['PDF', 'HTML', 'CSV', 'TSV', 'JSON'].map(fmt => (
                             <span key={fmt} className="text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded-md bg-slate-800/80 border border-slate-700/60 text-slate-300">
                               {fmt}
                             </span>
                           ))}
                         </div>
                         <p className="z-10 text-xs text-slate-500 mt-3 text-center max-w-md">
-                          {MAX_TOTAL_UPLOAD_MB} MB total set · {MIN_FILES}–{MAX_FILES} artifacts · PDFs parsed up to 100 pages · up to {MAX_IMAGE_FILES} PNG/JPG screenshots
+                          {MAX_TOTAL_UPLOAD_MB} MB total set · {MIN_FILES}–{MAX_FILES} artifacts · PDFs parsed as extracted text up to 100 pages
                         </p>
                       </div>
                     )}
@@ -1511,7 +1461,7 @@ const App: React.FC = () => {
                     <div className="flex items-center gap-4">
                       <button onClick={() => fileInputRef.current?.click()} disabled={files.length >= MAX_FILES} className="text-sm font-bold text-slate-400 hover:text-white transition-colors flex items-center gap-2 hover:bg-white/5 px-4 py-2 rounded-lg">
                         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 6v6m0 0v6m0-6h6m-6 0H6" /></svg>
-                        Add Files (PDF, HTML, CSV, TSV, JSON, PNG, JPG)
+                        Add Files (PDF, HTML, CSV, TSV, JSON)
                       </button>
                       <label
                         title="Forces synthesis to use Opus 4.7 (slower, more expensive, deeper roadmap reasoning). Auto-enabled for crawl-stage orgs with high anti-pattern burden."
@@ -1526,7 +1476,7 @@ const App: React.FC = () => {
                         <span className="font-bold">Deep analysis (Opus 4.7)</span>
                       </label>
                     </div>
-                    <input type="file" ref={fileInputRef} onChange={handleFileSelect} className="hidden" accept=".pdf,.html,.csv,.tsv,.json,.png,.jpg,.jpeg,text/csv,text/tab-separated-values,image/png,image/jpeg" multiple />
+                    <input type="file" ref={fileInputRef} onChange={handleFileSelect} className="hidden" accept=".pdf,.html,.csv,.tsv,.json,text/csv,text/tab-separated-values" multiple />
                     <button onClick={handleAnalyze} disabled={!scanResult.canRun || files.length < MIN_FILES || files.length > MAX_FILES} className={`px-8 py-4 rounded-xl font-bold shadow-2xl transition-all transform active:scale-[0.98] flex items-center gap-3 border ${!scanResult.canRun || files.length < MIN_FILES || files.length > MAX_FILES ? 'bg-slate-800 text-slate-500 border-slate-700 cursor-not-allowed shadow-none' : 'text-slate-900 bg-white border-white hover:bg-emerald-400 hover:border-emerald-400 hover:shadow-[0_0_30px_rgba(16,185,129,0.4)]'}`}>
                       {!scanResult.canRun || files.length < MIN_FILES || files.length > MAX_FILES ? (
                         <span>{files.length < MIN_FILES ? `Add ${MIN_FILES - files.length} more files` : files.length > MAX_FILES ? "Limit Exceeded" : "Checks Failed"}</span>

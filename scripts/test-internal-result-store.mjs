@@ -1,47 +1,21 @@
 import assert from 'node:assert/strict';
-import {
-  clearInternalModelResultsForTests,
-  completeInternalModelResult,
-  failInternalModelResult,
-  getInternalModelResult,
-  registerInternalModelResult,
-} from '../lib/internalModelResults.js';
+import { clearInternalModelResultsForTests,completeInternalModelResult,failInternalModelResult,getInternalModelResult,registerInternalModelResult } from '../lib/internalModelResults.js';
+import { inspectOutput } from '../lib/governance.js';
 
 clearInternalModelResultsForTests();
-
-registerInternalModelResult('call-pending', {
-  runId: 'run-1',
-  provider: 'anthropic',
-  stage: 'synthesis',
-  model: 'claude-sonnet-4-6',
-});
-assert.equal(getInternalModelResult('call-pending').status, 'pending');
-
-completeInternalModelResult('call-done', 'final text', { output_tokens: 12 }, {
-  runId: 'run-2',
-  provider: 'openai',
-  stage: 'fact_check',
-  model: 'gpt-5.5',
-});
-const done = getInternalModelResult('call-done');
-assert.equal(done.status, 'done');
-assert.equal(done.text, 'final text');
-assert.equal(done.usage.output_tokens, 12);
-assert.equal(done.model, 'gpt-5.5');
-
-failInternalModelResult('call-error', 'upstream failed', {
-  runId: 'run-3',
-  provider: 'anthropic',
-  stage: 'evidence_check',
-  model: 'claude-opus-4-7',
-});
-const error = getInternalModelResult('call-error');
-assert.equal(error.status, 'error');
-assert.equal(error.message, 'upstream failed');
-
-assert.equal(getInternalModelResult('missing-call'), null);
-
+const packet={packet_id:'packet-1',packet_hash:'a'.repeat(64),run_id:'run-1',stage:'synthesis',provider:'anthropic',model:'claude-sonnet-4-6'};
+const metadata={runId:packet.run_id,provider:packet.provider,stage:packet.stage,model:packet.model,packetId:packet.packet_id,packetHash:packet.packet_hash};
+registerInternalModelResult('call-1',metadata);
+assert.throws(()=>registerInternalModelResult('call-1',metadata),/COLLISION/);
+const output=inspectOutput('final text',packet,1000);
+completeInternalModelResult('call-1',output,{output_tokens:12},metadata);
+assert.equal(getInternalModelResult('call-1').output.text,'final text');
+assert.equal(getInternalModelResult('call-1').packetId,'packet-1');
+registerInternalModelResult('call-stale',metadata);
+assert.throws(()=>completeInternalModelResult('call-stale',{...output,run_id:'other'},null,metadata),/INVALID_GOVERNED_OUTPUT/);
+registerInternalModelResult('call-hash',metadata);
+assert.throws(()=>completeInternalModelResult('call-hash',{...output,text:'tampered'},null,metadata),/INVALID_GOVERNED_OUTPUT/);
+registerInternalModelResult('call-error',metadata);failInternalModelResult('call-error','upstream failed',metadata);assert.equal(getInternalModelResult('call-error').status,'error');
+assert.equal(getInternalModelResult('missing'),null);
 clearInternalModelResultsForTests();
-assert.equal(getInternalModelResult('call-done'), null);
-
-console.log('internal result store unit tests passed');
+console.log('internal result integrity tests passed');
