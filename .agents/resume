@@ -9,9 +9,19 @@ command -v node >/dev/null 2>&1 || {
   echo "[resume] Node.js is unavailable; create a fresh orb to rerun .agents/setup" >&2
   exit 1
 }
+command -v npm >/dev/null 2>&1 || {
+  echo "[resume] npm is unavailable; create a fresh orb to rerun .agents/setup" >&2
+  exit 1
+}
 [[ -d node_modules ]] || {
   echo "[resume] node_modules is missing; create a fresh orb to rerun .agents/setup" >&2
   exit 1
 }
 
-echo "[resume] Ready; this repository has no backing services to reconnect"
+echo "[resume] Verifying the installed dependency tree"
+npm ls --depth=0 --silent >/dev/null || {
+  echo "[resume] node_modules is stale or incomplete; create a fresh orb to rerun .agents/setup" >&2
+  exit 1
+}
+
+echo "[resume] Ready; no local backing services are managed (Railway PostgreSQL/Redis are runtime dependencies)"
