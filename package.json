@@ -28,6 +28,7 @@
     "test:tactic-grounding": "node scripts/test-tactic-grounding.mjs",
     "test:tactic-activity-playbook": "node scripts/test-tactic-activity-playbook.mjs",
     "test:kb-index": "node scripts/test-kb-index.mjs",
+    "test:acquisition-quality": "node scripts/test-acquisition-quality.mjs",
     "test:source-registry": "node scripts/test-source-registry-packetizer.mjs",
     "test:governance": "node scripts/test-governance.mjs",
     "test:dlp-distributed": "node scripts/test-dlp-distributed-sampling.mjs",

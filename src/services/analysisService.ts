@@ -39,6 +39,7 @@ import {
   sourceRegistryRuntimeStatus
 } from "./sourceRegistryService";
 import { buildRunTrace, clearStageTraces, consumeStageTraces, summarizeRunTrace } from "./runTraceService";
+import { acquisitionQualityPersistence, buildAcquisitionQualitySnapshot } from "./acquisitionQualityService";
 
 const FACT_CHECK_MAX_RETRIES = 2;
 const ID_VALIDATION_MAX_REGENS = 2;
@@ -1041,8 +1042,16 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => `  ${cat}
     });
     finalResult.meta.run_trace = runTrace;
     finalResult.meta.run_trace_summary = summarizeRunTrace(runTrace);
+    const acquisitionQuality = buildAcquisitionQualitySnapshot({
+      logs: auditLogs,
+      phase2: validationData,
+      sourceRegistry: sourceRegistryStatus,
+      knowledgeBase: referenceKbIndex.status,
+      runTrace
+    });
+    finalResult.meta.acquisition_quality = acquisitionQuality;
     completionIntent = true;
-    await completeRun(runId);
+    await completeRun(runId, acquisitionQualityPersistence(acquisitionQuality, sourceRegistryStatus));
     return finalResult;
 
   } catch (error: any) {

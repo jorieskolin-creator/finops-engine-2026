@@ -71,6 +71,10 @@ assert.match(exportSource, /roadmap-how-label">How/, 'HTML export should label a
 assert.match(exportSource, /renderDomainSignalOverview/, 'HTML exports should render the domain signal overview');
 assert.match(exportSource, /Domain Signal Overview/, 'HTML exports should include the domain signal title');
 assert.match(exportSource, /Anti-pattern finding rate/, 'HTML exports should label anti-pattern traffic lights');
+assert.match(exportSource, /Acquisition Quality &amp; Readiness/, 'Master Data should visibly render acquisition quality');
+assert.match(exportSource, /Evidence coverage measures how much of the assessment surface was tested/, 'Master Data should distinguish coverage from density');
+assert.match(exportSource, /observability-only in this milestone/, 'Master Data should disclose that acquisition readiness does not alter the Quality Gate');
+assert.match(exportSource, /renderAcquisitionQuality\(result\)/, 'Master Data generation should include the acquisition quality section');
 
 console.log(functionalChecksRan
   ? 'report rendering unit tests passed'

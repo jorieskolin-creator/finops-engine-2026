@@ -10,6 +10,7 @@ import type {
   SourcePacketManifestItem,
   SourceRegistry,
   SourceRegistryRuntimeStatus,
+  SourceExtractionQuality,
   SourceRelevanceTier
 } from '../types';
 
@@ -65,6 +66,70 @@ const escapeXml = (value: string): string => value
   .replace(/"/g, '&quot;');
 
 const normalize = (value: string): string => value.replace(/\s+/g, ' ').trim();
+const clampPercent = (value: number): number => Math.min(100, Math.max(0, Math.round(value)));
+
+const buildExtractionQuality = (records: SourceRecord[]): SourceExtractionQuality => {
+  const sources = records.map(record => {
+    const metadata = record.extraction || {
+      unit: 'document' as const,
+      total_units: 1,
+      processed_units: 1,
+      truncated: false
+    };
+    const unitCoverage = metadata.total_units === 0
+      ? 1
+      : Math.min(1, metadata.processed_units / metadata.total_units);
+    const textCoverage = metadata.text_coverage_ratio === undefined
+      ? 1
+      : Math.min(1, Math.max(0, metadata.text_coverage_ratio));
+    const completeness = clampPercent(unitCoverage * textCoverage * 100);
+    const status = completeness === 100 && !metadata.truncated
+      ? 'COMPLETE' as const
+      : completeness === 0
+        ? 'FAILED' as const
+        : 'PARTIAL' as const;
+    const warningCodes: SourceExtractionQuality['sources'][number]['warning_codes'] = [
+      ...((record.parse_warnings || []).length > 0 ? ['PARSE_WARNING' as const] : []),
+      ...(metadata.truncated ? ['TRUNCATED' as const] : []),
+      ...((metadata.sparse_units || 0) > 0 ? ['SPARSE_CONTENT' as const] : []),
+      ...(metadata.quality === 'mixed' ? ['MIXED_QUALITY' as const] : []),
+      ...(metadata.quality === 'poor' ? ['POOR_QUALITY' as const] : [])
+    ];
+    return {
+      source_id: record.source_id,
+      source_name: record.source_name,
+      kind: record.kind,
+      completeness,
+      status,
+      unit: metadata.unit,
+      total_units: metadata.total_units,
+      processed_units: metadata.processed_units,
+      text_coverage_ratio: metadata.text_coverage_ratio,
+      sparse_units: metadata.sparse_units,
+      truncated: metadata.truncated,
+      quality: metadata.quality,
+      warning_count: (record.parse_warnings || []).length,
+      warning_codes: Array.from(new Set(warningCodes))
+    };
+  });
+  const overallCompleteness = sources.length > 0
+    ? clampPercent(sources.reduce((sum, source) => sum + source.completeness, 0) / sources.length)
+    : 0;
+  const status = overallCompleteness === 100 && sources.every(source => source.status === 'COMPLETE')
+    ? 'COMPLETE' as const
+    : overallCompleteness === 0
+      ? 'FAILED' as const
+      : 'PARTIAL' as const;
+  return {
+    overall_completeness: overallCompleteness,
+    status,
+    warning_count: sources.reduce((sum, source) => sum + source.warning_count, 0),
+    sources,
+    blocking_reasons: sources
+      .filter(source => source.status !== 'COMPLETE')
+      .map(source => `${source.source_id}: extraction ${source.status.toLowerCase()} (${source.completeness}%)`)
+  };
+};
 
 const splitLongText = (text: string): Array<{ text: string; start: number; end: number }> => {
   const normalized = text.trim();
@@ -152,7 +217,18 @@ const validateSourceRecords = (records: SourceRecord[]): void => {
       || typeof record.source_name !== 'string' || record.source_name.length === 0 || record.source_name.length > 500
       || !SOURCE_KINDS.has(record.kind)
       || (record.text !== undefined && typeof record.text !== 'string')
-      || (record.parse_warnings !== undefined && (!Array.isArray(record.parse_warnings) || record.parse_warnings.some(warning => typeof warning !== 'string' || warning.length > 1000)))) {
+      || (record.parse_warnings !== undefined && (!Array.isArray(record.parse_warnings) || record.parse_warnings.some(warning => typeof warning !== 'string' || warning.length > 1000)))
+      || (record.extraction !== undefined && (
+        !['document', 'page', 'row'].includes(record.extraction.unit)
+        || !Number.isInteger(record.extraction.total_units) || record.extraction.total_units < 0
+        || !Number.isInteger(record.extraction.processed_units) || record.extraction.processed_units < 0
+        || record.extraction.processed_units > record.extraction.total_units
+        || (record.extraction.text_coverage_ratio !== undefined
+          && (!Number.isFinite(record.extraction.text_coverage_ratio)
+            || record.extraction.text_coverage_ratio < 0
+            || record.extraction.text_coverage_ratio > 1))
+        || typeof record.extraction.truncated !== 'boolean'
+      ))) {
       throw new Error('INVALID_SOURCE_RECORD');
     }
     sourceIds.add(record.source_id);
@@ -244,7 +320,8 @@ export const buildSourceRegistry = (records: SourceRecord[]): SourceRegistry => 
     source_count: new Set(chunks.map(chunk => chunk.source_id)).size,
     chunk_count: chunks.length,
     chunks,
-    warnings
+    warnings,
+    extraction: buildExtractionQuality(records)
   };
 };
 
@@ -477,6 +554,7 @@ export const sourceRegistryRuntimeStatus = (
   dlp_review_chunk_count: dlpReviewChunkCount,
   dlp_high_risk_hits: dlpScan.high_risk_hits.reduce((sum, hit) => sum + hit.count, 0),
   dlp_caution_hits: dlpScan.caution_hits.reduce((sum, hit) => sum + hit.count, 0),
+  extraction: registry.extraction,
   packets: Object.fromEntries(Object.entries(packets).map(([domain, packet]) => [domain, {
     included_chunk_count: packet.included_chunk_count,
     total_candidate_chunks: packet.total_candidate_chunks,

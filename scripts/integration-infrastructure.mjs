@@ -124,7 +124,14 @@ try {
     provider: packet.provider,
     model: packet.model,
   });
-  const completed = await lifecycle.transition(run.run_id, 'completed');
+  const completed = await lifecycle.completeWithQuality(run.run_id, {
+    schema_version: 'acquisition_quality_snapshot_v1', formula_version: 'acquisition_quality_formula_v1',
+    extraction_completeness: 100, evidence_coverage: 100, evidence_density: 100,
+    provenance_integrity: 100, kb_completeness: 100, evidence_packet_status: 'READY',
+    knowledge_packet_status: 'READY', acquisition_status: 'READY', security_status: 'PASS',
+    extraction_incomplete_count: 0, weak_source_packet_count: 0, kb_blocking_count: 0,
+    unresolved_provenance_count: 0,
+  });
   assert.equal(completed.cleanup_status, 'verified');
   assert.equal(await redis.getActivePacket(run.run_id, packet.packet_id), null);
   assert.equal(await redis.getResult(run.run_id, attempt.attempt_id), null);

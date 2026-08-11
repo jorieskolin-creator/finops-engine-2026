@@ -255,6 +255,7 @@ export interface AnalysisMeta {
   knowledge_base?: KnowledgeBaseRuntimeStatus;
   run_trace?: RunTrace;
   run_trace_summary?: RunTraceSummary;
+  acquisition_quality?: AcquisitionQualitySnapshot;
   model_mode?: 'normal' | 'cheap_test';
   model_config: {
     preflight: string;
@@ -268,6 +269,109 @@ export interface AnalysisMeta {
     fact_check_high?: string;
     validators: string;
   };
+}
+
+export interface SourceExtractionMetadata {
+  unit: 'document' | 'page' | 'row';
+  total_units: number;
+  processed_units: number;
+  text_coverage_ratio?: number;
+  sparse_units?: number;
+  truncated: boolean;
+  quality?: 'good' | 'mixed' | 'poor';
+}
+
+export interface SourceExtractionQuality {
+  overall_completeness: number;
+  status: 'COMPLETE' | 'PARTIAL' | 'FAILED';
+  warning_count: number;
+  sources: Array<{
+    source_id: string;
+    source_name: string;
+    kind: SourceRecord['kind'];
+    completeness: number;
+    status: 'COMPLETE' | 'PARTIAL' | 'FAILED';
+    unit: SourceExtractionMetadata['unit'];
+    total_units: number;
+    processed_units: number;
+    text_coverage_ratio?: number;
+    sparse_units?: number;
+    truncated: boolean;
+    quality?: SourceExtractionMetadata['quality'];
+    warning_count: number;
+    warning_codes: Array<'PARSE_WARNING' | 'TRUNCATED' | 'SPARSE_CONTENT' | 'MIXED_QUALITY' | 'POOR_QUALITY'>;
+  }>;
+  blocking_reasons: string[];
+}
+
+export interface AcquisitionQualitySnapshot {
+  schema_version: 'acquisition_quality_snapshot_v1';
+  formula_version: 'acquisition_quality_formula_v1';
+  enforcement: 'observability_only';
+  extraction: SourceExtractionQuality;
+  evidence: {
+    coverage: {
+      overall: number;
+      maturity: number;
+      antipattern: number;
+      covered_items: number;
+      total_items: number;
+      by_domain: Record<string, { covered_items: number; total_items: number; completeness: number }>;
+    };
+    density: {
+      overall: number;
+      verified_strength: number;
+      source_diversity: number;
+      category_diversity: number;
+      covered_items: number;
+    };
+    provenance: {
+      integrity: number;
+      source_backed_count: number;
+      derived_count: number;
+      asserted_count: number;
+      unresolved_criterion_ids: string[];
+    };
+  };
+  knowledge: {
+    completeness: number;
+    ready: boolean;
+    source: KnowledgeBaseRuntimeStatus['source'];
+    expected_document_count: number;
+    loaded_document_count: number;
+    missing_document_count: number;
+    blocking_reasons: string[];
+  };
+  security: {
+    status: 'PASS' | 'WARN' | 'BLOCK';
+    high_risk_hit_count: number;
+    caution_hit_count: number;
+    scanned_chunk_count: number;
+  };
+  readiness: {
+    evidence_packet: 'READY' | 'NOT_READY';
+    knowledge_packet: 'READY' | 'NOT_READY';
+    acquisition: 'READY' | 'NOT_READY';
+    blocking_reasons: string[];
+  };
+}
+
+export interface AcquisitionQualityPersistence {
+  schema_version: 'acquisition_quality_snapshot_v1';
+  formula_version: 'acquisition_quality_formula_v1';
+  extraction_completeness: number;
+  evidence_coverage: number;
+  evidence_density: number;
+  provenance_integrity: number;
+  kb_completeness: number;
+  evidence_packet_status: 'READY' | 'NOT_READY';
+  knowledge_packet_status: 'READY' | 'NOT_READY';
+  acquisition_status: 'READY' | 'NOT_READY';
+  security_status: 'PASS' | 'WARN' | 'BLOCK';
+  extraction_incomplete_count: number;
+  weak_source_packet_count: number;
+  kb_blocking_count: number;
+  unresolved_provenance_count: number;
 }
 
 export interface KnowledgeBaseRuntimeStatus {
@@ -320,6 +424,7 @@ export interface SourceRecord {
   text?: string;
   pages?: SourcePage[];
   parse_warnings?: string[];
+  extraction?: SourceExtractionMetadata;
 }
 
 export interface SourceChunkRoutingHint {
@@ -351,6 +456,7 @@ export interface SourceRegistry {
   chunk_count: number;
   chunks: SourceChunk[];
   warnings: string[];
+  extraction: SourceExtractionQuality;
 }
 
 export interface SourcePacketManifestItem {
@@ -397,6 +503,7 @@ export interface SourceRegistryRuntimeStatus {
   dlp_review_chunk_count: number;
   dlp_high_risk_hits: number;
   dlp_caution_hits: number;
+  extraction: SourceExtractionQuality;
   packets: Record<string, {
     included_chunk_count: number;
     total_candidate_chunks: number;

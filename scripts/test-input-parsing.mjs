@@ -28,6 +28,24 @@ assert.match(csv.text, /Format: CSV/);
 assert.match(csv.text, /Rows: 2/);
 assert.match(csv.text, /Headers: service \| cost/);
 assert.match(csv.text, /compute \| 12/);
+assert.equal(csv.rowCount, 2);
+assert.equal(csv.renderedRowCount, 2);
+
+const largeCsv = renderDelimitedTableForAnalysis(`service,cost\n${Array.from({ length: 151 }, (_, index) => `svc-${index},${index}`).join('\n')}`, {
+  fileName: 'large-costs.csv',
+  delimiter: ',',
+});
+assert.equal(largeCsv.rowCount, 151);
+assert.equal(largeCsv.renderedRowCount, 150);
+assert.match(largeCsv.warnings.join(' '), /first 150 rows/);
+
+const clippedCsv = renderDelimitedTableForAnalysis(`service,description\ncompute,${'x'.repeat(300)}`, {
+  fileName: 'long-cell.csv',
+  delimiter: ',',
+});
+assert.equal(clippedCsv.clippedCellCount, 1);
+assert.ok(clippedCsv.cellCharacterCoverageRatio < 1);
+assert.match(clippedCsv.warnings.join(' '), /cell\(s\).*truncated/);
 
 const tsv = renderDelimitedTableForAnalysis('team\towner\nplatform\tfinance', {
   fileName: 'teams.tsv',

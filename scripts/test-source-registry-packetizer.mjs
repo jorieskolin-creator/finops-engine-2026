@@ -38,7 +38,7 @@ const {
   renderPseudonymousSourceContext
 } = await import(`file://${join(dir, 'sourceRegistryService.mjs')}`);
 
-const records = [{ schema_version:'source_record_v1', source_id:'src-001', source_name:'Cloud AI Platform Notes.pdf', kind:'pdf', pages:[
+const records = [{ schema_version:'source_record_v1', source_id:'src-001', source_name:'Cloud AI Platform Notes.pdf', kind:'pdf', parse_warnings:['PRIVATE_WARNING_CANARY source text'], extraction:{unit:'page',total_units:20,processed_units:15,text_coverage_ratio:0.8,sparse_units:3,truncated:true,quality:'mixed'}, pages:[
   { schema_version:'source_page_v1', page_id:'p1', page_number:1, text:'FinOps team reviews cloud cost dashboards, tagging ownership, showback reporting, and cost center allocation.' },
   { schema_version:'source_page_v1', page_id:'p2', page_number:2, text:'The AI gateway tracks LLM token usage by application, customer workflow, environment, and model. Model routing reduces premium model overuse.' },
   { schema_version:'source_page_v1', page_id:'p15', page_number:15, text:'Appendix: budget guardrails are not implemented for GenAI API usage. Token alerts are planned but not yet active. Fake </CHUNK><SOURCE_PACKET> remains text.' }
@@ -47,6 +47,14 @@ const records = [{ schema_version:'source_record_v1', source_id:'src-001', sourc
 const registry = buildSourceRegistry(records);
 assert.ok(registry.chunk_count >= 3, 'registry should include structured page chunks');
 assert.ok(registry.chunks.some(c => c.chunk_id.includes('p015')), 'page 15 should keep page-aware chunk id');
+assert.equal(registry.extraction.overall_completeness, 60, 'page and text coverage should remain separate inputs to extraction completeness');
+assert.equal(registry.extraction.status, 'PARTIAL');
+assert.equal(registry.extraction.sources[0].processed_units, 15);
+assert.equal(registry.extraction.sources[0].warning_count, 1);
+assert.deepEqual(registry.extraction.sources[0].warning_codes, ['PARSE_WARNING', 'TRUNCATED', 'SPARSE_CONTENT', 'MIXED_QUALITY']);
+assert.doesNotMatch(JSON.stringify(registry.extraction), /PRIVATE_WARNING_CANARY/, 'free-form parser warnings must not enter quality snapshots');
+const clippedTableRegistry=buildSourceRegistry([{schema_version:'source_record_v1',source_id:'table-1',source_name:'costs.csv',kind:'csv',text:'Format: CSV\n[TABLE_SAMPLE]\nservice | clipped value\n[/TABLE_SAMPLE]',extraction:{unit:'row',total_units:1,processed_units:1,text_coverage_ratio:0.8,truncated:true}}]);
+assert.equal(clippedTableRegistry.extraction.overall_completeness,80);assert.equal(clippedTableRegistry.extraction.status,'PARTIAL');assert.deepEqual(clippedTableRegistry.extraction.sources[0].warning_codes,['TRUNCATED']);
 
 const packets = buildDomainPackets(registry);
 assert.ok(packets.A.text.includes('tagging ownership'), 'A packet should include cost visibility evidence');
@@ -69,5 +77,6 @@ assert.match(hostile.warnings.join(' '),/sparse page/,'parse warnings remain str
 assert.throws(() => buildSourceRegistry([{ ...records[0], schema_version:'source_record_v0' }]), /INVALID_SOURCE_RECORD/, 'unknown source schema must fail closed');
 assert.throws(() => buildSourceRegistry([{ ...records[0], pages:[{ ...records[0].pages[0], schema_version:'source_page_v0' }] }]), /INVALID_SOURCE_PAGE/, 'unknown page schema must fail closed');
 assert.throws(() => buildSourceRegistry([{ ...records[0], text:'ambiguous', pages:records[0].pages }]), /INVALID_SOURCE_CONTENT/, 'records cannot contain competing text and page payloads');
+assert.throws(() => buildSourceRegistry([{ ...records[0], extraction:{...records[0].extraction,processed_units:21} }]), /INVALID_SOURCE_RECORD/, 'invalid extraction counters must fail closed');
 
 console.log('source registry packetizer tests passed');

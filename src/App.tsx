@@ -149,6 +149,9 @@ interface UploadedFile {
     totalPages?: number;
     parsedTextPages?: number;
     rowCount?: number;
+    renderedRowCount?: number;
+    clippedCellCount?: number;
+    cellCharacterCoverageRatio?: number;
     parseQuality?: PdfParseQuality;
     warnings: string[];
   };
@@ -765,13 +768,13 @@ const App: React.FC = () => {
           const rendered = renderDelimitedTableForAnalysis(raw, { fileName: file.name, delimiter: ',' });
           text = rendered.text;
           kind = 'csv';
-          parseMetadata = { rowCount: Number(text.match(/^Rows: (\d+)/m)?.[1] || 0), warnings: rendered.warnings };
+          parseMetadata = { rowCount: rendered.rowCount, renderedRowCount: rendered.renderedRowCount, clippedCellCount: rendered.clippedCellCount, cellCharacterCoverageRatio: rendered.cellCharacterCoverageRatio, warnings: rendered.warnings };
         } else if (file.type === 'text/tab-separated-values' || lowerName.endsWith('.tsv')) {
           const raw = await file.text();
           const rendered = renderDelimitedTableForAnalysis(raw, { fileName: file.name, delimiter: '\t' });
           text = rendered.text;
           kind = 'tsv';
-          parseMetadata = { rowCount: Number(text.match(/^Rows: (\d+)/m)?.[1] || 0), warnings: rendered.warnings };
+          parseMetadata = { rowCount: rendered.rowCount, renderedRowCount: rendered.renderedRowCount, clippedCellCount: rendered.clippedCellCount, cellCharacterCoverageRatio: rendered.cellCharacterCoverageRatio, warnings: rendered.warnings };
         } else if (file.type === 'application/json' || lowerName.endsWith('.json')) {
           const raw = await file.text();
           text = `Format: JSON\n\n${raw}`;
@@ -812,7 +815,34 @@ const App: React.FC = () => {
     try {
       const sources: SourceRecord[] = opts?.sourcesOverride ?? (opts?.textOverride !== undefined
         ? [{ schema_version:'source_record_v1', source_id:'src-001', source_name:opts.label || 'fixture', kind:'text', text:sanitizeInput(opts.textOverride) }]
-        : files.map((file,index) => ({ schema_version:'source_record_v1', source_id:`src-${String(index+1).padStart(3,'0')}`, source_name:file.name, kind:file.kind || 'text', parse_warnings:file.parseMetadata?.warnings || file.parseMetadata?.parseQuality?.warnings, ...(file.pages?.length ? {pages:file.pages} : {text:sanitizeInput(file.text)}) })));
+        : files.map((file,index) => ({
+            schema_version:'source_record_v1' as const,
+            source_id:`src-${String(index+1).padStart(3,'0')}`,
+            source_name:file.name,
+            kind:file.kind || 'text',
+            parse_warnings:file.parseMetadata?.warnings || file.parseMetadata?.parseQuality?.warnings,
+            extraction: file.kind === 'pdf' && file.parseMetadata
+              ? {
+                  unit: 'page' as const,
+                  total_units: file.parseMetadata.totalPages || file.pages?.length || 0,
+                  processed_units: file.parseMetadata.parsedTextPages || file.pages?.length || 0,
+                  text_coverage_ratio: file.parseMetadata.parseQuality?.textCoverageRatio,
+                  sparse_units: file.parseMetadata.parseQuality?.sparseTextPages,
+                  truncated: (file.parseMetadata.parsedTextPages || 0) < (file.parseMetadata.totalPages || 0),
+                  quality: file.parseMetadata.parseQuality?.quality
+                }
+              : (file.kind === 'csv' || file.kind === 'tsv') && file.parseMetadata
+                ? {
+                    unit: 'row' as const,
+                    total_units: file.parseMetadata.rowCount || 0,
+                    processed_units: file.parseMetadata.renderedRowCount || 0,
+                    text_coverage_ratio: file.parseMetadata.cellCharacterCoverageRatio,
+                    truncated: (file.parseMetadata.renderedRowCount || 0) < (file.parseMetadata.rowCount || 0)
+                      || (file.parseMetadata.clippedCellCount || 0) > 0
+                  }
+                : { unit: 'document' as const, total_units: 1, processed_units: 1, truncated: false },
+            ...(file.pages?.length ? {pages:file.pages} : {text:sanitizeInput(file.text)})
+          })));
       const data = await analyzeDocument(sources, (stage, progress) => {
         setLoadingStage(stage);
         if (progress !== undefined) setAuditProgress(progress);

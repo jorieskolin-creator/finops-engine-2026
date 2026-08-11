@@ -191,6 +191,61 @@ const renderSourceRegistryPacketSummary = (result: DiagnosticResult): string => 
   </section>`;
 };
 
+const renderAcquisitionQuality = (result: DiagnosticResult): string => {
+  const quality = result.meta.acquisition_quality;
+  if (!quality) return '';
+  const coverage = quality.evidence.coverage;
+  const density = quality.evidence.density;
+  const provenance = quality.evidence.provenance;
+  const statusClass = (ready: boolean) => ready ? 'packet-coverage-ok' : 'packet-coverage-weak';
+  const metricRows: Array<[string, string]> = [
+    ['Extraction completeness', `${quality.extraction.overall_completeness}% · ${quality.extraction.status}`],
+    ['Evidence coverage', `${coverage.overall}% · ${coverage.covered_items}/${coverage.total_items} objects`],
+    ['Evidence density', `${density.overall}%`],
+    ['Verified evidence strength', `${density.verified_strength}%`],
+    ['Source diversity', `${density.source_diversity}%`],
+    ['Evidence-category diversity', `${density.category_diversity}%`],
+    ['Provenance integrity', `${provenance.integrity}% · ${provenance.source_backed_count} source-backed / ${provenance.asserted_count} unresolved`],
+    ['KB completeness', `${quality.knowledge.completeness}% · ${quality.knowledge.loaded_document_count}/${quality.knowledge.expected_document_count} objects`],
+    ['Security gate', `${quality.security.status} · ${quality.security.caution_hit_count} caution / ${quality.security.high_risk_hit_count} high-risk hit(s)`]
+  ];
+  const domainRows = Object.entries(coverage.by_domain).sort(([a], [b]) => a.localeCompare(b));
+  const blockingReasons = quality.readiness.blocking_reasons.slice(0, 30);
+
+  return `
+  <section class="source-packet-section">
+    <h2>Acquisition Quality &amp; Readiness</h2>
+    <div class="source-packet-card">
+      <p class="source-packet-note">Versioned acquisition telemetry (${escapeHtml(quality.formula_version)}). Evidence coverage measures how much of the assessment surface was tested; evidence density separately combines verified strength (60%), per-object source diversity (20%), and evidence-category diversity (20%). These readiness values are observability-only in this milestone and do not alter scores or the Quality Gate.</p>
+      <div class="source-packet-tables">
+        <table class="source-packet-table source-packet-metrics-table">
+          <thead><tr><th>Quality measure</th><th>Value</th></tr></thead>
+          <tbody>${metricRows.map(([label, value]) => `<tr><td>${escapeHtml(label)}</td><td>${escapeHtml(value)}</td></tr>`).join('')}</tbody>
+        </table>
+        <table class="source-packet-table">
+          <thead><tr><th>Readiness</th><th>Status</th></tr></thead>
+          <tbody>
+            <tr><td>Evidence Packet</td><td><span class="packet-coverage ${statusClass(quality.readiness.evidence_packet === 'READY')}">${quality.readiness.evidence_packet}</span></td></tr>
+            <tr><td>Knowledge Packet</td><td><span class="packet-coverage ${statusClass(quality.readiness.knowledge_packet === 'READY')}">${quality.readiness.knowledge_packet}</span></td></tr>
+            <tr><td>Overall acquisition</td><td><span class="packet-coverage ${statusClass(quality.readiness.acquisition === 'READY')}">${quality.readiness.acquisition}</span></td></tr>
+          </tbody>
+        </table>
+        ${domainRows.length > 0 ? `
+        <table class="source-packet-table">
+          <thead><tr><th>Domain</th><th>Covered objects</th><th>Expected objects</th><th>Coverage</th></tr></thead>
+          <tbody>${domainRows.map(([domain, value]) => `<tr><td><strong>${escapeHtml(domain)}</strong><span>${escapeHtml(BATCH_TITLES[domain] || domain)}</span></td><td>${value.covered_items}</td><td>${value.total_items}</td><td>${value.completeness}%</td></tr>`).join('')}</tbody>
+        </table>` : ''}
+        ${quality.extraction.sources.length > 0 ? `
+        <table class="source-packet-table">
+          <thead><tr><th>Source extraction</th><th>Processed</th><th>Completeness</th><th>Warnings</th></tr></thead>
+          <tbody>${quality.extraction.sources.map(source => `<tr><td><strong>${escapeHtml(source.source_id)}</strong><span>${escapeHtml(source.source_name)} · ${escapeHtml(source.kind)}</span></td><td>${source.processed_units}/${source.total_units} ${escapeHtml(source.unit)}(s)</td><td>${source.completeness}% · ${source.status}</td><td>${source.warning_count}${source.warning_codes.length > 0 ? ` · ${source.warning_codes.map(code => escapeHtml(code)).join(', ')}` : ''}</td></tr>`).join('')}</tbody>
+        </table>` : ''}
+      </div>
+      ${blockingReasons.length > 0 ? `<div class="gate-label">Readiness blocking reasons</div><ul class="source-packet-notes">${blockingReasons.map(reason => `<li>${escapeHtml(reason)}</li>`).join('')}</ul>` : ''}
+    </div>
+  </section>`;
+};
+
 const renderRunTraceAppendix = (result: DiagnosticResult): string => {
   const trace = result.meta.run_trace;
   const summary = result.meta.run_trace_summary;
@@ -1272,6 +1327,7 @@ const generateReportHtml = (result: DiagnosticResult): string => {
   ${renderForensicSection('Forensic Audit: FinOps Maturity', 'maturity', result.phase_1_audit_logs.maturity)}
   ${renderForensicSection('Forensic Audit: Anti-Patterns', 'antipattern', result.phase_1_audit_logs.antipattern)}
   ${renderQualityGateAppendix(result.quality_gate)}
+  ${renderAcquisitionQuality(result)}
   ${renderSourceRegistryPacketSummary(result)}
   ${renderRunTraceAppendix(result)}
 

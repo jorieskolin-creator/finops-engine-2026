@@ -125,3 +125,17 @@ npm run test:privacy
 The synthetic fixtures under `test/` represent separate organizations and must be assessed separately. They are engineering inputs for exercising parsing, routing, evidence, privacy, and Quality Gate boundaries. They are not expert-approved reference assessments and must not be used to claim model accuracy, reproducibility, or drift monitoring.
 
 The low-, borderline-, and strong-evidence scenarios provide broad pipeline inputs. Tier 1 fixtures exercise narrower document types such as governance policies, tagging standards, operating-model charters, strategies, and optimization reviews.
+
+## Acquisition quality telemetry
+
+Completed assessments include a versioned `acquisition_quality_snapshot_v1` under `meta.acquisition_quality`. The Master Data HTML renders the same snapshot visibly and preserves it in the embedded `finops-data` JSON.
+
+The metrics intentionally remain separate:
+
+- **Extraction completeness** combines processed source units with PDF text coverage; capped or sparse extraction is reported explicitly.
+- **Evidence coverage** is the share of the maturity and anti-pattern assessment surface with evidence or an explicit tested-absence result. The existing `metrics.evidence_density` value remains unchanged for scoring compatibility and is exposed here as the legacy overall coverage value; provenance integrity separately reports whether covered criteria resolve to registered sources.
+- **Evidence density** is a new observability measure within covered objects: 60% verified evidence strength, 20% per-object source diversity, and 20% evidence-category diversity.
+- **Provenance integrity** reports source-backed versus unresolved covered criteria without storing source content in the snapshot.
+- **KB completeness and readiness** report expected document coverage, delivery defects, and stage-packet readiness separately from customer evidence quality.
+
+Milestone 3 readiness is `observability_only`: it does not alter prompts, Phase 2 scores, assessment classification, or Quality Gate decisions. Hard acquisition enforcement is deferred until the packet contracts and operational thresholds are separately approved.
