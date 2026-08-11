@@ -1104,14 +1104,14 @@
 
       <div class="connector">▼ optionally ▼</div>
 
-      <!-- DRIFT -->
+      <!-- ENGINEERING SCENARIOS -->
       <div class="stage" data-phase="0" style="border-style: dashed;">
         <div class="stage-header">
-          <div class="stage-title">Drift Detection Suite</div>
-          <div class="stage-meta">Regression test · per-pack golden baselines</div>
+          <div class="stage-title">Scenario &amp; Boundary Fixture Suite</div>
+          <div class="stage-meta">Engineering regression inputs · no accuracy certification</div>
         </div>
         <div class="stage-body">
-          Nine golden fixtures bundled in the repo: three maturity-stratified (Crawl / Walk / Run) plus six Tier 1 document-type fixtures (governance policy, tagging policy, CoE charter, cloud strategy, RI/SP playbook, optimization review). Each has a per-criterion expected score range in <code style="font-family: var(--mono); font-size: 13px;">golden_baselines.json</code>. Run before every model upgrade; flag drift before deploying.
+          Synthetic low-, borderline-, and strong-evidence organizations plus six Tier 1 document-type fixtures exercise parsing, routing, evidence, privacy, and Quality Gate boundaries. They are engineering scenarios, not expert-approved reference assessments, and do not establish model accuracy or drift.
         </div>
       </div>
 
@@ -2815,10 +2815,10 @@ else: "Run"</div>
       </div>
 
       <div class="metric-item">
-        <div class="metric-name">Drift Detection Suite<span>per-pack regression test</span></div>
+        <div class="metric-name">Scenario &amp; Boundary Fixtures<span>engineering regression inputs</span></div>
         <div>
           <div class="metric-interp">
-            Nine bundled golden fixtures: three maturity-stratified (Crawl / Walk / Run) and six Tier 1 document-type fixtures (governance policy, tagging policy, CoE charter, cloud strategy, RI/SP playbook, optimization review). Each has a per-criterion expected score range with rationale in <code style="font-family: var(--mono); font-size: 12px;">golden_baselines.json</code>. The Per-Pack Drift suite runs each fixture standalone, compares scores against expected ranges, and flags drift before a model upgrade ships.
+            Synthetic low-, borderline-, and strong-evidence scenarios plus Tier 1 document-type fixtures exercise code paths and deterministic boundaries. They are intentionally separate from future expert-approved accuracy, reproducibility, and drift governance.
           </div>
         </div>
       </div>
@@ -2837,14 +2837,14 @@ else: "Run"</div>
 <section>
   <div class="container">
     <div class="section-tag"><span class="num">11</span><span>Why Not Just Use Copilot?</span></div>
-    <h2>The Difference Between 70% Accuracy and 99% Accuracy</h2>
+    <h2>The Difference Between a Single Prompt and a Governed Pipeline</h2>
 
     <p style="max-width: 820px; color: var(--ink-2); font-size: 16px;">
       A natural question: <em>"Why not just paste the documents into a general-purpose AI assistant and ask for a FinOps maturity summary?"</em>
     </p>
 
     <p style="max-width: 820px; color: var(--ink-2);">
-      You can. The output will read beautifully. It may hit roughly 70% accuracy and you will not be able to tell which 30% is wrong. That is the gap this Engine closes — and it closes it by doing, programmatically, dozens of discrete judgments that a human (or a generic AI prompt) would either skip, fabricate, or hide.
+      You can, but fluent output alone does not establish correctness. Without explicit evidence boundaries, schemas, deterministic checks, and an audit trail, unsupported conclusions can be difficult to detect. This Engine addresses that governance gap by making discrete pipeline judgments visible and independently inspectable. Its accuracy still requires separate expert-approved evaluation.
     </p>
 
     <h3 style="margin-top: 56px;">What the Engine Does That a Single Prompt Cannot</h3>
@@ -2940,9 +2940,9 @@ else: "Run"</div>
       </div>
 
       <div class="metric-item">
-        <div class="metric-name">Regression Test Suite<span>9 golden fixtures</span></div>
+        <div class="metric-name">Scenario Fixture Suite<span>engineering-only</span></div>
         <div>
-          <p style="font-size: 14px; color: var(--ink-2); margin: 0;">Three maturity-stratified goldens plus six Tier 1 document-type fixtures · Per-criterion expected score ranges in <code style="font-family: var(--mono); font-size: 12px;">golden_baselines.json</code> · Per-pack drift report run before every model upgrade</p>
+          <p style="font-size: 14px; color: var(--ink-2); margin: 0;">Low-, borderline-, and strong-evidence scenarios plus six Tier 1 document-type fixtures · exercises parsing, routing, evidence, privacy, and deterministic Quality Gate boundaries · does not claim model accuracy or drift certification</p>
         </div>
       </div>
 
@@ -2953,11 +2953,11 @@ else: "Run"</div>
       Expressed as discrete acts a human would otherwise perform to produce the same artifact: <strong>~180 sub-criterion judgments</strong>, evidence extraction from text and visual pages, parse-quality review, <strong>~60 evidence-check judgments</strong>, targeted rescans, anti-pattern absence classification, evidence-gated metric calculation, three persona-tailored writeups, WHY/WHAT/HOW roadmap synthesis, tactic-ID validation, split fact-check verification, strategy sanitation, quality-gate explanation, plus the visualization labor. Conservatively, <strong>300+ discrete decisions and lookups per assessment</strong> — 1 to 2 person-days of senior FinOps practitioner time, every time. The Engine turns that work into an auditable artifact so humans can focus on validating, deciding, designing solutions, and delivering outcomes.
     </p>
 
-    <h3 style="margin-top: 56px;">Where the 70%-vs-99% Gap Actually Lives</h3>
+    <h3 style="margin-top: 56px;">Where the Governance Gap Actually Lives</h3>
 
     <div class="streams" style="margin-top: 24px;">
       <div class="stream-card antipattern">
-        <h4>70 %</h4>
+        <h4>Ungoverned</h4>
         <div class="stream-name">Generic AI summary</div>
         <p style="font-size: 14px; color: var(--ink-2); margin: 0;">A beautiful summary that sounds right. Some facts traced to the source, some hallucinated, some inferred from training data. You cannot tell which is which. Cannot be regression-tested. Cannot be shown to an auditor. Confidence is unverifiable.</p>
         <ul style="font-size: 13px; color: var(--ink-2); margin: 12px 0 0 18px; padding: 0;">
@@ -2967,12 +2967,12 @@ else: "Run"</div>
           <li>No persona separation — one voice for everyone.</li>
           <li>No tactic citations — "best practices" handwave.</li>
           <li>No sanitation layer — one bad sentence can either hide or poison the whole output.</li>
-          <li>No regression suite — model drift invisible.</li>
+          <li>No boundary fixtures — deterministic pipeline regressions are harder to detect.</li>
           <li>No quality gate — output ships unlabeled.</li>
         </ul>
       </div>
       <div class="stream-card maturity">
-        <h4>99 %</h4>
+        <h4>Governed</h4>
         <div class="stream-name">FinOps Engine artifact</div>
         <p style="font-size: 14px; color: var(--ink-2); margin: 0;">Every score traced to evidence and challenged before scoring. Every claim either supported or flagged. Three persona views from the same evidence. Low confidence becomes findings mode, not false certainty. Source gaps surfaced as actionable next-cycle inputs. The artifact carries its own audit trail.</p>
         <ul style="font-size: 13px; color: var(--ink-2); margin: 12px 0 0 18px; padding: 0;">
@@ -2982,14 +2982,14 @@ else: "Run"</div>
           <li>Three persona summaries from one diagnostic dataset.</li>
           <li>Roadmap WHY/WHAT/HOW verified against findings and tactics.</li>
           <li>Strategy sanitation removes unsupported visible wording before display.</li>
-          <li>Per-pack drift suite catches model behavior shifts.</li>
+          <li>Neutral scenarios exercise deterministic pipeline boundaries; model monitoring remains a separate discipline.</li>
           <li>Quality Gate status and appendix ship inside the artifact.</li>
         </ul>
       </div>
     </div>
 
     <p class="pullquote" style="margin-top: 48px;">
-      The difference between 70% and 99% is not a better prompt. It is the <em>infrastructure that no single prompt can be</em>: a chain of constrained stages, each refusing to trust the previous, each leaving its trace in the output. A Copilot summary asks you to trust it. The Engine asks you to <strong style="font-style: normal;">audit it</strong> — and gives you the trail to do so.
+      The difference is not a better prompt. It is the <em>infrastructure that no single prompt can be</em>: a chain of constrained stages, each refusing to trust the previous, each leaving its trace in the output. A generic summary asks you to trust it. The Engine asks you to <strong style="font-style: normal;">audit it</strong> — and gives you the trail to do so. Accuracy and reproducibility still require separate expert-approved evaluation.
     </p>
   </div>
 </section>
@@ -3000,7 +3000,7 @@ else: "Run"</div>
 <footer>
   <div class="container">
     <p class="footer-note">
-      This document describes the intellectual architecture of the FinOps Maturity Assessment Engine. The knowledge base criteria, guardrails, taxonomy registry, tactics database, evidence-check stage, validation rules, quality gates, and golden baselines defined here represent the domain-specific content layer that sits on top of the Engine's reusable technical infrastructure (React UI, local parsing and parse-quality checks, Anthropic / OpenAI model routing, provider-specific fallback chains, internal-call protected model proxies, parallel batch processing, dedicated roadmap synthesis, fact-check pipeline, strategy sanitation, Quality Gate, drift detection suite, export system, and Railway deployment).
+      This document describes the intellectual architecture of the FinOps Maturity Assessment Engine. The knowledge base criteria, guardrails, taxonomy registry, tactics database, evidence-check stage, validation rules, and quality gates defined here represent the domain-specific content layer that sits on top of the Engine's reusable technical infrastructure (React UI, local parsing and parse-quality checks, Anthropic / OpenAI model routing, provider-specific fallback chains, internal-call protected model proxies, parallel batch processing, dedicated roadmap synthesis, fact-check pipeline, strategy sanitation, Quality Gate, engineering scenario fixtures, export system, and Railway deployment).
     </p>
     <p class="footer-note" style="margin-top: 24px;">
       <a href="https://finops-engine.vercel.app/" target="_blank" rel="noopener noreferrer">FinOps Assessment Engine - DEMO</a>

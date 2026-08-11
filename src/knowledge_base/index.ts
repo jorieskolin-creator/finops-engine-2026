@@ -1,5 +1,5 @@
 
-import type { KnowledgeTaxonomyRegistry, RemoteKnowledgeBaseDocument, RemoteKnowledgeBaseIndex, StrategicTactic, TacticActivityPlaybookEntry } from '../types';
+import type { KnowledgePacketStage, KnowledgeTaxonomyRegistry, RemoteKnowledgeBaseDocument, RemoteKnowledgeBaseIndex, ShadowKnowledgePacket, StrategicTactic, TacticActivityPlaybookEntry } from '../types';
 import criteriaData from './finops_criteria.json';
 import antipatternData from './finops_antipatterns.json';
 import keywordsData from './finops_preflight_keywords.json';
@@ -236,6 +236,205 @@ const normalizeKbText = (text: string, maxChars: number): string => {
     : compacted;
 };
 
+const SHADOW_SECTION_LIMIT = 6000;
+const SHADOW_PACKET_LIMIT = 45_000;
+
+const STAGE_SECTION_KEYS: Record<KnowledgePacketStage, string[]> = {
+  forensic_audit: [
+    'canonical_definition', 'primary_assessment_questions', 'state_interpretation',
+    'detailed_interpretation', 'evidence_requirements', 'strong_evidence_examples',
+    'moderate_evidence_examples', 'weak_evidence_examples', 'contradictory_evidence_examples',
+    'accepted_evidence_types', 'provider_mapping', 'focus_normalized_interpretation',
+    'false_positive_guards', 'validation_questions', 'detection_heuristics',
+    'operational_indicators', 'prohibited_inference_rules', 'scoring_guidance'
+  ],
+  evidence_check: [
+    'canonical_definition', 'state_interpretation', 'evidence_requirements',
+    'strong_evidence_examples', 'moderate_evidence_examples', 'weak_evidence_examples',
+    'contradictory_evidence_examples', 'accepted_evidence_types', 'false_positive_guards',
+    'validation_questions', 'detection_heuristics', 'prohibited_inference_rules', 'scoring_guidance'
+  ],
+  synthesis: [
+    'canonical_definition', 'state_interpretation', 'evidence_requirements',
+    'contradictory_evidence_examples', 'false_positive_guards', 'prohibited_inference_rules',
+    'scoring_guidance', 'risk_notes'
+  ],
+  roadmap_synthesis: [
+    'canonical_definition', 'related_capabilities', 'risk_notes',
+    'remediation_tactic_notes', 'prohibited_inference_rules'
+  ]
+};
+
+const REQUIRED_STAGE_SECTIONS: Record<KnowledgePacketStage, string[]> = {
+  forensic_audit: ['canonical_definition', 'evidence_requirements', 'false_positive_guards', 'validation_questions', 'scoring_guidance'],
+  evidence_check: ['canonical_definition', 'evidence_requirements', 'false_positive_guards', 'validation_questions'],
+  synthesis: ['canonical_definition', 'evidence_requirements', 'false_positive_guards'],
+  roadmap_synthesis: ['canonical_definition', 'risk_notes', 'remediation_tactic_notes']
+};
+
+const sectionSatisfied = (sections: Record<string, string>, key: string): boolean => {
+  if (sections[key]?.trim()) return true;
+  if (key === 'evidence_requirements') {
+    return [
+      'strong_evidence_examples', 'moderate_evidence_examples', 'weak_evidence_examples',
+      'contradictory_evidence_examples', 'accepted_evidence_types'
+    ].some(child => sections[child]?.trim());
+  }
+  return false;
+};
+
+const shadowHash = (value: string): string => {
+  let hash = 0x811c9dc5;
+  for (let i = 0; i < value.length; i++) {
+    hash ^= value.charCodeAt(i);
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return `fnv1a_${(hash >>> 0).toString(16).padStart(8, '0')}`;
+};
+
+const stageForLabel = (label?: string): KnowledgePacketStage => {
+  if (label?.includes('evidence')) return 'evidence_check';
+  if (label?.includes('roadmap') || label?.includes('strategy')) return 'roadmap_synthesis';
+  if (label?.includes('synthesis')) return 'synthesis';
+  return 'forensic_audit';
+};
+
+export const buildShadowKnowledgePacket = (
+  index: RemoteKnowledgeBaseIndex,
+  options: { batchId?: string; stage: KnowledgePacketStage }
+): ShadowKnowledgePacket => {
+  const sourceDocuments = (index.documents || [])
+    .filter(doc => !options.batchId || doc.domain_id === options.batchId)
+    .sort((a, b) => `${a.stream}.${a.criterion_id}`.localeCompare(`${b.stream}.${b.criterion_id}`));
+  const missingRequirements: string[] = [];
+  const coverageIssues: string[] = [];
+  const oversizedSections: string[] = [];
+  const pageLimitDocuments: string[] = [];
+  let packetChars = 0;
+  const documents: ShadowKnowledgePacket['documents'] = [];
+
+  const expectedDomains = options.batchId ? [options.batchId] : BATCH_IDS;
+  const expectedDocumentKeys = new Set(expectedDomains.flatMap(domainId => (
+    Array.from({ length: 5 }, (_, index) => [
+      `maturity:${domainId}${index + 1}`,
+      `antipattern:AP-${domainId}${index + 1}`
+    ]).flat()
+  )));
+  const documentKeyCounts = new Map<string, number>();
+  for (const doc of sourceDocuments) {
+    const key = `${doc.stream}:${doc.criterion_id}`;
+    documentKeyCounts.set(key, (documentKeyCounts.get(key) || 0) + 1);
+  }
+  for (const key of expectedDocumentKeys) {
+    if (!documentKeyCounts.has(key)) coverageIssues.push(`missing:${key}`);
+  }
+  for (const [key, count] of documentKeyCounts) {
+    if (!expectedDocumentKeys.has(key)) coverageIssues.push(`unexpected:${key}`);
+    if (count > 1) coverageIssues.push(`duplicate:${key}:${count}`);
+  }
+
+  for (const doc of sourceDocuments) {
+    const sections = doc.sections || {};
+    if (!doc.kb_id) missingRequirements.push(`${doc.criterion_id}:kb_id`);
+    if (!doc.version) missingRequirements.push(`${doc.criterion_id}:version`);
+    if (!doc.pdf_sha256) missingRequirements.push(`${doc.criterion_id}:pdf_sha256`);
+    if (!doc.extracted_text_sha256) missingRequirements.push(`${doc.criterion_id}:extracted_text_sha256`);
+    if (!doc.allowed_uses.length) missingRequirements.push(`${doc.criterion_id}:allowed_uses`);
+    if (!doc.forbidden_uses.length) missingRequirements.push(`${doc.criterion_id}:forbidden_uses`);
+    if (doc.extraction?.section_order_valid === false) {
+      missingRequirements.push(`${doc.criterion_id}:section_order_valid`);
+    }
+    if (doc.extraction?.duplicate_section_headings?.length) {
+      missingRequirements.push(`${doc.criterion_id}:unique_section_headings`);
+    }
+    const required = [
+      ...REQUIRED_STAGE_SECTIONS[options.stage],
+      ...(doc.stream === 'antipattern' && options.stage !== 'roadmap_synthesis'
+        ? ['state_interpretation', 'prohibited_inference_rules']
+        : [])
+    ];
+    for (const key of new Set(required)) {
+      if (!sectionSatisfied(sections, key)) missingRequirements.push(`${doc.criterion_id}:${key}`);
+    }
+    if (doc.extraction?.page_limit_reached) pageLimitDocuments.push(doc.criterion_id);
+
+    const includedSections: string[] = [];
+    const omittedSections: string[] = [];
+    const parts: string[] = [];
+    for (const key of STAGE_SECTION_KEYS[options.stage]) {
+      const value = sections[key]?.trim();
+      if (!value) continue;
+      if (value.length > SHADOW_SECTION_LIMIT) {
+        oversizedSections.push(`${doc.criterion_id}:${key}`);
+        omittedSections.push(key);
+        continue;
+      }
+      const part = `[KB_SECTION name="${key}"]\n${value}\n[/KB_SECTION]`;
+      if (packetChars + part.length > SHADOW_PACKET_LIMIT) {
+        omittedSections.push(key);
+        continue;
+      }
+      includedSections.push(key);
+      parts.push(part);
+      packetChars += part.length;
+    }
+    documents.push({
+      kb_id: doc.kb_id,
+      version: doc.version,
+      domain_id: doc.domain_id,
+      capability_id: doc.capability_id,
+      criterion_id: doc.criterion_id,
+      stream: doc.stream,
+      pdf_sha256: doc.pdf_sha256,
+      extracted_text_sha256: doc.extracted_text_sha256,
+      allowed_uses: [...doc.allowed_uses].sort(),
+      forbidden_uses: [...doc.forbidden_uses].sort(),
+      extraction_complete: !doc.extraction?.page_limit_reached,
+      extraction_warnings: [
+        ...(doc.extraction?.page_limit_reached ? ['PAGE_LIMIT_REACHED'] : []),
+        ...(doc.extraction?.sparse_pages || []).map(page => `SPARSE_PAGE:${page}`),
+        ...(doc.extraction?.section_order_valid === false ? ['SECTION_ORDER_INVALID'] : []),
+        ...(doc.extraction?.duplicate_section_headings || []).map(key => `DUPLICATE_SECTION:${key}`)
+      ],
+      included_sections: includedSections,
+      omitted_sections: omittedSections,
+      text: parts.join('\n\n')
+    });
+  }
+
+  const hashInput = JSON.stringify({
+    schema_version: 'shadow_knowledge_packet_v1',
+    mode: 'shadow',
+    stage: options.stage,
+    domain: options.batchId,
+    source: index.status.source,
+    documents
+  });
+  const ready = sourceDocuments.length > 0
+    && index.status.source === 'remote_blob'
+    && coverageIssues.length === 0
+    && missingRequirements.length === 0
+    && oversizedSections.length === 0
+    && pageLimitDocuments.length === 0
+    && documents.every(doc => doc.omitted_sections.length === 0);
+  return {
+    schema_version: 'shadow_knowledge_packet_v1',
+    mode: 'shadow',
+    stage: options.stage,
+    domain_id: options.batchId,
+    source: index.status.source,
+    readiness: ready ? 'READY' : 'NOT_READY',
+    packet_hash: shadowHash(hashInput),
+    document_count: documents.length,
+    char_count: packetChars,
+    missing_requirements: missingRequirements,
+    coverage_issues: coverageIssues,
+    oversized_sections: oversizedSections,
+    page_limit_documents: pageLimitDocuments,
+    documents
+  };
+};
+
 const formatKbDoc = (doc: RemoteKnowledgeBaseDocument, maxChars: number): string => {
   const allowed = doc.allowed_uses?.length ? doc.allowed_uses.join(', ') : 'rubric_context';
   const forbidden = doc.forbidden_uses?.length ? doc.forbidden_uses.join(', ') : 'customer_current_state_claim, source_evidence_quote';
@@ -319,6 +518,32 @@ export const knowledgeBaseService = {
 
   async fetchReferenceKnowledgeBaseContext(options: { batchId?: string; maxDocChars?: number; label?: string } = {}): Promise<string> {
     const index = await this.fetchReferenceKnowledgeBaseIndex();
+    const shadowPacket = buildShadowKnowledgePacket(index, {
+      batchId: options.batchId,
+      stage: stageForLabel(options.label)
+    });
+    const shadowKey = `${options.batchId || 'all'}:${shadowPacket.stage}`;
+    index.status.shadow_packets = {
+      ...(index.status.shadow_packets || {}),
+      [shadowKey]: {
+        stage: shadowPacket.stage,
+        domain_id: shadowPacket.domain_id,
+        readiness: shadowPacket.readiness,
+        packet_hash: shadowPacket.packet_hash,
+        document_count: shadowPacket.document_count,
+        char_count: shadowPacket.char_count,
+        missing_requirement_count: shadowPacket.missing_requirements.length,
+        coverage_issue_count: shadowPacket.coverage_issues.length,
+        oversized_section_count: shadowPacket.oversized_sections.length,
+        page_limit_document_count: shadowPacket.page_limit_documents.length
+      }
+    };
+    console.info(
+      `[FinOps KnowledgeBase] Shadow packet stage=${shadowPacket.stage} readiness=${shadowPacket.readiness}`
+      + ` documents=${shadowPacket.document_count} missing=${shadowPacket.missing_requirements.length}`
+      + ` coverage=${shadowPacket.coverage_issues.length}`
+      + ` oversized=${shadowPacket.oversized_sections.length} page_limited=${shadowPacket.page_limit_documents.length}`
+    );
     return formatRemoteKbContext(index, options);
   },
 

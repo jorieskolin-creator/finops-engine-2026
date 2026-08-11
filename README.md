@@ -120,17 +120,8 @@ npm run test:privacy
 
 `npm test` discovers and runs all focused `test:*` scripts, including the injected-adapter control-plane tests.
 
-## Drift and golden fixtures
+## Scenario and boundary fixtures
 
-The synthetic fixtures under `test/` represent separate organizations and must be assessed separately. The per-pack drift suite is the meaningful comparison against `src/knowledge_base/golden_baselines.json`.
+The synthetic fixtures under `test/` represent separate organizations and must be assessed separately. They are engineering inputs for exercising parsing, routing, evidence, privacy, and Quality Gate boundaries. They are not expert-approved reference assessments and must not be used to claim model accuracy, reproducibility, or drift monitoring.
 
-The older combined Drift Test runs Crawl, Walk, and Run fixtures as one document set. Treat that only as a pipeline simulation, not as a valid maturity or model-drift result.
-
-Run the per-pack suite:
-
-- after model-routing or prompt changes;
-- before a release candidate;
-- after scoring, taxonomy, or evidence-gate changes;
-- periodically to monitor provider-model behavior.
-
-Do not modify calibrated golden fixtures without reviewing and versioning their expected baselines.
+The low-, borderline-, and strong-evidence scenarios provide broad pipeline inputs. Tier 1 fixtures exercise narrower document types such as governance policies, tagging standards, operating-model charters, strategies, and optimization reviews.

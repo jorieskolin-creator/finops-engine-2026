@@ -273,7 +273,7 @@ export const buildRunTrace = (input: BuildRunTraceInput): RunTrace => {
   const kbDocs = input.referenceKbIndex.documents || [];
   const kbVersionHashes = Object.fromEntries(kbDocs.map(doc => [
     doc.pathname,
-    hashString([
+    doc.extracted_text_sha256 || doc.pdf_sha256 || hashString([
       doc.kb_id || '',
       doc.domain_id,
       doc.criterion_id,
@@ -310,7 +310,11 @@ export const buildRunTrace = (input: BuildRunTraceInput): RunTrace => {
     engine_version: input.engineVersion,
     taxonomy_version: FINOPS_TAXONOMY_REGISTRY.version,
     taxonomy_hash: hashString(JSON.stringify(FINOPS_TAXONOMY_REGISTRY)),
-    kb_index_hash: hashString(JSON.stringify(input.referenceKbIndex.status)),
+    kb_index_hash: hashString(JSON.stringify(kbDocs.map(doc => ({
+      pathname: doc.pathname,
+      pdf_sha256: doc.pdf_sha256,
+      extracted_text_sha256: doc.extracted_text_sha256
+    })))),
     kb_version_hashes: kbVersionHashes,
     tactic_db_version: 'local-tactics-v1',
     tactic_db_hash: hashString(JSON.stringify(FINOPS_TACTICS_LOCAL)),

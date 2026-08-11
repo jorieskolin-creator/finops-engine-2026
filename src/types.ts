@@ -276,6 +276,29 @@ export interface KnowledgeBaseRuntimeStatus {
   document_count: number;
   failure_count: number;
   domains?: Record<string, number>;
+  delivery?: {
+    sectioned_document_count: number;
+    page_limit_document_count: number;
+    sparse_page_count: number;
+    duplicate_section_heading_count: number;
+    invalid_section_order_document_count: number;
+    missing_expected_document_count: number;
+    unexpected_document_count: number;
+    duplicate_document_count: number;
+    shadow_ready: boolean;
+  };
+  shadow_packets?: Record<string, {
+    stage: KnowledgePacketStage;
+    domain_id?: string;
+    readiness: 'READY' | 'NOT_READY';
+    packet_hash: string;
+    document_count: number;
+    char_count: number;
+    missing_requirement_count: number;
+    coverage_issue_count: number;
+    oversized_section_count: number;
+    page_limit_document_count: number;
+  }>;
   loaded_at?: string;
 }
 
@@ -561,7 +584,10 @@ export interface RemoteKnowledgeBaseDocument {
   downloadUrl?: string;
   size?: number;
   uploadedAt?: string;
+  pdf_sha256?: string;
+  extracted_text_sha256?: string;
   kb_id?: string;
+  version?: string;
   domain_id: string;
   domain_name: string;
   stream: 'maturity' | 'antipattern';
@@ -572,7 +598,52 @@ export interface RemoteKnowledgeBaseDocument {
   allowed_uses: string[];
   forbidden_uses: string[];
   legacy_ids: string[];
+  extraction?: {
+    total_pages?: number;
+    processed_pages?: number;
+    sparse_pages: number[];
+    page_limit_reached: boolean;
+    section_count: number;
+    duplicate_section_headings: string[];
+    section_order_valid: boolean;
+  };
+  sections?: Record<string, string>;
   body_excerpt: string;
+}
+
+export type KnowledgePacketStage = 'forensic_audit' | 'evidence_check' | 'synthesis' | 'roadmap_synthesis';
+
+export interface ShadowKnowledgePacket {
+  schema_version: 'shadow_knowledge_packet_v1';
+  mode: 'shadow';
+  stage: KnowledgePacketStage;
+  domain_id?: string;
+  source: KnowledgeBaseRuntimeStatus['source'];
+  readiness: 'READY' | 'NOT_READY';
+  packet_hash: string;
+  document_count: number;
+  char_count: number;
+  missing_requirements: string[];
+  coverage_issues: string[];
+  oversized_sections: string[];
+  page_limit_documents: string[];
+  documents: Array<{
+    kb_id?: string;
+    version?: string;
+    domain_id: string;
+    capability_id: string;
+    criterion_id: string;
+    stream: 'maturity' | 'antipattern';
+    pdf_sha256?: string;
+    extracted_text_sha256?: string;
+    allowed_uses: string[];
+    forbidden_uses: string[];
+    extraction_complete: boolean;
+    extraction_warnings: string[];
+    included_sections: string[];
+    omitted_sections: string[];
+    text: string;
+  }>;
 }
 
 export interface RemoteKnowledgeBaseIndex {

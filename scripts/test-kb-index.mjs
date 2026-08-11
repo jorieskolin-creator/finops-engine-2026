@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
 import {
+  buildKbStatus,
+  extractKbSections,
   extractJsonFrontMatter,
   expectedIdsFromPathname,
   normalizeDomainName,
@@ -8,6 +10,7 @@ import {
   sanitizeKbDocument,
   validateKbMetadata,
 } from '../lib/kbIndex.js';
+import { fetchBlobBytes, listBlobPdfs } from '../api/kb-index.js';
 
 const baseMeta = {
   kb_type: 'reference',
@@ -143,5 +146,126 @@ const fDoc = sanitizeKbDocument({
 assert.equal(fDoc.domain_name, 'GenAI & AI Cost Management');
 assert.equal(fDoc.stream, 'maturity');
 assert.equal(fDoc.criterion_id, 'F2');
+
+const apD1Meta = {
+  ...antiMeta,
+  domain_id: 'D',
+  domain_name: 'Architecture & Engineering',
+  criterion_id: 'AP-D1',
+  capability_id: 'D1',
+  antipattern_name: 'Lift-and-Shift Without Optimization',
+};
+const apD1Path = 'Knowledge Base/Architecture & Engineering/D - Architecture & Engineering - AP-D1 - Lift-and-Shift Without Optimization.pdf';
+const longPrefix = 'Persistent migration economics context. '.repeat(220);
+const apD1Body = `Purpose
+${longPrefix}
+This prose mentions Validation Questions but is not a heading boundary.
+Canonical Definition
+Persistent inherited infrastructure assumptions create inefficient cloud economics.
+Primary Assessment Questions
+Were workloads migrated without cloud-native optimization?
+Anti-Pattern State Interpretation
+confirmed_present requires persistent operational evidence.
+Evidence Requirements
+Strong Evidence
+Persistently low utilization and inherited VM sizing.
+Moderate Evidence
+A modernization backlog with incomplete rightsizing.
+Weak Evidence
+Virtual machine use alone.
+Contradictory Evidence
+Operational autoscaling and recurring rightsizing.
+False Positive Guards
+A recent migration or temporary over-provisioning is not sufficient.
+Validation Questions
+Are workloads rightsized operationally?
+Detection Heuristics
+Same VM sizes as on-premises is a strong signal.
+Prohibited Inference Rules
+VM usage must not be treated as proof of this anti-pattern.
+Scoring Guidance Notes
+confirmed_present requires persistent inherited inefficiency.
+Canonical Source Foundations
+FinOps Foundation.`;
+const apD1Text = `${JSON.stringify(apD1Meta, null, 2)}\n\n${apD1Body}`;
+const apD1LegacyText = `${JSON.stringify(apD1Meta)}\n\n${apD1Body.replace(/\n/g, ' ')}`;
+const sections = extractKbSections(apD1Text);
+assert(Object.hasOwn(sections, 'evidence_requirements'));
+assert(sections.false_positive_guards.includes('recent migration'));
+assert(sections.prohibited_inference_rules.includes('must not be treated as proof'));
+assert(sections.scoring_guidance.includes('persistent inherited inefficiency'));
+assert(!sections.purpose.includes('Are workloads rightsized operationally?'));
+
+const apD1Doc = sanitizeKbDocument({
+  pathname: apD1Path,
+  text: apD1LegacyText,
+  sectionText: apD1Text,
+  pdfSha256: 'sha256_pdf',
+  extractedTextSha256: 'sha256_text',
+  extraction: {
+    totalPages: 15,
+    processedPages: 15,
+    sparsePages: [],
+    pageLimitReached: false,
+  },
+});
+assert(apD1Doc.body_excerpt.length > 6000, 'complete KB body must not be truncated at ingestion');
+assert(!apD1Doc.body_excerpt.includes('[truncated]'));
+assert(!apD1Doc.body_excerpt.includes('\nCanonical Definition'), 'legacy prompt body representation must remain flattened');
+assert(apD1Doc.sections.validation_questions.includes('rightsized operationally'));
+assert.equal(apD1Doc.extraction.processed_pages, 15);
+assert.equal(apD1Doc.extraction.page_limit_reached, false);
+assert.equal(apD1Doc.extraction.section_order_valid, true);
+assert.deepEqual(apD1Doc.extraction.duplicate_section_headings, []);
+assert.equal(apD1Doc.pdf_sha256, 'sha256_pdf');
+
+const status = buildKbStatus([apD1Doc], [], 'remote_blob', 'Knowledge Base/');
+assert.equal(status.delivery.sectioned_document_count, 1);
+assert.equal(status.delivery.missing_expected_document_count, 59);
+assert.equal(status.delivery.shadow_ready, false);
+
+const completeDocuments = ['A', 'B', 'C', 'D', 'E', 'F'].flatMap(domainId => (
+  Array.from({ length: 5 }, (_, index) => {
+    const capabilityId = `${domainId}${index + 1}`;
+    return [
+      { ...apD1Doc, domain_id: domainId, stream: 'maturity', criterion_id: capabilityId, capability_id: capabilityId },
+      { ...apD1Doc, domain_id: domainId, stream: 'antipattern', criterion_id: `AP-${capabilityId}`, capability_id: capabilityId },
+    ];
+  }).flat()
+));
+const completeStatus = buildKbStatus(completeDocuments, [], 'remote_blob', 'Knowledge Base/');
+assert.equal(completeStatus.delivery.missing_expected_document_count, 0);
+assert.equal(completeStatus.delivery.unexpected_document_count, 0);
+assert.equal(completeStatus.delivery.duplicate_document_count, 0);
+assert.equal(completeStatus.delivery.shadow_ready, true);
+
+await assert.rejects(
+  fetchBlobBytes({ pathname: 'oversized.pdf', size: (20 * 1024 * 1024) + 1, url: 'https://example.test/oversized.pdf' }, 'token'),
+  /KB_PDF_BYTE_LIMIT_EXCEEDED/
+);
+
+const originalFetch = globalThis.fetch;
+let listCalls = 0;
+globalThis.fetch = async () => {
+  const page = listCalls++;
+  const start = page * 100;
+  const count = page < 3 ? 100 : 1;
+  return {
+    ok: true,
+    json: async () => ({
+      blobs: Array.from({ length: count }, (_, index) => ({ pathname: `non-pdf-${start + index}.txt` })),
+      hasMore: page < 3,
+      cursor: page < 3 ? `cursor-${page + 1}` : undefined,
+    }),
+  };
+};
+try {
+  const boundedListing = await listBlobPdfs({ token: 'vercel_blob_rw_store_secret', prefix: 'Knowledge Base/' });
+  assert.equal(listCalls, 4);
+  assert.equal(boundedListing.blobs.length, 0);
+  assert.equal(boundedListing.limitReached, true);
+} finally {
+  globalThis.fetch = originalFetch;
+}
 
 console.log('KB index tests passed');

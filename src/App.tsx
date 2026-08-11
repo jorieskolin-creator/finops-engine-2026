@@ -9,7 +9,6 @@ import { forensicSanitizeImport } from './services/securityService';
 import { extractDiagnosticResultFromHtmlReport, isDiagnosticResultPayload, parseDiagnosticResultJson, serializeDiagnosticResultForHtml } from './services/reportImportService';
 import { findGeneratedReportPrivacyFindings, scrubDiagnosticResultForPrivacy } from './services/privacyService';
 import { PerformanceMonitor } from './services/debugService';
-import { runFullDriftSuite } from './services/driftDetectionService';
 import { DiagnosticResult, ScanResult, PersonaId, PERSONA_IDS, PERSONA_LABELS, SourcePage, SourceRecord } from './types';
 import { METRIC_DESCRIPTIONS } from './constants';
 import { GaugeCard, AuditGrid, StrategicRoadmap, ComparisonChart, ReferenceLibrary, QualityGateBanner, BenchmarkingChart, TransferProtocol, MarkdownRenderer, NeuralLoadingGrid } from './components/DashboardComponents';
@@ -18,9 +17,6 @@ import { LoginModal } from './components/LoginModal';
 import { AppErrorBoundary } from './components/AppErrorBoundary';
 import { checkSession, logout } from './services/authService';
 import { deleteRun } from './services/runLifecycleService';
-import goldenCrawl from '../test/golden-crawl.txt?raw';
-import goldenWalk from '../test/golden-walk.txt?raw';
-import goldenRun from '../test/golden-run.txt?raw';
 import tier1GovernancePolicy from '../test/tier1-governance-policy.txt?raw';
 import tier1TaggingPolicy from '../test/tier1-tagging-policy.txt?raw';
 import tier1CoeCharter from '../test/tier1-coe-charter.txt?raw';
@@ -29,12 +25,6 @@ import tier1RiSpStrategy from '../test/tier1-ri-sp-strategy.txt?raw';
 import tier1CostOptReview from '../test/tier1-cost-optimization-review.txt?raw';
 import demoSimulation from '../test/demo-simulation.txt?raw';
 
-const DRIFT_FIXTURES = [
-  { name: 'golden-crawl.txt', text: goldenCrawl },
-  { name: 'golden-walk.txt', text: goldenWalk },
-  { name: 'golden-run.txt', text: goldenRun },
-];
-const DRIFT_LABEL = 'Drift Test — Combined Golden Fixtures';
 const DEMO_SIMULATION_LABEL = 'Engine Simulation — Northstar Retail Demo Pack';
 const SAVED_ASSESSMENT_KEY = 'finops:last-assessment:v1';
 const SAVED_ASSESSMENT_META_KEY = 'finops:last-assessment-meta:v1';
@@ -144,13 +134,6 @@ const TIER1_FIXTURES: Array<{ pack_id: string; name: string; label: string; text
   { pack_id: 'tier1-cloud-strategy', name: 'tier1-cloud-strategy.txt', label: 'Cloud Strategy (3-Year Plan)', text: tier1CloudStrategy },
   { pack_id: 'tier1-ri-sp-strategy', name: 'tier1-ri-sp-strategy.txt', label: 'RI / Savings Plan Strategy', text: tier1RiSpStrategy },
   { pack_id: 'tier1-cost-optimization-review', name: 'tier1-cost-optimization-review.txt', label: 'Quarterly Cost Optimization Review', text: tier1CostOptReview }
-];
-
-const PER_PACK_FIXTURES: Array<{ pack_id: string; name: string; label: string; text: string }> = [
-  { pack_id: 'golden-crawl', name: 'golden-crawl.txt', label: 'Golden — Crawl-stage org', text: goldenCrawl },
-  { pack_id: 'golden-walk', name: 'golden-walk.txt', label: 'Golden — Walk-stage org', text: goldenWalk },
-  { pack_id: 'golden-run', name: 'golden-run.txt', label: 'Golden — Run-stage org', text: goldenRun },
-  ...TIER1_FIXTURES
 ];
 
 interface UploadedFile {
@@ -491,11 +474,6 @@ const App: React.FC = () => {
   const [showLogin, setShowLogin] = useState(false);
   const [activePersona, setActivePersona] = useState<PersonaId>('finops_lead');
   const [deepMode, setDeepMode] = useState(false);
-  const [perPackRunning, setPerPackRunning] = useState(false);
-  const [perPackCurrent, setPerPackCurrent] = useState<number>(0);
-  const [perPackCurrentLabel, setPerPackCurrentLabel] = useState<string>('');
-  const [perPackReport, setPerPackReport] = useState<ReturnType<typeof runFullDriftSuite> | null>(null);
-  const [perPackError, setPerPackError] = useState<string | null>(null);
   const [recoveryNotice, setRecoveryNotice] = useState<string | null>(null);
   const [hasSavedAssessment, setHasSavedAssessment] = useState(false);
   const [safeRecoveryResult, setSafeRecoveryResult] = useState<DiagnosticResult | null>(null);
@@ -507,8 +485,6 @@ const App: React.FC = () => {
   const [privacyNotice, setPrivacyNotice] = useState<string | null>(null);
   const [organizationRedactionTerm, setOrganizationRedactionTerm] = useState('');
   const pendingAnalyzeRef = useRef(false);
-  const pendingDriftRef = useRef(false);
-  const pendingPerPackRef = useRef(false);
   const pendingSimulationRef = useRef(false);
   const nextRecoverySourceRef = useRef<SavedAssessmentMeta['source']>('completed_assessment');
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -754,18 +730,6 @@ const App: React.FC = () => {
       return;
     }
 
-    // Reject composite drift fixtures. These describe three DIFFERENT
-    // archetype organizations (Crawl / Walk / Run) and were never meant to
-    // be assessed together — doing so produces a "consolidated audit across
-    // the corpus" that mixes the three orgs' evidence into one fictional
-    // composite. Route them to the Drift Test panel instead.
-    const driftFixturePattern = /^golden-(crawl|walk|run)\.txt$/i;
-    const driftFiles = [...files, ...newFiles].filter(f => driftFixturePattern.test(('name' in f ? f.name : '')));
-    if (driftFiles.length >= 2) {
-      setError(`Multiple drift fixtures detected (${driftFiles.map(f => f.name).join(', ')}). These describe DIFFERENT archetype organizations and must not be combined into one assessment. Use the Drift Test panel for comparison runs.`);
-      return;
-    }
-
     if (newFiles.some(f => f.type.startsWith('image/') || /\.(png|jpe?g)$/i.test(f.name))) {
       setError('Direct image uploads are disabled. Only extracted text is processed; local OCR is unavailable.');
       return;
@@ -871,82 +835,12 @@ const App: React.FC = () => {
     }
   };
 
-  const startDriftTest = () => {
-    const sources = DRIFT_FIXTURES.map((f,index): SourceRecord => ({ schema_version:'source_record_v1', source_id:`src-${String(index+1).padStart(3,'0')}`, source_name:f.name, kind:'text', text:sanitizeInput(f.text) }));
-    runAnalyze({ sourcesOverride:sources, label: DRIFT_LABEL });
-  };
-
   const startTier1Fixture = (packId: string) => {
     if (loading) return;
     const fixture = TIER1_FIXTURES.find(f => f.pack_id === packId);
     if (!fixture) return;
-    if (!authenticated) {
-      pendingDriftRef.current = true;
-      setShowLogin(true);
-      return;
-    }
     const source: SourceRecord = { schema_version:'source_record_v1', source_id:'src-001', source_name:fixture.name, kind:'text', text:sanitizeInput(fixture.text) };
     runAnalyze({ sourcesOverride:[source], label: `Tier 1 Fixture — ${fixture.label}` });
-  };
-
-  const startPerPackDrift = async () => {
-    setPerPackRunning(true);
-    setPerPackReport(null);
-    setPerPackError(null);
-    setPerPackCurrent(0);
-    setPerPackCurrentLabel('');
-    PerformanceMonitor.start('PerPackDriftSuite');
-
-    const accumulated: Array<{
-      packId: string;
-      phase1Logs: { maturity: Record<string, any>; antipattern: Record<string, any> };
-      classification: string;
-      readiness: number;
-    }> = [];
-
-    try {
-      for (let i = 0; i < PER_PACK_FIXTURES.length; i++) {
-        const fixture = PER_PACK_FIXTURES[i];
-        setPerPackCurrent(i + 1);
-        setPerPackCurrentLabel(fixture.label);
-        console.log(`[PerPackDrift] (${i + 1}/${PER_PACK_FIXTURES.length}) ${fixture.pack_id}`);
-        const source: SourceRecord = { schema_version:'source_record_v1', source_id:'src-001', source_name:fixture.name, kind:'text', text:sanitizeInput(fixture.text) };
-        const data = await analyzeDocument([source], () => {});
-        if (!data.phase_2_validation?.metrics) {
-          throw new Error(`Analysis for ${fixture.pack_id} returned incomplete data.`);
-        }
-        accumulated.push({
-          packId: fixture.pack_id,
-          phase1Logs: data.phase_1_audit_logs,
-          classification: data.phase_2_validation.crawl_walk_run,
-          readiness: data.phase_2_validation.metrics.finops_readiness
-        });
-      }
-      const report = runFullDriftSuite(accumulated);
-      console.log(report.report);
-      setPerPackReport(report);
-    } catch (err: any) {
-      setPerPackError(err?.message || 'Per-Pack Drift Suite failed.');
-      console.error('[PerPackDrift] Failed:', err);
-    } finally {
-      setPerPackRunning(false);
-      setPerPackCurrent(0);
-      setPerPackCurrentLabel('');
-      PerformanceMonitor.end('PerPackDriftSuite');
-    }
-  };
-
-  const handlePerPackDrift = () => {
-    if (loading || perPackRunning) return;
-    if (!authenticated) {
-      pendingPerPackRef.current = true;
-      setShowLogin(true);
-      return;
-    }
-    const confirmMsg = `Per-Pack Drift will run ${PER_PACK_FIXTURES.length} sequential analyses (3 maturity-stratified + 6 Tier 1 fixtures). ` +
-      `Each analysis is a full Phase 1+2+3 pass. Expect ~10–15 minutes and meaningful API cost. Proceed?`;
-    if (!window.confirm(confirmMsg)) return;
-    startPerPackDrift();
   };
 
   const handleAnalyze = async () => {
@@ -957,16 +851,6 @@ const App: React.FC = () => {
       return;
     }
     await runAnalyze();
-  };
-
-  const handleDriftTest = () => {
-    if (loading) return;
-    if (!authenticated) {
-      pendingDriftRef.current = true;
-      setShowLogin(true);
-      return;
-    }
-    startDriftTest();
   };
 
   const startEngineSimulation = () => {
@@ -1278,16 +1162,6 @@ const App: React.FC = () => {
             )}
 
             {authenticated && !loading && !result && (
-              <button
-                onClick={handleDriftTest}
-                className="text-xs font-bold uppercase tracking-widest text-amber-300 hover:text-white bg-amber-950/30 hover:bg-amber-700/40 border border-amber-700/40 hover:border-amber-400 transition-colors px-4 py-2 rounded-lg"
-                title="Run the assessment against the bundled golden fixtures (crawl + walk + run combined)"
-              >
-                Drift Test
-              </button>
-            )}
-
-            {authenticated && !loading && !result && (
               <select
                 onChange={(e) => { if (e.target.value) { startTier1Fixture(e.target.value); e.target.value = ''; } }}
                 defaultValue=""
@@ -1299,17 +1173,6 @@ const App: React.FC = () => {
                   <option key={f.pack_id} value={f.pack_id}>{f.label}</option>
                 ))}
               </select>
-            )}
-
-            {authenticated && !loading && !result && (
-              <button
-                onClick={handlePerPackDrift}
-                disabled={perPackRunning}
-                className="text-xs font-bold uppercase tracking-widest text-fuchsia-300 hover:text-white bg-fuchsia-950/30 hover:bg-fuchsia-700/40 border border-fuchsia-700/40 hover:border-fuchsia-400 transition-colors px-4 py-2 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
-                title="Run each golden fixture (3 maturity + 6 Tier 1) sequentially through the full pipeline, then compare scores against per-criterion expected ranges in golden_baselines.json. ~10–15 minutes."
-              >
-                {perPackRunning ? `Drift ${perPackCurrent}/${PER_PACK_FIXTURES.length}…` : 'Per-Pack Drift'}
-              </button>
             )}
 
             {(result || files.length > 0) && (
@@ -1841,101 +1704,11 @@ const App: React.FC = () => {
         </div>
       </footer>
 
-      {perPackRunning && (
-        <div className="fixed inset-0 z-[60] bg-slate-950/85 backdrop-blur-md flex items-center justify-center px-6">
-          <div className="max-w-xl w-full glass-panel rounded-3xl p-10 border border-fuchsia-500/30 bg-slate-900/70 text-center">
-            <div className="text-[10px] font-bold uppercase tracking-[0.25em] text-fuchsia-300 mb-3">Per-Pack Drift Suite</div>
-            <h3 className="text-2xl font-display font-bold text-white mb-2">Running {perPackCurrent} of {PER_PACK_FIXTURES.length}</h3>
-            <p className="text-sm text-slate-300 mb-6">{perPackCurrentLabel}</p>
-            <div className="w-full h-2 bg-white/5 rounded-full overflow-hidden mb-6">
-              <div
-                className="h-full bg-gradient-to-r from-fuchsia-500 to-violet-500 transition-all duration-500"
-                style={{ width: `${(perPackCurrent / PER_PACK_FIXTURES.length) * 100}%` }}
-              />
-            </div>
-            <p className="text-xs text-slate-400">
-              Each fixture runs through the full Phase 1 + 2 + 3 pipeline. Scores are accumulated and compared against per-criterion baselines once all fixtures complete.
-            </p>
-          </div>
-        </div>
-      )}
-
-      {perPackReport && !perPackRunning && (
-        <div className="fixed inset-0 z-[60] bg-slate-950/90 backdrop-blur-md flex items-start justify-center px-6 py-10 overflow-y-auto">
-          <div className="max-w-5xl w-full glass-panel rounded-3xl p-10 border border-fuchsia-500/30 bg-slate-900/80">
-            <div className="flex items-center justify-between gap-4 mb-6">
-              <div>
-                <div className="text-[10px] font-bold uppercase tracking-[0.25em] text-fuchsia-300 mb-2">Per-Pack Drift Report</div>
-                <h3 className="text-2xl font-display font-bold text-white">
-                  Overall Status: <span className={
-                    perPackReport.overall_status === 'CLEAN' ? 'text-emerald-400' :
-                    perPackReport.overall_status === 'MINOR_VARIANCE' ? 'text-amber-300' :
-                    'text-rose-400'
-                  }>{perPackReport.overall_status.replace('_', ' ')}</span>
-                </h3>
-              </div>
-              <button
-                onClick={() => setPerPackReport(null)}
-                className="text-xs font-bold uppercase tracking-widest text-slate-300 hover:text-white bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/20 transition-colors px-4 py-2 rounded-lg"
-              >
-                Close
-              </button>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 mb-6">
-              {perPackReport.results.map(r => {
-                const status = r.threshold_exceeded || !r.classification_match ? 'DRIFT' : r.criterion_violations.length > 0 ? 'VARIANCE' : 'CLEAN';
-                const color = status === 'CLEAN' ? 'border-emerald-500/30 text-emerald-300 bg-emerald-500/5' : status === 'VARIANCE' ? 'border-amber-500/30 text-amber-300 bg-amber-500/5' : 'border-rose-500/30 text-rose-300 bg-rose-500/5';
-                return (
-                  <div key={r.pack_id} className={`p-4 rounded-xl border ${color}`}>
-                    <div className="flex items-start justify-between gap-3 mb-2">
-                      <p className="font-mono text-[11px] text-slate-300 break-all">{r.pack_id}</p>
-                      <span className="text-[10px] font-bold uppercase tracking-wider shrink-0">{status}</span>
-                    </div>
-                    <p className="text-xs text-slate-400 mb-1">
-                      Classification: <span className="text-slate-200">{r.actual_classification}</span> (expected {r.expected_classification}) {r.classification_match ? '✓' : '✗'}
-                    </p>
-                    <p className="text-xs text-slate-400 mb-1">
-                      Readiness: <span className="text-slate-200">{Math.round(r.actual_readiness)}%</span> (expected {r.expected_readiness_range[0]}–{r.expected_readiness_range[1]}%) {r.readiness_in_range ? '✓' : '✗'}
-                    </p>
-                    <p className="text-xs text-slate-400">
-                      Violations: <span className="text-slate-200">{r.criterion_violations.length}</span> · Total deviation: <span className="text-slate-200">{r.total_deviation}</span>
-                    </p>
-                  </div>
-                );
-              })}
-            </div>
-
-            <div>
-              <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-2">Full Report (console-format)</p>
-              <pre className="text-xs text-slate-300 bg-slate-950/60 border border-white/5 rounded-xl p-4 overflow-x-auto whitespace-pre-wrap max-h-[500px] overflow-y-auto leading-relaxed">{perPackReport.report}</pre>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {perPackError && !perPackRunning && (
-        <div className="fixed inset-0 z-[60] bg-slate-950/90 backdrop-blur-md flex items-center justify-center px-6">
-          <div className="max-w-lg w-full glass-panel rounded-3xl p-10 border border-rose-500/30 bg-slate-900/80 text-center">
-            <div className="text-[10px] font-bold uppercase tracking-[0.25em] text-rose-300 mb-3">Per-Pack Drift Failed</div>
-            <p className="text-sm text-slate-200 mb-6">{perPackError}</p>
-            <button
-              onClick={() => setPerPackError(null)}
-              className="text-xs font-bold uppercase tracking-widest text-slate-300 hover:text-white bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/20 transition-colors px-4 py-2 rounded-lg"
-            >
-              Dismiss
-            </button>
-          </div>
-        </div>
-      )}
-
       <LoginModal
         open={showLogin}
         onClose={() => {
           setShowLogin(false);
           pendingAnalyzeRef.current = false;
-          pendingDriftRef.current = false;
-          pendingPerPackRef.current = false;
           pendingSimulationRef.current = false;
         }}
         onSuccess={() => {
@@ -1944,12 +1717,6 @@ const App: React.FC = () => {
           if (pendingAnalyzeRef.current) {
             pendingAnalyzeRef.current = false;
             runAnalyze();
-          } else if (pendingDriftRef.current) {
-            pendingDriftRef.current = false;
-            startDriftTest();
-          } else if (pendingPerPackRef.current) {
-            pendingPerPackRef.current = false;
-            startPerPackDrift();
           } else if (pendingSimulationRef.current) {
             pendingSimulationRef.current = false;
             startEngineSimulation();
