@@ -237,16 +237,18 @@ const validateSourceRecords = (records: SourceRecord[]): void => {
     if (hasText === hasPages) throw new Error('INVALID_SOURCE_CONTENT');
     if (hasPages) {
       const pageIds = new Set<string>();
+      const pageNumbers = new Set<number>();
       let nonEmptyPageCount = 0;
       for (const page of record.pages!) {
         if (!page || page.schema_version !== 'source_page_v1'
           || typeof page.page_id !== 'string' || !SOURCE_ID_PATTERN.test(page.page_id) || pageIds.has(page.page_id)
-          || !Number.isInteger(page.page_number) || page.page_number < 1
+          || !Number.isInteger(page.page_number) || page.page_number < 1 || pageNumbers.has(page.page_number)
           || typeof page.text !== 'string') {
           throw new Error('INVALID_SOURCE_PAGE');
         }
         if (page.text.trim().length > 0) nonEmptyPageCount++;
         pageIds.add(page.page_id);
+        pageNumbers.add(page.page_number);
       }
       if (nonEmptyPageCount === 0) throw new Error('INVALID_SOURCE_CONTENT');
     }
@@ -468,8 +470,8 @@ const countMatches = (text: string, rx: RegExp): number => {
 
 export const scanRegistryDlp = (registry: SourceRegistry): DlpScanResult => {
   const patterns: Array<{ kind: DlpPatternHit['kind']; severity: DlpPatternHit['severity']; rx: RegExp }> = [
-    { kind: 'cloud_key', severity: 'block', rx: /\b(?:AKIA[0-9A-Z]{16}|\[AWS_KEY_REDACTED\])\b/g },
-    { kind: 'secret', severity: 'block', rx: /\b(?:sk-[a-zA-Z0-9]{20,}|pk_[a-zA-Z0-9]{20,}|\[API_KEY_REDACTED\])\b/g },
+    { kind: 'cloud_key', severity: 'block', rx: /\bAKIA[0-9A-Z]{16}\b|\[AWS_KEY_REDACTED\]/g },
+    { kind: 'secret', severity: 'block', rx: /\b(?:sk-[a-zA-Z0-9]{20,}|pk_[a-zA-Z0-9]{20,})\b|\[API_KEY_REDACTED\]/g },
     { kind: 'private_key', severity: 'block', rx: /-----BEGIN [A-Z ]*PRIVATE KEY-----/g },
     { kind: 'email', severity: 'caution', rx: /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}|\[EMAIL_REDACTED\]/g },
     { kind: 'phone', severity: 'caution', rx: /(?:\+?\d{1,3}[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}|\[PHONE_REDACTED\]/g },

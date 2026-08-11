@@ -57,6 +57,9 @@ assert.equal(wideCsv.structuredTable.headers.length,200);assert.equal(wideCsv.st
 const manyRowsCsv = renderDelimitedTableForAnalysis(`owner\n${Array.from({length:10000},(_,i)=>`owner-${i}`).join('\n')}`, { fileName:'many.csv', delimiter:',' });
 assert.equal(manyRowsCsv.rowCount,10000);assert.equal(manyRowsCsv.structuredTable.rows.length,150);assert.equal(manyRowsCsv.structuredTable.truncated,true);
 const emptyCsv = renderDelimitedTableForAnalysis('', { fileName:'empty.csv', delimiter:',' });assert.deepEqual(emptyCsv.structuredTable.headers,[]);assert.deepEqual(emptyCsv.structuredTable.rows,[]);
+assert.throws(()=>renderDelimitedTableForAnalysis('owner,cost\n"alice,100',{fileName:'broken.csv',delimiter:','}),/INVALID_DELIMITED_TABLE_UNCLOSED_QUOTE/);
+assert.throws(()=>renderDelimitedTableForAnalysis('owner,cost\nal"ice,100',{fileName:'broken.csv',delimiter:','}),/INVALID_DELIMITED_TABLE_QUOTE_IN_UNQUOTED_CELL/);
+assert.throws(()=>renderDelimitedTableForAnalysis('owner,cost\n"alice"suffix,100',{fileName:'broken.csv',delimiter:','}),/INVALID_DELIMITED_TABLE_TRAILING_QUOTED_CONTENT/);
 
 const tsv = renderDelimitedTableForAnalysis('team\towner\nplatform\tfinance', {
   fileName: 'teams.tsv',

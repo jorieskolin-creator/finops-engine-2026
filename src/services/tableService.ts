@@ -27,6 +27,7 @@ export const parseDelimitedTable = (raw: string, delimiter: ',' | '\t'): ParsedD
   let current = '';
   let row: string[] = [];
   let inQuotes = false;
+  let quotedCellClosed = false;
   const commitRow = (): void => {
     if (!row.some(cell => cell.trim().length > 0)) return;
     if (!headerRow) headerRow = row;
@@ -40,12 +41,18 @@ export const parseDelimitedTable = (raw: string, delimiter: ',' | '\t'): ParsedD
     const char = raw[i];
     const next = raw[i + 1];
 
+    if (quotedCellClosed && char !== delimiter && char !== '\n' && char !== '\r' && !/\s/.test(char)) {
+      throw new Error('INVALID_DELIMITED_TABLE_TRAILING_QUOTED_CONTENT');
+    }
+
     if (char === '"') {
       if (inQuotes && next === '"') {
         current += '"';
         i++;
       } else {
+        if (!inQuotes && current.trim().length > 0) throw new Error('INVALID_DELIMITED_TABLE_QUOTE_IN_UNQUOTED_CELL');
         inQuotes = !inQuotes;
+        quotedCellClosed = !inQuotes;
       }
       continue;
     }
@@ -53,6 +60,7 @@ export const parseDelimitedTable = (raw: string, delimiter: ',' | '\t'): ParsedD
     if (char === delimiter && !inQuotes) {
       row.push(current);
       current = '';
+      quotedCellClosed = false;
       continue;
     }
 
@@ -62,11 +70,14 @@ export const parseDelimitedTable = (raw: string, delimiter: ',' | '\t'): ParsedD
       commitRow();
       row = [];
       current = '';
+      quotedCellClosed = false;
       continue;
     }
 
     current += char;
   }
+
+  if (inQuotes) throw new Error('INVALID_DELIMITED_TABLE_UNCLOSED_QUOTE');
 
   row.push(current);
   commitRow();

@@ -31,6 +31,7 @@
     "test:acquisition-quality": "node scripts/test-acquisition-quality.mjs",
     "test:structured-data": "node scripts/test-structured-data-analysis.mjs",
     "test:bounded-retrieval": "node scripts/test-bounded-retrieval.mjs",
+    "test:scenario-boundaries": "node scripts/test-scenario-boundaries.mjs",
     "test:source-registry": "node scripts/test-source-registry-packetizer.mjs",
     "test:governance": "node scripts/test-governance.mjs",
     "test:dlp-distributed": "node scripts/test-dlp-distributed-sampling.mjs",
