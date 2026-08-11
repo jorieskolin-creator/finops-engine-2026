@@ -2,6 +2,7 @@ import {
   AuditItem,
   DiagnosticResult,
   DlpScanResult,
+  DerivedAnalyticalEvidence,
   EvidenceQuote,
   Phase1AuditLogs,
   Phase2Validation,
@@ -48,6 +49,7 @@ interface BuildRunTraceInput {
   strategy: DiagnosticResult['phase_3_strategy'];
   qualityGate: QualityGateResult;
   tacticGroundingAdjustments: TacticGroundingTraceAdjustment[];
+  derivedAnalyticalEvidence?: DerivedAnalyticalEvidence[];
 }
 
 const stageTraceBuffer = new Map<string, StageTrace[]>();
@@ -322,6 +324,7 @@ export const buildRunTrace = (input: BuildRunTraceInput): RunTrace => {
     created_at: new Date().toISOString(),
     input_manifest: sourceManifest(input.sourceRegistry),
     context_packets: contextPackets,
+    derived_analytical_evidence: input.derivedAnalyticalEvidence,
     dlp: {
       scanned_chunk_count: input.dlpScan.scanned_chunk_count,
       model_review_chunk_count: input.dlpReviewChunkCount,

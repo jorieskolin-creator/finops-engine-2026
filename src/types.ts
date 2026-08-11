@@ -416,6 +416,14 @@ export interface SourcePage {
   text: string;
 }
 
+export interface StructuredTableData {
+  schema_version: 'structured_table_v1';
+  headers: string[];
+  rows: string[][];
+  total_row_count: number;
+  truncated: boolean;
+}
+
 export interface SourceRecord {
   schema_version: 'source_record_v1';
   source_id: string;
@@ -423,6 +431,7 @@ export interface SourceRecord {
   kind: 'text' | 'pdf' | 'html' | 'csv' | 'tsv' | 'json';
   text?: string;
   pages?: SourcePage[];
+  structured_table?: StructuredTableData;
   parse_warnings?: string[];
   extraction?: SourceExtractionMetadata;
 }
@@ -535,6 +544,7 @@ export interface RunTrace {
   created_at: string;
   input_manifest: SourceManifestTrace[];
   context_packets: ContextPacketTrace[];
+  derived_analytical_evidence?: DerivedAnalyticalEvidence[];
   dlp: {
     scanned_chunk_count: number;
     model_review_chunk_count: number;
@@ -555,6 +565,40 @@ export interface RunTrace {
     api_keys_included: false;
     note: string;
   };
+}
+
+export interface DataSignalRegistryEntry {
+  readonly signal_id: string;
+  analyzer_id: 'tagging_allocation_v1';
+  readonly targets: ReadonlyArray<{ readonly stream: 'maturity' | 'antipattern'; readonly criterion_id: 'A1' }>;
+  readonly canonical_fields: readonly string[];
+}
+
+export interface DerivedAnalyticalEvidence {
+  schema_version: 'derived_analytical_evidence_v1';
+  mode: 'shadow';
+  evidence_id: string;
+  evidence_type: 'deterministic_analytical';
+  source_id: string;
+  targets: Array<{ stream: 'maturity' | 'antipattern'; criterion_id: 'A1' }>;
+  derivation: {
+    analyzer_id: 'tagging_allocation_v1';
+    analyzer_version: '1.0.0';
+    registry_version: 'data_signal_registry_v1';
+    method: 'tagging_allocation_coverage_analysis';
+  };
+  result: {
+    status: 'OBSERVED' | 'INSUFFICIENT_SIGNAL';
+    source_row_count: number;
+    analyzed_row_count: number;
+    row_scope: 'full_table' | 'bounded_prefix';
+    row_truncated: boolean;
+    detected_signal_count: number;
+    mapping_population_coverage: number | null;
+    tagging_population_coverage: number | null;
+    allocation_population_coverage: number | null;
+  };
+  raw_value_exposure: false;
 }
 
 export interface SourceManifestTrace {

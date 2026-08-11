@@ -250,6 +250,18 @@ const validateSourceRecords = (records: SourceRecord[]): void => {
       }
       if (nonEmptyPageCount === 0) throw new Error('INVALID_SOURCE_CONTENT');
     }
+    if (record.structured_table) {
+      const table=record.structured_table;
+      if((record.kind!=='csv'&&record.kind!=='tsv')||table.schema_version!=='structured_table_v1'
+        ||!Array.isArray(table.headers)||table.headers.length>200
+        ||!Array.isArray(table.rows)||table.rows.length>150||!Number.isInteger(table.total_row_count)
+        ||table.total_row_count<table.rows.length||typeof table.truncated!=='boolean'
+        ||(table.total_row_count>table.rows.length&&!table.truncated)
+        ||table.headers.some(header=>typeof header!=='string'||header.length>243)
+        ||table.rows.some(row=>!Array.isArray(row)||row.length>200||row.some(cell=>typeof cell!=='string'||cell.length>243))) {
+        throw new Error('INVALID_STRUCTURED_TABLE');
+      }
+    }
   }
 };
 

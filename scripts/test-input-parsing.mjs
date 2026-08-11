@@ -30,6 +30,10 @@ assert.match(csv.text, /Headers: service \| cost/);
 assert.match(csv.text, /compute \| 12/);
 assert.equal(csv.rowCount, 2);
 assert.equal(csv.renderedRowCount, 2);
+assert.equal(csv.structuredTable.schema_version, 'structured_table_v1');
+assert.deepEqual(csv.structuredTable.headers, ['service', 'cost']);
+assert.equal(csv.structuredTable.total_row_count, 2);
+assert.equal(csv.structuredTable.truncated, false);
 
 const largeCsv = renderDelimitedTableForAnalysis(`service,cost\n${Array.from({ length: 151 }, (_, index) => `svc-${index},${index}`).join('\n')}`, {
   fileName: 'large-costs.csv',
@@ -37,6 +41,7 @@ const largeCsv = renderDelimitedTableForAnalysis(`service,cost\n${Array.from({ l
 });
 assert.equal(largeCsv.rowCount, 151);
 assert.equal(largeCsv.renderedRowCount, 150);
+assert.equal(largeCsv.structuredTable.truncated, true);
 assert.match(largeCsv.warnings.join(' '), /first 150 rows/);
 
 const clippedCsv = renderDelimitedTableForAnalysis(`service,description\ncompute,${'x'.repeat(300)}`, {
@@ -46,6 +51,12 @@ const clippedCsv = renderDelimitedTableForAnalysis(`service,description\ncompute
 assert.equal(clippedCsv.clippedCellCount, 1);
 assert.ok(clippedCsv.cellCharacterCoverageRatio < 1);
 assert.match(clippedCsv.warnings.join(' '), /cell\(s\).*truncated/);
+
+const wideCsv = renderDelimitedTableForAnalysis(`${Array.from({length:201},(_,i)=>`column_${i}`).join(',')}\n${Array.from({length:201},()=>1).join(',')}`, { fileName:'wide.csv', delimiter:',' });
+assert.equal(wideCsv.structuredTable.headers.length,200);assert.equal(wideCsv.structuredTable.rows[0].length,200);assert.equal(wideCsv.structuredTable.truncated,true);
+const manyRowsCsv = renderDelimitedTableForAnalysis(`owner\n${Array.from({length:10000},(_,i)=>`owner-${i}`).join('\n')}`, { fileName:'many.csv', delimiter:',' });
+assert.equal(manyRowsCsv.rowCount,10000);assert.equal(manyRowsCsv.structuredTable.rows.length,150);assert.equal(manyRowsCsv.structuredTable.truncated,true);
+const emptyCsv = renderDelimitedTableForAnalysis('', { fileName:'empty.csv', delimiter:',' });assert.deepEqual(emptyCsv.structuredTable.headers,[]);assert.deepEqual(emptyCsv.structuredTable.rows,[]);
 
 const tsv = renderDelimitedTableForAnalysis('team\towner\nplatform\tfinance', {
   fileName: 'teams.tsv',

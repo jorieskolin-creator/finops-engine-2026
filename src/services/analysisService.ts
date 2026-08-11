@@ -40,6 +40,7 @@ import {
 } from "./sourceRegistryService";
 import { buildRunTrace, clearStageTraces, consumeStageTraces, summarizeRunTrace } from "./runTraceService";
 import { acquisitionQualityPersistence, buildAcquisitionQualitySnapshot } from "./acquisitionQualityService";
+import { analyzeStructuredSources } from "./structuredDataAnalysisService";
 
 const FACT_CHECK_MAX_RETRIES = 2;
 const ID_VALIDATION_MAX_REGENS = 2;
@@ -236,6 +237,7 @@ export const analyzeDocument = async (
 
   try {
     const sourceRegistry = buildSourceRegistry(sources);
+    const derivedAnalyticalEvidence = analyzeStructuredSources(sources);
     const text = renderPseudonymousSourceContext(sourceRegistry, 50000);
     const sourcePackets = buildDomainPackets(sourceRegistry);
     const dlpScan = scanRegistryDlp(sourceRegistry);
@@ -1038,7 +1040,8 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => `  ${cat}
       phase2: validationData,
       strategy: finalResult.phase_3_strategy,
       qualityGate,
-      tacticGroundingAdjustments
+      tacticGroundingAdjustments,
+      derivedAnalyticalEvidence
     });
     finalResult.meta.run_trace = runTrace;
     finalResult.meta.run_trace_summary = summarizeRunTrace(runTrace);

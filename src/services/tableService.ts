@@ -21,10 +21,20 @@ const normalizeCell = (value: string): { value: string; originalLength: number; 
 };
 
 export const parseDelimitedTable = (raw: string, delimiter: ',' | '\t'): ParsedDelimitedTable => {
-  const rows: string[][] = [];
+  let headerRow: string[] | undefined;
+  const retainedRows: string[][] = [];
+  let rowCount = 0;
   let current = '';
   let row: string[] = [];
   let inQuotes = false;
+  const commitRow = (): void => {
+    if (!row.some(cell => cell.trim().length > 0)) return;
+    if (!headerRow) headerRow = row;
+    else {
+      rowCount++;
+      if (retainedRows.length < MAX_RENDERED_ROWS) retainedRows.push(row);
+    }
+  };
 
   for (let i = 0; i < raw.length; i++) {
     const char = raw[i];
@@ -49,7 +59,7 @@ export const parseDelimitedTable = (raw: string, delimiter: ',' | '\t'): ParsedD
     if ((char === '\n' || char === '\r') && !inQuotes) {
       if (char === '\r' && next === '\n') i++;
       row.push(current);
-      if (row.some(cell => cell.trim().length > 0)) rows.push(row);
+      commitRow();
       row = [];
       current = '';
       continue;
@@ -59,17 +69,17 @@ export const parseDelimitedTable = (raw: string, delimiter: ',' | '\t'): ParsedD
   }
 
   row.push(current);
-  if (row.some(cell => cell.trim().length > 0)) rows.push(row);
+  commitRow();
 
-  const headerCells = (rows.shift() || []).map(normalizeCell);
-  const renderedRows = rows.slice(0, MAX_RENDERED_ROWS).map(cells => cells.map(normalizeCell));
+  const headerCells = (headerRow || []).map(normalizeCell);
+  const renderedRows = retainedRows.map(cells => cells.map(normalizeCell));
   const renderedCells = [...headerCells, ...renderedRows.flat()];
   const originalCharacters = renderedCells.reduce((sum, cell) => sum + cell.originalLength, 0);
   const retainedCharacters = renderedCells.reduce((sum, cell) => sum + cell.retainedLength, 0);
   const clippedCellCount = renderedCells.filter(cell => cell.retainedLength < cell.originalLength).length;
   const warnings: string[] = [];
-  if (rows.length > MAX_RENDERED_ROWS) {
-    warnings.push(`Table has ${rows.length} data rows; first ${MAX_RENDERED_ROWS} rows were included for model context.`);
+  if (rowCount > MAX_RENDERED_ROWS) {
+    warnings.push(`Table has ${rowCount} data rows; first ${MAX_RENDERED_ROWS} rows were included for model context.`);
   }
   if (clippedCellCount > 0) warnings.push(`${clippedCellCount} table cell(s) exceeded the per-cell context limit and were truncated.`);
 
@@ -77,7 +87,7 @@ export const parseDelimitedTable = (raw: string, delimiter: ',' | '\t'): ParsedD
     delimiter,
     headers: headerCells.map(cell => cell.value),
     rows: renderedRows.map(cells => cells.map(cell => cell.value)),
-    rowCount: rows.length,
+    rowCount,
     clippedCellCount,
     cellCharacterCoverageRatio: originalCharacters > 0 ? retainedCharacters / originalCharacters : 1,
     warnings
@@ -87,8 +97,11 @@ export const parseDelimitedTable = (raw: string, delimiter: ',' | '\t'): ParsedD
 export const renderDelimitedTableForAnalysis = (
   raw: string,
   opts: { fileName: string; delimiter: ',' | '\t' }
-): { text: string; warnings: string[]; rowCount: number; renderedRowCount: number; clippedCellCount: number; cellCharacterCoverageRatio: number } => {
+): { text: string; warnings: string[]; rowCount: number; renderedRowCount: number; clippedCellCount: number; cellCharacterCoverageRatio: number; structuredTable: import('../types').StructuredTableData } => {
   const table = parseDelimitedTable(raw, opts.delimiter);
+  const structuredHeaders = table.headers.slice(0, 200);
+  const structuredRows = table.rows.map(row => row.slice(0, 200));
+  const structuredColumnTruncated = table.headers.length > structuredHeaders.length || table.rows.some(row => row.length > 200);
   const delimiterLabel = opts.delimiter === '\t' ? 'TSV' : 'CSV';
   const lines = [
     `Format: ${delimiterLabel}`,
@@ -113,6 +126,13 @@ export const renderDelimitedTableForAnalysis = (
     rowCount: table.rowCount,
     renderedRowCount: table.rows.length,
     clippedCellCount: table.clippedCellCount,
-    cellCharacterCoverageRatio: table.cellCharacterCoverageRatio
+    cellCharacterCoverageRatio: table.cellCharacterCoverageRatio,
+    structuredTable: {
+      schema_version: 'structured_table_v1',
+      headers: structuredHeaders,
+      rows: structuredRows,
+      total_row_count: table.rowCount,
+      truncated: table.rowCount > table.rows.length || table.clippedCellCount > 0 || structuredColumnTruncated
+    }
   };
 };

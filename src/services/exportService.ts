@@ -262,6 +262,7 @@ const renderRunTraceAppendix = (result: DiagnosticResult): string => {
       <div class="evidence-check-stat"><span>Evidence Paths</span><strong>${summary.evidence_path_count}</strong></div>
       <div class="evidence-check-stat"><span>Score Paths</span><strong>${summary.score_path_count}</strong></div>
       <div class="evidence-check-stat"><span>Tactic Paths</span><strong>${summary.tactic_path_count}</strong></div>
+      <div class="evidence-check-stat"><span>Derived Evidence</span><strong>${trace.derived_analytical_evidence?.length || 0}</strong></div>
       <div class="evidence-check-stat"><span>DLP Chunks</span><strong>${trace.dlp.scanned_chunk_count}</strong></div>
       <div class="evidence-check-stat"><span>Gate</span><strong>${escapeHtml(summary.quality_gate_decision)}</strong></div>
     </div>
@@ -272,6 +273,8 @@ const renderRunTraceAppendix = (result: DiagnosticResult): string => {
       <li><strong>API keys included:</strong> ${String(trace.privacy.api_keys_included)}</li>
       <li>${escapeHtml(trace.privacy.note)}</li>
     </ul>
+    ${(trace.derived_analytical_evidence || []).length > 0 ? `<div class="gate-label">Shadow deterministic A1/AP-A1 observations</div>
+    <ul class="appendix-list">${trace.derived_analytical_evidence!.map(evidence => `<li><strong>${escapeHtml(evidence.evidence_id)}</strong> · ${escapeHtml(evidence.result.status)} · ${evidence.result.row_scope === 'bounded_prefix' ? 'bounded-prefix' : 'full-table'} analyzed-row coverage (${evidence.result.analyzed_row_count}/${evidence.result.source_row_count} rows; input truncated: ${String(evidence.result.row_truncated)}): mapping ${evidence.result.mapping_population_coverage ?? 'n/a'}% · tagging ${evidence.result.tagging_population_coverage ?? 'n/a'}% · allocation ${evidence.result.allocation_population_coverage ?? 'n/a'}% · analyzer ${escapeHtml(evidence.derivation.analyzer_version)} · raw values exposed: ${String(evidence.raw_value_exposure)}</li>`).join('')}</ul>` : ''}
   </div>`;
 };
 

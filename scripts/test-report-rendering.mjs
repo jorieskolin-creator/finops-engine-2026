@@ -75,6 +75,8 @@ assert.match(exportSource, /Acquisition Quality &amp; Readiness/, 'Master Data s
 assert.match(exportSource, /Evidence coverage measures how much of the assessment surface was tested/, 'Master Data should distinguish coverage from density');
 assert.match(exportSource, /observability-only in this milestone/, 'Master Data should disclose that acquisition readiness does not alter the Quality Gate');
 assert.match(exportSource, /renderAcquisitionQuality\(result\)/, 'Master Data generation should include the acquisition quality section');
+assert.match(exportSource, /Shadow deterministic A1\/AP-A1 observations/, 'Master Data should visibly label derived evidence as shadow-only');
+assert.match(exportSource, /raw values exposed/, 'Master Data should disclose the derived-evidence privacy boundary');
 
 console.log(functionalChecksRan
   ? 'report rendering unit tests passed'

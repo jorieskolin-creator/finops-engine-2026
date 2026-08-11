@@ -139,3 +139,5 @@ The metrics intentionally remain separate:
 - **KB completeness and readiness** report expected document coverage, delivery defects, and stage-packet readiness separately from customer evidence quality.
 
 Milestone 3 readiness is `observability_only`: it does not alter prompts, Phase 2 scores, assessment classification, or Quality Gate decisions. Hard acquisition enforcement is deferred until the packet contracts and operational thresholds are separately approved.
+
+The first structured-data vertical slice analyzes bounded CSV/TSV tables for A1/AP-A1 ownership, tagging, and allocation signals. It emits versioned `derived_analytical_evidence_v1` records in shadow mode under RunTrace. These records contain only percentages, counts, controlled statuses, source IDs, and analyzer provenance—not source cell values—and do not yet affect prompts, scoring, or Quality Gate decisions.

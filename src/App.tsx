@@ -9,7 +9,7 @@ import { forensicSanitizeImport } from './services/securityService';
 import { extractDiagnosticResultFromHtmlReport, isDiagnosticResultPayload, parseDiagnosticResultJson, serializeDiagnosticResultForHtml } from './services/reportImportService';
 import { findGeneratedReportPrivacyFindings, scrubDiagnosticResultForPrivacy } from './services/privacyService';
 import { PerformanceMonitor } from './services/debugService';
-import { DiagnosticResult, ScanResult, PersonaId, PERSONA_IDS, PERSONA_LABELS, SourcePage, SourceRecord } from './types';
+import { DiagnosticResult, ScanResult, PersonaId, PERSONA_IDS, PERSONA_LABELS, SourcePage, SourceRecord, StructuredTableData } from './types';
 import { METRIC_DESCRIPTIONS } from './constants';
 import { GaugeCard, AuditGrid, StrategicRoadmap, ComparisonChart, ReferenceLibrary, QualityGateBanner, BenchmarkingChart, TransferProtocol, MarkdownRenderer, NeuralLoadingGrid } from './components/DashboardComponents';
 import { ReportView } from './components/ReportView';
@@ -142,6 +142,7 @@ interface UploadedFile {
   size: number;
   text: string;
   pages?: SourcePage[];
+  structuredTable?: StructuredTableData;
   kind?: 'pdf' | 'html' | 'csv' | 'tsv' | 'json';
   status: 'parsed' | 'error';
   scan?: ScanResult;
@@ -769,12 +770,14 @@ const App: React.FC = () => {
           text = rendered.text;
           kind = 'csv';
           parseMetadata = { rowCount: rendered.rowCount, renderedRowCount: rendered.renderedRowCount, clippedCellCount: rendered.clippedCellCount, cellCharacterCoverageRatio: rendered.cellCharacterCoverageRatio, warnings: rendered.warnings };
+          (file as any).__structuredTable = rendered.structuredTable;
         } else if (file.type === 'text/tab-separated-values' || lowerName.endsWith('.tsv')) {
           const raw = await file.text();
           const rendered = renderDelimitedTableForAnalysis(raw, { fileName: file.name, delimiter: '\t' });
           text = rendered.text;
           kind = 'tsv';
           parseMetadata = { rowCount: rendered.rowCount, renderedRowCount: rendered.renderedRowCount, clippedCellCount: rendered.clippedCellCount, cellCharacterCoverageRatio: rendered.cellCharacterCoverageRatio, warnings: rendered.warnings };
+          (file as any).__structuredTable = rendered.structuredTable;
         } else if (file.type === 'application/json' || lowerName.endsWith('.json')) {
           const raw = await file.text();
           text = `Format: JSON\n\n${raw}`;
@@ -789,6 +792,7 @@ const App: React.FC = () => {
           size: file.size,
           text,
           pages: (file as any).__structuredPages,
+          structuredTable: (file as any).__structuredTable,
           kind,
           status: 'parsed',
           scan: scanParseableFile(text, kind, false),
@@ -841,6 +845,7 @@ const App: React.FC = () => {
                       || (file.parseMetadata.clippedCellCount || 0) > 0
                   }
                 : { unit: 'document' as const, total_units: 1, processed_units: 1, truncated: false },
+            structured_table:file.structuredTable,
             ...(file.pages?.length ? {pages:file.pages} : {text:sanitizeInput(file.text)})
           })));
       const data = await analyzeDocument(sources, (stage, progress) => {

@@ -78,5 +78,7 @@ assert.throws(() => buildSourceRegistry([{ ...records[0], schema_version:'source
 assert.throws(() => buildSourceRegistry([{ ...records[0], pages:[{ ...records[0].pages[0], schema_version:'source_page_v0' }] }]), /INVALID_SOURCE_PAGE/, 'unknown page schema must fail closed');
 assert.throws(() => buildSourceRegistry([{ ...records[0], text:'ambiguous', pages:records[0].pages }]), /INVALID_SOURCE_CONTENT/, 'records cannot contain competing text and page payloads');
 assert.throws(() => buildSourceRegistry([{ ...records[0], extraction:{...records[0].extraction,processed_units:21} }]), /INVALID_SOURCE_RECORD/, 'invalid extraction counters must fail closed');
+assert.throws(() => buildSourceRegistry([{schema_version:'source_record_v1',source_id:'table-invalid',source_name:'invalid.csv',kind:'csv',text:'table',structured_table:{schema_version:'structured_table_v0',headers:['owner'],rows:[],total_row_count:0,truncated:false}}]), /INVALID_STRUCTURED_TABLE/, 'unknown structured-table schemas must fail closed');
+assert.throws(() => buildSourceRegistry([{schema_version:'source_record_v1',source_id:'table-inconsistent',source_name:'inconsistent.csv',kind:'csv',text:'table',structured_table:{schema_version:'structured_table_v1',headers:['owner'],rows:[['a']],total_row_count:2,truncated:false}}]), /INVALID_STRUCTURED_TABLE/, 'omitted rows must require an explicit truncation marker');
 
 console.log('source registry packetizer tests passed');
