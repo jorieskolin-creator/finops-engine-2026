@@ -376,15 +376,17 @@ const manifestFor = (chunk: SourceChunk, relevance: SourceRelevanceTier): Source
   routed_domains: routedDomains(chunk)
 });
 
-export const buildDomainPacket = (registry: SourceRegistry, domainId: string): RoutedSourcePacket => {
-  const title = BATCH_TITLES[domainId] || domainId;
-  const candidates = registry.chunks
+export const rankedDomainCandidates = (registry: SourceRegistry, domainId: string) => registry.chunks
     .map(chunk => ({ chunk, tier: tierForDomain(chunk, domainId), score: scoreForDomain(chunk, domainId) }))
     .filter(item => item.tier === 'high' || item.tier === 'medium' || hasGapOrContradictionSignal(item.chunk))
     .sort((a, b) => {
       const tierWeight = (tier: SourceRelevanceTier) => tier === 'high' ? 3 : tier === 'medium' ? 2 : tier === 'unknown' ? 1 : 0;
       return tierWeight(b.tier) - tierWeight(a.tier) || b.score - a.score || a.chunk.chunk_id.localeCompare(b.chunk.chunk_id);
     });
+
+export const buildDomainPacket = (registry: SourceRegistry, domainId: string): RoutedSourcePacket => {
+  const title = BATCH_TITLES[domainId] || domainId;
+  const candidates = rankedDomainCandidates(registry, domainId);
 
   const included: Array<{ chunk: SourceChunk; tier: SourceRelevanceTier }> = [];
   let chars = 0;

@@ -545,6 +545,7 @@ export interface RunTrace {
   input_manifest: SourceManifestTrace[];
   context_packets: ContextPacketTrace[];
   derived_analytical_evidence?: DerivedAnalyticalEvidence[];
+  bounded_retrieval?: BoundedRetrievalTrace;
   dlp: {
     scanned_chunk_count: number;
     model_review_chunk_count: number;
@@ -565,6 +566,31 @@ export interface RunTrace {
     api_keys_included: false;
     note: string;
   };
+}
+
+export type RetrievalStopReason = 'SUFFICIENT_BASELINE' | 'MINIMUM_GAIN_NOT_MET' | 'NO_NEW_CANDIDATES' | 'MAX_PASSES_REACHED';
+
+export interface BoundedRetrievalTrace {
+  schema_version: 'bounded_retrieval_trace_v1';
+  policy_version: 'bounded_retrieval_policy_v1';
+  mode: 'shadow';
+  max_passes: 2;
+  minimum_gain_points: 5;
+  domains: Array<{
+    domain_id: string;
+    baseline_coverage: number;
+    final_coverage: number;
+    stop_reason: RetrievalStopReason;
+    passes: Array<{
+      pass: 1 | 2;
+      strategy: 'omitted_routed_candidates' | 'neutral_gap_expansion';
+      coverage_before: number;
+      coverage_after: number;
+      gain_points: number;
+      candidate_count: number;
+      selected_chunk_ids: string[];
+    }>;
+  }>;
 }
 
 export interface DataSignalRegistryEntry {

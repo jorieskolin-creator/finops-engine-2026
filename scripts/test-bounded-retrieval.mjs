@@ -1,0 +1,17 @@
+import assert from 'node:assert/strict';
+import { mkdtemp, readFile, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import ts from '../node_modules/typescript/lib/typescript.js';
+const compile=source=>ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.ES2022,target:ts.ScriptTarget.ES2020,importsNotUsedAsValues:ts.ImportsNotUsedAsValues.Remove}}).outputText;
+const dir=await mkdtemp(join(tmpdir(),'finops-retrieval-'));
+const registrySource=(await readFile(new URL('../src/services/sourceRegistryService.ts',import.meta.url),'utf8')).replace("import { BATCH_TITLES } from '../knowledge_base';","const BATCH_TITLES={A:'A',B:'B',C:'C',D:'D',E:'E',F:'F'};");await writeFile(join(dir,'sourceRegistryService.mjs'),compile(registrySource));
+const retrievalSource=(await readFile(new URL('../src/services/boundedRetrievalService.ts',import.meta.url),'utf8')).replace("'./sourceRegistryService'","'./sourceRegistryService.mjs'");await writeFile(join(dir,'boundedRetrievalService.mjs'),compile(retrievalSource));
+const {buildBoundedRetrievalTrace}=await import(`file://${join(dir,'boundedRetrievalService.mjs')}`);
+const route=(domain,tier,score)=>({domain,tier,score,reasons:[]});const chunk=(id,text,routing)=>({chunk_id:id,source_id:'src-1',source_name:'PRIVATE_SOURCE_CANARY',type:'text',text,routing});
+const registry={source_count:1,chunk_count:3,warnings:[],extraction:{overall_completeness:100,status:'COMPLETE',warning_count:0,sources:[],blocking_reasons:[]},chunks:[chunk('c1','allocation baseline',[route('A','high',6)]),chunk('c2','tagging routed omitted',[route('A','high',6)]),chunk('c3','ownership review mapping PRIVATE_CONTENT_CANARY',[route('A','low',0)])]};
+const manifest=id=>({chunk_id:id,source_id:'src-1',type:'text',relevance:'high',routed_domains:['A']});const packet=(domain,weak,ids,candidates)=>({domain_id:domain,title:domain,text:'not inspected',images:[],manifest:ids.map(manifest),included_chunk_count:ids.length,total_candidate_chunks:candidates,weak_coverage:weak,coverage_notes:[],char_count:0});
+const trace=buildBoundedRetrievalTrace(registry,{A:packet('A',true,['c1'],2),B:packet('B',false,[],0),C:packet('C',true,[],0)});const a=trace.domains.find(domain=>domain.domain_id==='A');
+assert.equal(trace.mode,'shadow');assert.equal(trace.max_passes,2);assert.equal(a.passes.length,2);assert.deepEqual(a.passes[0].selected_chunk_ids,['c2']);assert.deepEqual(a.passes[1].selected_chunk_ids,['c3']);assert.equal(a.stop_reason,'MAX_PASSES_REACHED');assert.ok(a.final_coverage>a.baseline_coverage);assert.equal(trace.domains.find(domain=>domain.domain_id==='B').stop_reason,'SUFFICIENT_BASELINE');assert.equal(trace.domains.find(domain=>domain.domain_id==='C').stop_reason,'NO_NEW_CANDIDATES');assert.doesNotMatch(JSON.stringify(trace),/PRIVATE_SOURCE_CANARY|PRIVATE_CONTENT_CANARY/);
+assert.deepEqual(buildBoundedRetrievalTrace(registry,{A:packet('A',true,['c1'],2),B:packet('B',false,[],0),C:packet('C',true,[],0)}),trace,'retrieval trace must be deterministic');
+console.log('bounded retrieval tests passed');

@@ -41,6 +41,7 @@ import {
 import { buildRunTrace, clearStageTraces, consumeStageTraces, summarizeRunTrace } from "./runTraceService";
 import { acquisitionQualityPersistence, buildAcquisitionQualitySnapshot } from "./acquisitionQualityService";
 import { analyzeStructuredSources } from "./structuredDataAnalysisService";
+import { buildBoundedRetrievalTrace } from "./boundedRetrievalService";
 
 const FACT_CHECK_MAX_RETRIES = 2;
 const ID_VALIDATION_MAX_REGENS = 2;
@@ -240,6 +241,7 @@ export const analyzeDocument = async (
     const derivedAnalyticalEvidence = analyzeStructuredSources(sources);
     const text = renderPseudonymousSourceContext(sourceRegistry, 50000);
     const sourcePackets = buildDomainPackets(sourceRegistry);
+    const boundedRetrieval = buildBoundedRetrievalTrace(sourceRegistry, sourcePackets);
     const dlpScan = scanRegistryDlp(sourceRegistry);
     const dlpReview = buildDlpReviewPacket(sourceRegistry);
     const sourceRegistryStatus = sourceRegistryRuntimeStatus(sourceRegistry, sourcePackets, dlpReview.selected_chunk_count, dlpScan);
@@ -1041,7 +1043,8 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => `  ${cat}
       strategy: finalResult.phase_3_strategy,
       qualityGate,
       tacticGroundingAdjustments,
-      derivedAnalyticalEvidence
+      derivedAnalyticalEvidence,
+      boundedRetrieval
     });
     finalResult.meta.run_trace = runTrace;
     finalResult.meta.run_trace_summary = summarizeRunTrace(runTrace);

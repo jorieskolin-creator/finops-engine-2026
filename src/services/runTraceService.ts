@@ -1,5 +1,6 @@
 import {
   AuditItem,
+  BoundedRetrievalTrace,
   DiagnosticResult,
   DlpScanResult,
   DerivedAnalyticalEvidence,
@@ -50,6 +51,7 @@ interface BuildRunTraceInput {
   qualityGate: QualityGateResult;
   tacticGroundingAdjustments: TacticGroundingTraceAdjustment[];
   derivedAnalyticalEvidence?: DerivedAnalyticalEvidence[];
+  boundedRetrieval?: BoundedRetrievalTrace;
 }
 
 const stageTraceBuffer = new Map<string, StageTrace[]>();
@@ -325,6 +327,7 @@ export const buildRunTrace = (input: BuildRunTraceInput): RunTrace => {
     input_manifest: sourceManifest(input.sourceRegistry),
     context_packets: contextPackets,
     derived_analytical_evidence: input.derivedAnalyticalEvidence,
+    bounded_retrieval: input.boundedRetrieval,
     dlp: {
       scanned_chunk_count: input.dlpScan.scanned_chunk_count,
       model_review_chunk_count: input.dlpReviewChunkCount,
