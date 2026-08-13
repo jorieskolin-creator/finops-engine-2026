@@ -231,7 +231,7 @@ const applyAntiPatternAdjudication = async (
   images: ImageInput[],
   ctx: RunContext,
   items: EvidenceCheckItem[]
-): Promise<{ items: EvidenceCheckItem[]; model_used?: string }> => {
+): Promise<{ items: EvidenceCheckItem[]; model_used?: string; failed?: boolean; failure_reason?: string }> => {
   const candidates = items.filter(needsAntiPatternAdjudication);
   if (candidates.length === 0) return { items };
 
@@ -256,12 +256,23 @@ const applyAntiPatternAdjudication = async (
         decisions.set(raw.id, raw);
       }
     }
-    if (decisions.size !== candidates.length) {
-      throw new Error(`Anti-pattern adjudication returned ${decisions.size}/${candidates.length} required decisions.`);
-    }
+    const unresolved = candidates.filter(item => !decisions.has(item.id));
     const next = items.map(item => {
       if (!needsAntiPatternAdjudication(item)) return item;
       const decision = decisions.get(item.id);
+      if (!decision) {
+        return {
+          ...item,
+          status: 'missing' as const,
+          verified_count: 0,
+          rationale: 'Required anti-pattern adjudication did not return a valid decision for this criterion.',
+          antipattern_absence_status: 'unknown_absent' as const,
+          coverage_reason: 'Adjudication was unresolved, so neither presence nor tested absence can be claimed.',
+          adjudication_unresolved: true,
+          rescan_recommended: false,
+          quote_supported: false,
+        };
+      }
       const status = normalizeAntiPatternAbsenceStatus(decision?.antipattern_absence_status);
       if (status !== 'partially_present' && status !== 'unknown_absent') return item;
       const rationale = typeof decision?.rationale === 'string' && decision.rationale.trim().length > 0
@@ -284,15 +295,41 @@ const applyAntiPatternAdjudication = async (
       batch: batchId,
       model: resp.modelUsed.id,
       criteria_count: candidates.length,
+      accepted_count: decisions.size,
+      unresolved_count: unresolved.length,
     });
-    return { items: next, model_used: resp.modelUsed.id };
+    return {
+      items: next,
+      model_used: resp.modelUsed.id,
+      failed: unresolved.length > 0,
+      failure_reason: unresolved.length > 0
+        ? `Anti-pattern adjudication returned ${decisions.size}/${candidates.length} required decisions.`
+        : undefined,
+    };
   } catch (error: any) {
     await serverLog(ctx.runId, 'warn', 'evidence_adjudication_failed', {
       batch: batchId,
       criteria_count: candidates.length,
       error_code: 'ADJUDICATION_FAILED',
     });
-    throw error;
+    const unresolved = new Set(candidates.map(item => item.id));
+    return {
+      items: items.map(item => unresolved.has(item.id)
+        ? {
+            ...item,
+            status: 'missing' as const,
+            verified_count: 0,
+            rationale: 'Required anti-pattern adjudication did not complete for this criterion.',
+            antipattern_absence_status: 'unknown_absent' as const,
+            coverage_reason: 'Adjudication was unresolved, so neither presence nor tested absence can be claimed.',
+            adjudication_unresolved: true,
+            rescan_recommended: false,
+            quote_supported: false,
+          }
+        : item),
+      failed: true,
+      failure_reason: error?.message || String(error),
+    };
   }
 };
 
@@ -426,6 +463,8 @@ export const runEvidenceCheck = async (
       ...summarizeEvidenceCheck(batchId, adjudicated.items, []),
       model_used: resp.modelUsed.id,
       adjudication_model_used: adjudicated.model_used,
+      failed: adjudicated.failed,
+      failure_reason: adjudicated.failure_reason,
     };
   } catch (error: any) {
     return {

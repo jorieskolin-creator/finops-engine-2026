@@ -206,7 +206,9 @@ export const runPhase1Audit = async (
           if (evidenceCheck.adjudication_model_used) evidenceAdjudicationModelsSeen.add(evidenceCheck.adjudication_model_used);
         }
 
-        if (!evidenceCheck.failed) {
+        if (evidenceCheck.items.length > 0) {
+          const evidenceFailure = evidenceCheck.failed;
+          const evidenceFailureReason = evidenceCheck.failure_reason;
           const checked = applyEvidenceCheckToBatch(batchResult, evidenceCheck, rescannedKeys);
           batchResult = checked.batch as BatchAuditResult & { model_used?: string };
           const adjustments = checked.adjustments.map(a => {
@@ -217,6 +219,8 @@ export const runPhase1Audit = async (
             ...summarizeEvidenceCheck(batchId, evidenceCheck.items, adjustments),
             model_used: evidenceCheck.model_used,
             adjudication_model_used: evidenceCheck.adjudication_model_used,
+            failed: evidenceFailure,
+            failure_reason: evidenceFailureReason,
           };
         }
         evidenceResults.push(evidenceCheck);

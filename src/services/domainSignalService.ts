@@ -18,6 +18,7 @@ export interface DomainSignalRow {
   antiPatternPartialFindings: number;
   antiPatternTestedAbsent: number;
   antiPatternNotAssessed: number;
+  evidencePercent: number;
   coverageNote?: string;
 }
 
@@ -86,6 +87,9 @@ export const computeDomainSignalRows = (result: DiagnosticResult): DomainSignalR
       ? Math.round((antiPatternFindingWeight / antiPatternTotal) * 100)
       : 0;
     const notAssessedShare = antiPatternTotal > 0 ? antiPatternNotAssessed / antiPatternTotal : 0;
+    const evidencePercent = maturityTotal + antiPatternTotal > 0
+      ? Math.round(((maturityAssessed + antiPatternTotal - antiPatternNotAssessed) / (maturityTotal + antiPatternTotal)) * 100)
+      : 0;
 
     return {
       domain,
@@ -101,6 +105,7 @@ export const computeDomainSignalRows = (result: DiagnosticResult): DomainSignalR
       antiPatternPartialFindings,
       antiPatternTestedAbsent,
       antiPatternNotAssessed,
+      evidencePercent,
       coverageNote: notAssessedShare >= 0.4
         ? 'Anti-pattern absence is not fully assessable from source coverage.'
         : undefined

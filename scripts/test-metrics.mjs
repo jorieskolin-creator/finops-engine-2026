@@ -25,6 +25,15 @@ await writeFile(modulePath, compile(source).replace('./antiPatternSemantics', '.
 
 const { calculateMetrics } = await import(`file://${modulePath}`);
 
+const reportViewSource = (await readFile(new URL('../src/services/reportViewModel.ts', import.meta.url), 'utf8'))
+  .replace(
+    "import { FINOPS_ANTIPATTERNS, FINOPS_CRITERIA } from '../knowledge_base';",
+    "const FINOPS_CRITERIA = Array.from({ length: 30 }, (_, index) => ({ id: `M${index + 1}` })); const FINOPS_ANTIPATTERNS = Array.from({ length: 30 }, (_, index) => ({ id: `A${index + 1}` }));"
+  )
+  .replace('./antiPatternSemantics', './antiPatternSemantics.mjs');
+await writeFile(join(dir, 'reportViewModel.mjs'), compile(reportViewSource), 'utf8');
+const { buildReportViewModel } = await import(`file://${join(dir, 'reportViewModel.mjs')}`);
+
 const ids = ['A', 'B', 'C', 'D', 'E', 'F'].flatMap(batch => [1, 2, 3, 4, 5].map(n => `${batch}${n}`));
 
 const item = (count, withEvidence = false) => ({
@@ -44,7 +53,8 @@ const anti = (count, withEvidence = false, absenceStatus = undefined) => ({
   reasoning: withEvidence ? 'Evidence found.' : 'Not found.',
   is_silent: count === 0 && absenceStatus !== 'tested_absent',
   antipattern_absence_status: absenceStatus,
-  coverage_reason: absenceStatus === 'tested_absent' ? 'Relevant source coverage reviewed; anti-pattern was not found.' : undefined
+  coverage_reason: absenceStatus === 'tested_absent' ? 'Relevant source coverage reviewed; anti-pattern was not found.' : undefined,
+  evidence_check_status: absenceStatus === 'tested_absent' ? 'supported' : undefined
 });
 
 const logs = (maturityFactory, antiFactory) => ({
@@ -68,7 +78,7 @@ const logs = (maturityFactory, antiFactory) => ({
 {
   const result = calculateMetrics(logs(
     () => item(3, true),
-    () => anti(0, true)
+    () => anti(0, false, 'tested_absent')
   ));
   assert.equal(result.crawl_walk_run, 'Run');
   assert.ok(result.metrics.finops_readiness >= 90, `expected high readiness, got ${result.metrics.finops_readiness}`);
@@ -136,6 +146,62 @@ const logs = (maturityFactory, antiFactory) => ({
   ));
   assert.equal(result.metrics.evidence_density, 50, 'unknown anti-pattern absence should not count as verified coverage');
   assert.equal(result.metrics.antipattern_clearance, 0);
+}
+
+{
+  const antiLogs = Object.fromEntries(Array.from({ length: 30 }, (_, index) => [`A${index + 1}`, {
+    count: 0,
+    status: 'OK',
+    evidence: 'No supported finding.',
+    evidence_quotes: [],
+    reasoning: 'Not assessed.',
+    antipattern_absence_status: 'unknown_absent',
+  }]));
+  const evidenceItems = Array.from({ length: 60 }, (_, index) => ({
+    stream: index < 30 ? 'maturity' : 'antipattern',
+    id: index < 30 ? `M${index + 1}` : `A${index - 29}`,
+    status: index === 59 ? 'missing' : 'supported',
+    original_count: 0,
+    verified_count: 0,
+    rationale: 'Fixture verdict.',
+    adjudication_unresolved: index === 59,
+  }));
+  const view = buildReportViewModel({
+    phase_1_audit_logs: { maturity: {}, antipattern: antiLogs },
+    phase_2_validation: {
+      metrics: { evidence_density: 43, maturity_depth: 10 },
+      raw_counts: { maturity_sub_criteria_met: 9, antipattern_sub_criteria_met: 0 },
+    },
+    phase_3_strategy: {
+      diagnosis: { confidence: 'low' },
+      planning_decision: { decision: 'NO_GO' },
+    },
+    quality_gate: {
+      decision: 'BLOCK',
+      blocking_reasons: ['Unresolved adjudication.'],
+      evidence_check: {
+        total_items: 60,
+        supported_count: 59,
+        weak_count: 0,
+        unsupported_count: 0,
+        missing_count: 1,
+        downgraded_count: 0,
+        rescan_count: 0,
+        items: evidenceItems,
+        adjustments: [],
+        failed: true,
+      },
+    },
+  });
+  assert.equal(view.metrics.length, 4, 'report summary should expose exactly four gauges');
+  assert.equal(view.metrics[1].label, 'Verification Completion');
+  assert.equal(view.metrics[1].value, 98, 'one unresolved decision should produce 59/60 completion');
+  assert.equal(view.antipatternDisposition.unresolved, 1);
+  assert.equal(
+    Object.values(view.antipatternDisposition).reduce((sum, value) => sum + value, 0),
+    30,
+    'anti-pattern disposition states must partition all 30 anti-pattern criteria'
+  );
 }
 
 console.log('metrics unit tests passed');

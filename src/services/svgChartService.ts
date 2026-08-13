@@ -11,6 +11,7 @@ export interface GaugeSpec {
   color: string;
   description: string;
   trend: 'positive' | 'negative';
+  denominator?: string;
   size?: 'small' | 'large';
 }
 
@@ -42,6 +43,7 @@ export const svgGaugeCard = (g: GaugeSpec): string => {
     </svg>
     <h3 class="gauge-label">${escapeXml(g.label)}</h3>
     <p class="gauge-desc">${escapeXml(g.description)}</p>
+    ${g.denominator ? `<p class="gauge-denominator">${escapeXml(g.denominator)}</p>` : ''}
     <div class="gauge-trend">${trendLabel}</div>
   </div>`;
 };

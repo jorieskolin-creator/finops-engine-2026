@@ -9,7 +9,7 @@ export const METRIC_DESCRIPTIONS: Record<string, string> = {
   maturity_depth:
     'Average maturity score across all criteria on a 0–3 scale, normalized to 0–100%. Captures partial progress that maturity_ratio misses.',
   antipattern_ratio:
-    'Share of anti-patterns scored as deeply entrenched (3 of 3 sub-criteria met). Higher = worse.',
+    'Share of anti-pattern criteria with a confirmed or partial harmful-pattern signal. Higher = more widespread observed friction.',
   antipattern_burden:
     'Average severity across all anti-patterns. Higher = more friction blocking current FinOps practice. Low values mean "low confirmed burden" only when source evidence is strong enough.',
   antipattern_clearance:

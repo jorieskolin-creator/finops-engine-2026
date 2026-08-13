@@ -56,6 +56,28 @@ assert.equal(
 assert.equal(
   inferAntiPatternAbsenceStatus({
     count: 0,
+    evidence_quotes: [{ quote: 'The source discusses the topic.' }],
+    reasoning: 'The source does not establish whether the anti-pattern is absent.',
+  }),
+  'unknown_absent',
+  'a source quote alone must never imply tested absence'
+);
+
+assert.equal(
+  inferAntiPatternAbsenceStatus({
+    count: 0,
+    antipattern_absence_status: 'tested_absent',
+    evidence_check_status: 'supported',
+    coverage_reason: 'Final anti-pattern assessment: Not assessed. Absence cannot be confirmed from silence.',
+    reasoning: 'The source is effectively silent on the criterion.',
+  }),
+  'unknown_absent',
+  'not-assessed language must override a contradictory tested-absence flag'
+);
+
+assert.equal(
+  inferAntiPatternAbsenceStatus({
+    count: 0,
     antipattern_absence_status: 'tested_absent',
     reasoning: 'Coverage notes say there is partial tunnel vision in provider operations.',
   }),

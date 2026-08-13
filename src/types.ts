@@ -123,6 +123,7 @@ export interface EvidenceCheckItem {
   quote_supported?: boolean;
   antipattern_absence_status?: AntiPatternAbsenceStatus;
   coverage_reason?: string;
+  adjudication_unresolved?: boolean;
 }
 
 export interface EvidenceCheckAdjustment {

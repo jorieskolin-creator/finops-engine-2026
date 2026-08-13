@@ -92,12 +92,15 @@ export const inferAntiPatternAbsenceStatus = (item: Partial<AuditItem> | undefin
 
   const text = `${item?.coverage_reason || ''} ${item?.reasoning || ''}`.toLowerCase();
   if (hasAntiPatternPresenceSignal(text)) return 'partially_present';
-  if (explicit === 'tested_absent' || explicit === 'unknown_absent') return explicit;
-  if (text.includes('tested absent')) return 'tested_absent';
   if (text.includes('not assessed') || text.includes('insufficient to verify absence')) return 'unknown_absent';
-
-  const hasCoverageEvidence = Array.isArray(item?.evidence_quotes) && item.evidence_quotes.length > 0;
-  return hasCoverageEvidence ? 'tested_absent' : 'unknown_absent';
+  if (
+    explicit === 'tested_absent'
+    && item?.evidence_check_status === 'supported'
+    && typeof item?.coverage_reason === 'string'
+    && item.coverage_reason.trim().length > 0
+  ) return 'tested_absent';
+  if (explicit === 'unknown_absent') return 'unknown_absent';
+  return 'unknown_absent';
 };
 
 export const antiPatternStatusLabel = (item: Partial<AuditItem> | undefined): string => {

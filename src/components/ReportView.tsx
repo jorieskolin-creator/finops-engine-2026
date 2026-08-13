@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { AuditItem, DiagnosticResult, QualityGateResult, PersonaId, PERSONA_LABELS, ConfidenceBracket, FindingsModeOutput, RemediationStep } from '../types';
+import { AuditItem, DiagnosticResult, QualityGateResult, ConfidenceBracket, FindingsModeOutput, RemediationStep } from '../types';
 import { MarkdownRenderer } from './DashboardComponents';
 import { BATCH_TITLES, MASTER_BINGO_FINOPS } from '../knowledge_base';
 import { METRIC_DESCRIPTIONS } from '../constants';
@@ -8,6 +8,7 @@ import { isInsufficientEvidenceReport, renderInlineMarkdownHtml, strengthsSectio
 import { antiPatternStatusLabel, inferAntiPatternAbsenceStatus } from '../services/antiPatternSemantics';
 import { displayQualityGateDiagnostic, isReportableSourceCoverageGap, splitQualityGateDiagnostics } from '../services/reportDiagnosticsService';
 import { computeDomainSignalRows, DomainSignalTone } from '../services/domainSignalService';
+import { buildReportViewModel } from '../services/reportViewModel';
 
 const InlineSvg: React.FC<{ html: string; className?: string }> = ({ html, className }) => (
   <div className={className} dangerouslySetInnerHTML={{ __html: html }} />
@@ -581,23 +582,12 @@ interface ReportViewProps {
 
 export const ReportView: React.FC<ReportViewProps> = ({ result, onBack, onDownloadSummary, onDownloadMaster, onDownloadTrace }) => {
   const m = result.phase_2_validation.metrics;
+  const reportView = buildReportViewModel(result);
   const cwrClass = result.phase_2_validation.crawl_walk_run;
   const isBlocked = result.quality_gate.decision === 'BLOCK';
   const isInsufficientEvidence = isBlocked || m.evidence_density < 30 || m.antipattern_coverage < 60;
-  const readinessColor = isBlocked ? '#f43f5e' : '#10b981';
   const readinessDescription = m.readiness_cap_reason || METRIC_DESCRIPTIONS.finops_readiness;
-
-  const gauges = [
-    { value: m.finops_readiness, label: 'Evidence-Gated Readiness', color: readinessColor, description: readinessDescription, trend: 'positive' as const, size: 'large' as const },
-    { value: m.maturity_ratio, label: 'Maturity Level', color: '#14b8a6', description: METRIC_DESCRIPTIONS.maturity_ratio, trend: 'positive' as const },
-    { value: m.maturity_depth, label: 'Maturity Depth', color: '#06b6d4', description: METRIC_DESCRIPTIONS.maturity_depth, trend: 'positive' as const },
-    { value: m.antipattern_ratio, label: 'Anti-Pattern Level', color: '#f43f5e', description: METRIC_DESCRIPTIONS.antipattern_ratio, trend: 'negative' as const },
-    { value: m.antipattern_burden, label: 'Anti-Pattern Burden', color: '#e11d48', description: METRIC_DESCRIPTIONS.antipattern_burden, trend: 'negative' as const },
-    { value: m.antipattern_clearance, label: 'Anti-Pattern Clearance', color: '#10b981', description: METRIC_DESCRIPTIONS.antipattern_clearance, trend: 'positive' as const },
-    { value: m.antipattern_coverage, label: 'Anti-Pattern Coverage', color: '#64748b', description: METRIC_DESCRIPTIONS.antipattern_coverage, trend: 'positive' as const },
-    { value: m.delivery_integrity, label: 'Delivery Integrity', color: '#475569', description: METRIC_DESCRIPTIONS.delivery_integrity, trend: 'positive' as const },
-    { value: m.evidence_density, label: 'Evidence Density', color: '#475569', description: METRIC_DESCRIPTIONS.evidence_density, trend: 'positive' as const }
-  ];
+  const gauges = reportView.metrics;
 
   return (
     <div className="min-h-screen bg-white text-slate-900 font-sans">
@@ -688,13 +678,13 @@ export const ReportView: React.FC<ReportViewProps> = ({ result, onBack, onDownlo
         </div>
 
         <div className="mb-12">
-          <h2 className="text-2xl font-display font-bold text-slate-900 mb-6 pb-3 border-b border-slate-200">Maturity Gauges</h2>
+          <h2 className="text-2xl font-display font-bold text-slate-900 mb-6 pb-3 border-b border-slate-200">Assessment Metrics</h2>
           <div className="grid grid-cols-2 md:grid-cols-3 gap-4 items-stretch">
-            {gauges.map((g, i) => (
+            {gauges.map(g => (
               <InlineSvg
                 key={g.label}
                 html={svgGaugeCard(g)}
-                className={i === 0 ? 'col-span-2 md:col-span-3' : ''}
+                className=""
               />
             ))}
           </div>
@@ -719,7 +709,7 @@ export const ReportView: React.FC<ReportViewProps> = ({ result, onBack, onDownlo
         <DomainSignalOverview result={result} />
 
         <div className="mb-12">
-          <h2 className="text-2xl font-display font-bold text-slate-900 mb-6 pb-3 border-b border-slate-200">Evidence Summary</h2>
+          <h2 className="text-2xl font-display font-bold text-slate-900 mb-6 pb-3 border-b border-slate-200">Evidence-Backed Findings</h2>
           {(() => {
             const evidence = result.phase_3_strategy.evidence_summary;
             if (!evidence) return null;
@@ -767,42 +757,6 @@ export const ReportView: React.FC<ReportViewProps> = ({ result, onBack, onDownlo
               </div>
             );
           })()}
-          {(() => {
-            const summaries = result.phase_3_strategy.executive_summaries;
-            const ids: PersonaId[] = ['finops_lead', 'cfo', 'engineering_lead'];
-            const unsupported = result.quality_gate?.fact_check?.unsupported_claims || [];
-            const attempts = result.quality_gate?.fact_check?.attempts || 0;
-            if (summaries && ids.some(id => summaries[id])) {
-              return (
-                <div className="space-y-8">
-                  {ids.map(id => {
-                    const personaClaims = unsupported.filter(c => c.source_location === id);
-                    return (
-                      <div key={id}>
-                        <h3 className="text-sm font-bold uppercase tracking-widest text-emerald-700 mb-3">Evidence summary for the {PERSONA_LABELS[id]}</h3>
-                        <MarkdownRenderer content={summaries[id]} textColor="text-slate-700" />
-                        {personaClaims.length > 0 && (
-                          <div className="mt-4 p-4 rounded-lg bg-amber-50 border border-amber-200">
-                            <p className="text-xs font-bold uppercase tracking-widest text-amber-700 mb-2">Confidence Notes — Unverified Claims</p>
-                            <p className="text-xs text-amber-800 mb-2">The following statements could not be verified against the source after {attempts} regenerate pass(es). Treat with caution.</p>
-                            <ul className="space-y-1.5">
-                              {personaClaims.map((c, i) => (
-                                <li key={i} className="text-sm text-amber-900">
-                                  <span className="italic">&ldquo;{c.claim}&rdquo;</span>
-                                  <span className="block text-xs text-amber-700 mt-0.5">{c.rationale}{c.failure_type ? ` · ${c.failure_type.replace(/_/g, ' ')}` : ''}</span>
-                                </li>
-                              ))}
-                            </ul>
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              );
-            }
-            return <MarkdownRenderer content={result.phase_3_strategy.executive_summary} textColor="text-slate-700" />;
-          })()}
         </div>
 
         {(() => {
@@ -829,7 +783,7 @@ export const ReportView: React.FC<ReportViewProps> = ({ result, onBack, onDownlo
                 <div>
                   <p className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-2">Domain diagnosis</p>
                   <ul className="space-y-1.5">
-                    {Object.entries(diagnosis.domain_diagnosis || {}).map(([domain, text]) => <li key={domain} className="text-sm text-slate-700"><span className="font-bold">{domain}:</span> {text}</li>)}
+                    {computeDomainSignalRows(result).map(row => <li key={row.domain} className="text-sm text-slate-700"><span className="font-bold">{row.domain} · {row.title}:</span> Evidence {row.evidencePercent}%; maturity {row.maturityPercent}%; anti-pattern finding rate {row.antiPatternPercent}%.</li>)}
                   </ul>
                 </div>
               </div>

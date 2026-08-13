@@ -17,6 +17,7 @@ import { LoginModal } from './components/LoginModal';
 import { AppErrorBoundary } from './components/AppErrorBoundary';
 import { checkSession, logout } from './services/authService';
 import { deleteRun } from './services/runLifecycleService';
+import { buildReportViewModel } from './services/reportViewModel';
 import tier1GovernancePolicy from '../test/tier1-governance-policy.txt?raw';
 import tier1TaggingPolicy from '../test/tier1-tagging-policy.txt?raw';
 import tier1CoeCharter from '../test/tier1-coe-charter.txt?raw';
@@ -1621,35 +1622,18 @@ const App: React.FC = () => {
 
 
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-                  <div className="md:col-span-2 md:row-span-2">
-                    <GaugeCard
-                      size="large"
-                      value={result.phase_2_validation.metrics.finops_readiness}
-                      label="Evidence-Gated Readiness"
-                      color={result.quality_gate.decision === 'BLOCK' ? '#f43f5e' : '#10b981'}
-                      trend="positive"
-                      subLabel={result.phase_2_validation.metrics.readiness_cap_reason ? `Capped at ${Math.round(result.phase_2_validation.metrics.readiness_cap ?? result.phase_2_validation.metrics.finops_readiness)}%` : 'Validated Index'}
-                      description={result.phase_2_validation.metrics.readiness_cap_reason || METRIC_DESCRIPTIONS.finops_readiness}
-                    />
-                  </div>
-                  <div className="md:col-span-1">
-                    <GaugeCard value={result.phase_2_validation.metrics.maturity_ratio} label="Maturity Level" color="#14b8a6" trend="positive" description={METRIC_DESCRIPTIONS.maturity_ratio} />
-                  </div>
-                  <div className="md:col-span-1">
-                    <GaugeCard value={result.phase_2_validation.metrics.maturity_depth} label="Maturity Depth" color="#06b6d4" trend="positive" description={METRIC_DESCRIPTIONS.maturity_depth} />
-                  </div>
-                  <div className="md:col-span-1">
-                    <GaugeCard value={result.phase_2_validation.metrics.antipattern_ratio} label="Anti-Pattern Level" color="#f43f5e" trend="negative" description={METRIC_DESCRIPTIONS.antipattern_ratio} />
-                  </div>
-                  <div className="md:col-span-1">
-                    <GaugeCard value={result.phase_2_validation.metrics.antipattern_burden} label="Anti-Pattern Burden" color="#e11d48" trend="negative" description={METRIC_DESCRIPTIONS.antipattern_burden} />
-                  </div>
-                  <div className="md:col-span-1">
-                    <GaugeCard value={result.phase_2_validation.metrics.antipattern_clearance} label="Anti-Pattern Clearance" color="#10b981" trend="positive" description={METRIC_DESCRIPTIONS.antipattern_clearance} />
-                  </div>
-                  <div className="md:col-span-1">
-                    <GaugeCard value={result.phase_2_validation.metrics.antipattern_coverage} label="Anti-Pattern Coverage" color="#64748b" trend="positive" description={METRIC_DESCRIPTIONS.antipattern_coverage} />
-                  </div>
+                  {buildReportViewModel(result).metrics.map(metric => (
+                    <div key={metric.label} className="md:col-span-1">
+                      <GaugeCard
+                        value={metric.value}
+                        label={metric.label}
+                        color={metric.color}
+                        trend={metric.trend}
+                        subLabel={metric.denominator}
+                        description={metric.description}
+                      />
+                    </div>
+                  ))}
                 </div>
 
                 <div className="grid grid-cols-1 lg:grid-cols-5 gap-6 h-full items-stretch">

@@ -1,21 +1,15 @@
 
 import { AuditItem, DiagnosticResult, QualityGateResult } from '../types';
 import { BATCH_TITLES, MASTER_BINGO_FINOPS } from '../knowledge_base';
-import { METRIC_DESCRIPTIONS } from '../constants';
-import { SVG_CSS, svgGaugeCard, svgRadar, svgScatter } from './svgChartService';
-import { isInsufficientEvidenceReport, renderInlineMarkdownHtml, renderMarkdownSummaryHtml, strengthsSectionTitle } from './reportTextService';
+import { SVG_CSS, svgGaugeCard } from './svgChartService';
+import { isInsufficientEvidenceReport, renderInlineMarkdownHtml, strengthsSectionTitle } from './reportTextService';
 import { antiPatternStatusLabel, inferAntiPatternAbsenceStatus } from './antiPatternSemantics';
 import { displayQualityGateDiagnostic, isReportableSourceCoverageGap, splitQualityGateDiagnostics } from './reportDiagnosticsService';
 import { serializeDiagnosticResultForHtml } from './reportImportService';
 import { computeDomainSignalRows, DomainSignalTone } from './domainSignalService';
+import { buildReportViewModel } from './reportViewModel';
 
 const BATCHES = Object.keys(BATCH_TITLES);
-const PERSONA_SUMMARY_LABELS = {
-  finops_lead: 'FinOps Lead',
-  cfo: 'CFO',
-  engineering_lead: 'Engineering Lead'
-} as const;
-
 const escapeHtml = (s: string): string =>
   s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
@@ -277,7 +271,7 @@ const renderRunTraceAppendix = (result: DiagnosticResult): string => {
     </ul>
     ${(trace.derived_analytical_evidence || []).length > 0 ? `<div class="gate-label">Shadow deterministic A1/AP-A1 observations</div>
     <ul class="appendix-list">${trace.derived_analytical_evidence!.map(evidence => `<li><strong>${escapeHtml(evidence.evidence_id)}</strong> · ${escapeHtml(evidence.result.status)} · ${evidence.result.row_scope === 'bounded_prefix' ? 'bounded-prefix' : 'full-table'} analyzed-row coverage (${evidence.result.analyzed_row_count}/${evidence.result.source_row_count} rows; input truncated: ${String(evidence.result.row_truncated)}): mapping ${evidence.result.mapping_population_coverage ?? 'n/a'}% · tagging ${evidence.result.tagging_population_coverage ?? 'n/a'}% · allocation ${evidence.result.allocation_population_coverage ?? 'n/a'}% · analyzer ${escapeHtml(evidence.derivation.analyzer_version)} · raw values exposed: ${String(evidence.raw_value_exposure)}</li>`).join('')}</ul>` : ''}
-    ${trace.bounded_retrieval ? `<div class="gate-label">Shadow bounded retrieval diagnostics</div><ul class="appendix-list">${trace.bounded_retrieval.domains.map(domain => `<li><strong>Domain ${escapeHtml(domain.domain_id)}</strong> · coverage ${domain.baseline_coverage}%→${domain.final_coverage}% · passes ${domain.passes.length}/${trace.bounded_retrieval!.max_passes} · stop ${escapeHtml(domain.stop_reason)}</li>`).join('')}</ul>` : ''}
+    ${trace.bounded_retrieval ? `<div class="gate-label">Shadow bounded retrieval diagnostics</div><p class="appendix-note">Candidate inclusion measures how much of the eligible routed candidate set was selected. It is not a measure of evidence sufficiency; a domain can include 100% of routed candidates and still have weak evidence.</p><ul class="appendix-list">${trace.bounded_retrieval.domains.map(domain => `<li><strong>Domain ${escapeHtml(domain.domain_id)}</strong> · routed candidate inclusion ${domain.baseline_coverage}%→${domain.final_coverage}% · evidence sufficiency ${result.meta.run_trace?.context_packets.find(packet => packet.domain_id === domain.domain_id)?.weak_coverage ? 'weak' : 'sufficient'} · passes ${domain.passes.length}/${trace.bounded_retrieval!.max_passes} · stop ${escapeHtml(domain.stop_reason)}</li>`).join('')}</ul>` : ''}
     ${trace.data_signal_coverage ? `<div class="gate-label">Data Signal Registry coverage</div><p class="appendix-note">${trace.data_signal_coverage.analyzer_available_count} of ${trace.data_signal_coverage.total_object_count} objects have an authoritative shadow analyzer mapping; ${trace.data_signal_coverage.unsupported_count} remain explicitly NO_AUTHORITATIVE_ANALYZER_SEMANTICS pending governed KB schema definitions.</p>` : ''}
   </div>`;
 };
@@ -472,21 +466,83 @@ export const downloadRunTraceJson = (result: DiagnosticResult) => {
 
 export const downloadReport = downloadMasterDataReport;
 
-const renderSummaryExecutiveSummary = (result: DiagnosticResult): string => {
-  const summaries = result.phase_3_strategy.executive_summaries;
-  if (!summaries) {
-    return `<div class="summary-card summary-prose">${renderMarkdownSummaryHtml(result.phase_3_strategy.executive_summary || '')}</div>`;
-  }
-  const blocks = (Object.entries(PERSONA_SUMMARY_LABELS) as Array<[keyof typeof PERSONA_SUMMARY_LABELS, string]>)
-    .filter(([id]) => !!summaries[id])
-    .map(([id, label]) => `
-      <section class="exec-lens">
-        <h3>${escapeHtml(label)} lens</h3>
-        <div class="summary-prose">${renderMarkdownSummaryHtml(summaries[id] || '')}</div>
-      </section>`)
-    .join('');
-  return `<div class="exec-grid">${blocks}</div>`;
+const renderActionability = (result: DiagnosticResult): string => {
+  const vm = buildReportViewModel(result);
+  const tone = vm.actionability.gate.toLowerCase();
+  return `
+    <section class="actionability actionability-${escapeHtml(tone)}">
+      <div class="actionability-primary">
+        <span>Actionability</span>
+        <strong>${escapeHtml(vm.actionability.gate)}</strong>
+      </div>
+      <p>${escapeHtml(vm.actionability.statement)}</p>
+      <div class="actionability-facts">
+        <span><strong>${escapeHtml(vm.actionability.planningDecision.replace('_', ' '))}</strong> planning decision</span>
+        <span><strong>${escapeHtml(vm.actionability.confidence)}</strong> confidence</span>
+        <span><strong>${vm.actionability.blockerCount}</strong> blocking condition${vm.actionability.blockerCount === 1 ? '' : 's'}</span>
+      </div>
+    </section>`;
 };
+
+const renderAntiPatternDisposition = (result: DiagnosticResult): string => {
+  const d = buildReportViewModel(result).antipatternDisposition;
+  return `
+    <section class="disposition-card">
+      <h3>Anti-pattern disposition</h3>
+      <p>Counts preserve the distinction between observed friction, tested absence, and missing evidence.</p>
+      <div class="disposition-grid">
+        <div><strong>${d.confirmed}</strong><span>Confirmed</span></div>
+        <div><strong>${d.partial}</strong><span>Partial</span></div>
+        <div><strong>${d.testedAbsent}</strong><span>Tested absent</span></div>
+        <div><strong>${d.notAssessed}</strong><span>Not assessed</span></div>
+        <div><strong>${d.unresolved}</strong><span>Unresolved</span></div>
+      </div>
+    </section>`;
+};
+
+const renderEvidenceBackedFindings = (result: DiagnosticResult): string => {
+  const evidence = result.phase_3_strategy.evidence_summary;
+  if (!evidence) return '';
+  const m = result.phase_2_validation.metrics;
+  const useSourceObservationTitle = isInsufficientEvidenceReport(
+    evidence.maturity_classification,
+    m.evidence_density,
+    result.quality_gate.decision
+  );
+  const list = (title: string, items?: string[]) => items && items.length > 0
+    ? `<div class="summary-sub"><h3>${escapeHtml(title)}</h3><ul>${items.map(i => `<li>${renderInlineMarkdownHtml(i)}</li>`).join('')}</ul></div>`
+    : '';
+  const testedAbsences: string[] = [];
+  const notAssessed: string[] = [];
+  for (const criterion of MASTER_BINGO_FINOPS.antipattern) {
+    const item = result.phase_1_audit_logs.antipattern[criterion.id];
+    const status = inferAntiPatternAbsenceStatus(item);
+    const rationale = item?.coverage_reason || item?.reasoning || 'Source coverage was insufficient to verify absence.';
+    if (status === 'tested_absent') testedAbsences.push(`[${criterion.id}] Tested absent: ${rationale}`);
+    if (status === 'unknown_absent') notAssessed.push(`[${criterion.id}] Not assessed: ${rationale}`);
+  }
+  return `
+    <section class="evidence-findings">
+      <p class="persona-heading">Fact-only current state · ${escapeHtml(evidence.maturity_classification)}</p>
+      <h3>${escapeHtml(evidence.headline)}</h3>
+      <div class="summary-grid">
+        ${list(strengthsSectionTitle(useSourceObservationTitle), evidence.confirmed_strengths)}
+        ${list('Confirmed gaps', evidence.confirmed_gaps)}
+        ${list('Confirmed anti-patterns', evidence.confirmed_antipatterns)}
+        ${list('Tested anti-pattern absences', testedAbsences)}
+        ${list('Anti-patterns not assessed', notAssessed)}
+        ${list('Silent / missing evidence', evidence.silent_or_missing_evidence)}
+      </div>
+    </section>`;
+};
+
+const renderCanonicalDomainDiagnosis = (result: DiagnosticResult): string =>
+  computeDomainSignalRows(result).map(row => `
+    <li>
+      <strong>${escapeHtml(row.domain)} · ${escapeHtml(row.title)}:</strong>
+      Evidence coverage ${row.evidencePercent}%; observed maturity ${row.maturityPercent}%; anti-pattern finding rate ${row.antiPatternPercent}%.
+      ${row.antiPatternNotAssessed > 0 ? `${row.antiPatternNotAssessed} anti-pattern criterion${row.antiPatternNotAssessed === 1 ? ' was' : ' were'} not assessed.` : ''}
+    </li>`).join('');
 
 const renderSummaryDiagnosis = (result: DiagnosticResult): string => {
   const diagnosis = result.phase_3_strategy.diagnosis;
@@ -503,7 +559,7 @@ const renderSummaryDiagnosis = (result: DiagnosticResult): string => {
           </div>
           <div>
             <h3>Domain diagnosis</h3>
-            <ul>${Object.entries(diagnosis.domain_diagnosis || {}).map(([domain, text]) => `<li><strong>${escapeHtml(domain)}:</strong> ${escapeHtml(text)}</li>`).join('')}</ul>
+            <ul>${renderCanonicalDomainDiagnosis(result)}</ul>
           </div>
         </div>
         <div class="confidence-line"><strong>Diagnostic confidence: ${escapeHtml(diagnosis.confidence || 'unknown')}</strong>${diagnosis.confidence_rationale ? ` · ${escapeHtml(diagnosis.confidence_rationale)}` : ''}</div>
@@ -678,6 +734,11 @@ const renderDomainSignalOverview = (result: DiagnosticResult): string => {
           </div>
           <div class="domain-signal-metrics">
             <div class="domain-signal-metric">
+              <div class="signal-label"><i class="${row.evidencePercent >= 60 ? 'signal-green' : row.evidencePercent >= 30 ? 'signal-yellow' : 'signal-grey'}"></i><span>Evidence coverage</span></div>
+              <strong>${row.evidencePercent}%</strong>
+              <p>Assessed criterion surface</p>
+            </div>
+            <div class="domain-signal-metric">
               <div class="signal-label"><i class="${signalToneClass(row.maturityTone)}"></i><span>Maturity signal</span></div>
               <strong class="${signalToneClass(row.maturityTone)}">${row.maturityPercent}%</strong>
               <p>${row.maturityAssessed}/${row.maturityTotal} criteria assessed</p>
@@ -694,21 +755,12 @@ const renderDomainSignalOverview = (result: DiagnosticResult): string => {
   </section>`;
 };
 
-const generateSummaryReportHtml = (result: DiagnosticResult): string => {
+export const generateSummaryReportHtml = (result: DiagnosticResult): string => {
   const m = result.phase_2_validation.metrics;
+  const reportView = buildReportViewModel(result);
   const summaryPayload = resultWithoutRunTrace(result);
   const cwrClass = result.phase_2_validation.crawl_walk_run;
-  const isBlocked = result.quality_gate.decision === 'BLOCK';
-  const isInsufficientEvidence = isBlocked || m.evidence_density < 30 || m.antipattern_coverage < 60;
-  const readinessDescription = m.readiness_cap_reason || METRIC_DESCRIPTIONS.finops_readiness;
-  const gauges = [
-    { value: m.finops_readiness, label: 'Evidence-Gated Readiness', color: isBlocked ? '#f43f5e' : '#10b981', description: readinessDescription, trend: 'positive' as const, size: 'large' as const },
-    { value: m.maturity_depth, label: 'Maturity Depth', color: '#06b6d4', description: METRIC_DESCRIPTIONS.maturity_depth, trend: 'positive' as const },
-    { value: m.evidence_density, label: 'Evidence Density', color: '#475569', description: METRIC_DESCRIPTIONS.evidence_density, trend: 'positive' as const },
-    { value: m.antipattern_burden, label: 'Anti-Pattern Burden', color: '#e11d48', description: METRIC_DESCRIPTIONS.antipattern_burden, trend: 'negative' as const },
-    { value: m.antipattern_coverage, label: 'Anti-Pattern Coverage', color: '#64748b', description: METRIC_DESCRIPTIONS.antipattern_coverage, trend: 'positive' as const },
-    { value: m.antipattern_clearance, label: 'Anti-Pattern Clearance', color: '#10b981', description: METRIC_DESCRIPTIONS.antipattern_clearance, trend: 'positive' as const }
-  ];
+  const gauges = reportView.metrics;
   const qgTone = result.quality_gate.decision === 'GO' ? 'go' : result.quality_gate.decision === 'WARN' ? 'warn' : 'block';
   const kbStatus = result.meta.knowledge_base
     ? result.meta.knowledge_base.source === 'remote_blob'
@@ -746,6 +798,21 @@ const generateSummaryReportHtml = (result: DiagnosticResult): string => {
     li { margin: 0.35rem 0; }
     .summary-section { margin: 28px 0; }
     .section-lead { margin-top: -0.5rem; color: #64748b; }
+    .actionability { display: grid; grid-template-columns: minmax(160px, 0.35fr) 1fr; gap: 18px 28px; align-items: center; background: #fff; border: 1px solid #e2e8f0; border-left: 5px solid #94a3b8; border-radius: 16px; padding: 22px; margin: 28px 0; box-shadow: 0 12px 35px rgba(15,23,42,0.05); }
+    .actionability-go { border-left-color: #10b981; }
+    .actionability-warn { border-left-color: #f59e0b; }
+    .actionability-block { border-left-color: #f43f5e; }
+    .actionability-primary span { display: block; color: #64748b; text-transform: uppercase; letter-spacing: 0.1em; font-size: 0.68rem; font-weight: 800; }
+    .actionability-primary strong { display: block; font-size: 2.4rem; line-height: 1; margin-top: 5px; }
+    .actionability p { margin: 0; color: #334155; }
+    .actionability-facts { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 8px; }
+    .actionability-facts span { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 999px; padding: 6px 10px; color: #64748b; font-size: 0.76rem; }
+    .disposition-card, .evidence-findings { background: #fff; border: 1px solid #e2e8f0; border-radius: 16px; padding: 22px; margin: 20px 0; box-shadow: 0 12px 35px rgba(15,23,42,0.05); }
+    .disposition-card > p { color: #64748b; margin: 4px 0 16px; }
+    .disposition-grid { display: grid; grid-template-columns: repeat(5, minmax(90px, 1fr)); gap: 10px; }
+    .disposition-grid div { background: #f8fafc; border-radius: 12px; padding: 12px; text-align: center; }
+    .disposition-grid strong { display: block; font-size: 1.6rem; }
+    .disposition-grid span { color: #64748b; font-size: 0.72rem; }
     .source-note { margin: 16px 0 0; color: #fcd34d; font-size: 0.85rem; }
     .summary-card, .exec-lens, .decision-card, .withheld-card, .heatmap-panel, .chart-card, .summary-roadmap-phase { background: #fff; border: 1px solid #e2e8f0; border-radius: 16px; padding: 22px; box-shadow: 0 12px 35px rgba(15,23,42,0.05); }
     .summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 18px; }
@@ -760,6 +827,7 @@ const generateSummaryReportHtml = (result: DiagnosticResult): string => {
     .summary-prose em { color: #047857; font-style: normal; font-weight: 700; }
     .gauge-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1.25rem; align-items: stretch; }
     .gauge-grid > .gauge-large { grid-column: span 2; }
+    .gauge-denominator { color: #334155; font-size: 0.76rem; font-weight: 700; margin-top: 8px; }
     .chart-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 18px; }
     .chart-desc { color: #64748b; font-size: 0.88rem; margin: 0 0 12px; }
     .two-col { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 18px; }
@@ -855,6 +923,9 @@ const generateSummaryReportHtml = (result: DiagnosticResult): string => {
     @media (max-width: 760px) {
       .page { padding: 24px 16px 44px; }
       .hero { padding: 26px; border-radius: 18px; }
+      .actionability { grid-template-columns: 1fr; }
+      .actionability-facts { grid-column: 1; }
+      .disposition-grid { grid-template-columns: repeat(2, minmax(100px, 1fr)); }
       .gauge-grid > .gauge-large { grid-column: span 1; }
       .compact-heatmap-row { grid-template-columns: 1fr; }
       .compact-heatmap-cells { grid-template-columns: repeat(2, minmax(120px, 1fr)); }
@@ -883,37 +954,23 @@ const generateSummaryReportHtml = (result: DiagnosticResult): string => {
       ${sourceNote}
     </header>
 
-    <section class="summary-section">
-      <h2>Executive Summary</h2>
-      ${renderSummaryExecutiveSummary(result)}
-    </section>
+    ${renderActionability(result)}
 
     <section class="summary-section">
-      <h2>Maturity Gauges</h2>
+      <h2>Assessment Metrics</h2>
       <div class="gauge-grid">
         ${gauges.map(g => svgGaugeCard(g)).join('')}
       </div>
     </section>
 
-    <section class="summary-section">
-      <h2>Visual Diagnosis</h2>
-      <div class="chart-row">
-        <div class="chart-card">
-          <h3>Category Footprint</h3>
-          <p class="chart-desc">Per-domain maturity versus anti-pattern burden.</p>
-          ${svgRadar(result.phase_1_audit_logs)}
-        </div>
-        <div class="chart-card">
-          <h3>Position vs. Quadrants</h3>
-          <p class="chart-desc">Validated maturity depth plotted against confirmed anti-pattern burden. Insufficient evidence suppresses misleading quadrant labels.</p>
-          ${svgScatter(m.maturity_depth, m.antipattern_burden, isInsufficientEvidence)}
-        </div>
-      </div>
-    </section>
-
     ${renderDomainSignalOverview(result)}
-    ${renderSummaryDiagnosis(result)}
     ${renderAssessmentHeatmapSummary(result)}
+    ${renderAntiPatternDisposition(result)}
+    <section class="summary-section">
+      <h2>Evidence-Backed Findings</h2>
+      ${renderEvidenceBackedFindings(result)}
+    </section>
+    ${renderSummaryDiagnosis(result)}
     ${renderSummaryPlanningDecision(result)}
     ${renderSummaryRoadmap(result)}
     ${renderSourceRegistryPacketSummary(result)}
@@ -929,36 +986,21 @@ const generateSummaryReportHtml = (result: DiagnosticResult): string => {
 </html>`;
 };
 
-const generateReportHtml = (result: DiagnosticResult): string => {
-  const m = result.phase_2_validation.metrics;
-  const cwrClass = result.phase_2_validation.crawl_walk_run;
+export const generateReportHtml = (result: DiagnosticResult): string => {
+  const reportView = buildReportViewModel(result);
   const isBlocked = result.quality_gate.decision === 'BLOCK';
   const effectiveBracket = result.phase_3_strategy.effective_bracket ?? result.phase_3_strategy.confidence_bracket;
   const hasFindingsMode = effectiveBracket === 'LOW' && !!result.phase_3_strategy.findings_mode;
   const roadmap = result.phase_3_strategy.remediation_roadmap || [];
   const canRenderRoadmap = effectiveBracket !== 'LOW' && !isBlocked && roadmap.length > 0;
-  const isInsufficientEvidence = isBlocked || m.evidence_density < 30 || m.antipattern_coverage < 60;
-  const cwrSlug = cwrClass.toLowerCase().includes('insufficient') || cwrClass.toLowerCase().includes('crawl') ? 'crawl' : cwrClass.toLowerCase().includes('run') ? 'run' : 'walk';
-  const readinessDescription = m.readiness_cap_reason || METRIC_DESCRIPTIONS.finops_readiness;
-
-  const gauges = [
-    { value: m.finops_readiness, label: 'Evidence-Gated Readiness', color: isBlocked ? '#f43f5e' : '#10b981', description: readinessDescription, trend: 'positive' as const, size: 'large' as const },
-    { value: m.maturity_ratio, label: 'Maturity Level', color: '#14b8a6', description: METRIC_DESCRIPTIONS.maturity_ratio, trend: 'positive' as const },
-    { value: m.maturity_depth, label: 'Maturity Depth', color: '#06b6d4', description: METRIC_DESCRIPTIONS.maturity_depth, trend: 'positive' as const },
-    { value: m.antipattern_ratio, label: 'Anti-Pattern Level', color: '#f43f5e', description: METRIC_DESCRIPTIONS.antipattern_ratio, trend: 'negative' as const },
-    { value: m.antipattern_burden, label: 'Anti-Pattern Burden', color: '#e11d48', description: METRIC_DESCRIPTIONS.antipattern_burden, trend: 'negative' as const },
-    { value: m.antipattern_clearance, label: 'Anti-Pattern Clearance', color: '#10b981', description: METRIC_DESCRIPTIONS.antipattern_clearance, trend: 'positive' as const },
-    { value: m.antipattern_coverage, label: 'Anti-Pattern Coverage', color: '#64748b', description: METRIC_DESCRIPTIONS.antipattern_coverage, trend: 'positive' as const },
-    { value: m.delivery_integrity, label: 'Delivery Integrity', color: '#475569', description: METRIC_DESCRIPTIONS.delivery_integrity, trend: 'positive' as const },
-    { value: m.evidence_density, label: 'Evidence Density', color: '#475569', description: METRIC_DESCRIPTIONS.evidence_density, trend: 'positive' as const }
-  ];
+  const gauges = reportView.metrics;
 
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>FinOps Maturity Assessment Report</title>
+  <title>FinOps Master Data Report</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; background: #ffffff; color: #0f172a; padding: 48px 32px; max-width: 1100px; margin: 0 auto; line-height: 1.55; }
@@ -987,6 +1029,22 @@ const generateReportHtml = (result: DiagnosticResult): string => {
     .metric-desc { font-size: 0.8rem; color: #64748b; margin-top: 0.5rem; line-height: 1.45; }
     .gauge-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 1.25rem; margin: 1.5rem 0 2rem; align-items: stretch; }
     .gauge-grid > .gauge-large { grid-column: span 2; }
+    .gauge-denominator { color: #334155; font-size: 0.76rem; font-weight: 700; margin-top: 0.5rem; }
+    .actionability { display: grid; grid-template-columns: minmax(160px, 0.35fr) 1fr; gap: 1rem 1.5rem; align-items: center; background: #fff; border: 1px solid #e2e8f0; border-left: 5px solid #94a3b8; border-radius: 1rem; padding: 1.4rem; margin: 1.5rem 0 2rem; }
+    .actionability-go { border-left-color: #10b981; }
+    .actionability-warn { border-left-color: #f59e0b; }
+    .actionability-block { border-left-color: #f43f5e; }
+    .actionability-primary span { display: block; color: #64748b; text-transform: uppercase; letter-spacing: 0.1em; font-size: 0.68rem; font-weight: 800; }
+    .actionability-primary strong { display: block; font-size: 2.4rem; line-height: 1; margin-top: 0.3rem; }
+    .actionability p { margin: 0; color: #334155; }
+    .actionability-facts { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 0.5rem; }
+    .actionability-facts span { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 999px; padding: 0.35rem 0.65rem; color: #64748b; font-size: 0.75rem; }
+    .disposition-card, .evidence-findings { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 1rem; padding: 1.4rem; margin: 1.25rem 0; }
+    .disposition-card > p { color: #64748b; margin: 0.25rem 0 1rem; }
+    .disposition-grid { display: grid; grid-template-columns: repeat(5, minmax(90px, 1fr)); gap: 0.65rem; }
+    .disposition-grid div { background: #fff; border-radius: 0.75rem; padding: 0.75rem; text-align: center; }
+    .disposition-grid strong { display: block; font-size: 1.5rem; }
+    .disposition-grid span { color: #64748b; font-size: 0.7rem; }
     .chart-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); gap: 1.25rem; }
     .domain-signal-section { margin: 2rem 0; }
     .domain-signal-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1rem; }
@@ -1008,6 +1066,31 @@ const generateReportHtml = (result: DiagnosticResult): string => {
     .signal-label i.signal-yellow { background: #f59e0b; }
     .signal-label i.signal-red { background: #f43f5e; }
     .signal-label i.signal-grey { background: #cbd5e1; }
+    .section-lead { color: #64748b; margin-top: -0.75rem; }
+    .heatmap-explainer { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 0.75rem; margin: 1rem 0; }
+    .heatmap-explainer div { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 0.75rem; padding: 0.8rem; }
+    .heatmap-explainer strong, .heatmap-explainer span { display: block; }
+    .heatmap-explainer span { color: #64748b; font-size: 0.8rem; }
+    .heatmap-legend { display: flex; flex-wrap: wrap; gap: 0.75rem; margin: 0 0 1rem; color: #475569; font-size: 0.78rem; }
+    .heatmap-legend i { display: inline-block; width: 0.75rem; height: 0.75rem; border-radius: 0.2rem; margin-right: 0.3rem; vertical-align: -0.05rem; }
+    .compact-heatmap-grid { display: grid; gap: 1rem; }
+    .compact-heatmap-panel { background: #fff; border: 1px solid #e2e8f0; border-radius: 1rem; padding: 1rem; }
+    .compact-heatmap-row { display: grid; grid-template-columns: 150px 1fr; gap: 0.6rem; padding: 0.5rem 0; border-top: 1px solid #eef2f7; }
+    .compact-heatmap-row:first-of-type { border-top: 0; }
+    .compact-heatmap-batch strong, .compact-heatmap-batch span { display: block; }
+    .compact-heatmap-batch span { color: #64748b; font-size: 0.7rem; }
+    .compact-heatmap-cells { display: grid; grid-template-columns: repeat(5, minmax(84px, 1fr)); gap: 0.45rem; }
+    .compact-heat-cell { min-height: 150px; border-radius: 0.7rem; padding: 0.7rem; border: 1px solid; }
+    .compact-heat-head { display: flex; justify-content: space-between; gap: 0.4rem; margin-bottom: 0.6rem; }
+    .compact-heat-head strong { font-family: ui-monospace, SFMono-Regular, monospace; font-size: 0.72rem; }
+    .compact-heat-head span { font-size: 0.58rem; font-weight: 800; text-transform: uppercase; }
+    .compact-heat-cell h4 { margin: 0 0 0.4rem; font-size: 0.8rem; line-height: 1.2; }
+    .compact-heat-cell p { margin: 0; color: #334155; font-size: 0.68rem; line-height: 1.35; }
+    .heat-good { background: #d1fae5; border-color: #a7f3d0; color: #065f46; }
+    .heat-tested-absent { background: #ecfdf5; border-color: #86efac; color: #166534; }
+    .heat-partial { background: #fef3c7; border-color: #fde68a; color: #92400e; }
+    .heat-gap { background: #ffe4e6; border-color: #fecdd3; color: #9f1239; }
+    .heat-silent { background: #f1f5f9; border-color: #e2e8f0; color: #64748b; }
     .summary { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 1rem; padding: 2rem; line-height: 1.75; color: #334155; margin-bottom: 1.5rem; }
     .summary strong { color: #0f172a; }
     .summary em { color: #047857; font-style: normal; font-weight: 600; }
@@ -1116,6 +1199,14 @@ const generateReportHtml = (result: DiagnosticResult): string => {
     .gate-llm-failed { font-size: 0.75rem; opacity: 0.6; font-style: italic; margin-top: 0.75rem; }
     .footer { text-align: center; padding: 2rem 0; margin-top: 3rem; border-top: 1px solid #e2e8f0; font-size: 0.85rem; color: #94a3b8; }
     ${SVG_CSS}
+    @media (max-width: 760px) {
+      body { padding: 24px 16px; }
+      .actionability { grid-template-columns: 1fr; }
+      .actionability-facts { grid-column: 1; }
+      .disposition-grid { grid-template-columns: repeat(2, minmax(100px, 1fr)); }
+      .compact-heatmap-row { grid-template-columns: 1fr; }
+      .compact-heatmap-cells { grid-template-columns: repeat(2, minmax(120px, 1fr)); }
+    }
     @media print {
       body { padding: 24px; max-width: none; }
       h2 { page-break-after: avoid; }
@@ -1124,7 +1215,7 @@ const generateReportHtml = (result: DiagnosticResult): string => {
   </style>
 </head>
 <body>
-  <h1>FinOps Maturity Assessment</h1>
+  <h1>FinOps Master Data</h1>
   <div class="meta">
     <p>Generated ${escapeHtml(result.meta.timestamp)} · Engine ${escapeHtml(result.meta.engine_version)}</p>
     ${result.meta.knowledge_base ? `<p>Knowledge Base: ${result.meta.knowledge_base.source === 'remote_blob'
@@ -1133,126 +1224,19 @@ const generateReportHtml = (result: DiagnosticResult): string => {
     ${(result.meta.source_parse_warnings?.length ?? 0) > 0 ? `<p>Source parse note: ${escapeHtml(result.meta.source_parse_warnings![0])}${result.meta.source_parse_warnings!.length > 1 ? ` (+${result.meta.source_parse_warnings!.length - 1} more)` : ''}</p>` : ''}
   </div>
 
-  ${renderEvidenceCheckSummary(result)}
+  ${renderActionability(result)}
 
-  <div class="classification-panel">
-    <div class="classification-row">
-      <span class="classification ${cwrSlug}">${escapeHtml(cwrClass)}</span>
-      <span class="classification-pipe">|</span>
-      <span class="classification-meta">Delivery ${m.delivery_integrity}% · Evidence ${m.evidence_density}%</span>
-    </div>
-    <div class="metric-grid">
-      <div class="metric">
-        <div class="metric-label">Evidence-Gated Readiness</div>
-        <div class="metric-value ${isBlocked ? 'rose' : 'emerald'}">${Math.round(m.finops_readiness)}%</div>
-        <div class="metric-desc">${escapeHtml(readinessDescription)}</div>
-      </div>
-      <div class="metric">
-        <div class="metric-label">Maturity Depth</div>
-        <div class="metric-value teal">${Math.round(m.maturity_depth)}%</div>
-        <div class="metric-desc">${escapeHtml(METRIC_DESCRIPTIONS.maturity_depth)}</div>
-      </div>
-      <div class="metric">
-        <div class="metric-label">Anti-Pattern Burden</div>
-        <div class="metric-value rose">${Math.round(m.antipattern_burden)}%</div>
-        <div class="metric-desc">${escapeHtml(METRIC_DESCRIPTIONS.antipattern_burden)}</div>
-      </div>
-      <div class="metric">
-        <div class="metric-label">Anti-Pattern Clearance</div>
-        <div class="metric-value emerald">${Math.round(m.antipattern_clearance)}%</div>
-        <div class="metric-desc">${escapeHtml(METRIC_DESCRIPTIONS.antipattern_clearance)}</div>
-      </div>
-      <div class="metric">
-        <div class="metric-label">Anti-Pattern Coverage</div>
-        <div class="metric-value">${Math.round(m.antipattern_coverage)}%</div>
-        <div class="metric-desc">${escapeHtml(METRIC_DESCRIPTIONS.antipattern_coverage)}</div>
-      </div>
-      <div class="metric">
-        <div class="metric-label">Maturity Ratio</div>
-        <div class="metric-value violet">${Math.round(m.maturity_ratio)}%</div>
-        <div class="metric-desc">${escapeHtml(METRIC_DESCRIPTIONS.maturity_ratio)}</div>
-      </div>
-    </div>
-  </div>
-
-  <h2>Maturity Gauges</h2>
+  <h2>Assessment Metrics</h2>
   <div class="gauge-grid">
     ${gauges.map(g => svgGaugeCard(g)).join('')}
   </div>
 
-  <h2>Visual Diagnosis</h2>
-  <div class="chart-row">
-    <div class="chart-card">
-      <h3>Category Footprint</h3>
-      <p class="chart-desc">Per-domain maturity (emerald) vs anti-pattern burden (rose). Each axis is one assessment domain; values are the sum of sub-criterion counts (0–15) for that domain.</p>
-      ${svgRadar(result.phase_1_audit_logs)}
-    </div>
-    <div class="chart-card">
-      <h3>Position vs. Quadrants</h3>
-      <p class="chart-desc">Validated maturity depth (x-axis) plotted against confirmed anti-pattern burden (y-axis). When evidence or anti-pattern coverage is insufficient, quadrant labels are suppressed.</p>
-      ${svgScatter(m.maturity_depth, m.antipattern_burden, isInsufficientEvidence)}
-    </div>
-  </div>
-
   ${renderDomainSignalOverview(result)}
+  ${renderAssessmentHeatmapSummary(result)}
+  ${renderAntiPatternDisposition(result)}
 
-  <h2>Evidence Summary</h2>
-  ${(() => {
-    const evidence = result.phase_3_strategy.evidence_summary;
-    if (!evidence) return '';
-    const useSourceObservationTitle = isInsufficientEvidenceReport(
-      evidence.maturity_classification,
-      m.evidence_density,
-      result.quality_gate.decision
-    );
-    const list = (title: string, items?: string[]) => items && items.length > 0
-      ? `<div class="summary-sub"><h3>${escapeHtml(title)}</h3><ul>${items.map(i => `<li>${renderInlineMarkdownHtml(i)}</li>`).join('')}</ul></div>`
-      : '';
-    return `
-      <div class="summary evidence-summary">
-        <p class="persona-heading">Fact-only current state · ${escapeHtml(evidence.maturity_classification)}</p>
-        <h3>${escapeHtml(evidence.headline)}</h3>
-        <div class="summary-grid">
-          ${list('Key metrics', evidence.key_metrics)}
-          ${list(strengthsSectionTitle(useSourceObservationTitle), evidence.confirmed_strengths)}
-          ${list('Confirmed gaps', evidence.confirmed_gaps)}
-          ${list('Confirmed anti-patterns', evidence.confirmed_antipatterns)}
-          ${list('Verified anti-pattern absences', result.phase_2_validation.verified_antipattern_absences)}
-          ${list('Anti-patterns not assessable from source', result.phase_2_validation.unknown_antipattern_absences)}
-          ${list('Silent / missing evidence', evidence.silent_or_missing_evidence)}
-        </div>
-      </div>`;
-  })()}
-  ${(() => {
-    const summaries = result.phase_3_strategy.executive_summaries;
-    const personas: Array<{ id: 'finops_lead' | 'cfo' | 'engineering_lead'; label: string }> = [
-      { id: 'finops_lead', label: 'FinOps Lead' },
-      { id: 'cfo', label: 'CFO' },
-      { id: 'engineering_lead', label: 'Engineering Lead' }
-    ];
-    const unsupported = result.quality_gate?.fact_check?.unsupported_claims || [];
-    const attempts = result.quality_gate?.fact_check?.attempts || 0;
-    const renderConfidence = (personaId: string): string => {
-      const personaClaims = unsupported.filter(c => c.source_location === personaId);
-      if (personaClaims.length === 0) return '';
-      return `
-        <div class="confidence-notes">
-          <p class="confidence-title">Confidence Notes — Unverified Claims</p>
-          <p class="confidence-lead">The following statements could not be verified against the source after ${attempts} regenerate pass(es). Treat with caution.</p>
-          <ul>
-            ${personaClaims.map(c => `<li><span class="cn-claim">&ldquo;${escapeHtml(c.claim)}&rdquo;</span><span class="cn-rationale">${escapeHtml(c.rationale)}${c.failure_type ? ` · ${escapeHtml(c.failure_type.replace(/_/g, ' '))}` : ''}</span></li>`).join('')}
-          </ul>
-        </div>`;
-    };
-    if (summaries && personas.some(p => summaries[p.id])) {
-      return personas.map(p => `
-        <h3 class="persona-heading">Evidence summary for the ${escapeHtml(p.label)}</h3>
-        <div class="summary summary-markdown">${renderMarkdownSummaryHtml(summaries[p.id] || '')}</div>
-        ${renderConfidence(p.id)}
-      `).join('');
-    }
-    return `<div class="summary summary-markdown">${renderMarkdownSummaryHtml(result.phase_3_strategy.executive_summary || '')}</div>`;
-  })()}
+  <h2>Evidence-Backed Findings</h2>
+  ${renderEvidenceBackedFindings(result)}
 
   ${(() => {
     const diagnosis = result.phase_3_strategy.diagnosis;
@@ -1265,7 +1249,7 @@ const generateReportHtml = (result: DiagnosticResult): string => {
         ${primaryBottleneck ? `<h3>Primary bottleneck</h3><p>${escapeHtml(primaryBottleneck)}</p>` : ''}
         <div class="summary-grid">
           <div class="summary-sub"><h3>Root causes</h3><ul>${(diagnosis.root_causes || []).map(i => `<li>${escapeHtml(i)}</li>`).join('')}</ul></div>
-          <div class="summary-sub"><h3>Domain diagnosis</h3><ul>${Object.entries(diagnosis.domain_diagnosis || {}).map(([d, text]) => `<li><strong>${escapeHtml(d)}:</strong> ${escapeHtml(text)}</li>`).join('')}</ul></div>
+          <div class="summary-sub"><h3>Domain diagnosis</h3><ul>${renderCanonicalDomainDiagnosis(result)}</ul></div>
         </div>
         <p><strong>Confidence (${escapeHtml(diagnosis.confidence)}):</strong> ${escapeHtml(diagnosis.confidence_rationale)}</p>
       </div>`;
@@ -1328,6 +1312,7 @@ const generateReportHtml = (result: DiagnosticResult): string => {
     </div>
   ` : ''}
 
+  ${renderEvidenceCheckSummary(result)}
   ${renderForensicSection('Forensic Audit: FinOps Maturity', 'maturity', result.phase_1_audit_logs.maturity)}
   ${renderForensicSection('Forensic Audit: Anti-Patterns', 'antipattern', result.phase_1_audit_logs.antipattern)}
   ${renderQualityGateAppendix(result.quality_gate)}

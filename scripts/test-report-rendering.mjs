@@ -69,6 +69,11 @@ assert.match(exportSource, /roadmap-context-label">Why/, 'HTML export should ren
 assert.match(exportSource, /roadmap-context-label">What/, 'HTML export should render roadmap WHAT context');
 assert.match(exportSource, /roadmap-how-label">How/, 'HTML export should label action bullets as HOW');
 assert.match(exportSource, /renderDomainSignalOverview/, 'HTML exports should render the domain signal overview');
+assert.match(exportSource, /renderAssessmentHeatmapSummary\(result\)/, 'HTML exports should render the shared criterion heatmap');
+assert.match(exportSource, /Evidence-Backed Findings/, 'HTML exports should use the governed evidence findings section');
+assert.doesNotMatch(exportSource, /<h2>Executive Summary<\/h2>/, 'HTML exports should not render the legacy Executive Summary');
+assert.doesNotMatch(exportSource, /Evidence summary for the/, 'HTML exports should not render repetitive persona summaries');
+assert.match(exportSource, /Candidate inclusion measures/, 'Master Data should distinguish retrieval candidate inclusion from evidence sufficiency');
 assert.match(exportSource, /Domain Signal Overview/, 'HTML exports should include the domain signal title');
 assert.match(exportSource, /Anti-pattern finding rate/, 'HTML exports should label anti-pattern traffic lights');
 assert.match(exportSource, /Acquisition Quality &amp; Readiness/, 'Master Data should visibly render acquisition quality');
