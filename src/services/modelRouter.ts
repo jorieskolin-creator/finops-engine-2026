@@ -188,6 +188,17 @@ async function postWithTimeout(url: string, body: any, approval: any): Promise<{
       signal: controller.signal,
     });
     if (!res.ok) {
+      await serverLog(body.run_id, 'warn', 'internal_result_error', {
+        stage: body.stage || 'unknown',
+        model: approval.model || 'governed',
+        internal_call_id: body.internal_call_id,
+        error_code: res.status === 404 ? 'packet_unavailable' : 'gateway_http_error',
+        http_status: res.status,
+      });
+      // Both provider-gateway 404 paths occur before an attempt is reserved
+      // and before the external-send fence. A different model can therefore
+      // be tried without risking duplicate provider execution.
+      if (res.status === 404) throw new StageExecutionError('FALLBACK_ALLOWED', true);
       throw new Error(`${url} request failed (HTTP ${res.status})`);
     }
     if (!res.body) {
@@ -232,6 +243,7 @@ async function postWithTimeout(url: string, body: any, approval: any): Promise<{
     }
     return { text: finalText, usage: finalUsage };
   } catch (err) {
+    if (err instanceof StageExecutionError && err.fallbackAllowed) throw err;
     const recovered = await pollInternalResult(body, approval, err, dispatchStarted);
     if (recovered) return recovered;
     if(err instanceof StageExecutionError)throw err;
