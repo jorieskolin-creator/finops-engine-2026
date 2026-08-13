@@ -42,6 +42,7 @@ import { buildRunTrace, clearStageTraces, consumeStageTraces, summarizeRunTrace 
 import { acquisitionQualityPersistence, buildAcquisitionQualitySnapshot, shadowTelemetryPersistence } from "./acquisitionQualityService";
 import { analyzeStructuredSources, buildDataSignalCoverageReport } from "./structuredDataAnalysisService";
 import { buildBoundedRetrievalTrace } from "./boundedRetrievalService";
+import { parseGovernedJsonObject, validateFindingsModePayload } from "./jsonResponseService";
 
 const FACT_CHECK_MAX_RETRIES = 2;
 const ID_VALIDATION_MAX_REGENS = 2;
@@ -109,19 +110,7 @@ const normalizePersonaSummaries = (rawStrategy: any): {
 };
 
 const parseAiResponse = (text: string): any => {
-  if (!text) return {};
-  let cleaned = text.replace(/```json/gi, '').replace(/```/g, '').trim();
-  const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
-  if (!jsonMatch) {
-    console.warn("[FinOps Pipeline] AI Response contained no JSON braces.");
-    return {};
-  }
-  try {
-    return JSON.parse(jsonMatch[0]);
-  } catch (e) {
-    console.error("[FinOps Pipeline] JSON Parse Error: response content omitted by logging policy.");
-    throw new Error("AI response was malformed and could not be repaired safely.");
-  }
+  return parseGovernedJsonObject(text);
 };
 
 // Direct model calls now flow through modelRouter (`runStage`). The router
@@ -591,25 +580,45 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => `  ${cat}
     };
 
     const callFindingsSynthesis = async (correctionAppendix?: string): Promise<any> => {
-      const textParts: string[] = [STRATEGY_USER_PROMPT_FINDINGS];
-      textParts.push(`\n\n### DIAGNOSTIC FINDINGS (Phase 1 & 2)\nUse these findings to produce the findings-mode report:\n${handoffSummary}`);
-      textParts.push(`\n\n### ORIGINAL SOURCE CONTEXT\n<SOURCE_DOCUMENT_TO_AUDIT>\n${text.substring(0, 50000)}\n</SOURCE_DOCUMENT_TO_AUDIT>`);
-      if (correctionAppendix) textParts.push(correctionAppendix);
-      const synthStarted = Date.now();
-      const resp = await runStage(synthesisStage, {
-        userText: textParts.join(''),
-        systemInstruction: EVIDENCE_SYNTHESIS_SYSTEM_INSTRUCTION,
-      }, { runId });
-      actuals.synthesis = resp.modelUsed.id;
-      serverLog(runId, 'info', 'stage_complete', {
-        stage: synthesisStage,
-        model: resp.modelUsed.id,
-        substage: 'findings_mode',
-        bracket: confidenceBracket,
-        duration_ms: Date.now() - synthStarted,
-        regen: correctionAppendix ? 'yes' : 'no',
-      });
-      return parseAiResponse(resp.text);
+      let formatRetry = 0;
+      while (true) {
+        const textParts: string[] = [STRATEGY_USER_PROMPT_FINDINGS];
+        textParts.push(`\n\n### DIAGNOSTIC FINDINGS (Phase 1 & 2)\nUse these findings to produce the findings-mode report:\n${handoffSummary}`);
+        textParts.push(`\n\n### ORIGINAL SOURCE CONTEXT\n<SOURCE_DOCUMENT_TO_AUDIT>\n${text.substring(0, 50000)}\n</SOURCE_DOCUMENT_TO_AUDIT>`);
+        if (correctionAppendix) textParts.push(correctionAppendix);
+        if (formatRetry > 0) {
+          textParts.push('\n\n### OUTPUT CONTRACT CORRECTION\nThe previous response was not valid against the required findings-mode JSON contract. Return exactly one JSON object and include all four findings_mode arrays with the required item counts and non-empty string items. Do not add commentary or invent evidence.');
+        }
+        const synthStarted = Date.now();
+        const resp = await runStage(synthesisStage, {
+          userText: textParts.join(''),
+          systemInstruction: EVIDENCE_SYNTHESIS_SYSTEM_INSTRUCTION,
+        }, { runId });
+        actuals.synthesis = resp.modelUsed.id;
+        serverLog(runId, 'info', 'stage_complete', {
+          stage: synthesisStage,
+          model: resp.modelUsed.id,
+          substage: 'findings_mode',
+          bracket: confidenceBracket,
+          duration_ms: Date.now() - synthStarted,
+          regen: correctionAppendix || formatRetry > 0 ? 'yes' : 'no',
+        });
+        try {
+          const parsed = parseAiResponse(resp.text);
+          const contractErrors = validateFindingsModePayload(parsed);
+          if (contractErrors.length > 0) throw new Error('Findings-mode response failed its required contract.');
+          return parsed;
+        } catch (error) {
+          if (formatRetry >= 1) throw error;
+          formatRetry++;
+          serverLog(runId, 'warn', 'synthesis_output_retry', {
+            stage: synthesisStage,
+            substage: 'findings_mode',
+            reason_code: 'INVALID_OUTPUT_CONTRACT',
+            retry: formatRetry,
+          });
+        }
+      }
     };
 
     const mergePhase3Outputs = (summary: any, roadmapData: any): any => {

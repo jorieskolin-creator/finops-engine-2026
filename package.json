@@ -21,6 +21,7 @@
     "test:quality-gate": "node scripts/test-quality-gate-severity.mjs",
     "test:strategy-sanitation": "node scripts/test-strategy-sanitation.mjs",
     "test:fact-check-validation": "node scripts/test-fact-check-validation.mjs",
+    "test:json-response": "node scripts/test-json-response.mjs",
     "test:model-routing": "node scripts/test-model-routing.mjs",
     "test:internal-call-protection": "node scripts/test-internal-call-protection.mjs",
     "test:internal-result-recovery": "node scripts/test-internal-result-recovery.mjs",
