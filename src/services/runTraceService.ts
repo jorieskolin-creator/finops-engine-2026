@@ -1,6 +1,7 @@
 import {
   AuditItem,
   BoundedRetrievalTrace,
+  DataSignalCoverageReport,
   DiagnosticResult,
   DlpScanResult,
   DerivedAnalyticalEvidence,
@@ -51,6 +52,7 @@ interface BuildRunTraceInput {
   qualityGate: QualityGateResult;
   tacticGroundingAdjustments: TacticGroundingTraceAdjustment[];
   derivedAnalyticalEvidence?: DerivedAnalyticalEvidence[];
+  dataSignalCoverage?: DataSignalCoverageReport;
   boundedRetrieval?: BoundedRetrievalTrace;
 }
 
@@ -327,6 +329,7 @@ export const buildRunTrace = (input: BuildRunTraceInput): RunTrace => {
     input_manifest: sourceManifest(input.sourceRegistry),
     context_packets: contextPackets,
     derived_analytical_evidence: input.derivedAnalyticalEvidence,
+    data_signal_coverage: input.dataSignalCoverage,
     bounded_retrieval: input.boundedRetrieval,
     dlp: {
       scanned_chunk_count: input.dlpScan.scanned_chunk_count,

@@ -545,6 +545,7 @@ export interface RunTrace {
   input_manifest: SourceManifestTrace[];
   context_packets: ContextPacketTrace[];
   derived_analytical_evidence?: DerivedAnalyticalEvidence[];
+  data_signal_coverage?: DataSignalCoverageReport;
   bounded_retrieval?: BoundedRetrievalTrace;
   dlp: {
     scanned_chunk_count: number;
@@ -566,6 +567,22 @@ export interface RunTrace {
     api_keys_included: false;
     note: string;
   };
+}
+
+export interface DataSignalCoverageReport {
+  schema_version: 'data_signal_coverage_v1';
+  registry_version: 'data_signal_registry_v1';
+  mode: 'shadow';
+  total_object_count: 60;
+  analyzer_available_count: number;
+  unsupported_count: number;
+  objects: Array<{
+    domain_id: string;
+    stream: 'maturity' | 'antipattern';
+    criterion_id: string;
+    status: 'SHADOW_ANALYZER_AVAILABLE' | 'NO_AUTHORITATIVE_ANALYZER_SEMANTICS';
+    analyzer_ids: string[];
+  }>;
 }
 
 export type RetrievalStopReason = 'SUFFICIENT_BASELINE' | 'MINIMUM_GAIN_NOT_MET' | 'NO_NEW_CANDIDATES' | 'MAX_PASSES_REACHED';

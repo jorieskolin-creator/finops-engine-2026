@@ -1,4 +1,4 @@
-import type { DataSignalRegistryEntry, DerivedAnalyticalEvidence, SourceRecord, StructuredTableData } from '../types';
+import type { DataSignalCoverageReport, DataSignalRegistryEntry, DerivedAnalyticalEvidence, SourceRecord, StructuredTableData } from '../types';
 
 export const DATA_SIGNAL_REGISTRY_VERSION = 'data_signal_registry_v1' as const;
 export const TAGGING_ALLOCATION_ANALYZER_VERSION = '1.0.0' as const;
@@ -9,6 +9,17 @@ export const DATA_SIGNAL_REGISTRY: readonly DataSignalRegistryEntry[] = Object.f
   Object.freeze({ signal_id:'tagging_coverage', analyzer_id:'tagging_allocation_v1' as const, targets, canonical_fields:Object.freeze(['tag','tags','label','labels']) }),
   Object.freeze({ signal_id:'allocation_coverage', analyzer_id:'tagging_allocation_v1' as const, targets, canonical_fields:Object.freeze(['allocation','allocated','cost_center','billing_account']) })
 ]);
+
+export const buildDataSignalCoverageReport=():DataSignalCoverageReport=>{
+  const objects:DataSignalCoverageReport['objects']=[];
+  for(const domainId of ['A','B','C','D','E','F'])for(let index=1;index<=5;index++)for(const stream of ['maturity','antipattern'] as const){
+    const internalId=`${domainId}${index}`;
+    const analyzerIds=[...new Set(DATA_SIGNAL_REGISTRY.filter(entry=>entry.targets.some(target=>target.stream===stream&&target.criterion_id===internalId)).map(entry=>entry.analyzer_id))].sort();
+    objects.push({domain_id:domainId,stream,criterion_id:stream==='antipattern'?`AP-${internalId}`:internalId,status:analyzerIds.length?'SHADOW_ANALYZER_AVAILABLE':'NO_AUTHORITATIVE_ANALYZER_SEMANTICS',analyzer_ids:analyzerIds});
+  }
+  const analyzerAvailableCount=objects.filter(object=>object.status==='SHADOW_ANALYZER_AVAILABLE').length;
+  return{schema_version:'data_signal_coverage_v1',registry_version:DATA_SIGNAL_REGISTRY_VERSION,mode:'shadow',total_object_count:60,analyzer_available_count:analyzerAvailableCount,unsupported_count:60-analyzerAvailableCount,objects};
+};
 
 const normalizeHeader=(value:string):string=>value.toLowerCase().replace(/[^a-z0-9]+/g,'_').replace(/^_|_$/g,'');
 const matches=(header:string,patterns:readonly string[]):boolean=>patterns.some(pattern=>header===pattern||header.startsWith(`${pattern}_`)||header.endsWith(`_${pattern}`)||header.includes(`_${pattern}_`));

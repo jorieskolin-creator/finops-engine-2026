@@ -263,6 +263,7 @@ const renderRunTraceAppendix = (result: DiagnosticResult): string => {
       <div class="evidence-check-stat"><span>Score Paths</span><strong>${summary.score_path_count}</strong></div>
       <div class="evidence-check-stat"><span>Tactic Paths</span><strong>${summary.tactic_path_count}</strong></div>
       <div class="evidence-check-stat"><span>Derived Evidence</span><strong>${trace.derived_analytical_evidence?.length || 0}</strong></div>
+      <div class="evidence-check-stat"><span>Signal Analyzers</span><strong>${trace.data_signal_coverage?.analyzer_available_count || 0}/${trace.data_signal_coverage?.total_object_count || 60}</strong></div>
       <div class="evidence-check-stat"><span>Retrieval Passes</span><strong>${trace.bounded_retrieval?.domains.reduce((sum, domain) => sum + domain.passes.length, 0) || 0}</strong></div>
       <div class="evidence-check-stat"><span>DLP Chunks</span><strong>${trace.dlp.scanned_chunk_count}</strong></div>
       <div class="evidence-check-stat"><span>Gate</span><strong>${escapeHtml(summary.quality_gate_decision)}</strong></div>
@@ -277,6 +278,7 @@ const renderRunTraceAppendix = (result: DiagnosticResult): string => {
     ${(trace.derived_analytical_evidence || []).length > 0 ? `<div class="gate-label">Shadow deterministic A1/AP-A1 observations</div>
     <ul class="appendix-list">${trace.derived_analytical_evidence!.map(evidence => `<li><strong>${escapeHtml(evidence.evidence_id)}</strong> · ${escapeHtml(evidence.result.status)} · ${evidence.result.row_scope === 'bounded_prefix' ? 'bounded-prefix' : 'full-table'} analyzed-row coverage (${evidence.result.analyzed_row_count}/${evidence.result.source_row_count} rows; input truncated: ${String(evidence.result.row_truncated)}): mapping ${evidence.result.mapping_population_coverage ?? 'n/a'}% · tagging ${evidence.result.tagging_population_coverage ?? 'n/a'}% · allocation ${evidence.result.allocation_population_coverage ?? 'n/a'}% · analyzer ${escapeHtml(evidence.derivation.analyzer_version)} · raw values exposed: ${String(evidence.raw_value_exposure)}</li>`).join('')}</ul>` : ''}
     ${trace.bounded_retrieval ? `<div class="gate-label">Shadow bounded retrieval diagnostics</div><ul class="appendix-list">${trace.bounded_retrieval.domains.map(domain => `<li><strong>Domain ${escapeHtml(domain.domain_id)}</strong> · coverage ${domain.baseline_coverage}%→${domain.final_coverage}% · passes ${domain.passes.length}/${trace.bounded_retrieval!.max_passes} · stop ${escapeHtml(domain.stop_reason)}</li>`).join('')}</ul>` : ''}
+    ${trace.data_signal_coverage ? `<div class="gate-label">Data Signal Registry coverage</div><p class="appendix-note">${trace.data_signal_coverage.analyzer_available_count} of ${trace.data_signal_coverage.total_object_count} objects have an authoritative shadow analyzer mapping; ${trace.data_signal_coverage.unsupported_count} remain explicitly NO_AUTHORITATIVE_ANALYZER_SEMANTICS pending governed KB schema definitions.</p>` : ''}
   </div>`;
 };
 

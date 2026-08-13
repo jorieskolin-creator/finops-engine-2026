@@ -40,7 +40,7 @@ import {
 } from "./sourceRegistryService";
 import { buildRunTrace, clearStageTraces, consumeStageTraces, summarizeRunTrace } from "./runTraceService";
 import { acquisitionQualityPersistence, buildAcquisitionQualitySnapshot } from "./acquisitionQualityService";
-import { analyzeStructuredSources } from "./structuredDataAnalysisService";
+import { analyzeStructuredSources, buildDataSignalCoverageReport } from "./structuredDataAnalysisService";
 import { buildBoundedRetrievalTrace } from "./boundedRetrievalService";
 
 const FACT_CHECK_MAX_RETRIES = 2;
@@ -239,6 +239,7 @@ export const analyzeDocument = async (
   try {
     const sourceRegistry = buildSourceRegistry(sources);
     const derivedAnalyticalEvidence = analyzeStructuredSources(sources);
+    const dataSignalCoverage = buildDataSignalCoverageReport();
     const text = renderPseudonymousSourceContext(sourceRegistry, 50000);
     const sourcePackets = buildDomainPackets(sourceRegistry);
     const boundedRetrieval = buildBoundedRetrievalTrace(sourceRegistry, sourcePackets);
@@ -1044,6 +1045,7 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => `  ${cat}
       qualityGate,
       tacticGroundingAdjustments,
       derivedAnalyticalEvidence,
+      dataSignalCoverage,
       boundedRetrieval
     });
     finalResult.meta.run_trace = runTrace;
