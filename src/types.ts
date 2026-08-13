@@ -152,6 +152,28 @@ export interface EvidenceCheckResult {
   failure_reason?: string;
 }
 
+export type PipelineProgressStage =
+  | 'extraction'
+  | 'packetization'
+  | 'privacy'
+  | 'knowledge'
+  | 'analysis'
+  | 'evidence'
+  | 'calculation'
+  | 'synthesis'
+  | 'verification'
+  | 'finalization';
+
+export type PipelineProgressStatus = 'pending' | 'in_progress' | 'completed' | 'completed_with_warnings' | 'failed';
+
+export interface PipelineProgressUpdate {
+  stage: PipelineProgressStage;
+  status: PipelineProgressStatus;
+  completed?: number;
+  total?: number;
+  domain_id?: string;
+}
+
 export interface RemediationStep {
   phase: string;
   why?: string;

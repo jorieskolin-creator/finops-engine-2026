@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { ResponsiveContainer, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar, Legend, Tooltip } from 'recharts';
-import { AuditCategory, AuditItem, QualityGateResult, RemediationStep } from '../types';
+import { AuditCategory, AuditItem, PipelineProgressStage, PipelineProgressStatus, PipelineProgressUpdate, QualityGateResult, RemediationStep } from '../types';
 import { BATCH_DEFINITIONS, BATCH_IDS, MASTER_BINGO_FINOPS } from '../knowledge_base';
 import { antiPatternStatusLabel, inferAntiPatternAbsenceStatus } from '../services/antiPatternSemantics';
 import { displayQualityGateDiagnostic, scannerEvidenceCheckDisagreementTitle, splitQualityGateDiagnostics } from '../services/reportDiagnosticsService';
@@ -115,72 +115,94 @@ const useAuditMetadata = (isAntipattern: boolean) => {
   }, [isAntipattern]);
 };
 
-export const NeuralLoadingGrid: React.FC<{ progress: number; stage: string }> = ({ progress, stage }) => {
-  const steps = [
-    { id: 'A', label: 'VISIBILITY', sub: 'Allocation' },
-    { id: 'B', label: 'OPTIMIZE', sub: 'Rate & Usage' },
-    { id: 'C', label: 'GOVERN', sub: 'Policy' },
-    { id: 'D', label: 'ARCHITECT', sub: 'Engineering' },
-    { id: 'E', label: 'CULTURE', sub: 'Organization' },
-  ];
+const PIPELINE_STEPS: Array<{ id: PipelineProgressStage; label: string }> = [
+  { id: 'extraction', label: 'Extraction' },
+  { id: 'packetization', label: 'Packetization' },
+  { id: 'privacy', label: 'Privacy checks' },
+  { id: 'knowledge', label: 'Knowledge preparation' },
+  { id: 'analysis', label: 'Analysis' },
+  { id: 'evidence', label: 'Evidence verification' },
+  { id: 'calculation', label: 'Deterministic calculation' },
+  { id: 'synthesis', label: 'Synthesis' },
+  { id: 'verification', label: 'Quality verification' },
+  { id: 'finalization', label: 'Finalization & cleanup' },
+];
 
-  const activeIndex = stage === 'audit'
-    ? Math.floor(progress / 20)
-    : 5;
+const statusLabel = (status: PipelineProgressStatus): string => ({
+  pending: 'Pending',
+  in_progress: 'In progress',
+  completed: 'Completed',
+  completed_with_warnings: 'Completed with warnings',
+  failed: 'Failed',
+})[status];
+
+export const NeuralLoadingGrid: React.FC<{
+  progress: Partial<Record<PipelineProgressStage, PipelineProgressUpdate>>;
+  completedDomains: string[];
+}> = ({ progress, completedDomains }) => {
+  const domains = [
+    { id: 'A', label: 'VISIBILITY' },
+    { id: 'B', label: 'OPTIMIZE' },
+    { id: 'C', label: 'GOVERN' },
+    { id: 'D', label: 'ARCHITECT' },
+    { id: 'E', label: 'CULTURE' },
+    { id: 'F', label: 'GENAI COST' },
+  ];
+  const active = [...PIPELINE_STEPS].reverse().find(step => progress[step.id]?.status === 'in_progress');
+  const headline = active?.id === 'analysis' || active?.id === 'evidence'
+    ? 'Analyzing FinOps Streams...'
+    : active ? `${active.label}...` : 'Preparing governed assessment...';
+  const analysisActive = progress.analysis?.status === 'in_progress' || progress.evidence?.status === 'in_progress';
 
   return (
     <div className="flex items-center justify-center min-h-[500px] font-sans">
-      <div className="relative w-full max-w-4xl bg-slate-900/40 backdrop-blur-2xl rounded-[3rem] p-12 md:p-16 border border-white/10 shadow-[0_20px_50px_-12px_rgba(0,0,0,0.5)] overflow-hidden">
+      <div className="relative w-full max-w-5xl bg-slate-900/40 backdrop-blur-2xl rounded-[3rem] p-8 md:p-12 border border-white/10 shadow-[0_20px_50px_-12px_rgba(0,0,0,0.5)] overflow-hidden">
         <div className="flex justify-center mb-8">
           <div className="inline-flex items-center gap-2 px-6 py-2 rounded-full bg-slate-800/50 border border-slate-700/50 shadow-sm backdrop-blur-sm">
-            <span className={`w-2 h-2 rounded-full ${stage === 'strategy' ? 'bg-violet-500 animate-pulse shadow-[0_0_15px_rgba(139,92,246,0.5)]' : 'bg-emerald-400 animate-pulse shadow-[0_0_15px_rgba(52,211,153,0.5)]'}`}></span>
+            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shadow-[0_0_15px_rgba(52,211,153,0.5)]"></span>
             <span className="text-xs font-bold uppercase tracking-[0.2em] text-slate-300">
-              {stage === 'strategy' ? 'PHASE 3: STRATEGIC SYNTHESIS (Opus 4.7)' : 'PHASE 1: FORENSIC AUDIT (Sonnet 4.6)'}
+              Governed pipeline status
             </span>
           </div>
         </div>
-        <div className="text-center mb-16">
-          <h2 className="text-4xl md:text-5xl font-display font-bold text-white mb-3 tracking-tight">
-            {stage === 'strategy' ? 'Synthesizing Roadmap...' : 'Analyzing FinOps Streams...'}
+        <div className="text-center mb-10">
+          <h2 className="text-3xl md:text-4xl font-display font-bold text-white mb-3 tracking-tight">
+            {headline}
           </h2>
-          <p className="text-slate-300 font-medium text-lg">
-            {stage === 'strategy' ? 'Claude Opus 4.7 - Strategy Engine Active' : 'Claude Sonnet 4.6 - Parallel Batching Active'}
-          </p>
+          <p className="text-slate-300 font-medium">Pipeline stages are reported from actual processing boundaries.</p>
         </div>
-        <div className="flex justify-center gap-4 md:gap-8 mb-20 relative">
-          {steps.map((step, idx) => {
-            const isActive = idx === activeIndex && stage === 'audit';
-            const isDone = idx < activeIndex || stage === 'calc' || stage === 'strategy';
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-10">
+          {PIPELINE_STEPS.map((step, index) => {
+            const status = progress[step.id]?.status || 'pending';
+            const done = status === 'completed' || status === 'completed_with_warnings';
             return (
-              <div key={step.id} className="flex flex-col items-center gap-4 group">
-                <div className={`w-16 h-16 md:w-20 md:h-20 rounded-[1.5rem] flex items-center justify-center text-xl md:text-2xl font-bold font-display transition-all duration-500 ease-out border ${isActive ? 'bg-emerald-500/10 border-emerald-400 text-emerald-400 shadow-[0_0_30px_rgba(52,211,153,0.3)] scale-110 z-10' : isDone ? 'bg-slate-800 border-slate-700 text-white shadow-xl scale-100' : 'bg-slate-900/50 border-slate-800 text-slate-500 scale-95'}`}>
-                  {isDone ? (
-                    <svg className="w-6 h-6 md:w-8 md:h-8 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
-                  ) : step.id}
+              <div key={step.id} className={`rounded-2xl border p-3 min-h-[92px] transition-colors ${status === 'in_progress' ? 'border-emerald-400/70 bg-emerald-500/10' : status === 'completed_with_warnings' ? 'border-amber-400/50 bg-amber-500/5' : status === 'failed' ? 'border-rose-400/60 bg-rose-500/10' : done ? 'border-slate-700 bg-slate-800/70' : 'border-slate-800 bg-slate-950/30'}`}>
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-[10px] font-mono text-slate-500">{String(index + 1).padStart(2, '0')}</span>
+                  <span className={`w-2 h-2 rounded-full ${status === 'in_progress' ? 'bg-emerald-400 animate-pulse' : status === 'completed_with_warnings' ? 'bg-amber-400' : status === 'failed' ? 'bg-rose-400' : done ? 'bg-emerald-500' : 'bg-slate-700'}`}></span>
                 </div>
-                <span className={`text-[10px] md:text-xs font-bold uppercase tracking-widest transition-colors duration-300 ${isActive || isDone ? 'text-slate-200' : 'text-slate-500'}`}>{step.label}</span>
+                <div className={`text-xs font-bold ${status === 'pending' ? 'text-slate-500' : 'text-slate-200'}`}>{step.label}</div>
+                <div className={`text-[10px] mt-1 ${status === 'completed_with_warnings' ? 'text-amber-300' : status === 'failed' ? 'text-rose-300' : 'text-slate-500'}`}>{statusLabel(status)}</div>
               </div>
             );
           })}
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-12 md:gap-24 px-4 md:px-12 relative">
-          <div className="relative">
-            <div className="flex items-center gap-3 mb-3">
-              <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse shadow-[0_0_10px_rgba(251,191,36,0.6)]"></span>
-              <span className="text-[10px] font-bold uppercase tracking-widest text-slate-300">FinOps Knowledge Base</span>
+        <div className="rounded-3xl border border-slate-800 bg-slate-950/30 p-5 md:p-6">
+          <div className="flex items-center justify-between gap-4 mb-5">
+            <div>
+              <div className="text-xs font-bold uppercase tracking-widest text-slate-300">FinOps domain analysis</div>
+              <div className="text-[11px] text-slate-500 mt-1">Six domains execute in parallel; checks appear as each domain completes.</div>
             </div>
-            <div className="h-1.5 w-full bg-slate-800 rounded-full overflow-hidden">
-              <div className="h-full bg-amber-400 w-full animate-[loading_2s_ease-in-out_infinite] shadow-[0_0_10px_rgba(251,191,36,0.5)]"></div>
-            </div>
+            <span className={`text-[10px] uppercase tracking-widest font-bold ${analysisActive ? 'text-emerald-400' : 'text-slate-500'}`}>{analysisActive ? 'Parallel processing active' : `${completedDomains.length}/6 completed`}</span>
           </div>
-          <div className="relative">
-            <div className="flex items-center gap-3 mb-3">
-              <span className="w-2 h-2 rounded-full bg-violet-500 animate-pulse shadow-[0_0_10px_rgba(139,92,246,0.6)]"></span>
-              <span className="text-[10px] font-bold uppercase tracking-widest text-slate-300">Evidence Check</span>
-            </div>
-            <div className="h-1.5 w-full bg-slate-800 rounded-full overflow-hidden">
-              <div className="h-full bg-violet-500 transition-all duration-1000 ease-out shadow-[0_0_10px_rgba(139,92,246,0.5)]" style={{ width: `${progress}%` }}></div>
-            </div>
+          <div className="grid grid-cols-3 md:grid-cols-6 gap-3">
+            {domains.map(domain => {
+              const done = completedDomains.includes(domain.id);
+              return <div key={domain.id} className={`rounded-2xl border p-3 text-center ${done ? 'border-emerald-500/40 bg-emerald-500/10' : analysisActive ? 'border-emerald-400/40 bg-slate-900' : 'border-slate-800 bg-slate-900/40'}`}>
+                <div className={`text-xl font-bold ${done || analysisActive ? 'text-emerald-400' : 'text-slate-600'}`}>{done ? '✓' : domain.id}</div>
+                <div className="text-[9px] font-bold tracking-wider text-slate-400 mt-2">{domain.label}</div>
+              </div>;
+            })}
           </div>
         </div>
       </div>

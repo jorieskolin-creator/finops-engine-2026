@@ -10,7 +10,7 @@ import {
 import { bracketFromValidation, explainBracket } from "./confidenceBracket";
 import { runPhase1Audit } from "../orchestrator";
 import { knowledgeBaseService, BATCH_DEFINITIONS, FINOPS_TACTICS_LOCAL, FINOPS_TACTIC_ACTIVITY_PLAYBOOK, FINOPS_TAXONOMY_REGISTRY, buildTacticIdTable, validTacticIdSet } from "../knowledge_base";
-import { DiagnosticResult, Phase1AuditLogs, Phase2Validation, AuditItem, EvidenceQuote, EvidenceCategory, EVIDENCE_CATEGORIES, PersonaId, PERSONA_IDS, SourceRecord } from "../types";
+import { DiagnosticResult, Phase1AuditLogs, Phase2Validation, AuditItem, EvidenceQuote, EvidenceCategory, EVIDENCE_CATEGORIES, PersonaId, PERSONA_IDS, PipelineProgressStage, PipelineProgressUpdate, SourceRecord } from "../types";
 import { generateSafetyAuditPrompt } from "./securityService";
 import { validatePhase1Output, validatePhase3Grounding } from "./validatorService";
 import { runQualityGate, runQualityGateExplanation } from "./qualityGateService";
@@ -207,7 +207,7 @@ export interface AnalyzeOptions {
 
 export const analyzeDocument = async (
   sources: SourceRecord[],
-  onProgress: (stage: 'audit' | 'calc' | 'strategy', progress?: number) => void,
+  onProgress: (update: PipelineProgressUpdate) => void,
   options: AnalyzeOptions = {}
 ): Promise<DiagnosticResult> => {
   const images: never[] = [];
@@ -216,6 +216,12 @@ export const analyzeDocument = async (
   const authoritativeRun = await createRun();
   const runId = authoritativeRun.run_id;
   let completionIntent = false;
+  const activeProgressStages = new Set<PipelineProgressStage>();
+  const emitProgress = (update: PipelineProgressUpdate): void => {
+    if (update.status === 'in_progress') activeProgressStages.add(update.stage);
+    else activeProgressStages.delete(update.stage);
+    onProgress(update);
+  };
   const pipelineStarted = Date.now();
   const actuals: Record<string, string> = {
     preflight: STAGE_MODELS.preflight.id,
@@ -237,6 +243,9 @@ export const analyzeDocument = async (
   });
 
   try {
+    const extractionWarnings = sources.filter(source => source.extraction?.truncated || source.extraction?.quality === 'poor' || (source.parse_warnings?.length || 0) > 0).length;
+    emitProgress({ stage: 'extraction', status: extractionWarnings > 0 ? 'completed_with_warnings' : 'completed' });
+    emitProgress({ stage: 'packetization', status: 'in_progress' });
     const sourceRegistry = buildSourceRegistry(sources);
     const derivedAnalyticalEvidence = analyzeStructuredSources(sources);
     const dataSignalCoverage = buildDataSignalCoverageReport();
@@ -246,6 +255,9 @@ export const analyzeDocument = async (
     const dlpScan = scanRegistryDlp(sourceRegistry);
     const dlpReview = buildDlpReviewPacket(sourceRegistry);
     const sourceRegistryStatus = sourceRegistryRuntimeStatus(sourceRegistry, sourcePackets, dlpReview.selected_chunk_count, dlpScan);
+    const packetWarnings = Object.values(sourcePackets).filter(packet => packet.weak_coverage).length;
+    emitProgress({ stage: 'packetization', status: packetWarnings > 0 ? 'completed_with_warnings' : 'completed' });
+    emitProgress({ stage: 'privacy', status: 'in_progress' });
     const sourceParseWarnings = [
       ...sourceRegistry.warnings,
       ...dlpScan.caution_hits.map(hit => `DLP caution: ${hit.kind} detected in ${hit.chunk_ids.length} chunk(s).`),
@@ -280,7 +292,6 @@ export const analyzeDocument = async (
     }
 
     console.log(`[FinOps] [${runId}] Running Security Pre-Flight (DLP)...`);
-    onProgress('audit', 1);
     const dlpPrompt = generateSafetyAuditPrompt(dlpReview.text, dlpReview.images, {
       scannedChunkCount: dlpScan.scanned_chunk_count,
       selectedChunkCount: dlpReview.selected_chunk_count,
@@ -306,8 +317,11 @@ export const analyzeDocument = async (
       sourceParseWarnings.push(`DLP caution: model reviewer flagged financial sensitivity. ${dlpResult.caution_notes || dlpResult.reason || ''}`.trim());
     }
     console.log("[FinOps] DLP Scan Passed.");
+    const privacyWarnings = dlpScan.caution_hits.length > 0 || dlpResult?.risk_detected === 'FinancialSensitivity';
+    emitProgress({ stage: 'privacy', status: privacyWarnings ? 'completed_with_warnings' : 'completed' });
 
     console.log("[FinOps] Pre-fetching Tactics Database for Phase 3...");
+    emitProgress({ stage: 'knowledge', status: 'in_progress' });
     const tacticsPromise = knowledgeBaseService.fetchStrategicPlaybook();
     const referenceKbPromise = knowledgeBaseService.fetchReferenceKnowledgeBaseIndex();
     const referenceKbIndex = await referenceKbPromise;
@@ -316,12 +330,18 @@ export const analyzeDocument = async (
       failures: referenceKbIndex.status.failure_count,
       source: referenceKbIndex.status.source,
     });
+    const knowledgeWarnings = referenceKbIndex.status.failure_count > 0
+      || referenceKbIndex.status.source !== 'remote_blob'
+      || referenceKbIndex.status.delivery?.shadow_ready === false;
+    emitProgress({ stage: 'knowledge', status: knowledgeWarnings ? 'completed_with_warnings' : 'completed' });
 
-    onProgress('audit', 5);
     console.log(`[FinOps] [${runId}] Running Phase 1 Parallel Audit (${Object.keys(BATCH_DEFINITIONS).length} batches)...`);
+    emitProgress({ stage: 'analysis', status: 'in_progress', completed: 0, total: Object.keys(BATCH_DEFINITIONS).length });
+    emitProgress({ stage: 'evidence', status: 'in_progress', completed: 0, total: Object.keys(BATCH_DEFINITIONS).length });
     const phase1Started = Date.now();
-    const aggregatedRawData = await runPhase1Audit(text, images, (completed, total) => {
-      onProgress('audit', Math.round((completed / total) * 100));
+    const aggregatedRawData = await runPhase1Audit(text, images, (completed, total, batchId) => {
+      emitProgress({ stage: 'analysis', status: 'in_progress', completed, total, domain_id: batchId });
+      emitProgress({ stage: 'evidence', status: 'in_progress', completed, total, domain_id: batchId });
     }, { runId }, { packets: sourcePackets });
     if (aggregatedRawData.models_used.length > 0) {
       actuals.forensic_audit = aggregatedRawData.models_used.join(',');
@@ -367,11 +387,14 @@ export const analyzeDocument = async (
     }
 
     const auditLogs = validateAndSanitizeLogs(aggregatedRawData);
+    const phase1Status = aggregatedRawData.evidence_check.failed ? 'completed_with_warnings' : 'completed';
+    emitProgress({ stage: 'analysis', status: 'completed', completed: Object.keys(BATCH_DEFINITIONS).length, total: Object.keys(BATCH_DEFINITIONS).length });
+    emitProgress({ stage: 'evidence', status: phase1Status, completed: Object.keys(BATCH_DEFINITIONS).length, total: Object.keys(BATCH_DEFINITIONS).length });
 
-    onProgress('calc', 0);
+    emitProgress({ stage: 'calculation', status: 'in_progress' });
     await new Promise(r => setTimeout(r, 600));
-    onProgress('calc', 100);
     const validationData = calculateMetrics(auditLogs);
+    emitProgress({ stage: 'calculation', status: 'completed' });
 
     console.log(`[FinOps] Phase 2 Complete. Readiness: ${Math.round(validationData.metrics.finops_readiness)}%, Classification: ${validationData.crawl_walk_run}`);
 
@@ -426,7 +449,7 @@ export const analyzeDocument = async (
     // emits BLOCK if evidence_density crosses the threshold, but the report
     // ships with real findings content.
 
-    onProgress('strategy', 20);
+    emitProgress({ stage: 'synthesis', status: 'in_progress' });
     const tacticsContext = await tacticsPromise;
     const referenceKbContext = await knowledgeBaseService.fetchReferenceKnowledgeBaseContext({
       maxDocChars: 650,
@@ -454,7 +477,6 @@ ${referenceKbContext}
 === PART 4: THE PLAYBOOK (SOLUTIONS) ===
 ${tacticsContext}`;
 
-    onProgress('strategy', 50);
 
     const handoffSummary = `
 FINOPS DIAGNOSTIC REPORT SUMMARY (Computed by System):
@@ -831,7 +853,8 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => `  ${cat}
     });
 
     let strategyData: any = await callPhase3Validated();
-    onProgress('strategy', 70);
+    emitProgress({ stage: 'synthesis', status: 'completed' });
+    emitProgress({ stage: 'verification', status: 'in_progress' });
     let factCheck = await runFactCheck(strategyData, 1);
     let lastUnsupported: FactCheckClaim[] = factCheck.unsupported_claims;
     if (!factCheck.failed) trajectory.push(snapshot(factCheck));
@@ -885,7 +908,6 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => `  ${cat}
     strategyData = sanitation.strategyData;
     factCheck = sanitation.factCheck;
 
-    onProgress('strategy', 90);
 
     let groundingValidation = validatePhase3Grounding(strategyData, validationData, text);
     groundingValidation.warnings.push(...tacticGroundingWarnings);
@@ -965,7 +987,8 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => `  ${cat}
       });
     }
 
-    onProgress('strategy', 100);
+    emitProgress({ stage: 'verification', status: qualityGate.decision === 'GO' ? 'completed' : 'completed_with_warnings' });
+    emitProgress({ stage: 'finalization', status: 'in_progress' });
 
     const totalDuration = Date.now() - pipelineStarted;
     console.log(`[FinOps] [${runId}] === Pipeline complete === duration_ms=${totalDuration} quality_gate=${qualityGate.decision} bracket=${effectiveBracket}`);
@@ -1064,9 +1087,11 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => `  ${cat}
       acquisitionQualityPersistence(acquisitionQuality, sourceRegistryStatus),
       shadowTelemetryPersistence(boundedRetrieval, derivedAnalyticalEvidence, dataSignalCoverage)
     );
+    emitProgress({ stage: 'finalization', status: 'completed' });
     return finalResult;
 
   } catch (error: any) {
+    for (const stage of activeProgressStages) onProgress({ stage, status: 'failed' });
     clearStageTraces(runId);
     if (!completionIntent) await failRun(runId).catch(() => undefined);
     else {

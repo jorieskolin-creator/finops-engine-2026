@@ -86,7 +86,7 @@ const renderQualityGateAppendix = (gate: QualityGateResult): string => {
   <h2>Quality &amp; Strategy Hygiene Appendix</h2>
   <div class="appendix-card">
     <p class="appendix-note">Quality Gate detail is retained here for traceability. WARN-level strategy hygiene notes do not invalidate the assessment score.</p>
-    ${llm?.summary ? `<div class="gate-summary"><div class="gate-label">Reviewer Summary${llm.model_used ? ` · ${escapeHtml(llm.model_used)}` : ''}</div><p>${escapeHtml(llm.summary)}</p></div>` : ''}
+    ${llm?.summary ? `<div class="gate-summary"><div class="gate-label">Reviewer Summary</div><p>${escapeHtml(llm.summary)}</p></div>` : ''}
     ${gate.blocking_reasons.length > 0 ? `<div class="gate-label">Blocking</div>${renderDiagnosticList(gate.blocking_reasons, llm?.blocking_details)}` : ''}
     ${hasSanitizedNotes ? `<div class="gate-label">Sanitized strategy items</div><ul class="appendix-list">${gate.fact_check!.sanitized_claims!.map(c => `<li><strong>${escapeHtml(c.action)}${c.source_location ? ` · ${escapeHtml(c.source_location)}` : ''}</strong>: <em>&ldquo;${escapeHtml(c.claim)}&rdquo;</em>${c.rationale ? `<div class="gate-rationale">${escapeHtml(c.rationale)}</div>` : ''}</li>`).join('')}</ul>` : ''}
     ${evidenceWarnings.length > 0 ? `<div class="gate-label">Evidence-check adjustments</div>${renderDiagnosticList(evidenceWarnings, llm?.warning_details)}` : ''}
@@ -878,7 +878,6 @@ const generateSummaryReportHtml = (result: DiagnosticResult): string => {
         <span class="pill">Classification ${escapeHtml(cwrClass)}</span>
         <span class="pill pill-${qgTone}">Quality Gate ${escapeHtml(result.quality_gate.decision)}</span>
         <span class="pill">Evidence ${Math.round(m.evidence_density)}%</span>
-        ${result.meta.model_mode ? `<span class="pill">Model mode ${escapeHtml(result.meta.model_mode)}</span>` : ''}
         ${kbStatus ? `<span class="pill">${escapeHtml(kbStatus)}</span>` : ''}
       </div>
       ${sourceNote}
@@ -1128,8 +1127,6 @@ const generateReportHtml = (result: DiagnosticResult): string => {
   <h1>FinOps Maturity Assessment</h1>
   <div class="meta">
     <p>Generated ${escapeHtml(result.meta.timestamp)} · Engine ${escapeHtml(result.meta.engine_version)}</p>
-    ${result.meta.model_mode ? `<p>Model routing mode: ${escapeHtml(result.meta.model_mode)}</p>` : ''}
-    <p>Models: ${escapeHtml(result.meta.model_config.preflight)} (Pre-Flight) · ${escapeHtml(result.meta.model_config.forensic_audit)} (Audit) · ${escapeHtml(result.meta.model_config.evidence_check)} (Evidence Check) · ${escapeHtml(result.meta.model_config.synthesis)} (Summary/Diagnosis)${result.meta.model_config.roadmap_synthesis ? ` · ${escapeHtml(result.meta.model_config.roadmap_synthesis)} (Roadmap)` : ''} · ${escapeHtml(result.meta.model_config.fact_check)} (Fact-Check)</p>
     ${result.meta.knowledge_base ? `<p>Knowledge Base: ${result.meta.knowledge_base.source === 'remote_blob'
       ? `Remote PDF KB loaded (${escapeHtml(String(result.meta.knowledge_base.document_count))} PDFs${result.meta.knowledge_base.failure_count ? `, ${escapeHtml(String(result.meta.knowledge_base.failure_count))} issue(s)` : ''})`
       : 'Built-in KB fallback'}</p>` : ''}

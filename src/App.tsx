@@ -9,7 +9,7 @@ import { forensicSanitizeImport } from './services/securityService';
 import { extractDiagnosticResultFromHtmlReport, isDiagnosticResultPayload, parseDiagnosticResultJson, serializeDiagnosticResultForHtml } from './services/reportImportService';
 import { findGeneratedReportPrivacyFindings, scrubDiagnosticResultForPrivacy } from './services/privacyService';
 import { PerformanceMonitor } from './services/debugService';
-import { DiagnosticResult, ScanResult, PersonaId, PERSONA_IDS, PERSONA_LABELS, SourcePage, SourceRecord, StructuredTableData } from './types';
+import { DiagnosticResult, ScanResult, PersonaId, PERSONA_IDS, PERSONA_LABELS, PipelineProgressStage, PipelineProgressUpdate, SourcePage, SourceRecord, StructuredTableData } from './types';
 import { METRIC_DESCRIPTIONS } from './constants';
 import { GaugeCard, AuditGrid, StrategicRoadmap, ComparisonChart, ReferenceLibrary, QualityGateBanner, BenchmarkingChart, TransferProtocol, MarkdownRenderer, NeuralLoadingGrid } from './components/DashboardComponents';
 import { ReportView } from './components/ReportView';
@@ -468,8 +468,8 @@ const App: React.FC = () => {
   const [aggregatedText, setAggregatedText] = useState('');
   const [result, setResult] = useState<DiagnosticResult | null>(null);
   const [loading, setLoading] = useState(false);
-  const [loadingStage, setLoadingStage] = useState<'audit' | 'calc' | 'strategy' | null>(null);
-  const [auditProgress, setAuditProgress] = useState(0);
+  const [pipelineProgress, setPipelineProgress] = useState<Partial<Record<PipelineProgressStage, PipelineProgressUpdate>>>({});
+  const [completedDomains, setCompletedDomains] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'overview' | 'audit' | 'strategy' | 'reference'>('overview');
   const [viewMode, setViewMode] = useState<'dashboard' | 'report'>('dashboard');
@@ -812,8 +812,8 @@ const App: React.FC = () => {
 
   const runAnalyze = async (opts?: { textOverride?: string; sourcesOverride?: SourceRecord[]; label?: string }) => {
     setLoading(true);
-    setLoadingStage('audit');
-    setAuditProgress(0);
+    setPipelineProgress({});
+    setCompletedDomains([]);
     setError(null);
     PerformanceMonitor.start('FullAnalysis');
     try {
@@ -848,9 +848,11 @@ const App: React.FC = () => {
             structured_table:file.structuredTable,
             ...(file.pages?.length ? {pages:file.pages} : {text:sanitizeInput(file.text)})
           })));
-      const data = await analyzeDocument(sources, (stage, progress) => {
-        setLoadingStage(stage);
-        if (progress !== undefined) setAuditProgress(progress);
+      const data = await analyzeDocument(sources, update => {
+        setPipelineProgress(current => ({ ...current, [update.stage]: update }));
+        if (update.stage === 'analysis' && update.domain_id) {
+          setCompletedDomains(current => current.includes(update.domain_id!) ? current : [...current, update.domain_id!]);
+        }
       }, { deepMode });
       if (!data.phase_2_validation?.metrics) throw new Error("Analysis returned incomplete data.");
       if (opts?.label) {
@@ -865,7 +867,6 @@ const App: React.FC = () => {
       setError(e.message || "Analysis failed.");
     } finally {
       setLoading(false);
-      setLoadingStage(null);
       PerformanceMonitor.end('FullAnalysis');
     }
   };
@@ -912,7 +913,8 @@ const App: React.FC = () => {
     setFiles([]);
     setAggregatedText('');
     setError(null);
-    setLoadingStage(null);
+    setPipelineProgress({});
+    setCompletedDomains([]);
     setActiveTab('overview');
     setViewMode('dashboard');
     setRecoveryNotice(null);
@@ -1365,7 +1367,7 @@ const App: React.FC = () => {
                         Add Files (PDF, HTML, CSV, TSV, JSON)
                       </button>
                       <label
-                        title="Forces synthesis to use Opus 4.7 (slower, more expensive, deeper roadmap reasoning). Auto-enabled for crawl-stage orgs with high anti-pattern burden."
+                        title="Uses the deeper synthesis route for roadmap reasoning. It can be slower and is also selected automatically for assessments that meet escalation rules."
                         className="flex items-center gap-2 text-xs text-slate-400 hover:text-white cursor-pointer select-none px-3 py-2 rounded-lg hover:bg-white/5 transition-colors"
                       >
                         <input
@@ -1374,7 +1376,7 @@ const App: React.FC = () => {
                           onChange={(e) => setDeepMode(e.target.checked)}
                           className="accent-emerald-500 cursor-pointer"
                         />
-                        <span className="font-bold">Deep analysis (Opus 4.7)</span>
+                        <span className="font-bold">Deep analysis</span>
                       </label>
                     </div>
                     <input type="file" ref={fileInputRef} onChange={handleFileSelect} className="hidden" accept=".pdf,.html,.csv,.tsv,.json,text/csv,text/tab-separated-values" multiple />
@@ -1400,7 +1402,7 @@ const App: React.FC = () => {
                 )}
               </>
             ) : (
-              <NeuralLoadingGrid progress={auditProgress} stage={loadingStage || 'audit'} />
+              <NeuralLoadingGrid progress={pipelineProgress} completedDomains={completedDomains} />
             )}
           </div>
         )}
@@ -1714,7 +1716,7 @@ const App: React.FC = () => {
               <span className="font-display font-bold text-slate-300">FinOps Assessment Engine</span>
             </div>
             <p className="text-xs text-slate-400 leading-relaxed max-w-xs mx-auto md:mx-0">
-              Assessment Suite v1.0<br />Multi-Model Architecture (GPT-5.5 + Claude Sonnet/Opus)
+              Assessment Suite v1.0<br />Governed multi-stage architecture
             </p>
           </div>
 

@@ -271,7 +271,7 @@ const QualityGateAppendix: React.FC<{ gate: QualityGateResult }> = ({ gate }) =>
         </p>
         {llm?.summary && (
           <div className="mb-5 p-3 bg-white rounded border border-slate-200">
-            <p className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">Reviewer Summary{llm.model_used ? ` · ${llm.model_used}` : ''}</p>
+            <p className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">Reviewer Summary</p>
             <p className="text-sm text-slate-700">{llm.summary}</p>
           </div>
         )}
@@ -957,11 +957,6 @@ export const ReportView: React.FC<ReportViewProps> = ({ result, onBack, onDownlo
 
         <div className="text-center py-8 border-t border-slate-200 text-sm text-slate-400">
           <p>FinOps Assessment Engine v{result.meta.engine_version}</p>
-          {result.meta.model_mode && <p>Model routing mode: {result.meta.model_mode}</p>}
-          <p>
-            Models: {result.meta.model_config.preflight} (Pre-Flight) | {result.meta.model_config.forensic_audit} (Audit) | {result.meta.model_config.evidence_check} (Evidence Check) | {result.meta.model_config.synthesis} (Summary/Diagnosis)
-            {result.meta.model_config.roadmap_synthesis ? ` | ${result.meta.model_config.roadmap_synthesis} (Roadmap)` : ''} | {result.meta.model_config.fact_check} (Fact-Check)
-          </p>
           {result.meta.knowledge_base && (
             <p>
               Knowledge Base: {result.meta.knowledge_base.source === 'remote_blob'

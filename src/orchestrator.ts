@@ -125,7 +125,7 @@ const runTargetedRescan = async (
 export const runPhase1Audit = async (
   text: string,
   images: ImageInput[],
-  onProgress: (completed: number, total: number) => void,
+  onProgress: (completed: number, total: number, batchId?: string) => void,
   ctx: RunContext,
   sourcePackets?: Phase1SourcePackets
 ): Promise<Phase1Result> => {
@@ -148,6 +148,8 @@ export const runPhase1Audit = async (
   const evidenceModelsSeen = new Set<string>();
   const evidenceAdjudicationModelsSeen = new Set<string>();
   const evidenceResults: EvidenceCheckResult[] = [];
+
+  onProgress(0, totalBatches);
 
   const auditPromises = batches.map(async (batchId) => {
     const batchStarted = Date.now();
@@ -249,7 +251,7 @@ export const runPhase1Audit = async (
       serverLog(ctx.runId, 'error', 'batch_failed', { batch: batchId });
     }
     completedCount++;
-    onProgress(completedCount, totalBatches);
+    onProgress(completedCount, totalBatches, batchId);
   });
 
   await Promise.all(auditPromises);
