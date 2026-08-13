@@ -374,6 +374,33 @@ export interface AcquisitionQualityPersistence {
   unresolved_provenance_count: number;
 }
 
+export interface ShadowTelemetryPersistence {
+  schema_version: 'shadow_telemetry_v1';
+  retrieval_policy_version: 'bounded_retrieval_policy_v1';
+  derived_evidence_schema_version: 'derived_analytical_evidence_v1';
+  analyzer_version: 'tagging_allocation_v1@1.0.0';
+  scale_registry_version: 'data_signal_registry_v1';
+  retrieval_domain_count: number;
+  retrieval_triggered_domain_count: number;
+  retrieval_pass_1_count: number;
+  retrieval_pass_2_count: number;
+  retrieval_selected_candidate_count: number;
+  retrieval_average_gain_points: number;
+  retrieval_max_gain_points: number;
+  stop_sufficient_baseline_count: number;
+  stop_minimum_gain_not_met_count: number;
+  stop_no_new_candidates_count: number;
+  stop_max_passes_reached_count: number;
+  derived_evidence_count: number;
+  derived_observed_count: number;
+  derived_insufficient_signal_count: number;
+  derived_full_table_count: number;
+  derived_bounded_prefix_count: number;
+  scale_total_object_count: number;
+  scale_analyzer_available_count: number;
+  scale_unsupported_count: number;
+}
+
 export interface KnowledgeBaseRuntimeStatus {
   source: 'remote_blob' | 'fallback' | 'built_in';
   prefix?: string;

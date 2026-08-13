@@ -39,7 +39,7 @@ import {
   sourceRegistryRuntimeStatus
 } from "./sourceRegistryService";
 import { buildRunTrace, clearStageTraces, consumeStageTraces, summarizeRunTrace } from "./runTraceService";
-import { acquisitionQualityPersistence, buildAcquisitionQualitySnapshot } from "./acquisitionQualityService";
+import { acquisitionQualityPersistence, buildAcquisitionQualitySnapshot, shadowTelemetryPersistence } from "./acquisitionQualityService";
 import { analyzeStructuredSources, buildDataSignalCoverageReport } from "./structuredDataAnalysisService";
 import { buildBoundedRetrievalTrace } from "./boundedRetrievalService";
 
@@ -1059,7 +1059,11 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => `  ${cat}
     });
     finalResult.meta.acquisition_quality = acquisitionQuality;
     completionIntent = true;
-    await completeRun(runId, acquisitionQualityPersistence(acquisitionQuality, sourceRegistryStatus));
+    await completeRun(
+      runId,
+      acquisitionQualityPersistence(acquisitionQuality, sourceRegistryStatus),
+      shadowTelemetryPersistence(boundedRetrieval, derivedAnalyticalEvidence, dataSignalCoverage)
+    );
     return finalResult;
 
   } catch (error: any) {

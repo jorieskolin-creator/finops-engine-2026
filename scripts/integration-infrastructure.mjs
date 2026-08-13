@@ -131,6 +131,17 @@ try {
     knowledge_packet_status: 'READY', acquisition_status: 'READY', security_status: 'PASS',
     extraction_incomplete_count: 0, weak_source_packet_count: 0, kb_blocking_count: 0,
     unresolved_provenance_count: 0,
+  }, {
+    schema_version: 'shadow_telemetry_v1', retrieval_policy_version: 'bounded_retrieval_policy_v1',
+    derived_evidence_schema_version: 'derived_analytical_evidence_v1', analyzer_version: 'tagging_allocation_v1@1.0.0',
+    scale_registry_version: 'data_signal_registry_v1', retrieval_domain_count: 6,
+    retrieval_triggered_domain_count: 0, retrieval_pass_1_count: 0, retrieval_pass_2_count: 0,
+    retrieval_selected_candidate_count: 0, retrieval_average_gain_points: 0, retrieval_max_gain_points: 0,
+    stop_sufficient_baseline_count: 6, stop_minimum_gain_not_met_count: 0,
+    stop_no_new_candidates_count: 0, stop_max_passes_reached_count: 0,
+    derived_evidence_count: 0, derived_observed_count: 0, derived_insufficient_signal_count: 0,
+    derived_full_table_count: 0, derived_bounded_prefix_count: 0, scale_total_object_count: 60,
+    scale_analyzer_available_count: 2, scale_unsupported_count: 58,
   });
   assert.equal(completed.cleanup_status, 'verified');
   assert.equal(await redis.getActivePacket(run.run_id, packet.packet_id), null);

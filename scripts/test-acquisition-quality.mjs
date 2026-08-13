@@ -15,7 +15,7 @@ const compiled = ts.transpileModule(source, {
 const dir = await mkdtemp(join(tmpdir(), 'finops-acquisition-quality-'));
 const modulePath = join(dir, 'acquisitionQualityService.mjs');
 await writeFile(modulePath, compiled, 'utf8');
-const { acquisitionQualityPersistence, buildAcquisitionQualitySnapshot } = await import(`file://${modulePath}`);
+const { acquisitionQualityPersistence, buildAcquisitionQualitySnapshot, shadowTelemetryPersistence } = await import(`file://${modulePath}`);
 
 const quote = (text, source, category) => ({ quote: text, source_id: source, source_document: `${source}.txt`, chunk_id: `${source}-c1`, category });
 const item = (status, evidenceQuotes, extra = {}) => ({
@@ -112,6 +112,18 @@ assert.deepEqual(Object.keys(persisted).sort(), [
 ].sort());
 assert.equal(persisted.unresolved_provenance_count, 1);
 assert.doesNotMatch(JSON.stringify(persisted), /source\.pdf|sensitive owner mapping detail|allocation process|missing mapping signal/);
+const shadow = shadowTelemetryPersistence({
+  policy_version: 'bounded_retrieval_policy_v1',
+  domains: [
+    { baseline_coverage: 50, final_coverage: 70, stop_reason: 'MAX_PASSES_REACHED', passes: [{ pass: 1, selected_chunk_ids: ['PRIVATE_CHUNK_CANARY'] }, { pass: 2, selected_chunk_ids: ['c2'] }] },
+    { baseline_coverage: 100, final_coverage: 100, stop_reason: 'SUFFICIENT_BASELINE', passes: [] }
+  ]
+}, [
+  { result: { status: 'OBSERVED', row_scope: 'full_table' } },
+  { result: { status: 'INSUFFICIENT_SIGNAL', row_scope: 'bounded_prefix' } }
+], { registry_version: 'data_signal_registry_v1', total_object_count: 60, analyzer_available_count: 2, unsupported_count: 58 });
+assert.equal(shadow.retrieval_domain_count, 2);assert.equal(shadow.retrieval_triggered_domain_count, 1);assert.equal(shadow.retrieval_selected_candidate_count, 2);assert.equal(shadow.retrieval_average_gain_points, 10);assert.equal(shadow.retrieval_max_gain_points, 20);assert.equal(shadow.derived_observed_count, 1);assert.equal(shadow.scale_unsupported_count, 58);
+assert.doesNotMatch(JSON.stringify(shadow), /PRIVATE_CHUNK_CANARY|source_id|chunk_id|row_value/);
 
 const forgedLogs = {
   maturity: { A1: item('supported', [quote('FORGED_SOURCE_CANARY', 'invented-source', 'Policy')]) },
