@@ -24,6 +24,10 @@ assert.doesNotMatch(report, /Model routing mode:|Models:/);
 assert.doesNotMatch(exportedReport, /Model routing mode:|Models:|Model mode /);
 assert.match(orchestrator, /onProgress\(0, totalBatches\)/, 'parallel domain work must be announced before batches settle');
 assert.match(orchestrator, /onProgress\(completedCount, totalBatches, batchId\)/, 'domain completion must use actual settled batches');
+assert.match(orchestrator, /unavailableEvidenceCheck\(batchId, errorCode\)/, 'failed domains must produce explicit unavailable evidence decisions');
+assert.doesNotMatch(analysis, /Phase 1 audit incomplete:[\s\S]*?throw new Error/, 'a failed domain must degrade the report instead of terminating the pipeline');
+assert.match(analysis, /continuing with explicit unavailable criteria/, 'invalid Phase 1 coverage must remain visible while processing continues');
+assert.match(analysis, /safeItem\.antipattern_absence_status = item\.antipattern_absence_status/, 'sanitization must preserve validated evidence semantics');
 for (const stage of orderedStages) assert.match(analysis, new RegExp(`stage: '${stage}'`));
 assert.match(analysis, /completeRun\([\s\S]*emitProgress\(\{ stage: 'finalization', status: 'completed' \}\)/, 'finalization must complete only after governed completion and cleanup');
 

@@ -1,7 +1,7 @@
 
 import { generateBatchSystemInstruction, generateBatchUserPrompt, generateTargetedBatchUserPrompt } from './prompts';
 import { BATCH_DEFINITIONS, BATCH_IDS, knowledgeBaseService } from './knowledge_base';
-import { runStage, serverLog, RunContext } from './services/modelRouter';
+import { runStage, serverLog, RunContext, StageExecutionError } from './services/modelRouter';
 import { StageId } from './models';
 import { EvidenceCheckItem, EvidenceCheckResult, ImageInput, RoutedSourcePacket } from './types';
 import {
@@ -95,6 +95,40 @@ const mergeBatchResult = (base: BatchAuditResult, patch: BatchAuditResult): Batc
   maturity: { ...(base.maturity || {}), ...(patch.maturity || {}) },
   antipattern: { ...(base.antipattern || {}), ...(patch.antipattern || {}) },
 });
+
+const batchFailureCode = (error: unknown): string => {
+  if (error instanceof StageExecutionError) return error.code;
+  const message = error instanceof Error ? error.message : '';
+  if (message.includes('All models exhausted')) return 'MODELS_EXHAUSTED';
+  if (message.includes('not valid JSON')) return 'INVALID_MODEL_OUTPUT';
+  if (message.includes('empty result')) return 'EMPTY_MODEL_OUTPUT';
+  return 'BATCH_PROCESSING_FAILED';
+};
+
+const unavailableEvidenceCheck = (batchId: string, failureCode: string): EvidenceCheckResult => {
+  const items: EvidenceCheckItem[] = (['maturity', 'antipattern'] as const).flatMap(stream =>
+    Array.from({ length: 5 }, (_, index) => ({
+      stream,
+      id: `${batchId}${index + 1}`,
+      status: 'missing' as const,
+      original_count: 0,
+      verified_count: 0,
+      rationale: 'Domain analysis was unavailable after retry; no evidence verdict was produced.',
+      rescan_recommended: false,
+      quote_supported: false,
+      verification_unresolved: true,
+      ...(stream === 'antipattern' ? {
+        antipattern_absence_status: 'unknown_absent' as const,
+        coverage_reason: 'Domain analysis was unavailable, so neither presence nor tested absence can be claimed.',
+      } : {}),
+    }))
+  );
+  return {
+    ...summarizeEvidenceCheck(batchId, items, []),
+    failed: true,
+    failure_reason: `Domain analysis unavailable (${failureCode}).`,
+  };
+};
 
 const feedbackForRescan = (items: EvidenceCheckItem[]): string => {
   return items
@@ -241,18 +275,21 @@ export const runPhase1Audit = async (
         break;
       } catch (error: any) {
         lastError = error;
-        console.warn(`[FinOps] [${ctx.runId}] Batch ${batchId} attempt ${attempt} failed with error_code=BATCH_ATTEMPT_FAILED.`);
+        const errorCode = batchFailureCode(error);
+        console.warn(`[FinOps] [${ctx.runId}] Batch ${batchId} attempt ${attempt} failed with error_code=${errorCode}.`);
         serverLog(ctx.runId, 'warn', 'batch_attempt_failed', {
           batch: batchId,
           attempt,
-          error_code: 'BATCH_ATTEMPT_FAILED',
+          error_code: errorCode,
         });
       }
     }
     if (lastError) {
+      const errorCode = batchFailureCode(lastError);
       console.error(`[FinOps] [${ctx.runId}] Batch ${batchId} failed after retry. Marking as failed.`);
       aggregated.failed_batches.push(batchId);
-      serverLog(ctx.runId, 'error', 'batch_failed', { batch: batchId });
+      evidenceResults.push(unavailableEvidenceCheck(batchId, errorCode));
+      serverLog(ctx.runId, 'error', 'batch_failed', { batch: batchId, error_code: errorCode });
     }
     completedCount++;
     onProgress(completedCount, totalBatches, batchId);

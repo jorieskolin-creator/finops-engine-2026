@@ -64,6 +64,30 @@ const evidenceCheckOk = {
   failed: false
 };
 
+{
+  const phase1Unavailable = {
+    valid: false,
+    errors: ['maturity: Analysis unavailable for criteria IDs: F1, F2, F3, F4, F5'],
+    warnings: []
+  };
+  const gate = runQualityGate(
+    phase1,
+    phase2,
+    phase1Unavailable,
+    validationOk,
+    { ...evidenceCheckOk, failed: true, failure_reason: 'F: Domain analysis unavailable (MODELS_EXHAUSTED).' },
+    {
+      attempts: 1,
+      total_claims: 0,
+      supported_count: 0,
+      unsupported_claims: [],
+      failed: false
+    }
+  );
+  assert.equal(gate.decision, 'BLOCK', 'unavailable domain analysis must block actionability without aborting report generation');
+  assert.ok(gate.blocking_reasons.includes(`Phase 1: ${phase1Unavailable.errors[0]}`));
+}
+
 const domainClaim = {
   claim: 'Domain D scores 9/15 and represents infrastructure and autoscaling.',
   classification: 'unsupported',

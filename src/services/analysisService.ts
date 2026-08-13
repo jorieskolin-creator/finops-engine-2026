@@ -149,6 +149,17 @@ const validateAndSanitizeLogs = (rawData: any): Phase1AuditLogs => {
 
     if (typeof item.evidence === 'string' && item.evidence.length > 5) safeItem.evidence = item.evidence;
     if (typeof item.reasoning === 'string') safeItem.reasoning = item.reasoning;
+    if (['supported', 'weak', 'unsupported', 'missing'].includes(item.evidence_check_status)) {
+      safeItem.evidence_check_status = item.evidence_check_status;
+    }
+    if (typeof item.original_count === 'number') safeItem.original_count = Math.min(Math.max(Math.round(item.original_count), 0), 3);
+    if (typeof item.verified_count === 'number') safeItem.verified_count = Math.min(Math.max(Math.round(item.verified_count), 0), 3);
+    if (typeof item.adjustment_reason === 'string') safeItem.adjustment_reason = item.adjustment_reason;
+    if (typeof item.rescan_attempted === 'boolean') safeItem.rescan_attempted = item.rescan_attempted;
+    if (isAntipattern && ['confirmed_present', 'partially_present', 'tested_absent', 'unknown_absent'].includes(item.antipattern_absence_status)) {
+      safeItem.antipattern_absence_status = item.antipattern_absence_status;
+    }
+    if (isAntipattern && typeof item.coverage_reason === 'string') safeItem.coverage_reason = item.coverage_reason;
 
     if (Array.isArray(item.evidence_quotes)) {
       safeItem.evidence_quotes = item.evidence_quotes
@@ -356,28 +367,17 @@ export const analyzeDocument = async (
       evidence_rescans: aggregatedRawData.evidence_check.rescan_count,
     });
 
-    if (aggregatedRawData.failed_batches.length > 0) {
-      throw new Error(
-        `Phase 1 audit incomplete: ${aggregatedRawData.failed_batches.length} of ${Object.keys(BATCH_DEFINITIONS).length} batches (${aggregatedRawData.failed_batches.join(', ')}) failed after retry. ` +
-        `${aggregatedRawData.failed_batches.length * 10} criteria are missing data. ` +
-        `Re-run the assessment, or check the audit model's availability.`
-      );
-    }
-
-    const phase1Validation = validatePhase1Output(aggregatedRawData);
+    const auditLogs = validateAndSanitizeLogs(aggregatedRawData);
+    const phase1Validation = validatePhase1Output({ phase_1_audit_logs: auditLogs });
     if (!phase1Validation.valid) {
-      throw new Error(
-        `Phase 1 validation failed:\n  - ${phase1Validation.errors.join('\n  - ')}\n` +
-        `Re-run the assessment.`
-      );
+      console.warn(`[FinOps] Phase 1 validation produced ${phase1Validation.errors.length} blocking issue(s); continuing with explicit unavailable criteria.`);
     }
     if (phase1Validation.warnings.length > 0) {
       console.warn(`[FinOps] Phase 1 validation produced ${phase1Validation.warnings.length} warning(s); content omitted by logging policy.`);
     }
 
-    const auditLogs = validateAndSanitizeLogs(aggregatedRawData);
-    const phase1Status = aggregatedRawData.evidence_check.failed ? 'completed_with_warnings' : 'completed';
-    emitProgress({ stage: 'analysis', status: 'completed', completed: Object.keys(BATCH_DEFINITIONS).length, total: Object.keys(BATCH_DEFINITIONS).length });
+    const phase1Status = aggregatedRawData.evidence_check.failed || !phase1Validation.valid ? 'completed_with_warnings' : 'completed';
+    emitProgress({ stage: 'analysis', status: phase1Status, completed: Object.keys(BATCH_DEFINITIONS).length, total: Object.keys(BATCH_DEFINITIONS).length });
     emitProgress({ stage: 'evidence', status: phase1Status, completed: Object.keys(BATCH_DEFINITIONS).length, total: Object.keys(BATCH_DEFINITIONS).length });
 
     emitProgress({ stage: 'calculation', status: 'in_progress' });

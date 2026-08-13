@@ -124,6 +124,7 @@ export interface EvidenceCheckItem {
   antipattern_absence_status?: AntiPatternAbsenceStatus;
   coverage_reason?: string;
   adjudication_unresolved?: boolean;
+  verification_unresolved?: boolean;
 }
 
 export interface EvidenceCheckAdjustment {

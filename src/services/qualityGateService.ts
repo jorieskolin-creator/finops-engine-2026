@@ -139,6 +139,10 @@ export const runQualityGate = (
     }
   }
 
+  for (const err of phase1Validation.errors) {
+    blocking_reasons.push(`Phase 1: ${err}`);
+  }
+
   for (const err of phase3Validation.errors) {
     blocking_reasons.push(`Phase 3: ${err}`);
   }

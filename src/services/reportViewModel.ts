@@ -38,11 +38,11 @@ export const buildReportViewModel = (result: DiagnosticResult): ReportViewModel 
   const criterionTotal = maturityTotal + antiPatternTotal;
   const evidenceCheck = result.quality_gate.evidence_check;
   const verificationCompleted = evidenceCheck
-    ? evidenceCheck.items.filter(item => !item.adjudication_unresolved).length
+    ? evidenceCheck.items.filter(item => !item.adjudication_unresolved && !item.verification_unresolved).length
     : 0;
   const unresolvedAntiPatternIds = new Set(
     evidenceCheck?.items
-      .filter(item => item.stream === 'antipattern' && item.adjudication_unresolved)
+      .filter(item => item.stream === 'antipattern' && (item.adjudication_unresolved || item.verification_unresolved))
       .map(item => item.id) || []
   );
 

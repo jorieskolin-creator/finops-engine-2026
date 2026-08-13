@@ -41,8 +41,14 @@ export const validatePhase1Output = (rawData: any): ValidationResult => {
       errors.push(`${stream}: Duplicate criteria IDs detected`);
     }
 
+    const unavailableIds: string[] = [];
     for (const [id, item] of Object.entries(logs[stream])) {
       const auditItem = item as any;
+
+      if (auditItem?.count === -1 && auditItem?.is_silent === true) {
+        unavailableIds.push(id);
+        continue;
+      }
 
       if (typeof auditItem?.count !== 'number' || auditItem.count < scoreMin || auditItem.count > scoreMax || !Number.isInteger(auditItem.count)) {
         errors.push(`${stream}.${id}: Invalid score ${auditItem?.count} (must be integer ${scoreMin}-${scoreMax})`);
@@ -66,6 +72,9 @@ export const validatePhase1Output = (rawData: any): ValidationResult => {
       if (!auditItem?.reasoning || typeof auditItem.reasoning !== 'string') {
         warnings.push(`${stream}.${id}: Missing reasoning field`);
       }
+    }
+    if (unavailableIds.length > 0) {
+      errors.push(`${stream}: Analysis unavailable for criteria IDs: ${unavailableIds.join(', ')}`);
     }
   }
 
