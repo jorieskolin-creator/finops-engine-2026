@@ -27,10 +27,12 @@ export interface RunContext {
 
 const REQUEST_TIMEOUT_MS = 595_000;
 const GATEWAY_DEADLINE_MS = 540_000;
-const RECOVERY_PROPAGATION_MS = 15_000;
+// The browser deadline starts at dispatch, while the provider deadline starts
+// only when a worker claims the attempt. Recovery must cover that queue offset.
+const RECOVERY_PROPAGATION_MS = 120_000;
 const INTERNAL_RESULT_POLL_INTERVAL_MS = 2_000;
 const INTERNAL_RESULT_MISSING_GRACE_MS = 10_000;
-class StageExecutionError extends Error { constructor(public code:string,public fallbackAllowed=false){super(code);} }
+export class StageExecutionError extends Error { constructor(public code:string,public fallbackAllowed=false){super(code);} }
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -82,50 +84,73 @@ const validOutput = async (output: any, body: any, approval: any): Promise<boole
 // crashed), we throw — the router catches it and falls forward to the
 // next model in the chain. Returning partial text would corrupt downstream
 // JSON.parse, which is worse than retrying.
-async function pollInternalResult(body: any, approval: any, cause: unknown, dispatchStarted: number): Promise<{ text: string; usage?: any } | null> {
+interface InternalResultRecoveryOptions {
+  fetchFn?: typeof fetch;
+  sleepFn?: (ms: number) => Promise<void>;
+  now?: () => number;
+  logFn?: typeof serverLog;
+  gatewayDeadlineMs?: number;
+  recoveryPropagationMs?: number;
+  pollIntervalMs?: number;
+  missingGraceMs?: number;
+}
+
+export async function pollInternalResult(body: any, approval: any, cause: unknown, dispatchStarted: number, options: InternalResultRecoveryOptions = {}): Promise<{ text: string; usage?: any } | null> {
   const internalCallId = body?.internal_call_id;
   if (!body?.internal_pipeline_call || !internalCallId) return null;
 
-  const started = Date.now();
+  const fetchFn = options.fetchFn || fetch;
+  const sleepFn = options.sleepFn || sleep;
+  const now = options.now || Date.now;
+  const logFn = options.logFn || serverLog;
+  const gatewayDeadlineMs = options.gatewayDeadlineMs ?? GATEWAY_DEADLINE_MS;
+  const recoveryPropagationMs = options.recoveryPropagationMs ?? RECOVERY_PROPAGATION_MS;
+  const pollIntervalMs = options.pollIntervalMs ?? INTERNAL_RESULT_POLL_INTERVAL_MS;
+  const missingGraceMs = options.missingGraceMs ?? INTERNAL_RESULT_MISSING_GRACE_MS;
+  const started = now();
   const stage = body.stage || 'unknown';
   const model = 'governed';
   const recoveryErrorCode = cause instanceof DOMException && cause.name === 'AbortError'
     ? 'request_timeout'
     : 'model_request_failed';
   let firstMissingAt: number | null = null;
+  let lastAttemptStatus = 'unknown';
   const recoveryDeadline = Math.max(
-    dispatchStarted + GATEWAY_DEADLINE_MS + RECOVERY_PROPAGATION_MS,
-    started + RECOVERY_PROPAGATION_MS
+    dispatchStarted + gatewayDeadlineMs + recoveryPropagationMs,
+    started + recoveryPropagationMs
   );
-  while (Date.now() < recoveryDeadline) {
+  while (now() < recoveryDeadline) {
     try {
-      const res = await fetch('/api/model-result', {
+      const res = await fetchFn('/api/model-result', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ internalCallId }),
       });
       if (res.status === 404) {
-        if (firstMissingAt === null) firstMissingAt = Date.now();
-        if (Date.now() - firstMissingAt > INTERNAL_RESULT_MISSING_GRACE_MS) {
+        if (firstMissingAt === null) firstMissingAt = now();
+        if (now() - firstMissingAt > missingGraceMs) {
           return null;
         }
-        await sleep(INTERNAL_RESULT_POLL_INTERVAL_MS);
+        await sleepFn(pollIntervalMs);
         continue;
       }
       if (!res.ok) {
         throw new Error(`/api/model-result → ${res.status}`);
       }
       const data = await res.json();
+      if (['queued','running','done','fallback_allowed','outcome_unknown','cancelled','expired','result_unavailable'].includes(data?.status)) {
+        lastAttemptStatus = data.status;
+      }
       if (data?.status === 'queued' || data?.status === 'running') {
-        await sleep(INTERNAL_RESULT_POLL_INTERVAL_MS);
+        await sleepFn(pollIntervalMs);
         continue;
       }
       if (data?.status === 'done') {
-        await serverLog(body.run_id, 'info', 'internal_result_recovered', {
+        await logFn(body.run_id, 'info', 'internal_result_recovered', {
           stage,
           model,
           internal_call_id: internalCallId,
-          duration_ms: Date.now() - started,
+          duration_ms: now() - started,
           response_chars: typeof data.text === 'string' ? data.text.length : 0,
         });
         const output = data.output;
@@ -136,16 +161,17 @@ async function pollInternalResult(body: any, approval: any, cause: unknown, disp
       if (['outcome_unknown','cancelled','expired','result_unavailable'].includes(data?.status)) throw new StageExecutionError(String(data.status).toUpperCase());
     } catch (err: any) {
       if (err instanceof StageExecutionError) throw err;
-      await sleep(INTERNAL_RESULT_POLL_INTERVAL_MS);
+      await sleepFn(pollIntervalMs);
     }
   }
 
-  await serverLog(body.run_id, 'warn', 'internal_result_timeout', {
+  await logFn(body.run_id, 'warn', 'internal_result_timeout', {
     stage,
     model,
     internal_call_id: internalCallId,
-    duration_ms: Date.now() - started,
+    duration_ms: now() - started,
     error_code: recoveryErrorCode,
+    attempt_status: lastAttemptStatus,
   });
   return null;
 }
