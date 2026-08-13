@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
-import { ExecutionWorker,AttemptReconciler } from '../lib/executionWorker.js';
+import { ExecutionWorker,AttemptReconciler,OutboxPublisher } from '../lib/executionWorker.js';
 import { approveRequest,inspectOutput,POLICY_VERSION,STAGE_PACKET_REQUEST_VERSION } from '../lib/governance.js';
 import { providerHandler } from '../lib/providerGateway.js';
 import { issueCookie } from '../lib/auth.js';
@@ -20,6 +20,11 @@ const worker=(repo,redis,invoke,extra={})=>new ExecutionWorker({repository:repo,
 for(const owners of [['one','one'],['one','two']]){const repo=new Repo(),redis=new Redis();let calls=0;const invoke=async()=>{calls++;await new Promise(r=>setTimeout(r,10));return{text:'ok',usage:{}};};await Promise.all(owners.map(owner=>worker(repo,redis,invoke,{owner}).process('a')));assert.equal(calls,1);assert.equal(repo.a.state,'succeeded');}
 // A heartbeat keeps both fences alive during a long invocation.
 {const repo=new Repo(),redis=new Redis();await worker(repo,redis,async()=>{await new Promise(r=>setTimeout(r,18));return{text:'ok',usage:{}};}).process('a');assert.ok(repo.renewals>=2);assert.ok(redis.renewals>=2);assert.equal(repo.a.state,'succeeded');}
+// The stream must resume from retained entries. `$` can skip notifications
+// published between blocking reads and leave authoritative attempts queued.
+{const cursors=[];let instance;const redis={readAttempts:async cursor=>{cursors.push(cursor);instance.stopped=true;return[];}};instance=worker({},redis,async()=>({text:'ok',usage:{}}));instance.stopped=false;await instance.loop();assert.deepEqual(cursors,['0-0']);}
+// Publishing marks the durable outbox only after the Redis notification exists.
+{const calls=[];const publisher=new OutboxPublisher({repository:{claimPendingOutbox:async()=>[{outbox_id:'o',attempt_id:'a',run_id:'r'}],markPublished:async()=>{calls.push('marked');return true;}},redis:{notifyAttempt:async()=>calls.push('notified')}});await publisher.tick();assert.deepEqual(calls,['notified','marked']);}
 // A stale queued attempt has not crossed the send boundary and may safely fall back.
 {const repo=new Repo(),redis=new Redis();repo.a.created_at=new Date(Date.now()-61_000);let calls=0;await worker(repo,redis,async()=>{calls++;}).process('a');assert.equal(calls,0);assert.equal(repo.a.state,'fallback_allowed');assert.equal(repo.a.outcome_code,'QUEUE_WAIT_EXCEEDED');assert.equal(redis.marker,null);}
 // Marker created by a crashed worker is ambiguous and never redispatched.

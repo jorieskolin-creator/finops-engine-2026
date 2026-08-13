@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { filterOperationalMetadata, safeOperationalIdentifier } from '../lib/operationalLogPolicy.js';
+import { safeWorkerErrorCode, workerOperationalLog } from '../lib/workerOperationalLog.js';
 
 assert.deepEqual(filterOperationalMetadata('stage_complete', {
   stage: 'synthesis', model: 'model-v1', duration_ms: 42,
@@ -15,6 +16,24 @@ assert.deepEqual(filterOperationalMetadata('pipeline_complete', { models: { secr
 assert.equal(safeOperationalIdentifier('gpt-5.2/model:v1'), 'gpt-5.2/model:v1');
 assert.equal(safeOperationalIdentifier('private.pdf'), '?');
 assert.equal(safeOperationalIdentifier('private.pdf\nsource contents'), '?');
+assert.equal(safeWorkerErrorCode({ code: 'REDIS_UNAVAILABLE' }), 'REDIS_UNAVAILABLE');
+assert.equal(safeWorkerErrorCode(new Error('private source content')), 'INTERNAL_ERROR');
+
+const logged = [];
+const originalLog = console.log;
+try {
+  console.log = value => logged.push(String(value));
+  workerOperationalLog('info', 'execution_attempt_claimed', {
+    run_id: 'run-1', attempt_id: 'attempt-1', stage: 'preflight', provider: 'openai', model: 'gpt-5.5', queue_age_ms: 17,
+    prompt: 'private source content', filename: 'private.pdf', response_body: 'private model output',
+  });
+} finally {
+  console.log = originalLog;
+}
+assert.equal(logged.length, 1);
+assert.match(logged[0], /event=execution_attempt_claimed/);
+assert.match(logged[0], /run_id=run-1/);
+assert.doesNotMatch(logged[0], /private source content|private\.pdf|private model output/);
 
 for (const file of ['../api/openai-generate.js', '../api/anthropic-generate.js']) {
   const source = await readFile(new URL(file, import.meta.url), 'utf8');
