@@ -483,7 +483,7 @@ export interface EvidenceSourceAcquisition {
   detection_method: 'magic_bytes' | 'structured_text';
   validation_status: 'PASS' | 'BLOCK';
   validation_codes: string[];
-  extraction_method: 'not_started' | 'browser_pdfjs' | 'browser_dom' | 'browser_delimited' | 'browser_json' | 'browser_xlsx_worker';
+  extraction_method: 'not_started' | 'browser_pdfjs' | 'browser_dom' | 'browser_delimited' | 'browser_json' | 'browser_xlsx_worker' | 'local_ocr';
   extraction_version: string;
   extraction_status: 'PENDING' | 'PASS' | 'BLOCK';
 }
@@ -506,22 +506,67 @@ export interface StructuredTableData {
   formula_cell_count?: number;
   formula_cached_value_missing_count?: number;
   merged_range_count?: number;
+  native_charts?: NativeChartEvidenceUnit[];
   unsupported_objects?: string[];
   /** Describes bounded model context, not deterministic analysis population. */
   truncated: boolean;
+}
+
+export interface NativeChartEvidenceUnit {
+  schema_version: 'native_chart_evidence_unit_v1';
+  chart_id: string;
+  chart_part: string;
+  sheet_name?: string;
+  chart_type: string;
+  title?: string;
+  axis_titles: string[];
+  series: Array<{
+    name?: string;
+    category_range?: string;
+    value_range?: string;
+    categories: string[];
+    values: Array<number | null>;
+  }>;
+  extraction_status: 'COMPLETE' | 'PARTIAL';
+  warnings: string[];
 }
 
 export interface SourceRecord {
   schema_version: 'source_record_v1';
   source_id: string;
   source_name: string;
-  kind: 'text' | 'pdf' | 'html' | 'csv' | 'tsv' | 'json' | 'xlsx';
+  kind: 'text' | 'pdf' | 'html' | 'csv' | 'tsv' | 'json' | 'xlsx' | 'image';
   text?: string;
   pages?: SourcePage[];
   structured_table?: StructuredTableData;
   parse_warnings?: string[];
   extraction?: SourceExtractionMetadata;
   acquisition?: EvidenceSourceAcquisition;
+  visual_units?: VisualEvidenceUnit[];
+}
+
+export interface VisualEvidenceUnit {
+  schema_version: 'visual_evidence_unit_v1';
+  unit_id: string;
+  source_id?: string;
+  extraction_method: 'local_ocr';
+  engine_version: 'tesseract.js@7.0.0';
+  language: 'eng';
+  width: number;
+  height: number;
+  confidence: number;
+  text: string;
+  words: Array<{
+    text: string;
+    confidence: number;
+    bounding_box: { x0: number; y0: number; x1: number; y1: number };
+  }>;
+  post_ocr_redaction_status: 'PENDING' | 'PASSED' | 'PASSED_WITH_REDACTIONS';
+  visual_interpretation_status: 'OCR_TEXT_ONLY';
+  withheld_regions: Array<{
+    bounding_box: { x0: number; y0: number; x1: number; y1: number };
+    reason: 'UNINSPECTED_VISUAL_REGION';
+  }>;
 }
 
 export type EvidencePrivacyFindingKind =
@@ -576,6 +621,9 @@ export interface SourceChunk {
   page_number?: number;
   sheet_name?: string;
   row_number?: number;
+  visual_unit_id?: string;
+  bounding_box?: { x0: number; y0: number; x1: number; y1: number };
+  ocr_confidence?: number;
   char_start?: number;
   char_end?: number;
   parse_warnings?: string[];
@@ -608,6 +656,8 @@ export interface SourcePacketManifestItem {
   source_id: string;
   page_id?: string;
   page_number?: number;
+  visual_unit_id?: string;
+  bounding_box?: { x0: number; y0: number; x1: number; y1: number };
   type: SourceChunkType;
   relevance: SourceRelevanceTier;
   routed_domains: string[];
@@ -647,6 +697,13 @@ export interface SourceRegistryRuntimeStatus {
   dlp_review_chunk_count: number;
   dlp_high_risk_hits: number;
   dlp_caution_hits: number;
+  acquisition_readiness: {
+    status: 'READY' | 'READY_WITH_WARNINGS' | 'BLOCKED';
+    reasons: string[];
+    privacy_decision: EvidencePrivacyDecision['decision'];
+    registry_hash: string;
+    packet_manifest_hash: string;
+  };
   extraction: SourceExtractionQuality;
   packets: Record<string, {
     included_chunk_count: number;

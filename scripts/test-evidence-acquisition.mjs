@@ -97,4 +97,21 @@ const identityPrivacy = sanitizeEvidenceSources([{
 assert.equal(identityPrivacy.decision.decision, 'PASS_WITH_REDACTIONS');
 assert.doesNotMatch(identityPrivacy.sources[0].text, /123-45-6789|AB123456|12 Private Street/);
 
+const chartPrivacy = sanitizeEvidenceSources([{
+  schema_version: 'source_record_v1', source_id: 'src-chart', source_name: 'costs.xlsx', kind: 'xlsx',
+  text: 'Format: XLSX\nBounded model context contains no private chart category.',
+  structured_table: {
+    schema_version: 'structured_table_v1', headers: ['month', 'cost'], rows: [], analysis_rows: [],
+    total_row_count: 0, analysis_complete: true, truncated: false,
+    native_charts: [{
+      schema_version: 'native_chart_evidence_unit_v1', chart_id: 'chart-xl-charts-chart1-xml',
+      chart_part: 'xl/charts/chart1.xml', sheet_name: 'Costs', chart_type: 'barChart',
+      title: 'Spend', axis_titles: [], extraction_status: 'COMPLETE', warnings: [],
+      series: [{ name: 'Cost', categories: ['public', 'alice@example.com'], values: [10, 20] }]
+    }]
+  }
+}]);
+assert.equal(chartPrivacy.decision.decision, 'PASS_WITH_REDACTIONS', 'full native chart caches must be privacy scanned even beyond bounded text context');
+assert.deepEqual(chartPrivacy.sources[0].structured_table.native_charts[0].series[0].categories, ['public', '[EMAIL_REDACTED]']);
+
 console.log('evidence acquisition tests passed');

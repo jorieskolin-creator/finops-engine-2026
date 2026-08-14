@@ -183,5 +183,21 @@ export const renderStructuredTableContext = (
     lines.push(`[ROW ${table.sampled_row_numbers?.[index] || index + 1}] ${row.join(' | ')}`);
   });
   lines.push('[/TABLE_SAMPLE]');
+  if (table.native_charts?.length) {
+    lines.push('', `[NATIVE_CHARTS total="${table.native_charts.length}"]`);
+    let remainingPoints = 200;
+    for (const chart of table.native_charts.slice(0, 10)) {
+      lines.push(`Chart ${chart.chart_id}: type=${chart.chart_type}; title=${chart.title || 'not available'}; part=${chart.chart_part}; extraction=${chart.extraction_status}`);
+      for (const [index, series] of chart.series.entries()) {
+        const take = Math.min(remainingPoints, 20, Math.max(series.categories.length, series.values.length));
+        lines.push(`Series ${index + 1}: name=${series.name || 'not available'}; category_range=${series.category_range || 'not available'}; value_range=${series.value_range || 'not available'}; cached_categories=${JSON.stringify(series.categories.slice(0, take))}; cached_values=${JSON.stringify(series.values.slice(0, take))}`);
+        remainingPoints -= take;
+        if (remainingPoints === 0) break;
+      }
+      if (remainingPoints === 0) break;
+    }
+    lines.push('Native chart context is bounded to 10 charts, 20 points per series and 200 cached points total; full extracted chart caches remain local for deterministic privacy inspection.');
+    lines.push('[/NATIVE_CHARTS]');
+  }
   return lines.join('\n');
 };

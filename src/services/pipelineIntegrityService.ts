@@ -102,6 +102,9 @@ const stableRegistryValue = (registry: SourceRegistry): string => JSON.stringify
       page_number: chunk.page_number,
       sheet_name: chunk.sheet_name,
       row_number: chunk.row_number,
+      visual_unit_id: chunk.visual_unit_id,
+      bounding_box: chunk.bounding_box,
+      ocr_confidence: chunk.ocr_confidence,
       type: chunk.type,
       text: chunk.text,
       image_hash: chunk.image ? hashString(chunk.image.data) : undefined,
@@ -209,6 +212,8 @@ export const validateEvidenceAcquisition = (
       if (!chunk
         || packetChunkIds.has(item.chunk_id)
         || chunk.source_id !== item.source_id
+        || chunk.visual_unit_id !== item.visual_unit_id
+        || JSON.stringify(chunk.bounding_box) !== JSON.stringify(item.bounding_box)
         || !packet.text.includes(`id="${item.chunk_id}"`)
         || !packet.text.includes(`source_id="${item.source_id}"`)) {
         throw new PipelineIntegrityError('EVIDENCE_PACKET_INTEGRITY_FAILED', 'acquisition', [domain]);

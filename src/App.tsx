@@ -6,12 +6,13 @@ import type { PdfParseQuality } from './services/pdfService';
 import { renderDelimitedTableForAnalysis } from './services/tableService';
 import { inspectEvidenceFile } from './services/evidenceFileService';
 import { extractXlsx } from './services/xlsxService';
+import { extractImageOcr } from './services/ocrService';
 import { downloadMasterDataReport, downloadRunTraceJson, downloadSummaryReport } from './services/exportService';
 import { forensicSanitizeImport } from './services/securityService';
 import { extractDiagnosticResultFromHtmlReport, isDiagnosticResultPayload, parseDiagnosticResultJson, serializeDiagnosticResultForHtml } from './services/reportImportService';
 import { findGeneratedReportPrivacyFindings, scrubDiagnosticResultForPrivacy } from './services/privacyService';
 import { PerformanceMonitor } from './services/debugService';
-import { DiagnosticResult, EvidenceSourceAcquisition, ScanResult, PersonaId, PERSONA_IDS, PERSONA_LABELS, PipelineProgressStage, PipelineProgressUpdate, SourcePage, SourceRecord, StructuredTableData } from './types';
+import { DiagnosticResult, EvidenceSourceAcquisition, ScanResult, PersonaId, PERSONA_IDS, PERSONA_LABELS, PipelineProgressStage, PipelineProgressUpdate, SourcePage, SourceRecord, StructuredTableData, VisualEvidenceUnit } from './types';
 import { METRIC_DESCRIPTIONS } from './constants';
 import { GaugeCard, AuditGrid, StrategicRoadmap, ComparisonChart, ReferenceLibrary, QualityGateBanner, BenchmarkingChart, TransferProtocol, MarkdownRenderer, NeuralLoadingGrid } from './components/DashboardComponents';
 import { ReportView } from './components/ReportView';
@@ -147,7 +148,8 @@ interface UploadedFile {
   pages?: SourcePage[];
   structuredTable?: StructuredTableData;
   acquisition?: EvidenceSourceAcquisition;
-  kind?: 'pdf' | 'html' | 'csv' | 'tsv' | 'json' | 'xlsx';
+  visualUnits?: VisualEvidenceUnit[];
+  kind?: 'pdf' | 'html' | 'csv' | 'tsv' | 'json' | 'xlsx' | 'image';
   status: 'parsed' | 'error';
   scan?: ScanResult;
   parseMetadata?: {
@@ -740,11 +742,6 @@ const App: React.FC = () => {
       return;
     }
 
-    if (newFiles.some(f => f.type.startsWith('image/') || /\.(png|jpe?g)$/i.test(f.name))) {
-      setError('Direct image uploads are disabled. Only extracted text is processed; local OCR is unavailable.');
-      return;
-    }
-
     setParsing(true);
     setError(null);
     const processedFiles: UploadedFile[] = [];
@@ -802,12 +799,23 @@ const App: React.FC = () => {
             warnings: extracted.warnings
           };
           (file as any).__structuredTable = extracted.table;
+        } else if (file.type.startsWith('image/') || /\.(png|jpe?g|webp)$/i.test(lowerName)) {
+          const visualUnit = await extractImageOcr(file, acquisition.original_sha256);
+          text = `Format: IMAGE_OCR\nOCR confidence: ${visualUnit.confidence}\nVisual interpretation: OCR text only; non-text visual semantics withheld.\n\n${visualUnit.text}`;
+          kind = 'image';
+          parseMetadata = {
+            warnings: [
+              'Local OCR extracted text only. Graph structure, spatial relationships, colors, shapes and other non-text visual semantics remain UNINSPECTED_VISUAL_REGION.',
+              ...(visualUnit.confidence < 70 ? [`OCR confidence ${visualUnit.confidence.toFixed(1)} is observationally low; extracted text requires cautious interpretation.`] : [])
+            ]
+          };
+          (file as any).__visualUnits = [visualUnit];
         } else if (file.type === 'application/json' || lowerName.endsWith('.json')) {
           const raw = await file.text();
           text = `Format: JSON\n\n${raw}`;
           kind = 'json';
         } else {
-          throw new Error(`File ${file.name} is not a supported format (PDF, HTML, CSV, TSV, XLSX, JSON).`);
+          throw new Error(`File ${file.name} is not a supported format (PDF, HTML, CSV, TSV, XLSX, PNG, JPEG, WEBP, JSON).`);
         }
 
         const extraction = kind === 'pdf'
@@ -818,6 +826,8 @@ const App: React.FC = () => {
               ? { extraction_method: 'browser_delimited' as const, extraction_version: 'delimited_parser_v2' }
               : kind === 'xlsx'
                 ? { extraction_method: 'browser_xlsx_worker' as const, extraction_version: 'sheetjs-ce@0.20.3+zipjs@2.8.49' }
+                : kind === 'image'
+                  ? { extraction_method: 'local_ocr' as const, extraction_version: 'tesseract.js@7.0.0' }
                 : { extraction_method: 'browser_json' as const, extraction_version: 'json_parse_v1' };
         acquisition = { ...acquisition, ...extraction, extraction_status: 'PASS' };
 
@@ -829,6 +839,7 @@ const App: React.FC = () => {
           pages: (file as any).__structuredPages,
           structuredTable: (file as any).__structuredTable,
           acquisition,
+          visualUnits: (file as any).__visualUnits,
           kind,
           status: 'parsed',
           scan: scanParseableFile(text, kind, false),
@@ -861,6 +872,10 @@ const App: React.FC = () => {
             source_name:file.name,
             kind:file.kind || 'text',
             acquisition:file.acquisition,
+            visual_units:file.visualUnits?.map(unit => ({
+              ...unit,
+              source_id:`src-${String(index+1).padStart(3,'0')}`
+            })),
             parse_warnings:file.parseMetadata?.warnings || file.parseMetadata?.parseQuality?.warnings,
             extraction: file.kind === 'pdf' && file.parseMetadata
               ? {
@@ -882,7 +897,7 @@ const App: React.FC = () => {
                   }
                 : { unit: 'document' as const, total_units: 1, processed_units: 1, truncated: false },
             structured_table:file.structuredTable,
-            ...(file.pages?.length ? {pages:file.pages} : {text:file.text})
+            ...(file.kind === 'image' ? {} : file.pages?.length ? {pages:file.pages} : {text:file.text})
           })));
       const data = await analyzeDocument(sources, update => {
         setPipelineProgress(current => ({ ...current, [update.stage]: update }));
@@ -1386,7 +1401,7 @@ const App: React.FC = () => {
                           Upload Cloud Cost Reports, FinOps Policies, Optimization Plans, Governance Docs, Architecture Reviews.
                         </p>
                         <div className="z-10 mt-4 flex flex-wrap justify-center gap-1.5 max-w-md">
-                          {['PDF', 'HTML', 'CSV', 'TSV', 'XLSX', 'JSON'].map(fmt => (
+                          {['PDF', 'HTML', 'CSV', 'TSV', 'XLSX', 'PNG/JPEG', 'JSON'].map(fmt => (
                             <span key={fmt} className="text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded-md bg-slate-800/80 border border-slate-700/60 text-slate-300">
                               {fmt}
                             </span>
@@ -1418,7 +1433,7 @@ const App: React.FC = () => {
                         <span className="font-bold">Deep analysis</span>
                       </label>
                     </div>
-                    <input type="file" ref={fileInputRef} onChange={handleFileSelect} className="hidden" accept=".pdf,.html,.csv,.tsv,.xlsx,.json,text/csv,text/tab-separated-values,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" multiple />
+                    <input type="file" ref={fileInputRef} onChange={handleFileSelect} className="hidden" accept=".pdf,.html,.csv,.tsv,.xlsx,.png,.jpg,.jpeg,.webp,.json,text/csv,text/tab-separated-values,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,image/png,image/jpeg,image/webp" multiple />
                     <button onClick={handleAnalyze} disabled={!scanResult.canRun || files.length < MIN_FILES || files.length > MAX_FILES} className={`px-8 py-4 rounded-xl font-bold shadow-2xl transition-all transform active:scale-[0.98] flex items-center gap-3 border ${!scanResult.canRun || files.length < MIN_FILES || files.length > MAX_FILES ? 'bg-slate-800 text-slate-500 border-slate-700 cursor-not-allowed shadow-none' : 'text-slate-900 bg-white border-white hover:bg-emerald-400 hover:border-emerald-400 hover:shadow-[0_0_30px_rgba(16,185,129,0.4)]'}`}>
                       {!scanResult.canRun || files.length < MIN_FILES || files.length > MAX_FILES ? (
                         <span>{files.length < MIN_FILES ? `Add ${MIN_FILES - files.length} more files` : files.length > MAX_FILES ? "Limit Exceeded" : "Checks Failed"}</span>

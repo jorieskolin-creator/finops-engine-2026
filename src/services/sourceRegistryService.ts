@@ -11,7 +11,8 @@ import type {
   SourceRegistry,
   SourceRegistryRuntimeStatus,
   SourceExtractionQuality,
-  SourceRelevanceTier
+  SourceRelevanceTier,
+  EvidencePrivacyDecision
 } from '../types';
 
 const TARGET_PACKET_CHARS = 35000;
@@ -19,7 +20,7 @@ const HARD_PACKET_CHARS = 45000;
 const CHUNK_TARGET_CHARS = 2200;
 const CHUNK_OVERLAP_CHARS = 200;
 const SOURCE_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
-const SOURCE_KINDS = new Set(['text', 'pdf', 'html', 'csv', 'tsv', 'json', 'xlsx']);
+const SOURCE_KINDS = new Set(['text', 'pdf', 'html', 'csv', 'tsv', 'json', 'xlsx', 'image']);
 const SHA256_PATTERN = /^sha256_[a-f0-9]{64}$/;
 
 const DOMAIN_TERMS: Record<string, string[]> = {
@@ -59,6 +60,35 @@ const GAP_TERMS = [
 const CONTRADICTION_TERMS = [
   'contradiction', 'conflict', 'inconsistent', 'unclear', 'exception', 'override', 'manual override'
 ];
+
+const validNativeCharts = (charts: NonNullable<SourceRecord['structured_table']>['native_charts']): boolean => {
+  if (charts === undefined) return true;
+  if (!Array.isArray(charts) || charts.length > 50) return false;
+  const ids = new Set<string>();
+  return charts.every(chart => {
+    if (!chart || chart.schema_version !== 'native_chart_evidence_unit_v1'
+      || !SOURCE_ID_PATTERN.test(chart.chart_id) || ids.has(chart.chart_id)
+      || typeof chart.chart_part !== 'string' || !/^xl\/charts\/chart[^/]*\.xml$/i.test(chart.chart_part)
+      || (chart.sheet_name !== undefined && (typeof chart.sheet_name !== 'string' || chart.sheet_name.length > 255))
+      || typeof chart.chart_type !== 'string' || chart.chart_type.length === 0 || chart.chart_type.length > 64
+      || (chart.title !== undefined && (typeof chart.title !== 'string' || chart.title.length > 1000))
+      || !Array.isArray(chart.axis_titles) || chart.axis_titles.some(title => typeof title !== 'string' || title.length > 1000)
+      || !Array.isArray(chart.series) || chart.series.length > 20
+      || !['COMPLETE', 'PARTIAL'].includes(chart.extraction_status)
+      || !Array.isArray(chart.warnings) || chart.warnings.some(warning => typeof warning !== 'string' || warning.length > 200)) return false;
+    ids.add(chart.chart_id);
+    let points = 0;
+    return chart.series.every(series => {
+      if (!series || [series.name, series.category_range, series.value_range]
+        .some(value => value !== undefined && (typeof value !== 'string' || value.length > 1000))
+        || [series.category_range, series.value_range].some(value => value?.includes('['))
+        || !Array.isArray(series.categories) || series.categories.some(value => typeof value !== 'string' || value.length > 1000)
+        || !Array.isArray(series.values) || series.values.some(value => value !== null && !Number.isFinite(value))) return false;
+      points += Math.max(series.categories.length, series.values.length);
+      return points <= 5000;
+    });
+  });
+};
 
 const escapeXml = (value: string): string => value
   .replace(/&/g, '&amp;')
@@ -251,7 +281,11 @@ const validateSourceRecords = (records: SourceRecord[]): void => {
     sourceIds.add(record.source_id);
     const hasText = typeof record.text === 'string' && record.text.trim().length > 0;
     const hasPages = Array.isArray(record.pages) && record.pages.length > 0;
-    if (hasText === hasPages) throw new Error('INVALID_SOURCE_CONTENT');
+    const hasVisualUnits = Array.isArray(record.visual_units) && record.visual_units.length > 0;
+    if (record.kind === 'image') {
+      if (hasText || hasPages || !hasVisualUnits
+        || record.acquisition?.extraction_method !== 'local_ocr') throw new Error('INVALID_SOURCE_CONTENT');
+    } else if (hasText === hasPages || hasVisualUnits) throw new Error('INVALID_SOURCE_CONTENT');
     if (hasPages) {
       const pageIds = new Set<string>();
       const pageNumbers = new Set<number>();
@@ -278,6 +312,7 @@ const validateSourceRecords = (records: SourceRecord[]): void => {
         ||(table.total_row_count>table.rows.length&&!table.truncated)
         ||table.headers.some(header=>typeof header!=='string'||header.length>243)
         ||table.rows.some(row=>!Array.isArray(row)||row.length>200||row.some(cell=>typeof cell!=='string'||cell.length>243))
+        ||!validNativeCharts(table.native_charts)
         ||(table.analysis_rows!==undefined&&(
           !Array.isArray(table.analysis_rows)||table.analysis_rows.length!==table.total_row_count
           ||table.analysis_complete!==true
@@ -294,6 +329,39 @@ const validateSourceRecords = (records: SourceRecord[]): void => {
         throw new Error('INVALID_STRUCTURED_TABLE');
       }
     }
+    if (record.visual_units) {
+      const unitIds = new Set<string>();
+      for (const unit of record.visual_units) {
+        if (!unit || unit.schema_version !== 'visual_evidence_unit_v1'
+          || !SOURCE_ID_PATTERN.test(unit.unit_id) || unitIds.has(unit.unit_id)
+          || unit.source_id !== record.source_id
+          || unit.extraction_method !== 'local_ocr' || unit.engine_version !== 'tesseract.js@7.0.0'
+          || unit.language !== 'eng'
+          || !Number.isInteger(unit.width) || unit.width < 1 || unit.width > 10000
+          || !Number.isInteger(unit.height) || unit.height < 1 || unit.height > 10000
+          || unit.width * unit.height > 20_000_000
+          || !Number.isFinite(unit.confidence) || unit.confidence < 0 || unit.confidence > 100
+          || typeof unit.text !== 'string' || unit.text.trim().length === 0
+          || !Array.isArray(unit.words) || unit.words.some(word =>
+            typeof word.text !== 'string' || !word.text
+            || !Number.isFinite(word.confidence) || word.confidence < 0 || word.confidence > 100
+            || ![word.bounding_box.x0, word.bounding_box.y0, word.bounding_box.x1, word.bounding_box.y1].every(Number.isFinite)
+            || word.bounding_box.x0 < 0 || word.bounding_box.y0 < 0
+            || word.bounding_box.x1 > unit.width || word.bounding_box.y1 > unit.height
+            || word.bounding_box.x0 >= word.bounding_box.x1 || word.bounding_box.y0 >= word.bounding_box.y1)
+          || !['PASSED', 'PASSED_WITH_REDACTIONS'].includes(unit.post_ocr_redaction_status)
+          || unit.visual_interpretation_status !== 'OCR_TEXT_ONLY'
+          || !Array.isArray(unit.withheld_regions) || unit.withheld_regions.length === 0
+          || unit.withheld_regions.some(region => region.reason !== 'UNINSPECTED_VISUAL_REGION'
+            || ![region.bounding_box.x0, region.bounding_box.y0, region.bounding_box.x1, region.bounding_box.y1].every(Number.isFinite)
+            || region.bounding_box.x0 < 0 || region.bounding_box.y0 < 0
+            || region.bounding_box.x1 > unit.width || region.bounding_box.y1 > unit.height
+            || region.bounding_box.x0 >= region.bounding_box.x1 || region.bounding_box.y0 >= region.bounding_box.y1)) {
+          throw new Error('INVALID_VISUAL_EVIDENCE_UNIT');
+        }
+        unitIds.add(unit.unit_id);
+      }
+    }
   }
 };
 
@@ -303,6 +371,29 @@ export const buildSourceRegistry = (records: SourceRecord[]): SourceRegistry => 
   const warnings: string[] = [];
   records.forEach((doc, docIndex) => {
     const sourceId = doc.source_id || sourceIdFor(docIndex);
+    if (doc.kind === 'image') {
+      warnings.push(...(doc.parse_warnings || []).map(warning => `${sourceId}: ${warning}`));
+      for (const [unitIndex, unit] of doc.visual_units!.entries()) {
+        const split = splitLongText(unit.text);
+        for (const [partIndex, part] of split.entries()) {
+          chunks.push({
+            chunk_id: `${sourceId}-v${String(unitIndex + 1).padStart(3, '0')}-c${String(partIndex + 1).padStart(3, '0')}`,
+            source_id: sourceId,
+            source_name: doc.source_name,
+            type: 'image',
+            text: part.text,
+            visual_unit_id: unit.unit_id,
+            bounding_box: { x0: 0, y0: 0, x1: unit.width, y1: unit.height },
+            ocr_confidence: unit.confidence,
+            char_start: part.start,
+            char_end: part.end,
+            routing: routeChunk(part.text),
+            parse_warnings: doc.parse_warnings
+          });
+        }
+      }
+      return;
+    }
     const pages: Array<{ pageNumber?: number; text: string }> = doc.pages?.length
       ? doc.pages.filter(page => page.text.trim().length > 0).map(page => ({ pageNumber:page.page_number, text:page.text }))
       : [{ text:doc.text || '' }];
@@ -403,6 +494,9 @@ const renderChunk = (chunk: SourceChunk, relevance: SourceRelevanceTier): string
     `id="${escapeXml(chunk.chunk_id)}"`,
     `source_id="${escapeXml(chunk.source_id)}"`,
     chunk.page_number ? `page="${chunk.page_number}"` : '',
+    chunk.visual_unit_id ? `visual_unit_id="${escapeXml(chunk.visual_unit_id)}"` : '',
+    chunk.bounding_box ? `region="${chunk.bounding_box.x0},${chunk.bounding_box.y0},${chunk.bounding_box.x1},${chunk.bounding_box.y1}"` : '',
+    chunk.ocr_confidence !== undefined ? `ocr_confidence="${chunk.ocr_confidence}"` : '',
     `type="${chunk.type}"`,
     `relevance="${relevance}"`,
     `routed_domains="${escapeXml(routedDomains(chunk).join(','))}"`
@@ -415,6 +509,8 @@ const manifestFor = (chunk: SourceChunk, relevance: SourceRelevanceTier): Source
   source_id: chunk.source_id,
   page_id: chunk.page_id,
   page_number: chunk.page_number,
+  visual_unit_id: chunk.visual_unit_id,
+  bounding_box: chunk.bounding_box,
   type: chunk.type,
   relevance,
   routed_domains: routedDomains(chunk)
@@ -605,13 +701,34 @@ export const sourceRegistryRuntimeStatus = (
   registry: SourceRegistry,
   packets: Record<string, RoutedSourcePacket>,
   dlpReviewChunkCount: number,
-  dlpScan: DlpScanResult
-): SourceRegistryRuntimeStatus => ({
+  dlpScan: DlpScanResult,
+  privacyDecision: EvidencePrivacyDecision,
+  integrity: { registry_hash: string; packet_manifest_hash: string }
+): SourceRegistryRuntimeStatus => {
+  const blockingReasons = [
+    ...(registry.extraction.status === 'FAILED' ? ['SOURCE_EXTRACTION_FAILED'] : []),
+    ...(dlpScan.blocked ? ['DETERMINISTIC_DLP_BLOCKED'] : []),
+    ...(privacyDecision.decision === 'BLOCK' ? privacyDecision.blocking_codes : [])
+  ];
+  const warningReasons = [
+    ...(registry.extraction.warning_count > 0 ? ['EXTRACTION_WARNINGS_PRESENT'] : []),
+    ...(dlpScan.caution_hits.length > 0 ? ['DLP_CAUTION_FINDINGS_PRESENT'] : []),
+    ...(privacyDecision.decision === 'PASS_WITH_REDACTIONS' ? ['PRIVACY_REDACTIONS_APPLIED'] : []),
+    ...(Object.values(packets).some(packet => packet.weak_coverage) ? ['PACKET_COVERAGE_WARNINGS_PRESENT'] : [])
+  ];
+  return ({
   source_count: registry.source_count,
   chunk_count: registry.chunk_count,
   dlp_review_chunk_count: dlpReviewChunkCount,
   dlp_high_risk_hits: dlpScan.high_risk_hits.reduce((sum, hit) => sum + hit.count, 0),
   dlp_caution_hits: dlpScan.caution_hits.reduce((sum, hit) => sum + hit.count, 0),
+  acquisition_readiness: {
+    status: blockingReasons.length > 0 ? 'BLOCKED' : warningReasons.length > 0 ? 'READY_WITH_WARNINGS' : 'READY',
+    reasons: blockingReasons.length > 0 ? blockingReasons : warningReasons,
+    privacy_decision: privacyDecision.decision,
+    registry_hash: integrity.registry_hash,
+    packet_manifest_hash: integrity.packet_manifest_hash
+  },
   extraction: registry.extraction,
   packets: Object.fromEntries(Object.entries(packets).map(([domain, packet]) => [domain, {
     included_chunk_count: packet.included_chunk_count,
@@ -619,4 +736,5 @@ export const sourceRegistryRuntimeStatus = (
     weak_coverage: packet.weak_coverage,
     char_count: packet.char_count
   }]))
-});
+  });
+};

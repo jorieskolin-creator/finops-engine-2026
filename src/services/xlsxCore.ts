@@ -1,6 +1,6 @@
-import { Uint8ArrayReader, ZipReader } from '@zip.js/zip.js';
+import { TextWriter, Uint8ArrayReader, ZipReader, type FileEntry } from '@zip.js/zip.js';
 import * as XLSX from 'xlsx';
-import type { StructuredTableData } from '../types';
+import type { NativeChartEvidenceUnit, StructuredTableData } from '../types';
 import { renderStructuredTableContext } from './tableService';
 
 const MAX_ARCHIVE_ENTRIES = 5_000;
@@ -12,6 +12,9 @@ const MAX_ROWS = 250_000;
 const MAX_COLUMNS = 200;
 const MAX_CONTEXT_ROWS = 150;
 const MAX_CELL_CHARS = 240;
+const MAX_CHARTS = 50;
+const MAX_CHART_SERIES = 20;
+const MAX_CHART_POINTS = 5_000;
 
 export interface XlsxSheetManifest {
   sheet_name: string;
@@ -29,9 +32,96 @@ export interface XlsxExtractionResult {
   archive_inspector_version: '2.8.49';
   text: string;
   table: StructuredTableData;
+  native_charts: NativeChartEvidenceUnit[];
   sheets: XlsxSheetManifest[];
   warnings: string[];
 }
+
+const decodeXmlText = (value: string): string => value
+  .replace(/<[^>]*>/g, '')
+  .replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"')
+  .replace(/&apos;/g, "'").replace(/&amp;/g, '&')
+  .replace(/&#(\d+);/g, (_, code) => String.fromCodePoint(Number(code)))
+  .replace(/&#x([0-9a-f]+);/gi, (_, code) => String.fromCodePoint(Number.parseInt(code, 16)))
+  .replace(/\s+/g, ' ').trim();
+
+const xmlBlocks = (xml: string, localName: string): string[] => {
+  const pattern = new RegExp(`<(?:[A-Za-z_][\\w.-]*:)?${localName}\\b[^>]*>([\\s\\S]*?)<\\/(?:[A-Za-z_][\\w.-]*:)?${localName}>`, 'gi');
+  return [...xml.matchAll(pattern)].map(match => match[1]);
+};
+
+const firstXmlValue = (xml: string, localName: string): string | undefined => {
+  const value = xmlBlocks(xml, localName)[0];
+  return value === undefined ? undefined : decodeXmlText(value);
+};
+
+const cachedValues = (xml: string, numeric: boolean): Array<string | number | null> => {
+  const cache = xmlBlocks(xml, numeric ? 'numCache' : 'strCache')[0];
+  if (!cache) return [];
+  const pointCountMatch = cache.match(/<(?:[A-Za-z_][\w.-]*:)?ptCount\b[^>]*\bval="(\d+)"/i);
+  const pointCount = pointCountMatch ? Number(pointCountMatch[1]) : 0;
+  const points = [...cache.matchAll(/<(?:[A-Za-z_][\w.-]*:)?pt\b[^>]*\bidx="(\d+)"[^>]*>([\s\S]*?)<\/(?:[A-Za-z_][\w.-]*:)?pt>/gi)]
+    .map(match => ({ index: Number(match[1]), value: firstXmlValue(match[2], 'v') || '' }));
+  const length = Math.max(Number.isInteger(pointCount) ? pointCount : 0, ...points.map(point => point.index + 1), 0);
+  const values: Array<string | number | null> = Array.from({ length }, () => numeric ? null : '');
+  for (const point of points) {
+    if (point.index >= length) continue;
+    if (!numeric) values[point.index] = point.value;
+    else {
+      const parsed = Number(point.value);
+      values[point.index] = Number.isFinite(parsed) ? parsed : null;
+    }
+  }
+  return values;
+};
+
+export const parseNativeChartXml = (chartPart: string, xml: string): NativeChartEvidenceUnit => {
+  const chartTypes = ['barChart', 'lineChart', 'pieChart', 'doughnutChart', 'areaChart', 'scatterChart', 'bubbleChart', 'radarChart', 'surfaceChart', 'stockChart'];
+  const chartType = chartTypes.find(type => new RegExp(`<(?:[A-Za-z_][\\w.-]*:)?${type}\\b`, 'i').test(xml)) || 'unknown';
+  const titleBlock = xmlBlocks(xml, 'title')[0] || '';
+  const title = xmlBlocks(titleBlock, 't').map(decodeXmlText).filter(Boolean).join(' ') || undefined;
+  const axisTitles = xmlBlocks(xml, 'catAx').concat(xmlBlocks(xml, 'valAx'))
+    .flatMap(axis => xmlBlocks(xmlBlocks(axis, 'title')[0] || '', 't').map(decodeXmlText).filter(Boolean));
+  const warnings: string[] = [];
+  const seriesBlocks = xmlBlocks(xml, 'ser');
+  if (seriesBlocks.length > MAX_CHART_SERIES) throw new Error('XLSX_CHART_SERIES_LIMIT_EXCEEDED');
+  let pointCount = 0;
+  const series = seriesBlocks.map(block => {
+    const tx = xmlBlocks(block, 'tx')[0] || '';
+    const category = xmlBlocks(block, 'cat')[0] || xmlBlocks(block, 'xVal')[0] || '';
+    const value = xmlBlocks(block, 'val')[0] || xmlBlocks(block, 'yVal')[0] || '';
+    const name = firstXmlValue(xmlBlocks(tx, 'strCache')[0] || '', 'v') || firstXmlValue(tx, 'v');
+    const categoryRange = firstXmlValue(category, 'f');
+    const valueRange = firstXmlValue(value, 'f');
+    if ([categoryRange, valueRange].some(range => range?.includes('['))) throw new Error('XLSX_EXTERNAL_LINK_REJECTED');
+    const categories = (cachedValues(category, false).length > 0
+      ? cachedValues(category, false)
+      : cachedValues(category, true)).map(String);
+    const values = cachedValues(value, true) as Array<number | null>;
+    pointCount += Math.max(categories.length, values.length);
+    if (categories.length === 0) warnings.push('CHART_CATEGORIES_CACHE_UNAVAILABLE');
+    if (values.length === 0) warnings.push('CHART_VALUES_CACHE_UNAVAILABLE');
+    return { name, category_range: categoryRange, value_range: valueRange, categories, values };
+  });
+  if (pointCount > MAX_CHART_POINTS) throw new Error('XLSX_CHART_POINT_LIMIT_EXCEEDED');
+  const formulas = series.flatMap(item => [item.category_range, item.value_range]).filter(Boolean) as string[];
+  const sheetName = formulas.map(formula => formula.match(/^(?:'((?:[^']|'')+)'|([^!]+))!/))
+    .find(Boolean)?.slice(1).find(Boolean)?.replace(/''/g, "'");
+  if (chartType === 'unknown') warnings.push('CHART_TYPE_UNSUPPORTED');
+  if (series.length === 0) warnings.push('CHART_SERIES_UNAVAILABLE');
+  return {
+    schema_version: 'native_chart_evidence_unit_v1',
+    chart_id: `chart-${chartPart.replace(/[^A-Za-z0-9]+/g, '-').replace(/^-|-$/g, '')}`,
+    chart_part: chartPart,
+    sheet_name: sheetName,
+    chart_type: chartType,
+    title,
+    axis_titles: axisTitles,
+    series,
+    extraction_status: warnings.length === 0 ? 'COMPLETE' : 'PARTIAL',
+    warnings: [...new Set(warnings)].sort()
+  };
+};
 
 const blockedEntry = (name: string): string | null => {
   const normalized = name.toLowerCase();
@@ -41,7 +131,7 @@ const blockedEntry = (name: string): string | null => {
   return null;
 };
 
-export const inspectXlsxArchive = async (bytes: Uint8Array): Promise<{ unsupportedObjects: string[] }> => {
+export const inspectXlsxArchive = async (bytes: Uint8Array): Promise<{ unsupportedObjects: string[]; nativeCharts: NativeChartEvidenceUnit[] }> => {
   const reader = new ZipReader(new Uint8ArrayReader(bytes), { useWebWorkers: false });
   try {
     const entries = await reader.getEntries();
@@ -50,6 +140,7 @@ export const inspectXlsxArchive = async (bytes: Uint8Array): Promise<{ unsupport
     if (!names.has('[Content_Types].xml') || !names.has('xl/workbook.xml')) throw new Error('XLSX_STRUCTURE_INVALID');
     let totalUncompressed = 0;
     const unsupportedObjects = new Set<string>();
+    const chartEntries: FileEntry[] = [];
     for (const entry of entries) {
       if (entry.encrypted) throw new Error('XLSX_ENCRYPTED_REJECTED');
       const rejection = blockedEntry(entry.filename);
@@ -63,11 +154,16 @@ export const inspectXlsxArchive = async (bytes: Uint8Array): Promise<{ unsupport
         throw new Error('XLSX_COMPRESSION_RATIO_LIMIT_EXCEEDED');
       }
       const normalized = entry.filename.toLowerCase();
-      if (/^xl\/charts\//.test(normalized)) unsupportedObjects.add('NATIVE_CHART_REQUIRES_EXTRACTION');
+      if (!entry.directory && /^xl\/charts\/chart[^/]*\.xml$/.test(normalized)) chartEntries.push(entry);
       if (/^xl\/media\//.test(normalized)) unsupportedObjects.add('WORKBOOK_IMAGE_REQUIRES_VISUAL_INSPECTION');
       if (/^xl\/(?:comments|threadedcomments)\//.test(normalized)) unsupportedObjects.add('CELL_COMMENTS_NOT_INSPECTED');
     }
-    return { unsupportedObjects: [...unsupportedObjects].sort() };
+    if (chartEntries.length > MAX_CHARTS) throw new Error('XLSX_CHART_LIMIT_EXCEEDED');
+    const nativeCharts: NativeChartEvidenceUnit[] = [];
+    for (const entry of chartEntries.sort((a, b) => a.filename.localeCompare(b.filename))) {
+      nativeCharts.push(parseNativeChartXml(entry.filename, await entry.getData(new TextWriter())));
+    }
+    return { unsupportedObjects: [...unsupportedObjects].sort(), nativeCharts };
   } finally {
     await reader.close();
   }
@@ -160,6 +256,7 @@ export const parseXlsxBytes = async (bytes: Uint8Array): Promise<XlsxExtractionR
   if (formulaCellCount > 0) warnings.push(`${formulaCellCount} formula cell(s) were recorded from cached values; formulas were not executed.`);
   if (formulaCachedValueMissingCount > 0) warnings.push(`${formulaCachedValueMissingCount} formula cell(s) had no cached value and were treated as empty.`);
   warnings.push(...archive.unsupportedObjects.map(code => `Unsupported workbook object: ${code}.`));
+  warnings.push(...archive.nativeCharts.flatMap(chart => chart.warnings.map(code => `Native chart ${chart.chart_id}: ${code}.`)));
 
   const sheets: XlsxSheetManifest[] = sheetDetails.map(item => ({
     sheet_name: item.sheetName,
@@ -192,6 +289,7 @@ export const parseXlsxBytes = async (bytes: Uint8Array): Promise<XlsxExtractionR
     formula_cell_count: formulaCellCount,
     formula_cached_value_missing_count: formulaCachedValueMissingCount,
     merged_range_count: selected.sheet['!merges']?.length || 0,
+    native_charts: archive.nativeCharts,
     unsupported_objects: archive.unsupportedObjects,
     truncated: dataRows.length > MAX_CONTEXT_ROWS || sampled.some(row => row.values.some(value => value.length > MAX_CELL_CHARS))
   };
@@ -203,6 +301,7 @@ export const parseXlsxBytes = async (bytes: Uint8Array): Promise<XlsxExtractionR
     archive_inspector_version: '2.8.49',
     text: renderStructuredTableContext(table, 'XLSX'),
     table,
+    native_charts: archive.nativeCharts,
     sheets,
     warnings
   };

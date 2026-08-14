@@ -1,7 +1,7 @@
 import type { EvidenceSourceAcquisition, EvidenceSourceFormat } from '../types';
 
 const extensionFor = (name: string): string => name.toLowerCase().split('.').pop() || '';
-const IMPLEMENTED_EXTRACTION_FORMATS = new Set<EvidenceSourceFormat>(['pdf', 'html', 'csv', 'tsv', 'json', 'xlsx']);
+const IMPLEMENTED_EXTRACTION_FORMATS = new Set<EvidenceSourceFormat>(['pdf', 'html', 'csv', 'tsv', 'json', 'xlsx', 'png', 'jpeg', 'webp']);
 
 const formatForExtension = (name: string): EvidenceSourceFormat | null => {
   const extension = extensionFor(name);

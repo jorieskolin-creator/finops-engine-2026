@@ -5,7 +5,9 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "predev": "node scripts/prepare-ocr-assets.mjs",
     "dev": "vite",
+    "prebuild": "node scripts/prepare-ocr-assets.mjs",
     "build": "tsc && vite build",
     "migrate": "node scripts/migrate.mjs",
     "integration": "node scripts/integration-infrastructure.mjs",
@@ -16,6 +18,7 @@
     "test:input-parsing": "node scripts/test-input-parsing.mjs",
     "test:evidence-acquisition": "node scripts/test-evidence-acquisition.mjs",
     "test:xlsx-acquisition": "node scripts/test-xlsx-acquisition.mjs",
+    "test:visual-acquisition": "node scripts/test-visual-acquisition.mjs",
     "test:report-import": "node scripts/test-report-import.mjs",
     "test:report-rendering": "node scripts/test-report-rendering.mjs",
     "test:report-diagnostics": "node scripts/test-report-diagnostics.mjs",
@@ -53,6 +56,7 @@
     "node": ">=18"
   },
   "dependencies": {
+    "@tesseract.js-data/eng": "1.0.0",
     "@zip.js/zip.js": "2.8.49",
     "dompurify": "^3.1.0",
     "express": "^4.19.0",
@@ -62,6 +66,7 @@
     "react-dom": "^18.3.0",
     "recharts": "^2.12.0",
     "redis": "5.8.2",
+    "tesseract.js": "7.0.0",
     "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"
   },
   "devDependencies": {

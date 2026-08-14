@@ -266,7 +266,6 @@ export const analyzeDocument = async (
     const sourcePackets = buildDomainPackets(sourceRegistry);
     const boundedRetrieval = buildBoundedRetrievalTrace(sourceRegistry, sourcePackets);
     const dlpScan = scanRegistryDlp(sourceRegistry);
-    const sourceRegistryStatus = sourceRegistryRuntimeStatus(sourceRegistry, sourcePackets, 0, dlpScan);
     const packetWarnings = Object.values(sourcePackets).filter(packet => packet.weak_coverage).length;
     emitProgress({ stage: 'packetization', status: packetWarnings > 0 ? 'completed_with_warnings' : 'completed' });
     emitProgress({ stage: 'privacy', status: 'in_progress' });
@@ -303,6 +302,14 @@ export const analyzeDocument = async (
       throw new Error(`Security Alert: high-risk secret material detected in source chunks (${dlpScan.high_risk_hits.map(hit => `${hit.kind}:${hit.count}`).join(', ')}). Remove or redact secrets before running the assessment.`);
     }
     const evidenceIntegrity = validateEvidenceAcquisition(acquiredSources, sourceRegistry, sourcePackets);
+    const sourceRegistryStatus = sourceRegistryRuntimeStatus(
+      sourceRegistry,
+      sourcePackets,
+      0,
+      dlpScan,
+      privacy.decision,
+      evidenceIntegrity
+    );
     serverLog(runId, 'info', 'pipeline_integrity_passed', {
       gate: 'acquisition',
       sources: sourceRegistry.source_count,
