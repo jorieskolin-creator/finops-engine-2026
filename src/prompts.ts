@@ -28,7 +28,7 @@ You must evaluate **ALL 3 criteria** for every item to determine the final score
 ### EVIDENCE QUOTES (CRITICAL)
 For EVERY item with score > 0, you MUST include at least one direct quote from the source document as evidence.
 Wrap evidence in the "evidence_quotes" array with the actual text from the document.
-If the source text contains <CHUNK id="..."> markers, include the relevant "chunk_id", "source_id", and "page_number" fields in the evidence quote whenever identifiable.
+Every evidence quote MUST copy its "source_id" and "chunk_id" from the enclosing <CHUNK> marker. Also copy every locator present on that marker: "page_number"/"page_id" for PDF pages and "sheet_name"/"row_number" for table evidence. Never cite text outside the cited chunk.
 
 ### IMAGE / VISUAL EVIDENCE
 Some of the source material may be provided as IMAGES (pages from a PDF, screenshots of dashboards, architecture diagrams, organization charts). Treat the visible content of those images as evidence on equal footing with text.
@@ -93,6 +93,7 @@ For the 5 criteria in Stream A (${columnId}1-${columnId}5) AND the 5 criteria in
 2. Check the text for evidence of each.
 3. Sum the matches to get the **Count (0-3)**.
 4. If Count > 0, extract at least one direct quote as evidence.
+5. Every quote must include source_id, chunk_id, and all page/sheet/row locators shown by its enclosing CHUNK marker.
 
 **REQUIRED OUTPUT STRUCTURE (JSON Only):**
 {
@@ -162,8 +163,9 @@ For ONLY the listed criteria, re-evaluate all 3 sub-criteria and return correcte
 Rules:
 1. If evidence is not directly present in the source, lower the Count.
 2. For Count > 0, include at least one direct text quote or visible-image description in evidence_quotes.
-3. For anti-pattern Count = 0, distinguish verified absence from unknown absence in the evidence/reasoning text. Verified absence requires relevant source coverage; silence or irrelevant source material is not positive evidence.
-4. Do not return criteria that were not listed in <target_criteria>.
+3. Every quote must include source_id, chunk_id, and every page/sheet/row locator shown by its enclosing CHUNK marker. Never cite text outside that chunk.
+4. For anti-pattern Count = 0, distinguish verified absence from unknown absence in the evidence/reasoning text. Verified absence requires relevant source coverage; silence or irrelevant source material is not positive evidence.
+5. Do not return criteria that were not listed in <target_criteria>.
 
 Required JSON shape:
 {

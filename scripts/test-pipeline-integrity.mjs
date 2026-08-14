@@ -80,7 +80,34 @@ assert.throws(
   error => error instanceof PipelineIntegrityError && error.code === 'SOURCE_EXTRACTION_INCOMPLETE',
 );
 const tableSource = { ...sourceRecord, kind: 'csv', extraction: { unit: 'row', total_units: 10, processed_units: 5, truncated: true }, structured_table: { schema_version: 'structured_table_v1', headers: ['cost'], rows: [['1']], total_row_count: 10, truncated: true } };
-assert.doesNotThrow(() => validateEvidenceAcquisition([tableSource], truncatedRegistry(true), packets), 'governed bounded table prefixes remain valid acquisition');
+assert.throws(
+  () => validateEvidenceAcquisition([tableSource], truncatedRegistry(true), packets),
+  error => error instanceof PipelineIntegrityError && error.code === 'SOURCE_EXTRACTION_INCOMPLETE',
+  'a bounded model sample must not excuse incomplete deterministic table acquisition',
+);
+const completeTableSource = {
+  ...sourceRecord,
+  kind: 'csv',
+  extraction: { unit: 'row', total_units: 2, processed_units: 2, truncated: false },
+  structured_table: {
+    schema_version: 'structured_table_v1', headers: ['cost'], rows: [['1']],
+    analysis_rows: [['1'], ['2']], analysis_row_numbers: [2, 3], total_row_count: 2,
+    analysis_complete: true, truncated: true,
+    deterministic_inspection: { schema_version: 'deterministic_table_inspection_v1', population_scope: 'FULL_TABLE', row_count: 2 },
+  },
+};
+const completeTableRegistry = {
+  ...registry,
+  extraction: {
+    ...registry.extraction,
+    status: 'COMPLETE', overall_completeness: 100,
+    sources: [{ ...registry.extraction.sources[0], kind: 'csv', unit: 'row', total_units: 2, processed_units: 2, completeness: 100, status: 'COMPLETE', truncated: false }],
+  },
+};
+assert.doesNotThrow(
+  () => validateEvidenceAcquisition([completeTableSource], completeTableRegistry, packets),
+  'complete deterministic populations remain valid when only model context is bounded',
+);
 
 const knowledgeIndex = { status: { source: 'built_in', document_count: 0, failure_count: 1 }, documents: [], failures: [] };
 const knowledgeSnapshot = validateKnowledgeAcquisition(knowledgeIndex);
@@ -129,11 +156,46 @@ const routedPacket = {
 routedPacket.char_count = routedPacket.text.length;
 const routedPackets = { ...packets, A: routedPacket };
 const routedSnapshot = validateEvidenceAcquisition([sourceRecord], registry, routedPackets);
+const validLocatedPhase1 = {
+  ...phase1,
+  phase_1_audit_logs: {
+    ...phase1.phase_1_audit_logs,
+    maturity: { ...phase1.phase_1_audit_logs.maturity, A1: { count: 1, evidence_quotes: [{ quote: chunk.text, chunk_id: chunk.chunk_id, source_id: chunk.source_id }] } },
+  },
+};
+assert.doesNotThrow(
+  () => validatePreSynthesisIntegrity(routedSnapshot, knowledgeSnapshot, registry, routedPackets, knowledgeIndex, validLocatedPhase1),
+  'positive evidence with an exact governed chunk locator and quote must pass',
+);
+const missingProvenancePhase1 = {
+  ...phase1,
+  phase_1_audit_logs: {
+    ...phase1.phase_1_audit_logs,
+    maturity: { ...phase1.phase_1_audit_logs.maturity, A1: { count: 1, evidence_quotes: [{ quote: chunk.text }] } },
+  },
+};
+assert.throws(
+  () => validatePreSynthesisIntegrity(routedSnapshot, knowledgeSnapshot, registry, routedPackets, knowledgeIndex, missingProvenancePhase1),
+  error => error instanceof PipelineIntegrityError && error.code === 'EVIDENCE_PACKET_INTEGRITY_FAILED',
+  'positive evidence without mandatory provenance must block synthesis',
+);
+const forgedQuotePhase1 = {
+  ...phase1,
+  phase_1_audit_logs: {
+    ...phase1.phase_1_audit_logs,
+    maturity: { ...phase1.phase_1_audit_logs.maturity, A1: { count: 1, evidence_quotes: [{ quote: 'A fabricated claim', chunk_id: chunk.chunk_id, source_id: chunk.source_id }] } },
+  },
+};
+assert.throws(
+  () => validatePreSynthesisIntegrity(routedSnapshot, knowledgeSnapshot, registry, routedPackets, knowledgeIndex, forgedQuotePhase1),
+  error => error instanceof PipelineIntegrityError && error.code === 'EVIDENCE_PACKET_INTEGRITY_FAILED',
+  'a quote that is absent from its cited chunk must block synthesis',
+);
 const invalidLocatorPhase1 = {
   ...phase1,
   phase_1_audit_logs: {
     ...phase1.phase_1_audit_logs,
-    maturity: { ...phase1.phase_1_audit_logs.maturity, A1: { count: 1, evidence_quotes: [{ chunk_id: 'missing-chunk', source_id: 'src-001' }] } },
+    maturity: { ...phase1.phase_1_audit_logs.maturity, A1: { count: 1, evidence_quotes: [{ quote: chunk.text, chunk_id: 'missing-chunk', source_id: 'src-001' }] } },
   },
 };
 assert.throws(
@@ -145,7 +207,7 @@ const mismatchedSheetPhase1 = {
   ...phase1,
   phase_1_audit_logs: {
     ...phase1.phase_1_audit_logs,
-    maturity: { ...phase1.phase_1_audit_logs.maturity, A1: { count: 1, evidence_quotes: [{ chunk_id: chunk.chunk_id, source_id: chunk.source_id, sheet_name: 'Wrong Sheet' }] } },
+    maturity: { ...phase1.phase_1_audit_logs.maturity, A1: { count: 1, evidence_quotes: [{ quote: chunk.text, chunk_id: chunk.chunk_id, source_id: chunk.source_id, sheet_name: 'Wrong Sheet' }] } },
   },
 };
 assert.throws(

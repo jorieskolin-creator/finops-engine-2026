@@ -165,11 +165,26 @@ const remoteKnowledgeReady = (index: RemoteKnowledgeBaseIndex): boolean =>
     && buildShadowKnowledgePacket(index, { batchId: domain, stage: 'evidence_check' }).readiness === 'READY'
   ));
 
-const isGovernedBoundedTable = (source: SourceRecord): boolean =>
-  (source.kind === 'csv' || source.kind === 'tsv')
-  && source.extraction?.unit === 'row'
-  && Boolean(source.structured_table)
-  && (source.extraction?.processed_units || 0) > 0;
+const hasCompleteDelimitedPopulation = (source: SourceRecord): boolean => {
+  if (source.kind !== 'csv' && source.kind !== 'tsv') return true;
+  const table = source.structured_table;
+  return Boolean(table
+    && table.analysis_complete === true
+    && Array.isArray(table.analysis_rows)
+    && table.analysis_rows.length === table.total_row_count
+    && Array.isArray(table.analysis_row_numbers)
+    && table.analysis_row_numbers.length === table.total_row_count
+    && new Set(table.analysis_row_numbers).size === table.total_row_count
+    && table.deterministic_inspection?.schema_version === 'deterministic_table_inspection_v1'
+    && table.deterministic_inspection.population_scope === 'FULL_TABLE'
+    && table.deterministic_inspection.row_count === table.total_row_count
+    && source.extraction?.unit === 'row'
+    && source.extraction.total_units === table.total_row_count
+    && source.extraction.processed_units === table.total_row_count
+    && source.extraction.truncated === false);
+};
+
+const normalizedEvidenceText = (value: string): string => value.replace(/\s+/g, ' ').trim().toLocaleLowerCase();
 
 export const validateEvidenceAcquisition = (
   sources: SourceRecord[],
@@ -188,9 +203,8 @@ export const validateEvidenceAcquisition = (
     throw new PipelineIntegrityError('EVIDENCE_PACKET_INTEGRITY_FAILED', 'acquisition');
   }
   const extractionFailed = registry.extraction.status === 'FAILED'
+    || sources.some(source => !hasCompleteDelimitedPopulation(source))
     || registry.extraction.sources.some(extraction => {
-      const source = sources.find(candidate => candidate.source_id === extraction.source_id);
-      if (source && isGovernedBoundedTable(source)) return false;
       return extraction.truncated
         || extraction.processed_units < extraction.total_units
         || extraction.quality === 'poor';
@@ -230,6 +244,8 @@ export const validateEvidenceAcquisition = (
       if (!chunk
         || packetChunkIds.has(item.chunk_id)
         || chunk.source_id !== item.source_id
+        || chunk.page_id !== item.page_id
+        || chunk.page_number !== item.page_number
         || chunk.sheet_name !== item.sheet_name
         || chunk.row_number !== item.row_number
         || chunk.visual_unit_id !== item.visual_unit_id
@@ -329,15 +345,27 @@ export const validatePreSynthesisIntegrity = (
     for (const stream of ['maturity', 'antipattern'] as const) {
       for (let index = 1; index <= 5; index++) {
         const item = phase1.phase_1_audit_logs[stream][`${domain}${index}`] as {
-          evidence_quotes?: Array<{ chunk_id?: string; source_id?: string; sheet_name?: string; row_number?: number }>;
+          count?: number;
+          evidence_quotes?: Array<{ quote?: string; chunk_id?: string; source_id?: string; page_id?: string; page_number?: number; sheet_name?: string; row_number?: number }>;
         } | undefined;
+        if ((item?.count || 0) > 0 && (item?.evidence_quotes?.length || 0) === 0) {
+          throw new PipelineIntegrityError('EVIDENCE_PACKET_INTEGRITY_FAILED', 'pre_synthesis', [domain]);
+        }
         for (const quote of item?.evidence_quotes || []) {
-          if (!quote.chunk_id) continue;
+          if (!quote.chunk_id || !quote.source_id || typeof quote.quote !== 'string') {
+            throw new PipelineIntegrityError('EVIDENCE_PACKET_INTEGRITY_FAILED', 'pre_synthesis', [domain]);
+          }
           const located = manifest.get(quote.chunk_id);
+          const chunk = registry.chunks.find(candidate => candidate.chunk_id === quote.chunk_id);
           if (!located
-            || (quote.source_id && quote.source_id !== located.source_id)
-            || (quote.sheet_name && quote.sheet_name !== located.sheet_name)
-            || (quote.row_number && quote.row_number !== located.row_number)) {
+            || !chunk
+            || quote.source_id !== located.source_id
+            || quote.page_id !== located.page_id
+            || quote.page_number !== located.page_number
+            || quote.sheet_name !== located.sheet_name
+            || quote.row_number !== located.row_number
+            || normalizedEvidenceText(quote.quote).length < 4
+            || !normalizedEvidenceText(chunk.text).includes(normalizedEvidenceText(quote.quote))) {
             throw new PipelineIntegrityError('EVIDENCE_PACKET_INTEGRITY_FAILED', 'pre_synthesis', [domain]);
           }
         }

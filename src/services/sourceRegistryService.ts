@@ -627,6 +627,7 @@ const renderChunk = (chunk: SourceChunk, relevance: SourceRelevanceTier): string
   const attrs = [
     `id="${escapeXml(chunk.chunk_id)}"`,
     `source_id="${escapeXml(chunk.source_id)}"`,
+    chunk.page_id ? `page_id="${escapeXml(chunk.page_id)}"` : '',
     chunk.page_number ? `page="${chunk.page_number}"` : '',
     chunk.sheet_name ? `sheet="${escapeXml(chunk.sheet_name)}"` : '',
     chunk.row_number ? `row="${chunk.row_number}"` : '',
