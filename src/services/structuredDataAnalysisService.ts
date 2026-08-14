@@ -104,8 +104,8 @@ const currenciesFor=(header:string,rows:string[][],index:number):string[]=>{
   for(const match of values.matchAll(/\b(USD|EUR|GBP|JPY|CNY|CAD|AUD)\b/gi))found.add(match[1].toUpperCase());if(found.has('USD'))found.delete('USD_OR_DOLLAR');return[...found].sort();
 };
 
-export const analyzeTaggingAllocationTable=(source:SourceRecord):DerivedAnalyticalEvidence|null=>{
-  const table=source.structured_table;
+export const analyzeTaggingAllocationTable=(source:SourceRecord, tableOverride?:StructuredTableData):DerivedAnalyticalEvidence|null=>{
+  const table=tableOverride||source.structured_table;
   if(!table)return null;
   const rows=analysisRows(table);
   const headers=table.headers.map(normalizeHeader);
@@ -181,4 +181,7 @@ export const analyzeTaggingAllocationTable=(source:SourceRecord):DerivedAnalytic
   };
 };
 
-export const analyzeStructuredSources=(sources:SourceRecord[]):DerivedAnalyticalEvidence[]=>sources.map(analyzeTaggingAllocationTable).filter((value):value is DerivedAnalyticalEvidence=>Boolean(value));
+export const analyzeStructuredSources=(sources:SourceRecord[]):DerivedAnalyticalEvidence[]=>sources.flatMap(source=>{
+  const tables=source.structured_tables?.filter(table=>table.model_eligible) || (source.structured_table?[source.structured_table]:[]);
+  return tables.map(table=>analyzeTaggingAllocationTable(source,table)).filter((value):value is DerivedAnalyticalEvidence=>Boolean(value));
+});

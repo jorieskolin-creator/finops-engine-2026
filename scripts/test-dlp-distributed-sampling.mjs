@@ -27,7 +27,8 @@ const source = (await readFile(new URL('../src/services/sourceRegistryService.ts
   .replace(
     "import { BATCH_TITLES } from '../knowledge_base';",
     "const BATCH_TITLES = { A: 'Cost Visibility & Allocation', B: 'Rate & Usage Optimization', C: 'Governance & Policy', D: 'Architecture & Engineering', E: 'Culture & Organization', F: 'GenAI & AI Cost Management' };"
-  );
+  )
+  .replace("import { renderStructuredTableContext } from './tableService';", "const renderStructuredTableContext=()=>'';");
 await writeFile(join(dir, 'sourceRegistryService.mjs'), transpile(source), 'utf8');
 
 const {

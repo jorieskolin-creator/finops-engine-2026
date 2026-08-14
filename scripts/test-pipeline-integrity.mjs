@@ -132,5 +132,17 @@ assert.throws(
   error => error instanceof PipelineIntegrityError && error.code === 'EVIDENCE_PACKET_INTEGRITY_FAILED',
   'evidence locators must resolve within the governed domain packet',
 );
+const mismatchedSheetPhase1 = {
+  ...phase1,
+  phase_1_audit_logs: {
+    ...phase1.phase_1_audit_logs,
+    maturity: { ...phase1.phase_1_audit_logs.maturity, A1: { count: 1, evidence_quotes: [{ chunk_id: chunk.chunk_id, source_id: chunk.source_id, sheet_name: 'Wrong Sheet' }] } },
+  },
+};
+assert.throws(
+  () => validatePreSynthesisIntegrity(routedSnapshot, knowledgeSnapshot, registry, routedPackets, knowledgeIndex, mismatchedSheetPhase1),
+  error => error instanceof PipelineIntegrityError && error.code === 'EVIDENCE_PACKET_INTEGRITY_FAILED',
+  'model-supplied sheet and row locators must match the governed packet manifest',
+);
 
 console.log('pipeline integrity tests passed');

@@ -492,6 +492,8 @@ export interface StructuredTableData {
   schema_version: 'structured_table_v1';
   sheet_name?: string;
   sheet_visibility?: 'visible' | 'hidden' | 'very_hidden';
+  /** Hidden/non-evidence workbook sheets are scanned locally but never routed to model context. */
+  model_eligible?: boolean;
   source_range?: string;
   header_row_number?: number;
   headers: string[];
@@ -542,6 +544,7 @@ export interface SourceRecord {
   text?: string;
   pages?: SourcePage[];
   structured_table?: StructuredTableData;
+  structured_tables?: StructuredTableData[];
   parse_warnings?: string[];
   extraction?: SourceExtractionMetadata;
   acquisition?: EvidenceSourceAcquisition;
@@ -659,6 +662,8 @@ export interface SourcePacketManifestItem {
   source_id: string;
   page_id?: string;
   page_number?: number;
+  sheet_name?: string;
+  row_number?: number;
   visual_unit_id?: string;
   bounding_box?: { x0: number; y0: number; x1: number; y1: number };
   type: SourceChunkType;

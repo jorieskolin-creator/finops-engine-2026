@@ -147,6 +147,7 @@ interface UploadedFile {
   text: string;
   pages?: SourcePage[];
   structuredTable?: StructuredTableData;
+  structuredTables?: StructuredTableData[];
   acquisition?: EvidenceSourceAcquisition;
   visualUnits?: VisualEvidenceUnit[];
   kind?: 'pdf' | 'html' | 'csv' | 'tsv' | 'json' | 'xlsx' | 'image';
@@ -790,15 +791,15 @@ const App: React.FC = () => {
           text = extracted.text;
           kind = 'xlsx';
           parseMetadata = {
-            rowCount: extracted.table.total_row_count,
-            renderedRowCount: extracted.table.rows.length,
-            analyzedRowCount: extracted.table.analysis_rows?.length || 0,
-            analysisComplete: extracted.table.analysis_complete,
+            rowCount: extracted.tables.reduce((sum, table) => sum + table.total_row_count, 0),
+            renderedRowCount: extracted.tables.filter(table => table.model_eligible).reduce((sum, table) => sum + table.rows.length, 0),
+            analyzedRowCount: extracted.tables.reduce((sum, table) => sum + (table.analysis_rows?.length || 0), 0),
+            analysisComplete: extracted.tables.every(table => table.analysis_complete),
             clippedCellCount: 0,
-            cellCharacterCoverageRatio: extracted.table.truncated ? undefined : 1,
+            cellCharacterCoverageRatio: extracted.tables.some(table => table.truncated) ? undefined : 1,
             warnings: extracted.warnings
           };
-          (file as any).__structuredTable = extracted.table;
+          (file as any).__structuredTables = extracted.tables;
         } else if (file.type.startsWith('image/') || /\.(png|jpe?g|webp)$/i.test(lowerName)) {
           const visualUnit = await extractImageOcr(file, acquisition.original_sha256);
           text = `Format: IMAGE_OCR\nOCR confidence: ${visualUnit.confidence}\nVisual interpretation: OCR text only; non-text visual semantics withheld.\n\n${visualUnit.text}`;
@@ -838,6 +839,7 @@ const App: React.FC = () => {
           text,
           pages: (file as any).__structuredPages,
           structuredTable: (file as any).__structuredTable,
+          structuredTables: (file as any).__structuredTables,
           acquisition,
           visualUnits: (file as any).__visualUnits,
           kind,
@@ -897,6 +899,7 @@ const App: React.FC = () => {
                   }
                 : { unit: 'document' as const, total_units: 1, processed_units: 1, truncated: false },
             structured_table:file.structuredTable,
+            structured_tables:file.structuredTables,
             ...(file.kind === 'image' ? {} : file.pages?.length ? {pages:file.pages} : {text:file.text})
           })));
       const data = await analyzeDocument(sources, update => {

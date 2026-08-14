@@ -30,7 +30,7 @@ export interface XlsxExtractionResult {
   archive_inspector: 'zipjs';
   archive_inspector_version: '2.8.49';
   text: string;
-  table: StructuredTableData;
+  tables: StructuredTableData[];
   native_charts: NativeChartEvidenceUnit[];
   sheets: XlsxSheetManifest[];
   warnings: string[];
@@ -207,107 +207,114 @@ export const parseXlsxBytes = async (bytes: Uint8Array, sourceHash?: string): Pr
   const sheetDetails = workbook.SheetNames.map((sheetName, index) => {
     const sheet = workbook.Sheets[sheetName];
     const visibility = visibilityFor(workbook.Workbook?.Sheets?.[index]?.Hidden);
-    return { sheetName, sheet, visibility, range: sheet['!ref'] };
-  });
-  const selected = sheetDetails.find(item => item.visibility === 'visible' && Boolean(item.range));
-  if (!selected?.range) throw new Error('XLSX_NO_VISIBLE_NONEMPTY_SHEET');
-  if (sheetDetails.some(item => item.sheetName !== selected.sheetName && Boolean(item.range))) {
-    // Until every worksheet becomes its own fully scanned ContentUnit, allowing
-    // another non-empty sheet would violate complete-source privacy inspection.
-    throw new Error('XLSX_MULTISHEET_ANALYSIS_NOT_IMPLEMENTED');
-  }
-
-  const range = XLSX.utils.decode_range(selected.range);
-  const rowCapacity = range.e.r - range.s.r + 1;
-  const columnCount = range.e.c - range.s.c + 1;
-  if (rowCapacity > MAX_ROWS + 1) throw new Error('XLSX_ROW_LIMIT_EXCEEDED');
-  if (columnCount > MAX_COLUMNS) throw new Error('XLSX_COLUMN_LIMIT_EXCEEDED');
-
-  let formulaCellCount = 0;
-  let formulaCachedValueMissingCount = 0;
-  let headerRow = -1;
-  const physicalRows: Array<{ rowNumber: number; values: string[] }> = [];
-  for (let rowIndex = range.s.r; rowIndex <= range.e.r; rowIndex++) {
-    const values: string[] = [];
-    for (let columnIndex = range.s.c; columnIndex <= range.e.c; columnIndex++) {
-      const cell = selected.sheet[XLSX.utils.encode_cell({ r: rowIndex, c: columnIndex })];
-      if (cell?.f) {
-        formulaCellCount++;
-        if (cell.v === undefined || cell.v === null) formulaCachedValueMissingCount++;
-      }
-      if (cell?.l?.Target && /^(?:https?:|file:|\\\\)/i.test(cell.l.Target)) throw new Error('XLSX_EXTERNAL_LINK_REJECTED');
-      values.push(cellText(cell));
-    }
-    if (values.some(Boolean)) {
-      if (headerRow < 0) headerRow = rowIndex;
-      physicalRows.push({ rowNumber: rowIndex + 1, values });
-    }
-  }
-  if (headerRow < 0 || physicalRows.length === 0) throw new Error('XLSX_SELECTED_SHEET_EMPTY');
-
-  const headers = uniqueHeaders(physicalRows[0].values, range.s.c);
-  const dataRows = physicalRows.slice(1);
-  const analysisRows = dataRows.map(row => row.values);
-  const analysisRowNumbers = dataRows.map(row => row.rowNumber);
-  const sample = selectDeterministicTableSample({
-    headers,
-    rows: analysisRows,
-    rowNumbers: analysisRowNumbers,
-    sourceHash
+    return { sheetName, sheet, visibility, range: sheet['!ref'], sheetIndex: index };
   });
   const warnings: string[] = [];
-  if (dataRows.length > sample.rows.length) warnings.push(`Selected sheet has ${dataRows.length} data rows; a deterministic bounded sample of ${sample.rows.length} rows was included for model context.`);
-  if (formulaCellCount > 0) warnings.push(`${formulaCellCount} formula cell(s) were recorded from cached values; formulas were not executed.`);
-  if (formulaCachedValueMissingCount > 0) warnings.push(`${formulaCachedValueMissingCount} formula cell(s) had no cached value and were treated as empty.`);
   warnings.push(...archive.unsupportedObjects.map(code => `Unsupported workbook object: ${code}.`));
   warnings.push(...archive.nativeCharts.flatMap(chart => chart.warnings.map(code => `Native chart ${chart.chart_id}: ${code}.`)));
+  const nonEmptySheets = sheetDetails.filter(item => Boolean(item.range));
+  if (!nonEmptySheets.some(item => item.visibility === 'visible')) throw new Error('XLSX_NO_VISIBLE_NONEMPTY_SHEET');
+  const extractedSheetNames = new Set(nonEmptySheets.map(item => item.sheetName));
+  let totalDataRows = 0;
+  const tables: StructuredTableData[] = [];
+  for (const [tableIndex, detail] of nonEmptySheets.entries()) {
+    const range = XLSX.utils.decode_range(detail.range!);
+    const rowCapacity = range.e.r - range.s.r + 1;
+    const columnCount = range.e.c - range.s.c + 1;
+    if (rowCapacity > MAX_ROWS + 1) throw new Error('XLSX_ROW_LIMIT_EXCEEDED');
+    if (columnCount > MAX_COLUMNS) throw new Error('XLSX_COLUMN_LIMIT_EXCEEDED');
+
+    let formulaCellCount = 0;
+    let formulaCachedValueMissingCount = 0;
+    let headerRow = -1;
+    const physicalRows: Array<{ rowNumber: number; values: string[] }> = [];
+    for (let rowIndex = range.s.r; rowIndex <= range.e.r; rowIndex++) {
+      const values: string[] = [];
+      for (let columnIndex = range.s.c; columnIndex <= range.e.c; columnIndex++) {
+        const cell = detail.sheet[XLSX.utils.encode_cell({ r: rowIndex, c: columnIndex })];
+        if (cell?.f) {
+          formulaCellCount++;
+          if (cell.v === undefined || cell.v === null) formulaCachedValueMissingCount++;
+        }
+        if (cell?.l?.Target && /^(?:https?:|file:|\\\\)/i.test(cell.l.Target)) throw new Error('XLSX_EXTERNAL_LINK_REJECTED');
+        values.push(cellText(cell));
+      }
+      if (values.some(Boolean)) {
+        if (headerRow < 0) headerRow = rowIndex;
+        physicalRows.push({ rowNumber: rowIndex + 1, values });
+      }
+    }
+    if (headerRow < 0 || physicalRows.length === 0) continue;
+    const headers = uniqueHeaders(physicalRows[0].values, range.s.c);
+    const dataRows = physicalRows.slice(1);
+    totalDataRows += dataRows.length;
+    if (totalDataRows > MAX_ROWS) throw new Error('XLSX_TOTAL_ROW_LIMIT_EXCEEDED');
+    const analysisRows = dataRows.map(row => row.values);
+    const analysisRowNumbers = dataRows.map(row => row.rowNumber);
+    const sample = selectDeterministicTableSample({
+      headers,
+      rows: analysisRows,
+      rowNumbers: analysisRowNumbers,
+      sourceHash: sourceHash ? `${sourceHash}:${detail.sheetIndex}` : undefined
+    });
+    if (dataRows.length > sample.rows.length) warnings.push(`Workbook sheet ${detail.sheetIndex + 1} has ${dataRows.length} data rows; a deterministic bounded sample of ${sample.rows.length} rows was included for model context.`);
+    if (formulaCellCount > 0) warnings.push(`Workbook sheet ${detail.sheetIndex + 1} contains ${formulaCellCount} formula cell(s); cached values were recorded and formulas were not executed.`);
+    if (formulaCachedValueMissingCount > 0) warnings.push(`Workbook sheet ${detail.sheetIndex + 1} contains ${formulaCachedValueMissingCount} formula cell(s) without cached values; they were treated as empty.`);
+    const nativeCharts = archive.nativeCharts.filter(chart =>
+      chart.sheet_name === detail.sheetName || ((!chart.sheet_name || !extractedSheetNames.has(chart.sheet_name)) && tableIndex === 0)
+    );
+    tables.push({
+      schema_version: 'structured_table_v1',
+      sheet_name: detail.sheetName,
+      sheet_visibility: detail.visibility,
+      model_eligible: detail.visibility === 'visible',
+      source_range: detail.range,
+      header_row_number: headerRow + 1,
+      headers,
+      rows: sample.rows.map(row => row.map(boundedCell)),
+      analysis_rows: analysisRows,
+      analysis_row_numbers: analysisRowNumbers,
+      sampled_row_numbers: sample.rowNumbers,
+      sampled_row_reasons: sample.reasons,
+      sample_strategy_version: TABLE_SAMPLE_STRATEGY_VERSION,
+      sample_seed_hash: sample.seedHash,
+      total_row_count: dataRows.length,
+      analysis_complete: true,
+      formula_cell_count: formulaCellCount,
+      formula_cached_value_missing_count: formulaCachedValueMissingCount,
+      merged_range_count: detail.sheet['!merges']?.length || 0,
+      native_charts: nativeCharts,
+      unsupported_objects: archive.unsupportedObjects,
+      truncated: dataRows.length > sample.rows.length || sample.rows.some(row => row.some(value => value.length > MAX_CELL_CHARS))
+    });
+  }
+  if (!tables.some(table => table.model_eligible)) throw new Error('XLSX_NO_VISIBLE_NONEMPTY_SHEET');
 
   const sheets: XlsxSheetManifest[] = sheetDetails.map(item => ({
     sheet_name: item.sheetName,
     visibility: item.visibility,
     source_range: item.range,
-    selected: item.sheetName === selected.sheetName,
-    reason: item.sheetName === selected.sheetName
+    selected: item.visibility === 'visible' && Boolean(item.range),
+    reason: item.visibility === 'visible' && Boolean(item.range)
       ? 'SELECTED'
-      : item.visibility !== 'visible'
-        ? 'HIDDEN'
-        : !item.range
-          ? 'EMPTY'
-          : 'ADDITIONAL_VISIBLE_SHEET'
+      : !item.range
+        ? 'EMPTY'
+        : item.visibility !== 'visible'
+          ? 'HIDDEN'
+          : 'EMPTY'
   }));
-  for (const sheet of sheets.filter(item => !item.selected)) warnings.push(`Sheet "${sheet.sheet_name}" was not analyzed (${sheet.reason}).`);
-
-  const table: StructuredTableData = {
-    schema_version: 'structured_table_v1',
-    sheet_name: selected.sheetName,
-    sheet_visibility: selected.visibility,
-    source_range: selected.range,
-    header_row_number: headerRow + 1,
-    headers,
-    rows: sample.rows.map(row => row.map(boundedCell)),
-    analysis_rows: analysisRows,
-    analysis_row_numbers: analysisRowNumbers,
-    sampled_row_numbers: sample.rowNumbers,
-    sampled_row_reasons: sample.reasons,
-    sample_strategy_version: TABLE_SAMPLE_STRATEGY_VERSION,
-    sample_seed_hash: sample.seedHash,
-    total_row_count: dataRows.length,
-    analysis_complete: true,
-    formula_cell_count: formulaCellCount,
-    formula_cached_value_missing_count: formulaCachedValueMissingCount,
-    merged_range_count: selected.sheet['!merges']?.length || 0,
-    native_charts: archive.nativeCharts,
-    unsupported_objects: archive.unsupportedObjects,
-    truncated: dataRows.length > sample.rows.length || sample.rows.some(row => row.some(value => value.length > MAX_CELL_CHARS))
-  };
+  sheets.forEach((sheet, index) => {
+    if (sheet.reason === 'HIDDEN') warnings.push(`Workbook sheet ${index + 1} was fully inspected locally but withheld from model context (${sheet.reason}).`);
+  });
+  const visibleTables = tables.filter(table => table.model_eligible);
   return {
     schema_version: 'xlsx_extraction_v1',
     parser: 'sheetjs_ce',
     parser_version: '0.20.3',
     archive_inspector: 'zipjs',
     archive_inspector_version: '2.8.49',
-    text: renderStructuredTableContext(table, 'XLSX'),
-    table,
+    text: visibleTables.map(table => renderStructuredTableContext(table, 'XLSX')).join('\n\n'),
+    tables,
     native_charts: archive.nativeCharts,
     sheets,
     warnings

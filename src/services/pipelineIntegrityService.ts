@@ -213,6 +213,8 @@ export const validateEvidenceAcquisition = (
       if (!chunk
         || packetChunkIds.has(item.chunk_id)
         || chunk.source_id !== item.source_id
+        || chunk.sheet_name !== item.sheet_name
+        || chunk.row_number !== item.row_number
         || chunk.visual_unit_id !== item.visual_unit_id
         || JSON.stringify(chunk.bounding_box) !== JSON.stringify(item.bounding_box)
         || !packet.text.includes(`id="${item.chunk_id}"`)
@@ -303,12 +305,15 @@ export const validatePreSynthesisIntegrity = (
     for (const stream of ['maturity', 'antipattern'] as const) {
       for (let index = 1; index <= 5; index++) {
         const item = phase1.phase_1_audit_logs[stream][`${domain}${index}`] as {
-          evidence_quotes?: Array<{ chunk_id?: string; source_id?: string }>;
+          evidence_quotes?: Array<{ chunk_id?: string; source_id?: string; sheet_name?: string; row_number?: number }>;
         } | undefined;
         for (const quote of item?.evidence_quotes || []) {
           if (!quote.chunk_id) continue;
           const located = manifest.get(quote.chunk_id);
-          if (!located || (quote.source_id && quote.source_id !== located.source_id)) {
+          if (!located
+            || (quote.source_id && quote.source_id !== located.source_id)
+            || (quote.sheet_name && quote.sheet_name !== located.sheet_name)
+            || (quote.row_number && quote.row_number !== located.row_number)) {
             throw new PipelineIntegrityError('EVIDENCE_PACKET_INTEGRITY_FAILED', 'pre_synthesis', [domain]);
           }
         }

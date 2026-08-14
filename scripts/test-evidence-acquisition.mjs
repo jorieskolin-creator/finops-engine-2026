@@ -114,4 +114,16 @@ const chartPrivacy = sanitizeEvidenceSources([{
 assert.equal(chartPrivacy.decision.decision, 'PASS_WITH_REDACTIONS', 'full native chart caches must be privacy scanned even beyond bounded text context');
 assert.deepEqual(chartPrivacy.sources[0].structured_table.native_charts[0].series[0].categories, ['public', '[EMAIL_REDACTED]']);
 
+const hiddenSheetPrivacy = sanitizeEvidenceSources([{
+  schema_version: 'source_record_v1', source_id: 'src-workbook', source_name: 'multisheet.xlsx', kind: 'xlsx',
+  text: 'Format: XLSX\nOnly visible sheet context is model eligible.',
+  structured_tables: [
+    { schema_version: 'structured_table_v1', sheet_name: 'Visible', sheet_visibility: 'visible', model_eligible: true, headers: ['owner'], rows: [['Alice']], analysis_rows: [['Alice']], total_row_count: 1, analysis_complete: true, truncated: false },
+    { schema_version: 'structured_table_v1', sheet_name: 'Hidden', sheet_visibility: 'hidden', model_eligible: false, headers: ['credential'], rows: [['password=hidden-secret-value']], analysis_rows: [['password=hidden-secret-value']], total_row_count: 1, analysis_complete: true, truncated: false }
+  ]
+}]);
+assert.equal(hiddenSheetPrivacy.decision.decision, 'BLOCK', 'prohibited content in a hidden sheet must block before packetization');
+assert.ok(hiddenSheetPrivacy.decision.findings.some(finding => finding.kind === 'credential_assignment'));
+assert.equal(hiddenSheetPrivacy.decision.scanned_table_cell_count, 4, 'visible and hidden sheet headers and complete populations must all be scanned');
+
 console.log('evidence acquisition tests passed');

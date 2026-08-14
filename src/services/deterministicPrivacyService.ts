@@ -79,40 +79,43 @@ export const sanitizeEvidenceSources = (sources: SourceRecord[]): {
       scannedTextUnitCount++;
       return { ...page, text: sanitizeText(page.text, source.source_id, findings) };
     });
-    const table = source.structured_table;
-    const completeRows = table?.analysis_rows || table?.rows || [];
-    const sanitizedCompleteRows = completeRows.map(row => row.map(cell => {
-      scannedTableCellCount++;
-      return sanitizeText(cell, source.source_id, findings);
-    }));
     const sanitizeChartText = (value: string): string => {
       scannedTextUnitCount++;
       return sanitizeText(value, source.source_id, findings);
     };
-    const sanitizedTable = table ? {
-      ...table,
-      sheet_name: table.sheet_name ? sanitizeText(table.sheet_name, source.source_id, findings) : undefined,
-      headers: table.headers.map(header => {
+    const sanitizeTable = (table: NonNullable<SourceRecord['structured_table']>) => {
+      const completeRows = table.analysis_rows || table.rows;
+      const sanitizedCompleteRows = completeRows.map(row => row.map(cell => {
         scannedTableCellCount++;
-        return sanitizeText(header, source.source_id, findings);
-      }),
-      rows: table.rows.map(row => row.map(applyKnownRedactions)),
-      analysis_rows: table.analysis_rows ? sanitizedCompleteRows : undefined,
-      native_charts: table.native_charts?.map(chart => ({
-        ...chart,
-        chart_part: sanitizeChartText(chart.chart_part),
-        sheet_name: chart.sheet_name ? sanitizeChartText(chart.sheet_name) : undefined,
-        title: chart.title ? sanitizeChartText(chart.title) : undefined,
-        axis_titles: chart.axis_titles.map(sanitizeChartText),
-        series: chart.series.map(series => ({
-          ...series,
-          name: series.name ? sanitizeChartText(series.name) : undefined,
-          category_range: series.category_range ? sanitizeChartText(series.category_range) : undefined,
-          value_range: series.value_range ? sanitizeChartText(series.value_range) : undefined,
-          categories: series.categories.map(sanitizeChartText)
+        return sanitizeText(cell, source.source_id, findings);
+      }));
+      return {
+        ...table,
+        sheet_name: table.sheet_name ? sanitizeText(table.sheet_name, source.source_id, findings) : undefined,
+        headers: table.headers.map(header => {
+          scannedTableCellCount++;
+          return sanitizeText(header, source.source_id, findings);
+        }),
+        rows: table.rows.map(row => row.map(applyKnownRedactions)),
+        analysis_rows: table.analysis_rows ? sanitizedCompleteRows : undefined,
+        native_charts: table.native_charts?.map(chart => ({
+          ...chart,
+          chart_part: sanitizeChartText(chart.chart_part),
+          sheet_name: chart.sheet_name ? sanitizeChartText(chart.sheet_name) : undefined,
+          title: chart.title ? sanitizeChartText(chart.title) : undefined,
+          axis_titles: chart.axis_titles.map(sanitizeChartText),
+          series: chart.series.map(series => ({
+            ...series,
+            name: series.name ? sanitizeChartText(series.name) : undefined,
+            category_range: series.category_range ? sanitizeChartText(series.category_range) : undefined,
+            value_range: series.value_range ? sanitizeChartText(series.value_range) : undefined,
+            categories: series.categories.map(sanitizeChartText)
+          }))
         }))
-      }))
-    } : undefined;
+      };
+    };
+    const sanitizedTable = source.structured_table ? sanitizeTable(source.structured_table) : undefined;
+    const sanitizedTables = source.structured_tables?.map(sanitizeTable);
     const sanitizedVisualUnits = source.visual_units?.map(unit => {
       scannedTextUnitCount++;
       const text = sanitizeText(unit.text, source.source_id, findings);
@@ -137,6 +140,7 @@ export const sanitizeEvidenceSources = (sources: SourceRecord[]): {
       text: sanitizedText,
       pages: sanitizedPages,
       structured_table: sanitizedTable,
+      structured_tables: sanitizedTables,
       visual_units: sanitizedVisualUnits
     };
   });
@@ -144,18 +148,13 @@ export const sanitizeEvidenceSources = (sources: SourceRecord[]): {
   const residual = sanitizedSources.some(source =>
     (source.text !== undefined && containsProhibitedRawValue(source.text))
     || Boolean(source.pages?.some(page => containsProhibitedRawValue(page.text)))
-    || Boolean(source.structured_table && (
-      [
-        source.structured_table.sheet_name || '',
-        ...source.structured_table.headers,
-        ...source.structured_table.rows.flat(),
-        ...(source.structured_table.analysis_rows?.flat() || [])
-      ].some(containsProhibitedRawValue)
-      || source.structured_table.native_charts?.some(chart => [
+    || Boolean([...(source.structured_tables || []), ...(source.structured_table ? [source.structured_table] : [])].some(table => (
+      [table.sheet_name || '', ...table.headers, ...table.rows.flat(), ...(table.analysis_rows?.flat() || [])].some(containsProhibitedRawValue)
+      || table.native_charts?.some(chart => [
           chart.chart_part, chart.sheet_name || '', chart.title || '', ...chart.axis_titles,
           ...chart.series.flatMap(series => [series.name || '', series.category_range || '', series.value_range || '', ...series.categories])
         ].some(containsProhibitedRawValue))
-    ))
+    )))
     || Boolean(source.visual_units?.some(unit => containsProhibitedRawValue(unit.text)
       || unit.words.some(word => containsProhibitedRawValue(word.text))))
   );

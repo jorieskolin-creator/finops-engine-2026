@@ -61,17 +61,17 @@ XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet([]), 'Hidden Empt
 workbook.Workbook = { Sheets: [{ Hidden: 0 }, { Hidden: 1 }] };
 const bytes = new Uint8Array(XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx', compression: true }));
 const parsed = await parseXlsxBytes(bytes);
+const primaryTable = parsed.tables[0];
 assert.equal(parsed.parser_version, '0.20.3');
-assert.equal(parsed.table.sheet_name, 'Cloud Costs');
-assert.equal(parsed.table.source_range, 'A1:D3');
-assert.deepEqual(parsed.table.sampled_row_numbers, [2, 3]);
-assert.equal(parsed.table.formula_cell_count, 2);
-assert.equal(parsed.table.formula_cached_value_missing_count, 0);
-assert.equal(parsed.table.analysis_complete, true);
-assert.equal(parsed.table.sample_strategy_version, 'deterministic_table_sample_v1');
-assert.deepEqual(parsed.table.sampled_row_reasons, [['FULL_POPULATION'], ['FULL_POPULATION']]);
-assert.equal(parsed.sheets[1].reason, 'HIDDEN');
-assert.match(parsed.warnings.join(' '), /Hidden Empty.*not analyzed/);
+assert.equal(primaryTable.sheet_name, 'Cloud Costs');
+assert.equal(primaryTable.source_range, 'A1:D3');
+assert.deepEqual(primaryTable.sampled_row_numbers, [2, 3]);
+assert.equal(primaryTable.formula_cell_count, 2);
+assert.equal(primaryTable.formula_cached_value_missing_count, 0);
+assert.equal(primaryTable.analysis_complete, true);
+assert.equal(primaryTable.sample_strategy_version, 'deterministic_table_sample_v1');
+assert.deepEqual(primaryTable.sampled_row_reasons, [['FULL_POPULATION'], ['FULL_POPULATION']]);
+assert.equal(parsed.sheets[1].reason, 'EMPTY');
 
 const largeWorkbook = XLSX.utils.book_new();
 XLSX.utils.book_append_sheet(largeWorkbook, XLSX.utils.aoa_to_sheet([
@@ -80,17 +80,26 @@ XLSX.utils.book_append_sheet(largeWorkbook, XLSX.utils.aoa_to_sheet([
 ]), 'Large Costs');
 const largeBytes = new Uint8Array(XLSX.write(largeWorkbook, { type: 'buffer', bookType: 'xlsx', compression: true }));
 const largeParsed = await parseXlsxBytes(largeBytes, 'd'.repeat(64));
-assert.equal(largeParsed.table.rows.length, 150);
-assert.equal(largeParsed.table.sample_seed_hash, 'd'.repeat(64));
-assert.ok(largeParsed.table.sampled_row_numbers.includes(182), 'XLSX numeric extreme must retain its physical worksheet row');
-assert.ok(largeParsed.table.sampled_row_numbers.includes(201), 'XLSX last-row boundary must be represented');
+assert.equal(largeParsed.tables[0].rows.length, 150);
+assert.equal(largeParsed.tables[0].sample_seed_hash, `${'d'.repeat(64)}:0`);
+assert.ok(largeParsed.tables[0].sampled_row_numbers.includes(182), 'XLSX numeric extreme must retain its physical worksheet row');
+assert.ok(largeParsed.tables[0].sampled_row_numbers.includes(201), 'XLSX last-row boundary must be represented');
 assert.match(largeParsed.warnings.join(' '), /deterministic bounded sample of 150 rows/);
 
 const multisheetWorkbook = XLSX.utils.book_new();
 XLSX.utils.book_append_sheet(multisheetWorkbook, XLSX.utils.aoa_to_sheet([['Owner'], ['Alice']]), 'First');
-XLSX.utils.book_append_sheet(multisheetWorkbook, XLSX.utils.aoa_to_sheet([['Secret'], ['must be inspected']]), 'Second');
+XLSX.utils.book_append_sheet(multisheetWorkbook, XLSX.utils.aoa_to_sheet([['Owner'], ['Bob']]), 'Second');
+XLSX.utils.book_append_sheet(multisheetWorkbook, XLSX.utils.aoa_to_sheet([['Secret'], ['hidden-value']]), 'Hidden Evidence');
+multisheetWorkbook.Workbook = { Sheets: [{ Hidden: 0 }, { Hidden: 0 }, { Hidden: 1 }] };
 const multisheetBytes = new Uint8Array(XLSX.write(multisheetWorkbook, { type: 'buffer', bookType: 'xlsx' }));
-await assert.rejects(() => parseXlsxBytes(multisheetBytes), /XLSX_MULTISHEET_ANALYSIS_NOT_IMPLEMENTED/);
+const multisheet = await parseXlsxBytes(multisheetBytes, 'e'.repeat(64));
+assert.equal(multisheet.tables.length, 3, 'every non-empty sheet must be extracted for complete-source privacy inspection');
+assert.deepEqual(multisheet.tables.map(table => table.model_eligible), [true, true, false]);
+assert.match(multisheet.text, /Sheet: First/);
+assert.match(multisheet.text, /Sheet: Second/);
+assert.doesNotMatch(multisheet.text, /Hidden Evidence|hidden-value/, 'hidden sheet content must not enter model context');
+assert.match(multisheet.warnings.join(' '), /Workbook sheet 3.*fully inspected locally but withheld/);
+assert.doesNotMatch(multisheet.warnings.join(' '), /Hidden Evidence/, 'parser warnings must not expose raw worksheet names');
 
 const linkedWorkbook = XLSX.utils.book_new();
 const linked = XLSX.utils.aoa_to_sheet([['Owner'], ['Alice']]);

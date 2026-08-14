@@ -28,6 +28,10 @@ const source = (await readFile(new URL('../src/services/sourceRegistryService.ts
   .replace(
     "import { BATCH_TITLES } from '../knowledge_base';",
     "const BATCH_TITLES = { A: 'Cost Visibility & Allocation', B: 'Rate & Usage Optimization', C: 'Governance & Policy', D: 'Architecture & Engineering', E: 'Culture & Organization', F: 'GenAI & AI Cost Management' };"
+  )
+  .replace(
+    "import { renderStructuredTableContext } from './tableService';",
+    "const renderStructuredTableContext = table => `Format: XLSX\\nSheet: ${table.sheet_name}\\n[TABLE_SAMPLE]\\n${table.headers.join(' | ')}\\n${table.rows.map((row,index)=>`[ROW ${table.sampled_row_numbers?.[index]||index+1} reasons=FULL_POPULATION] ${row.join(' | ')}`).join('\\n')}\\n[/TABLE_SAMPLE]`;"
   );
 await writeFile(join(dir, 'sourceRegistryService.mjs'), transpile(source), 'utf8');
 
@@ -58,6 +62,13 @@ assert.equal(clippedTableRegistry.extraction.overall_completeness,80);assert.equ
 const sampledTableRegistry=buildSourceRegistry([{schema_version:'source_record_v1',source_id:'table-2',source_name:'sampled.csv',kind:'csv',text:'Format: CSV\n[TABLE_SAMPLE]\nowner | cost\n[ROW 242 reasons=NUMERIC_EXTREME,SOURCE_HASH_SEEDED] alice | 999999\n[/TABLE_SAMPLE]',extraction:{unit:'row',total_units:300,processed_units:300,text_coverage_ratio:1,truncated:false}}]);
 assert.equal(sampledTableRegistry.chunks.find(chunk=>chunk.type==='table_row').row_number,242,'sample row locator must survive source-registry chunking');
 assert.match(sampledTableRegistry.chunks.find(chunk=>chunk.type==='table_row').text,/Selection reasons: NUMERIC_EXTREME,SOURCE_HASH_SEEDED/);
+const workbookRegistry=buildSourceRegistry([{schema_version:'source_record_v1',source_id:'book-1',source_name:'costs.xlsx',kind:'xlsx',text:'visible workbook context',extraction:{unit:'row',total_units:2,processed_units:2,text_coverage_ratio:1,truncated:false},structured_tables:[
+  {schema_version:'structured_table_v1',sheet_name:'Visible Costs',sheet_visibility:'visible',model_eligible:true,source_range:'A1:B2',header_row_number:1,headers:['Owner','Spend'],rows:[['Alice','100']],analysis_rows:[['Alice','100']],analysis_row_numbers:[2],sampled_row_numbers:[2],sampled_row_reasons:[['FULL_POPULATION']],sample_strategy_version:'deterministic_table_sample_v1',sample_seed_hash:'seed-visible',total_row_count:1,analysis_complete:true,truncated:false},
+  {schema_version:'structured_table_v1',sheet_name:'Hidden Notes',sheet_visibility:'hidden',model_eligible:false,source_range:'A1:A2',header_row_number:1,headers:['Secret'],rows:[['hidden-value']],analysis_rows:[['hidden-value']],analysis_row_numbers:[2],sampled_row_numbers:[2],sampled_row_reasons:[['FULL_POPULATION']],sample_strategy_version:'deterministic_table_sample_v1',sample_seed_hash:'seed-hidden',total_row_count:1,analysis_complete:true,truncated:false}
+]}]);
+assert.ok(workbookRegistry.chunks.some(chunk=>chunk.sheet_name==='Visible Costs'&&chunk.row_number===2));
+assert.ok(workbookRegistry.chunks.every(chunk=>chunk.sheet_name!=='Hidden Notes'),'hidden sheets must be privacy-scanned but never routed');
+const workbookPacket=buildDomainPackets(workbookRegistry).A;assert.ok(workbookPacket.manifest.some(item=>item.sheet_name==='Visible Costs'&&item.row_number===2));assert.doesNotMatch(workbookPacket.text,/hidden-value|Hidden Notes/);
 
 const packets = buildDomainPackets(registry);
 assert.ok(packets.A.text.includes('tagging ownership'), 'A packet should include cost visibility evidence');

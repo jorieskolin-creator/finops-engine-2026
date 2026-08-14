@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import ts from '../node_modules/typescript/lib/typescript.js';
 const compile=source=>ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.ES2022,target:ts.ScriptTarget.ES2020,importsNotUsedAsValues:ts.ImportsNotUsedAsValues.Remove}}).outputText;
 const dir=await mkdtemp(join(tmpdir(),'finops-retrieval-'));
-const registrySource=(await readFile(new URL('../src/services/sourceRegistryService.ts',import.meta.url),'utf8')).replace("import { BATCH_TITLES } from '../knowledge_base';","const BATCH_TITLES={A:'A',B:'B',C:'C',D:'D',E:'E',F:'F'};");await writeFile(join(dir,'sourceRegistryService.mjs'),compile(registrySource));
+const registrySource=(await readFile(new URL('../src/services/sourceRegistryService.ts',import.meta.url),'utf8')).replace("import { BATCH_TITLES } from '../knowledge_base';","const BATCH_TITLES={A:'A',B:'B',C:'C',D:'D',E:'E',F:'F'};").replace("import { renderStructuredTableContext } from './tableService';","const renderStructuredTableContext=()=>'';");await writeFile(join(dir,'sourceRegistryService.mjs'),compile(registrySource));
 const retrievalSource=(await readFile(new URL('../src/services/boundedRetrievalService.ts',import.meta.url),'utf8')).replace("'./sourceRegistryService'","'./sourceRegistryService.mjs'");await writeFile(join(dir,'boundedRetrievalService.mjs'),compile(retrievalSource));
 const {buildBoundedRetrievalTrace}=await import(`file://${join(dir,'boundedRetrievalService.mjs')}`);
 const route=(domain,tier,score)=>({domain,tier,score,reasons:[]});const chunk=(id,text,routing)=>({chunk_id:id,source_id:'src-1',source_name:'PRIVATE_SOURCE_CANARY',type:'text',text,routing});

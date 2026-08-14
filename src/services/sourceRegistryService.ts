@@ -14,6 +14,7 @@ import type {
   SourceRelevanceTier,
   EvidencePrivacyDecision
 } from '../types';
+import { renderStructuredTableContext } from './tableService';
 
 const TARGET_PACKET_CHARS = 35000;
 const HARD_PACKET_CHARS = 45000;
@@ -89,6 +90,35 @@ const validNativeCharts = (charts: NonNullable<SourceRecord['structured_table']>
     });
   });
 };
+
+const validStructuredTable = (table: NonNullable<SourceRecord['structured_table']>): boolean =>
+  table.schema_version === 'structured_table_v1'
+  && Array.isArray(table.headers) && table.headers.length <= 200
+  && Array.isArray(table.rows) && table.rows.length <= 150 && Number.isInteger(table.total_row_count)
+  && table.total_row_count >= table.rows.length && typeof table.truncated === 'boolean'
+  && !(table.total_row_count > table.rows.length && !table.truncated)
+  && table.headers.every(header => typeof header === 'string' && header.length <= 243)
+  && table.rows.every(row => Array.isArray(row) && row.length <= 200 && row.every(cell => typeof cell === 'string' && cell.length <= 243))
+  && validNativeCharts(table.native_charts)
+  && (table.analysis_rows === undefined || (
+    Array.isArray(table.analysis_rows) && table.analysis_rows.length === table.total_row_count
+    && table.analysis_complete === true
+    && table.analysis_rows.every(row => Array.isArray(row) && row.length <= 200 && row.every(cell => typeof cell === 'string'))
+  ))
+  && (table.sampled_row_numbers === undefined || (
+    Array.isArray(table.sampled_row_numbers) && table.sampled_row_numbers.length === table.rows.length
+    && table.sampled_row_numbers.every(rowNumber => Number.isInteger(rowNumber) && rowNumber >= 1)
+  ))
+  && (table.sampled_row_reasons === undefined || (
+    Array.isArray(table.sampled_row_reasons) && table.sampled_row_reasons.length === table.rows.length
+    && table.sampled_row_reasons.every(reasons => Array.isArray(reasons) && reasons.length > 0 && reasons.every(reason => typeof reason === 'string' && reason.length <= 100))
+  ))
+  && (table.sample_strategy_version === undefined || table.sample_strategy_version === 'deterministic_table_sample_v1')
+  && (table.sample_seed_hash === undefined || (typeof table.sample_seed_hash === 'string' && table.sample_seed_hash.length >= 8 && table.sample_seed_hash.length <= 80))
+  && (table.analysis_row_numbers === undefined || (
+    Array.isArray(table.analysis_row_numbers) && table.analysis_row_numbers.length === (table.analysis_rows?.length || 0)
+    && table.analysis_row_numbers.every(rowNumber => Number.isInteger(rowNumber) && rowNumber >= 1)
+  ));
 
 const escapeXml = (value: string): string => value
   .replace(/&/g, '&amp;')
@@ -304,36 +334,21 @@ const validateSourceRecords = (records: SourceRecord[]): void => {
       }
       if (nonEmptyPageCount === 0) throw new Error('INVALID_SOURCE_CONTENT');
     }
-    if (record.structured_table) {
-      const table=record.structured_table;
-      if((record.kind!=='csv'&&record.kind!=='tsv'&&record.kind!=='xlsx')||table.schema_version!=='structured_table_v1'
-        ||!Array.isArray(table.headers)||table.headers.length>200
-        ||!Array.isArray(table.rows)||table.rows.length>150||!Number.isInteger(table.total_row_count)
-        ||table.total_row_count<table.rows.length||typeof table.truncated!=='boolean'
-        ||(table.total_row_count>table.rows.length&&!table.truncated)
-        ||table.headers.some(header=>typeof header!=='string'||header.length>243)
-        ||table.rows.some(row=>!Array.isArray(row)||row.length>200||row.some(cell=>typeof cell!=='string'||cell.length>243))
-        ||!validNativeCharts(table.native_charts)
-        ||(table.analysis_rows!==undefined&&(
-          !Array.isArray(table.analysis_rows)||table.analysis_rows.length!==table.total_row_count
-          ||table.analysis_complete!==true
-          ||table.analysis_rows.some(row=>!Array.isArray(row)||row.length>200||row.some(cell=>typeof cell!=='string'))
-        ))
-        ||(table.sampled_row_numbers!==undefined&&(
-          !Array.isArray(table.sampled_row_numbers)||table.sampled_row_numbers.length!==table.rows.length
-          ||table.sampled_row_numbers.some(rowNumber=>!Number.isInteger(rowNumber)||rowNumber<1)
-        ))
-        ||(table.sampled_row_reasons!==undefined&&(
-          !Array.isArray(table.sampled_row_reasons)||table.sampled_row_reasons.length!==table.rows.length
-          ||table.sampled_row_reasons.some(reasons=>!Array.isArray(reasons)||reasons.length===0||reasons.some(reason=>typeof reason!=='string'||reason.length>100))
-        ))
-        ||(table.sample_strategy_version!==undefined&&table.sample_strategy_version!=='deterministic_table_sample_v1')
-        ||(table.sample_seed_hash!==undefined&&(typeof table.sample_seed_hash!=='string'||table.sample_seed_hash.length<8||table.sample_seed_hash.length>80))
-        ||(table.analysis_row_numbers!==undefined&&(
-          !Array.isArray(table.analysis_row_numbers)||table.analysis_row_numbers.length!==(table.analysis_rows?.length||0)
-          ||table.analysis_row_numbers.some(rowNumber=>!Number.isInteger(rowNumber)||rowNumber<1)
-        ))) {
-        throw new Error('INVALID_STRUCTURED_TABLE');
+    const tables = [...(record.structured_table ? [record.structured_table] : []), ...(record.structured_tables || [])];
+    if ((record.structured_tables !== undefined && (
+      record.kind !== 'xlsx' || !Array.isArray(record.structured_tables) || record.structured_tables.length === 0
+      || record.structured_tables.length > 20 || record.structured_table !== undefined
+    )) || (tables.length > 0 && !['csv', 'tsv', 'xlsx'].includes(record.kind))
+      || tables.some(table => !validStructuredTable(table))) {
+      throw new Error('INVALID_STRUCTURED_TABLE');
+    }
+    if (record.kind === 'xlsx' && record.structured_tables) {
+      const sheetNames = new Set<string>();
+      if (!record.structured_tables.some(table => table.model_eligible)) throw new Error('INVALID_STRUCTURED_TABLE');
+      for (const table of record.structured_tables) {
+        if (!table.sheet_name || sheetNames.has(table.sheet_name)
+          || table.model_eligible !== (table.sheet_visibility === 'visible')) throw new Error('INVALID_STRUCTURED_TABLE');
+        sheetNames.add(table.sheet_name);
       }
     }
     if (record.visual_units) {
@@ -401,11 +416,40 @@ export const buildSourceRegistry = (records: SourceRecord[]): SourceRegistry => 
       }
       return;
     }
+    warnings.push(...(doc.parse_warnings || []).map(warning => `${sourceId}: ${warning}`));
+    let chunkIndex = 0;
+    if (doc.kind === 'xlsx' && doc.structured_tables) {
+      for (const table of doc.structured_tables.filter(item => item.model_eligible)) {
+        const context = renderStructuredTableContext(table, 'XLSX');
+        chunks.push({
+          chunk_id: chunkIdFor(sourceId, chunkIndex++),
+          source_id: sourceId,
+          source_name: doc.source_name,
+          type: 'table_profile',
+          text: context,
+          sheet_name: table.sheet_name,
+          char_start: 0,
+          char_end: context.length,
+          routing: routeChunk(context)
+        });
+        for (const row of tableRowChunks(context)) {
+          chunks.push({
+            chunk_id: chunkIdFor(sourceId, chunkIndex++),
+            source_id: sourceId,
+            source_name: doc.source_name,
+            type: 'table_row',
+            text: row.text,
+            sheet_name: table.sheet_name,
+            row_number: row.rowNumber,
+            routing: routeChunk(row.text)
+          });
+        }
+      }
+      return;
+    }
     const pages: Array<{ pageNumber?: number; text: string }> = doc.pages?.length
       ? doc.pages.filter(page => page.text.trim().length > 0).map(page => ({ pageNumber:page.page_number, text:page.text }))
       : [{ text:doc.text || '' }];
-    warnings.push(...(doc.parse_warnings || []).map(warning => `${sourceId}: ${warning}`));
-    let chunkIndex = 0;
     for (const page of pages) {
       const isTable = !page.pageNumber && /\[TABLE_SAMPLE\]/.test(page.text);
       if (isTable) {
@@ -501,6 +545,8 @@ const renderChunk = (chunk: SourceChunk, relevance: SourceRelevanceTier): string
     `id="${escapeXml(chunk.chunk_id)}"`,
     `source_id="${escapeXml(chunk.source_id)}"`,
     chunk.page_number ? `page="${chunk.page_number}"` : '',
+    chunk.sheet_name ? `sheet="${escapeXml(chunk.sheet_name)}"` : '',
+    chunk.row_number ? `row="${chunk.row_number}"` : '',
     chunk.visual_unit_id ? `visual_unit_id="${escapeXml(chunk.visual_unit_id)}"` : '',
     chunk.bounding_box ? `region="${chunk.bounding_box.x0},${chunk.bounding_box.y0},${chunk.bounding_box.x1},${chunk.bounding_box.y1}"` : '',
     chunk.ocr_confidence !== undefined ? `ocr_confidence="${chunk.ocr_confidence}"` : '',
@@ -516,6 +562,8 @@ const manifestFor = (chunk: SourceChunk, relevance: SourceRelevanceTier): Source
   source_id: chunk.source_id,
   page_id: chunk.page_id,
   page_number: chunk.page_number,
+  sheet_name: chunk.sheet_name,
+  row_number: chunk.row_number,
   visual_unit_id: chunk.visual_unit_id,
   bounding_box: chunk.bounding_box,
   type: chunk.type,
