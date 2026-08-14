@@ -1,7 +1,7 @@
 import { TextWriter, Uint8ArrayReader, ZipReader, type FileEntry } from '@zip.js/zip.js';
 import * as XLSX from 'xlsx';
 import type { NativeChartEvidenceUnit, StructuredTableData } from '../types';
-import { renderStructuredTableContext } from './tableService';
+import { renderStructuredTableContext, selectDeterministicTableSample, TABLE_SAMPLE_STRATEGY_VERSION } from './tableService';
 
 const MAX_ARCHIVE_ENTRIES = 5_000;
 const MAX_UNCOMPRESSED_BYTES = 100 * 1024 * 1024;
@@ -10,7 +10,6 @@ const MAX_COMPRESSION_RATIO = 200;
 const MAX_SHEETS = 20;
 const MAX_ROWS = 250_000;
 const MAX_COLUMNS = 200;
-const MAX_CONTEXT_ROWS = 150;
 const MAX_CELL_CHARS = 240;
 const MAX_CHARTS = 50;
 const MAX_CHART_SERIES = 20;
@@ -192,7 +191,7 @@ const uniqueHeaders = (values: string[], startColumn: number): string[] => {
   });
 };
 
-export const parseXlsxBytes = async (bytes: Uint8Array): Promise<XlsxExtractionResult> => {
+export const parseXlsxBytes = async (bytes: Uint8Array, sourceHash?: string): Promise<XlsxExtractionResult> => {
   const archive = await inspectXlsxArchive(bytes);
   const workbook = XLSX.read(bytes, {
     type: 'array',
@@ -250,9 +249,14 @@ export const parseXlsxBytes = async (bytes: Uint8Array): Promise<XlsxExtractionR
   const dataRows = physicalRows.slice(1);
   const analysisRows = dataRows.map(row => row.values);
   const analysisRowNumbers = dataRows.map(row => row.rowNumber);
-  const sampled = dataRows.slice(0, MAX_CONTEXT_ROWS);
+  const sample = selectDeterministicTableSample({
+    headers,
+    rows: analysisRows,
+    rowNumbers: analysisRowNumbers,
+    sourceHash
+  });
   const warnings: string[] = [];
-  if (dataRows.length > MAX_CONTEXT_ROWS) warnings.push(`Selected sheet has ${dataRows.length} data rows; first ${MAX_CONTEXT_ROWS} rows were included for model context.`);
+  if (dataRows.length > sample.rows.length) warnings.push(`Selected sheet has ${dataRows.length} data rows; a deterministic bounded sample of ${sample.rows.length} rows was included for model context.`);
   if (formulaCellCount > 0) warnings.push(`${formulaCellCount} formula cell(s) were recorded from cached values; formulas were not executed.`);
   if (formulaCachedValueMissingCount > 0) warnings.push(`${formulaCachedValueMissingCount} formula cell(s) had no cached value and were treated as empty.`);
   warnings.push(...archive.unsupportedObjects.map(code => `Unsupported workbook object: ${code}.`));
@@ -280,10 +284,13 @@ export const parseXlsxBytes = async (bytes: Uint8Array): Promise<XlsxExtractionR
     source_range: selected.range,
     header_row_number: headerRow + 1,
     headers,
-    rows: sampled.map(row => row.values.map(boundedCell)),
+    rows: sample.rows.map(row => row.map(boundedCell)),
     analysis_rows: analysisRows,
     analysis_row_numbers: analysisRowNumbers,
-    sampled_row_numbers: sampled.map(row => row.rowNumber),
+    sampled_row_numbers: sample.rowNumbers,
+    sampled_row_reasons: sample.reasons,
+    sample_strategy_version: TABLE_SAMPLE_STRATEGY_VERSION,
+    sample_seed_hash: sample.seedHash,
     total_row_count: dataRows.length,
     analysis_complete: true,
     formula_cell_count: formulaCellCount,
@@ -291,7 +298,7 @@ export const parseXlsxBytes = async (bytes: Uint8Array): Promise<XlsxExtractionR
     merged_range_count: selected.sheet['!merges']?.length || 0,
     native_charts: archive.nativeCharts,
     unsupported_objects: archive.unsupportedObjects,
-    truncated: dataRows.length > MAX_CONTEXT_ROWS || sampled.some(row => row.values.some(value => value.length > MAX_CELL_CHARS))
+    truncated: dataRows.length > sample.rows.length || sample.rows.some(row => row.some(value => value.length > MAX_CELL_CHARS))
   };
   return {
     schema_version: 'xlsx_extraction_v1',

@@ -2,7 +2,7 @@ import type { XlsxExtractionResult } from './xlsxCore';
 
 const XLSX_WORKER_TIMEOUT_MS = 20_000;
 
-export const extractXlsx = async (file: File): Promise<XlsxExtractionResult> => {
+export const extractXlsx = async (file: File, sourceHash: string): Promise<XlsxExtractionResult> => {
   const bytes = await file.arrayBuffer();
   const worker = new Worker(new URL('./xlsx.worker.ts', import.meta.url), { type: 'module' });
   return new Promise<XlsxExtractionResult>((resolve, reject) => {
@@ -21,6 +21,6 @@ export const extractXlsx = async (file: File): Promise<XlsxExtractionResult> => 
       worker.terminate();
       reject(new Error('XLSX_WORKER_FAILED'));
     };
-    worker.postMessage({ bytes }, [bytes]);
+    worker.postMessage({ bytes, sourceHash }, [bytes]);
   });
 };

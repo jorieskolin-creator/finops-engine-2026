@@ -501,6 +501,9 @@ export interface StructuredTableData {
   analysis_rows?: string[][];
   analysis_row_numbers?: number[];
   sampled_row_numbers?: number[];
+  sampled_row_reasons?: string[][];
+  sample_strategy_version?: 'deterministic_table_sample_v1';
+  sample_seed_hash?: string;
   total_row_count: number;
   analysis_complete?: boolean;
   formula_cell_count?: number;

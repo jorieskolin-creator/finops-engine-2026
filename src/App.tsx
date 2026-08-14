@@ -773,20 +773,20 @@ const App: React.FC = () => {
           kind = 'html';
         } else if (file.type === 'text/csv' || lowerName.endsWith('.csv')) {
           const raw = await file.text();
-          const rendered = renderDelimitedTableForAnalysis(raw, { fileName: file.name, delimiter: ',' });
+          const rendered = renderDelimitedTableForAnalysis(raw, { fileName: file.name, delimiter: ',', sourceHash: acquisition.original_sha256 });
           text = rendered.text;
           kind = 'csv';
           parseMetadata = { rowCount: rendered.rowCount, renderedRowCount: rendered.renderedRowCount, analyzedRowCount: rendered.structuredTable.analysis_rows?.length || 0, analysisComplete: rendered.structuredTable.analysis_complete, clippedCellCount: rendered.clippedCellCount, cellCharacterCoverageRatio: rendered.cellCharacterCoverageRatio, warnings: rendered.warnings };
           (file as any).__structuredTable = rendered.structuredTable;
         } else if (file.type === 'text/tab-separated-values' || lowerName.endsWith('.tsv')) {
           const raw = await file.text();
-          const rendered = renderDelimitedTableForAnalysis(raw, { fileName: file.name, delimiter: '\t' });
+          const rendered = renderDelimitedTableForAnalysis(raw, { fileName: file.name, delimiter: '\t', sourceHash: acquisition.original_sha256 });
           text = rendered.text;
           kind = 'tsv';
           parseMetadata = { rowCount: rendered.rowCount, renderedRowCount: rendered.renderedRowCount, analyzedRowCount: rendered.structuredTable.analysis_rows?.length || 0, analysisComplete: rendered.structuredTable.analysis_complete, clippedCellCount: rendered.clippedCellCount, cellCharacterCoverageRatio: rendered.cellCharacterCoverageRatio, warnings: rendered.warnings };
           (file as any).__structuredTable = rendered.structuredTable;
         } else if (lowerName.endsWith('.xlsx')) {
-          const extracted = await extractXlsx(file);
+          const extracted = await extractXlsx(file, acquisition.original_sha256);
           text = extracted.text;
           kind = 'xlsx';
           parseMetadata = {

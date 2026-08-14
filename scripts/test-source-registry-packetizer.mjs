@@ -55,6 +55,9 @@ assert.deepEqual(registry.extraction.sources[0].warning_codes, ['PARSE_WARNING',
 assert.doesNotMatch(JSON.stringify(registry.extraction), /PRIVATE_WARNING_CANARY/, 'free-form parser warnings must not enter quality snapshots');
 const clippedTableRegistry=buildSourceRegistry([{schema_version:'source_record_v1',source_id:'table-1',source_name:'costs.csv',kind:'csv',text:'Format: CSV\n[TABLE_SAMPLE]\nservice | clipped value\n[/TABLE_SAMPLE]',extraction:{unit:'row',total_units:1,processed_units:1,text_coverage_ratio:0.8,truncated:true}}]);
 assert.equal(clippedTableRegistry.extraction.overall_completeness,80);assert.equal(clippedTableRegistry.extraction.status,'PARTIAL');assert.deepEqual(clippedTableRegistry.extraction.sources[0].warning_codes,['TRUNCATED']);
+const sampledTableRegistry=buildSourceRegistry([{schema_version:'source_record_v1',source_id:'table-2',source_name:'sampled.csv',kind:'csv',text:'Format: CSV\n[TABLE_SAMPLE]\nowner | cost\n[ROW 242 reasons=NUMERIC_EXTREME,SOURCE_HASH_SEEDED] alice | 999999\n[/TABLE_SAMPLE]',extraction:{unit:'row',total_units:300,processed_units:300,text_coverage_ratio:1,truncated:false}}]);
+assert.equal(sampledTableRegistry.chunks.find(chunk=>chunk.type==='table_row').row_number,242,'sample row locator must survive source-registry chunking');
+assert.match(sampledTableRegistry.chunks.find(chunk=>chunk.type==='table_row').text,/Selection reasons: NUMERIC_EXTREME,SOURCE_HASH_SEEDED/);
 
 const packets = buildDomainPackets(registry);
 assert.ok(packets.A.text.includes('tagging ownership'), 'A packet should include cost visibility evidence');

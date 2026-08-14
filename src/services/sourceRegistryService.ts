@@ -206,13 +206,14 @@ const tableRowChunks = (text: string): Array<{ rowNumber: number; text: string }
     .map(line => normalize(line))
     .filter(Boolean);
   const header = lines[0] || '';
-  return lines.slice(1, 31).map((row, idx) => {
-    const located = row.match(/^\[ROW\s+(\d+)\]\s*(.*)$/i);
+  return lines.slice(1, 151).map((row, idx) => {
+    const located = row.match(/^\[ROW\s+(\d+)(?:\s+reasons=([A-Z0-9_,-]+))?\]\s*(.*)$/i);
     const rowNumber = located ? Number(located[1]) : idx + 1;
-    const values = located ? located[2] : row;
+    const reasons = located?.[2];
+    const values = located ? located[3] : row;
     return {
       rowNumber,
-      text: `Table evidence sample row ${rowNumber}\nHeaders: ${header}\nValues: ${values}`
+      text: `Table evidence sample row ${rowNumber}${reasons ? `\nSelection reasons: ${reasons}` : ''}\nHeaders: ${header}\nValues: ${values}`
     };
   });
 };
@@ -322,6 +323,12 @@ const validateSourceRecords = (records: SourceRecord[]): void => {
           !Array.isArray(table.sampled_row_numbers)||table.sampled_row_numbers.length!==table.rows.length
           ||table.sampled_row_numbers.some(rowNumber=>!Number.isInteger(rowNumber)||rowNumber<1)
         ))
+        ||(table.sampled_row_reasons!==undefined&&(
+          !Array.isArray(table.sampled_row_reasons)||table.sampled_row_reasons.length!==table.rows.length
+          ||table.sampled_row_reasons.some(reasons=>!Array.isArray(reasons)||reasons.length===0||reasons.some(reason=>typeof reason!=='string'||reason.length>100))
+        ))
+        ||(table.sample_strategy_version!==undefined&&table.sample_strategy_version!=='deterministic_table_sample_v1')
+        ||(table.sample_seed_hash!==undefined&&(typeof table.sample_seed_hash!=='string'||table.sample_seed_hash.length<8||table.sample_seed_hash.length>80))
         ||(table.analysis_row_numbers!==undefined&&(
           !Array.isArray(table.analysis_row_numbers)||table.analysis_row_numbers.length!==(table.analysis_rows?.length||0)
           ||table.analysis_row_numbers.some(rowNumber=>!Number.isInteger(rowNumber)||rowNumber<1)

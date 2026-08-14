@@ -38,13 +38,27 @@ assert.equal(csv.structuredTable.truncated, false);
 const largeCsv = renderDelimitedTableForAnalysis(`service,cost\n${Array.from({ length: 151 }, (_, index) => `svc-${index},${index}`).join('\n')}`, {
   fileName: 'large-costs.csv',
   delimiter: ',',
+  sourceHash: 'a'.repeat(64),
 });
 assert.equal(largeCsv.rowCount, 151);
 assert.equal(largeCsv.renderedRowCount, 150);
 assert.equal(largeCsv.structuredTable.truncated, true);
 assert.equal(largeCsv.structuredTable.analysis_rows.length, 151);
 assert.equal(largeCsv.structuredTable.analysis_complete, true);
-assert.match(largeCsv.warnings.join(' '), /first 150 rows/);
+assert.equal(largeCsv.structuredTable.sample_strategy_version, 'deterministic_table_sample_v1');
+assert.equal(largeCsv.structuredTable.sample_seed_hash, 'a'.repeat(64));
+assert.ok(largeCsv.structuredTable.sampled_row_numbers.includes(152), 'last-row boundary must be represented');
+assert.match(largeCsv.warnings.join(' '), /deterministic bounded sample of 150 rows/);
+
+const samplingRaw = `owner,cost\n${Array.from({ length: 300 }, (_, index) => `${index % 17 === 0 ? '' : `owner-${index}`},${index === 240 ? 999999 : index}`).join('\n')}`;
+const deterministicSampleA = renderDelimitedTableForAnalysis(samplingRaw, { fileName: 'sample.csv', delimiter: ',', sourceHash: 'b'.repeat(64) });
+const deterministicSampleARepeat = renderDelimitedTableForAnalysis(samplingRaw, { fileName: 'sample.csv', delimiter: ',', sourceHash: 'b'.repeat(64) });
+const deterministicSampleB = renderDelimitedTableForAnalysis(samplingRaw, { fileName: 'sample.csv', delimiter: ',', sourceHash: 'c'.repeat(64) });
+assert.deepEqual(deterministicSampleA.structuredTable.sampled_row_numbers, deterministicSampleARepeat.structuredTable.sampled_row_numbers, 'same source hash must reproduce the same sample');
+assert.notDeepEqual(deterministicSampleA.structuredTable.sampled_row_numbers, deterministicSampleB.structuredTable.sampled_row_numbers, 'source hash participates in bounded random selection');
+assert.ok(deterministicSampleA.structuredTable.sampled_row_numbers.includes(242), 'numeric extreme row must be selected with its exact CSV row locator');
+assert.ok(deterministicSampleA.structuredTable.sampled_row_reasons.some(reasons => reasons.includes('MISSING_RECOGNIZED_FIELD')));
+assert.match(deterministicSampleA.text, /\[ROW 242 reasons=[^\]]*NUMERIC_EXTREME/);
 
 const clippedCsv = renderDelimitedTableForAnalysis(`service,description\ncompute,${'x'.repeat(300)}`, {
   fileName: 'long-cell.csv',

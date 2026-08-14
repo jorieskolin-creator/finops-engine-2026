@@ -68,8 +68,23 @@ assert.deepEqual(parsed.table.sampled_row_numbers, [2, 3]);
 assert.equal(parsed.table.formula_cell_count, 2);
 assert.equal(parsed.table.formula_cached_value_missing_count, 0);
 assert.equal(parsed.table.analysis_complete, true);
+assert.equal(parsed.table.sample_strategy_version, 'deterministic_table_sample_v1');
+assert.deepEqual(parsed.table.sampled_row_reasons, [['FULL_POPULATION'], ['FULL_POPULATION']]);
 assert.equal(parsed.sheets[1].reason, 'HIDDEN');
 assert.match(parsed.warnings.join(' '), /Hidden Empty.*not analyzed/);
+
+const largeWorkbook = XLSX.utils.book_new();
+XLSX.utils.book_append_sheet(largeWorkbook, XLSX.utils.aoa_to_sheet([
+  ['Owner', 'Spend'],
+  ...Array.from({ length: 200 }, (_, index) => [`owner-${index}`, index === 180 ? 999999 : index]),
+]), 'Large Costs');
+const largeBytes = new Uint8Array(XLSX.write(largeWorkbook, { type: 'buffer', bookType: 'xlsx', compression: true }));
+const largeParsed = await parseXlsxBytes(largeBytes, 'd'.repeat(64));
+assert.equal(largeParsed.table.rows.length, 150);
+assert.equal(largeParsed.table.sample_seed_hash, 'd'.repeat(64));
+assert.ok(largeParsed.table.sampled_row_numbers.includes(182), 'XLSX numeric extreme must retain its physical worksheet row');
+assert.ok(largeParsed.table.sampled_row_numbers.includes(201), 'XLSX last-row boundary must be represented');
+assert.match(largeParsed.warnings.join(' '), /deterministic bounded sample of 150 rows/);
 
 const multisheetWorkbook = XLSX.utils.book_new();
 XLSX.utils.book_append_sheet(multisheetWorkbook, XLSX.utils.aoa_to_sheet([['Owner'], ['Alice']]), 'First');
