@@ -654,6 +654,12 @@ export interface SourceChunk {
   visual_unit_id?: string;
   bounding_box?: { x0: number; y0: number; x1: number; y1: number };
   ocr_confidence?: number;
+  ocr_extraction_method?: VisualEvidenceUnit['extraction_method'];
+  ocr_engine_version?: VisualEvidenceUnit['engine_version'];
+  ocr_language?: VisualEvidenceUnit['language'];
+  post_ocr_redaction_status?: Exclude<VisualEvidenceUnit['post_ocr_redaction_status'], 'PENDING'>;
+  visual_interpretation_status?: VisualEvidenceUnit['visual_interpretation_status'];
+  withheld_visual_region_count?: number;
   char_start?: number;
   char_end?: number;
   parse_warnings?: string[];
@@ -690,6 +696,13 @@ export interface SourcePacketManifestItem {
   row_number?: number;
   visual_unit_id?: string;
   bounding_box?: { x0: number; y0: number; x1: number; y1: number };
+  ocr_confidence?: number;
+  ocr_extraction_method?: VisualEvidenceUnit['extraction_method'];
+  ocr_engine_version?: VisualEvidenceUnit['engine_version'];
+  ocr_language?: VisualEvidenceUnit['language'];
+  post_ocr_redaction_status?: Exclude<VisualEvidenceUnit['post_ocr_redaction_status'], 'PENDING'>;
+  visual_interpretation_status?: VisualEvidenceUnit['visual_interpretation_status'];
+  withheld_visual_region_count?: number;
   type: SourceChunkType;
   relevance: SourceRelevanceTier;
   routed_domains: string[];
@@ -736,6 +749,7 @@ export interface EvidenceLaneStagePacket {
   };
   privacy_decision: EvidencePrivacyDecision['decision'];
   acquisition_readiness: SourceRegistryRuntimeStatus['acquisition_readiness']['status'];
+  acquisition_readiness_reasons: string[];
   acquisition_binding: {
     registry_hash: string;
     packet_manifest_hash: string;
@@ -996,6 +1010,7 @@ export interface ContextPacketTrace {
   evidence_stage_packet_hash?: string;
   evidence_stage_packet_schema?: EvidenceLaneStagePacket['schema_version'];
   acquisition_readiness?: EvidenceLaneStagePacket['acquisition_readiness'];
+  acquisition_readiness_reasons?: EvidenceLaneStagePacket['acquisition_readiness_reasons'];
   privacy_decision?: EvidenceLaneStagePacket['privacy_decision'];
   included_chunk_ids: string[];
   included_chunk_count: number;

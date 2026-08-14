@@ -105,6 +105,12 @@ const stableRegistryValue = (registry: SourceRegistry): string => JSON.stringify
       visual_unit_id: chunk.visual_unit_id,
       bounding_box: chunk.bounding_box,
       ocr_confidence: chunk.ocr_confidence,
+      ocr_extraction_method: chunk.ocr_extraction_method,
+      ocr_engine_version: chunk.ocr_engine_version,
+      ocr_language: chunk.ocr_language,
+      post_ocr_redaction_status: chunk.post_ocr_redaction_status,
+      visual_interpretation_status: chunk.visual_interpretation_status,
+      withheld_visual_region_count: chunk.withheld_visual_region_count,
       type: chunk.type,
       text: chunk.text,
       image_hash: chunk.image ? hashString(chunk.image.data) : undefined,
@@ -217,6 +223,13 @@ export const validateEvidenceAcquisition = (
         || chunk.row_number !== item.row_number
         || chunk.visual_unit_id !== item.visual_unit_id
         || JSON.stringify(chunk.bounding_box) !== JSON.stringify(item.bounding_box)
+        || chunk.ocr_confidence !== item.ocr_confidence
+        || chunk.ocr_extraction_method !== item.ocr_extraction_method
+        || chunk.ocr_engine_version !== item.ocr_engine_version
+        || chunk.ocr_language !== item.ocr_language
+        || chunk.post_ocr_redaction_status !== item.post_ocr_redaction_status
+        || chunk.visual_interpretation_status !== item.visual_interpretation_status
+        || chunk.withheld_visual_region_count !== item.withheld_visual_region_count
         || !packet.text.includes(`id="${item.chunk_id}"`)
         || !packet.text.includes(`source_id="${item.source_id}"`)) {
         throw new PipelineIntegrityError('EVIDENCE_PACKET_INTEGRITY_FAILED', 'acquisition', [domain]);

@@ -48,6 +48,9 @@ const textualManifest = {
 const visualManifest = {
   chunk_id: 'src-002-v001-c001', source_id: 'src-002', type: 'image',
   visual_unit_id: 'visual-aaaaaaaaaaaaaaaaaaaaaaaa', bounding_box: { x0: 0, y0: 0, x1: 800, y1: 600 },
+  ocr_confidence: 88, ocr_extraction_method: 'local_ocr', ocr_engine_version: 'tesseract.js@7.0.0',
+  ocr_language: 'eng', post_ocr_redaction_status: 'PASSED', visual_interpretation_status: 'OCR_TEXT_ONLY',
+  withheld_visual_region_count: 1,
   relevance: 'medium', routed_domains: ['A']
 };
 const sourcePacket = {
@@ -96,6 +99,7 @@ assert.deepEqual(packet.sanitized_visual_evidence, [visualManifest]);
 assert.deepEqual(packet.derived_evidence, [], 'shadow-only deterministic metrics must not reach model context');
 assert.equal(packet.coverage.signal_state, 'ROUTED_EVIDENCE');
 assert.equal(packet.acquisition_binding.source_packet_hash, sourcePacketHash);
+assert.deepEqual(packet.acquisition_readiness_reasons, readiness.reasons);
 assert.equal(packet.acquisition_binding.packet_manifest_hash, readiness.packet_manifest_hash);
 assert.equal(packet.withheld_content.shadow_derived_evidence_count, 1);
 assert.equal(packet.withheld_content.uninspected_visual_region_count, 1);
@@ -103,10 +107,20 @@ assert.equal(packet.withheld_content.raw_image_payload_count, 0);
 assert.match(packet.text, /knowledge_context\[\] is intentionally empty/);
 assert.match(packet.text, /<EVIDENCE_MANIFEST count="1">/);
 assert.match(packet.text, /<SANITIZED_VISUAL_EVIDENCE_MANIFEST count="1">/);
+assert.match(packet.text, /PACKET_COVERAGE_WARNINGS_PRESENT/);
 assert.match(packet.text, /No report-eligible deterministic analytical evidence is approved/);
 assert.match(packet.text, /<CUSTOMER_EVIDENCE>[\s\S]*owner allocation evidence/);
 assert.doesNotThrow(() => assertEvidenceLaneStagePacket(packet));
 assert.throws(() => assertEvidenceLaneStagePacket({ ...packet, text: `${packet.text} tampered` }), /INTEGRITY_FAILED/);
+assert.throws(() => buildEvidenceLaneStagePackets({
+  source_packets: { A: { ...sourcePacket, manifest: [textualManifest, { ...visualManifest, ocr_engine_version: undefined }] } },
+  source_packet_hashes: { A: hashSourcePacket({ ...sourcePacket, manifest: [textualManifest, { ...visualManifest, ocr_engine_version: undefined }] }) },
+  derived_evidence: [], privacy_decision: privacyDecision,
+  acquisition_readiness: {
+    ...readiness,
+    packet_manifest_hash: hashString(JSON.stringify({ A: hashSourcePacket({ ...sourcePacket, manifest: [textualManifest, { ...visualManifest, ocr_engine_version: undefined }] }) }))
+  }
+}), /VISUAL_EVIDENCE_PROVENANCE_INCOMPLETE/, 'visual evidence without complete OCR and redaction provenance must not enter a stage packet');
 
 const unapprovedClaim = { ...shadowDerived, mode: 'authoritative', report_eligible: true };
 const unapprovedPacket = buildEvidenceLaneStagePackets({

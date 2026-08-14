@@ -38,7 +38,9 @@ sanitized_visual_evidence[] contains local-OCR text evidence with region provena
 derived_evidence[] contains only registry-approved, report-eligible deterministic calculations.
 knowledge_context[] is intentionally empty in the Customer Evidence lane. Knowledge is supplied separately and is never customer proof.
 </ROLE_BOUNDARY>
-<ACQUISITION_STATE privacy_decision="${packet.privacy_decision}" readiness="${packet.acquisition_readiness}" />
+<ACQUISITION_STATE privacy_decision="${packet.privacy_decision}" readiness="${packet.acquisition_readiness}">
+${packet.acquisition_readiness_reasons.join('\n') || 'No acquisition readiness warnings.'}
+</ACQUISITION_STATE>
 <ACQUISITION_BINDING registry_hash="${packet.acquisition_binding.registry_hash}" packet_manifest_hash="${packet.acquisition_binding.packet_manifest_hash}" source_packet_hash="${packet.acquisition_binding.source_packet_hash}" privacy_decision_hash="${packet.acquisition_binding.privacy_decision_hash}" />
 <COVERAGE weak="${packet.coverage.weak}" signal_state="${packet.coverage.signal_state}" candidates="${packet.coverage.candidate_chunks}" included="${packet.coverage.included_chunks}" omitted="${packet.coverage.omitted_relevant_chunks}">
 ${packet.coverage.notes.join('\n')}
@@ -96,6 +98,26 @@ export const buildEvidenceLaneStagePackets = (input: {
     }
     const evidence = sourcePacket.manifest.filter(item => item.type !== 'image');
     const sanitizedVisualEvidence = sourcePacket.manifest.filter(item => item.type === 'image');
+    if (sanitizedVisualEvidence.some(item =>
+      !item.visual_unit_id
+      || !item.bounding_box
+      || item.ocr_confidence === undefined
+      || item.ocr_extraction_method !== 'local_ocr'
+      || item.ocr_engine_version !== 'tesseract.js@7.0.0'
+      || item.ocr_language !== 'eng'
+      || !['PASSED', 'PASSED_WITH_REDACTIONS'].includes(item.post_ocr_redaction_status || '')
+      || item.visual_interpretation_status !== 'OCR_TEXT_ONLY'
+      || !Number.isInteger(item.withheld_visual_region_count)
+      || item.withheld_visual_region_count! < 1
+    )) throw new Error(`VISUAL_EVIDENCE_PROVENANCE_INCOMPLETE:${domainId}`);
+    const withheldVisualRegionsByUnit = new Map<string, number>();
+    for (const item of sanitizedVisualEvidence) {
+      withheldVisualRegionsByUnit.set(
+        item.visual_unit_id!,
+        Math.max(withheldVisualRegionsByUnit.get(item.visual_unit_id!) || 0, item.withheld_visual_region_count!)
+      );
+    }
+    const withheldVisualRegionCount = [...withheldVisualRegionsByUnit.values()].reduce((sum, count) => sum + count, 0);
     const domainDerived = input.derived_evidence.filter(item =>
       isDerivedEvidenceApprovedForPacket(item) && domainForEvidence(item) === domainId
     );
@@ -130,13 +152,14 @@ export const buildEvidenceLaneStagePackets = (input: {
       },
       withheld_content: {
         shadow_derived_evidence_count: shadowDerivedCount,
-        uninspected_visual_region_count: sanitizedVisualEvidence.length,
+        uninspected_visual_region_count: withheldVisualRegionCount,
         raw_image_payload_count: 0,
         reasons
       },
       policy: { permitted_uses: [...PERMITTED_USES], forbidden_uses: [...FORBIDDEN_USES] },
       privacy_decision: input.privacy_decision.decision,
       acquisition_readiness: input.acquisition_readiness.status,
+      acquisition_readiness_reasons: [...input.acquisition_readiness.reasons],
       acquisition_binding: {
         registry_hash: input.acquisition_readiness.registry_hash,
         packet_manifest_hash: input.acquisition_readiness.packet_manifest_hash,
@@ -163,6 +186,19 @@ export const assertEvidenceLaneStagePacket = (packet: EvidenceLaneStagePacket): 
     || packet.withheld_content.raw_image_payload_count !== 0
     || packet.privacy_decision === 'BLOCK'
     || packet.acquisition_readiness === 'BLOCKED'
+    || (packet.acquisition_readiness === 'READY_WITH_WARNINGS' && packet.acquisition_readiness_reasons.length === 0)
+    || (packet.acquisition_readiness === 'READY' && packet.acquisition_readiness_reasons.length > 0)
+    || packet.sanitized_visual_evidence.some(item =>
+      !item.visual_unit_id
+      || !item.bounding_box
+      || item.ocr_confidence === undefined
+      || item.ocr_extraction_method !== 'local_ocr'
+      || item.ocr_engine_version !== 'tesseract.js@7.0.0'
+      || item.ocr_language !== 'eng'
+      || !['PASSED', 'PASSED_WITH_REDACTIONS'].includes(item.post_ocr_redaction_status || '')
+      || item.visual_interpretation_status !== 'OCR_TEXT_ONLY'
+      || !Number.isInteger(item.withheld_visual_region_count)
+      || item.withheld_visual_region_count! < 1)
     || !packet.acquisition_binding.registry_hash
     || !packet.acquisition_binding.packet_manifest_hash
     || !packet.acquisition_binding.source_packet_hash

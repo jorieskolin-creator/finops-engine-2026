@@ -302,6 +302,7 @@ export const buildRunTrace = (input: BuildRunTraceInput): RunTrace => {
     evidence_stage_packet_hash: input.evidenceStagePackets?.[domain]?.integrity_hash,
     evidence_stage_packet_schema: input.evidenceStagePackets?.[domain]?.schema_version,
     acquisition_readiness: input.evidenceStagePackets?.[domain]?.acquisition_readiness,
+    acquisition_readiness_reasons: input.evidenceStagePackets?.[domain]?.acquisition_readiness_reasons,
     privacy_decision: input.evidenceStagePackets?.[domain]?.privacy_decision,
     included_chunk_ids: packet.manifest.map(item => item.chunk_id),
     included_chunk_count: packet.included_chunk_count,
