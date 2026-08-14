@@ -23,8 +23,8 @@ const legacy = resolveModelRouting({});
 validateRoute(legacy);
 assert.equal(legacy.mode, 'legacy');
 assert.equal(legacy.label, 'legacy');
-assert.deepEqual(legacy.routes.forensic_audit.map(profile => profile.id), ['claude-sonnet-4-6', 'gpt-5.5', 'claude-opus-4-7']);
-assert.deepEqual(legacy.routes.targeted_rescan.map(profile => profile.id), ['claude-opus-4-7', 'gpt-5.5', 'claude-sonnet-4-6']);
+assert.deepEqual(legacy.routes.forensic_audit.map(profile => profile.id), ['claude-sonnet-5', 'gpt-5.6-sol', 'claude-opus-5']);
+assert.deepEqual(legacy.routes.targeted_rescan.map(profile => profile.id), ['claude-opus-5', 'gpt-5.6-sol', 'claude-sonnet-5']);
 assert.deepEqual(legacy.routes.fact_check_high[0].openaiReasoning, { effort: 'high' });
 
 const qwenOpenAI = resolveModelRouting({ PRIMARY_MODEL_PROVIDER: 'qwen', FALLBACK_MODEL_PROVIDER: 'openai' });
@@ -41,14 +41,15 @@ for (const stage of MODEL_STAGES) {
   assert.equal(chain[1].provider, 'openai');
 }
 assert.equal(qwenOpenAI.routes.quality_gate[1].id, 'gpt-5.4-mini');
-assert.equal(qwenOpenAI.routes.forensic_audit[1].id, 'gpt-5.5');
+assert.equal(qwenOpenAI.routes.forensic_audit[1].id, 'gpt-5.6-sol');
 assert.deepEqual(qwenOpenAI.routes.targeted_rescan[1].openaiReasoning, { effort: 'high' });
+assert.equal(qwenOpenAI.routes.targeted_rescan[1].maxTokens, 32768);
 
 const openAIAnthropic = resolveModelRouting({ PRIMARY_MODEL_PROVIDER: 'OPENAI', FALLBACK_MODEL_PROVIDER: 'ANTHROPIC' });
 validateRoute(openAIAnthropic);
-assert.equal(openAIAnthropic.routes.forensic_audit[0].id, 'gpt-5.5');
-assert.equal(openAIAnthropic.routes.forensic_audit[1].id, 'claude-sonnet-4-6');
-assert.equal(openAIAnthropic.routes.roadmap_synthesis[1].id, 'claude-opus-4-7');
+assert.equal(openAIAnthropic.routes.forensic_audit[0].id, 'gpt-5.6-sol');
+assert.equal(openAIAnthropic.routes.forensic_audit[1].id, 'claude-sonnet-5');
+assert.equal(openAIAnthropic.routes.roadmap_synthesis[1].id, 'claude-opus-5');
 
 const strictQwen = resolveModelRouting({ PRIMARY_MODEL_PROVIDER: 'QWEN', FALLBACK_MODEL_PROVIDER: 'NONE' });
 validateRoute(strictQwen);
@@ -71,7 +72,7 @@ assert.doesNotThrow(() => authorizeConfiguredDestination(
   { PRIMARY_MODEL_PROVIDER: 'QWEN', FALLBACK_MODEL_PROVIDER: 'OPENAI' },
 ));
 assert.throws(() => authorizeConfiguredDestination(
-  'forensic_audit', 'anthropic', 'claude-sonnet-4-6', { max_tokens: 8192 },
+  'forensic_audit', 'anthropic', 'claude-sonnet-5', { max_tokens: 8192 },
   { PRIMARY_MODEL_PROVIDER: 'QWEN', FALLBACK_MODEL_PROVIDER: 'OPENAI' },
 ), /DESTINATION_NOT_CONFIGURED/);
 

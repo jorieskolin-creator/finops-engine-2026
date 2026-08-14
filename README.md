@@ -29,15 +29,16 @@ Model profiles, stage assignments, and fallback chains are centralized in the se
 
 | Stage group | Normal primary provider/profile |
 |-------------|---------------------------------|
-| Preflight / DLP | OpenAI GPT-5.5, low reasoning |
-| Forensic audit | Anthropic Claude Sonnet 4.6 |
-| Targeted rescan | Anthropic Claude Opus 4.7 |
-| Evidence check and adjudication | OpenAI GPT-5.5 |
-| Evidence synthesis | Anthropic Claude Sonnet 4.6 |
-| Roadmap synthesis | Anthropic Claude Opus 4.7 |
-| Fact check and quality-gate explanation | OpenAI GPT-5.5 |
+| Acquisition and DLP | Deterministic local processing; no model call |
+| Forensic audit | Anthropic Claude Sonnet 5 |
+| Targeted rescan | Anthropic Claude Opus 5 |
+| Evidence check and adjudication | OpenAI GPT-5.6 Sol, high reasoning |
+| Evidence synthesis | Anthropic Claude Sonnet 5 |
+| Roadmap synthesis | Anthropic Claude Opus 5 |
+| Fact check | OpenAI GPT-5.6 Sol, high reasoning |
+| Quality-gate explanation | OpenAI GPT-5.4 Mini, medium reasoning |
 
-When provider variables are absent, the established mixed-provider routing above remains active. Set `PRIMARY_MODEL_PROVIDER` and `FALLBACK_MODEL_PROVIDER` to choose providers for all model stages; code-owned stage profiles still select the exact model and reasoning settings. OpenAI uses GPT-5.4-mini for lighter stages and GPT-5.5 with medium/high reasoning for deeper stages; Anthropic uses Haiku/Sonnet/Opus by stage; Qwen uses Qwen3.8-Max in non-thinking JSON mode. Fallback `NONE` disables automatic provider fallback. Post-send uncertainty never becomes fallback.
+When provider variables are absent, the established mixed-provider routing above remains active. Set `PRIMARY_MODEL_PROVIDER` and `FALLBACK_MODEL_PROVIDER` to choose providers for all model stages; code-owned stage profiles still select the exact model and reasoning settings. OpenAI uses GPT-5.4 Mini for the lighter quality-gate explanation and GPT-5.6 Sol with high reasoning for deeper stages. Anthropic uses Sonnet 5 and Opus 5 by stage; Haiku 4.5 remains Anthropic's latest Haiku but is not needed now that acquisition and DLP are deterministic. Qwen uses Qwen3.8-Max in non-thinking JSON mode. Fallback `NONE` disables automatic provider fallback. Post-send uncertainty never becomes fallback.
 
 ## Environment variables
 
