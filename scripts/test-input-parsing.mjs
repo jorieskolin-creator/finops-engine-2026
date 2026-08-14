@@ -42,6 +42,8 @@ const largeCsv = renderDelimitedTableForAnalysis(`service,cost\n${Array.from({ l
 assert.equal(largeCsv.rowCount, 151);
 assert.equal(largeCsv.renderedRowCount, 150);
 assert.equal(largeCsv.structuredTable.truncated, true);
+assert.equal(largeCsv.structuredTable.analysis_rows.length, 151);
+assert.equal(largeCsv.structuredTable.analysis_complete, true);
 assert.match(largeCsv.warnings.join(' '), /first 150 rows/);
 
 const clippedCsv = renderDelimitedTableForAnalysis(`service,description\ncompute,${'x'.repeat(300)}`, {
@@ -52,10 +54,9 @@ assert.equal(clippedCsv.clippedCellCount, 1);
 assert.ok(clippedCsv.cellCharacterCoverageRatio < 1);
 assert.match(clippedCsv.warnings.join(' '), /cell\(s\).*truncated/);
 
-const wideCsv = renderDelimitedTableForAnalysis(`${Array.from({length:201},(_,i)=>`column_${i}`).join(',')}\n${Array.from({length:201},()=>1).join(',')}`, { fileName:'wide.csv', delimiter:',' });
-assert.equal(wideCsv.structuredTable.headers.length,200);assert.equal(wideCsv.structuredTable.rows[0].length,200);assert.equal(wideCsv.structuredTable.truncated,true);
+assert.throws(()=>renderDelimitedTableForAnalysis(`${Array.from({length:201},(_,i)=>`column_${i}`).join(',')}\n${Array.from({length:201},()=>1).join(',')}`, { fileName:'wide.csv', delimiter:',' }),/DELIMITED_TABLE_COLUMN_LIMIT_EXCEEDED/);
 const manyRowsCsv = renderDelimitedTableForAnalysis(`owner\n${Array.from({length:10000},(_,i)=>`owner-${i}`).join('\n')}`, { fileName:'many.csv', delimiter:',' });
-assert.equal(manyRowsCsv.rowCount,10000);assert.equal(manyRowsCsv.structuredTable.rows.length,150);assert.equal(manyRowsCsv.structuredTable.truncated,true);
+assert.equal(manyRowsCsv.rowCount,10000);assert.equal(manyRowsCsv.structuredTable.rows.length,150);assert.equal(manyRowsCsv.structuredTable.analysis_rows.length,10000);assert.equal(manyRowsCsv.structuredTable.analysis_complete,true);assert.equal(manyRowsCsv.structuredTable.truncated,true);
 const emptyCsv = renderDelimitedTableForAnalysis('', { fileName:'empty.csv', delimiter:',' });assert.deepEqual(emptyCsv.structuredTable.headers,[]);assert.deepEqual(emptyCsv.structuredTable.rows,[]);
 assert.throws(()=>renderDelimitedTableForAnalysis('owner,cost\n"alice,100',{fileName:'broken.csv',delimiter:','}),/INVALID_DELIMITED_TABLE_UNCLOSED_QUOTE/);
 assert.throws(()=>renderDelimitedTableForAnalysis('owner,cost\nal"ice,100',{fileName:'broken.csv',delimiter:','}),/INVALID_DELIMITED_TABLE_QUOTE_IN_UNQUOTED_CELL/);

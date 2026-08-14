@@ -91,6 +91,7 @@ const safeSnippet = (value: string, max = 520): string => {
 };
 
 const sourceManifest = (registry: SourceRegistry): SourceManifestTrace[] => {
+  const acquisitionBySource = new Map((registry.source_acquisition || []).map(source => [source.source_id, source]));
   const bySource = new Map<string, SourceChunk[]>();
   for (const chunk of registry.chunks) {
     const list = bySource.get(chunk.source_id) || [];
@@ -98,6 +99,7 @@ const sourceManifest = (registry: SourceRegistry): SourceManifestTrace[] => {
     bySource.set(chunk.source_id, list);
   }
   return Array.from(bySource.entries()).map(([sourceId, chunks]) => {
+    const acquisition = acquisitionBySource.get(sourceId);
     const pages = new Set(chunks.map(c => c.page_number).filter((p): p is number => typeof p === 'number'));
     const sheets = new Set(chunks.map(c => c.sheet_name).filter((s): s is string => typeof s === 'string'));
     const rows = chunks.map(c => c.row_number).filter((r): r is number => typeof r === 'number');
@@ -105,7 +107,7 @@ const sourceManifest = (registry: SourceRegistry): SourceManifestTrace[] => {
     return {
       source_id: sourceId,
       source_name: chunks[0]?.source_name || sourceId,
-      source_hash: hashString(chunks.map(c => `${c.chunk_id}:${c.text}`).join('\n')),
+      source_hash: acquisition?.original_sha256 || hashString(chunks.map(c => `${c.chunk_id}:${c.text}`).join('\n')),
       chunk_count: chunks.length,
       chunk_ids: chunks.map(c => c.chunk_id),
       page_count: pages.size || undefined,

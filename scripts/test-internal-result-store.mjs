@@ -3,7 +3,7 @@ import { modelResultHandler } from '../api/model-result.js';
 import { issueCookie } from '../lib/auth.js';
 import { inspectOutput } from '../lib/governance.js';
 process.env.SECRET_KEY='test-secret-key-that-is-long-enough-123';
-const attempt={attempt_id:'a',internal_call_id:'123e4567-e89b-12d3-a456-426614174000',run_id:'r',packet_id:'p',packet_hash:'h',provider:'openai',model:'m',stage:'preflight',state:'outcome_unknown'};
+const attempt={attempt_id:'a',internal_call_id:'123e4567-e89b-12d3-a456-426614174000',run_id:'r',packet_id:'p',packet_hash:'h',provider:'openai',model:'m',stage:'forensic_audit',state:'outcome_unknown'};
 const req={method:'POST',headers:{cookie:''},body:{internalCallId:attempt.internal_call_id}};const res={status(n){this.statusCode=n;return this;},json(v){this.body=v;return this;}};
 // Auth is deliberately tested elsewhere; inject a malformed cookie and verify closed authentication.
 await modelResultHandler({getAttemptByInternalCallId:async()=>attempt},{getResult:async()=>null})(req,res);assert.equal(res.statusCode,401);

@@ -1,6 +1,5 @@
 
 import DOMPurify from 'dompurify';
-import { ImageInput } from '../types';
 
 export const forensicSanitizeImport = (dirtyHtml: string): string => {
   return DOMPurify.sanitize(dirtyHtml, {
@@ -8,47 +7,6 @@ export const forensicSanitizeImport = (dirtyHtml: string): string => {
     FORBID_TAGS: ['script', 'style', 'iframe', 'object', 'embed', 'form', 'input', 'button'],
     FORBID_ATTR: ['style', 'onmouseover', 'onclick', 'onerror', 'onload']
   });
-};
-
-export const generateSafetyAuditPrompt = (
-  reviewPacket: string,
-  images?: ImageInput[],
-  metadata?: { scannedChunkCount?: number; selectedChunkCount?: number; cautionNotes?: string[] }
-) => {
-  const imageCount = images?.length ?? 0;
-  const scanned = metadata?.scannedChunkCount ?? 0;
-  const selected = metadata?.selectedChunkCount ?? 0;
-  return `
-<task>
-You are a **Data Loss Prevention (DLP) Officer** for a FinOps Assessment Engine.
-Scan the following distributed source-review packet${imageCount > 0 ? ` AND the ${imageCount} attached image part(s)` : ''} for High-Risk Content.
-
-The deterministic pre-scan has already inspected the full source registry${scanned ? ` (${scanned} chunk(s))` : ''}. This packet contains distributed review samples${selected ? ` (${selected} text chunk(s))` : ''}: first/last chunks, high-risk regex-hit chunks, table headers, parse warnings, and representative later pages/appendices. Do not assume only the beginning of the source was reviewed.
-
-**HIGH-RISK CATEGORIES:**
-1. **PII:** Social Security Numbers, Passport Numbers, Home Addresses, Personal Financial Data${imageCount > 0 ? ', faces of individuals in screenshots with names visible, employee photos' : ''}.
-2. **SECRETS:** API Keys (AWS AKIA*, Azure keys, GCP service account keys), Passwords, Private Keys, Tokens${imageCount > 0 ? '. In images, look for visible keys in console screenshots, passwords on sticky notes, login screens with credentials, terminal output exposing tokens' : ''}.
-3. **CLOUD CREDENTIALS:** Cloud account IDs with associated access keys, billing account numbers with pricing details${imageCount > 0 ? '. In images, check for visible account numbers next to access keys, billing-console screenshots showing exact dollar amounts and account IDs together' : ''}.
-4. **FINANCIAL SENSITIVITY:** Exact contract values, specific negotiated discount rates, EDP pricing terms (flag but do not block — mark as CAUTION).
-5. **IRRELEVANCE:** Cooking recipes, fiction, code repositories, or gibberish${imageCount > 0 ? '. For images: non-FinOps content (vacation photos, memes, unrelated screenshots)' : ''}.
-
-**IMPORTANT:** Documents about cloud costs, budgets, and FinOps strategies are EXPECTED and should pass even if they mention dollar amounts in a business context. Only flag raw financial instruments or personal financial data.
-${imageCount > 0 ? `\n**IMAGE-SPECIFIC GUIDANCE:** Dashboard screenshots, architecture diagrams, org charts, and PDF pages rendered as images are all EXPECTED FinOps content. Pass them unless they visibly contain one of the HIGH-RISK CATEGORIES above. A redacted dashboard or one showing percentages without raw dollar amounts is safe.\n` : ''}
-${metadata?.cautionNotes?.length ? `\n**DETERMINISTIC CAUTION NOTES:**\n${metadata.cautionNotes.map(note => `- ${note}`).join('\n')}\n` : ''}
-**OUTPUT FORMAT:**
-Return a JSON object ONLY:
-{
-  "safe": boolean,
-  "risk_detected": "None" | "PII" | "Secrets" | "CloudCredentials" | "FinancialSensitivity" | "Irrelevant",
-  "reason": "Short explanation${imageCount > 0 ? '. Name the image filename and approximate location if a secret was visible in an image.' : ''}",
-  "caution_notes": "Optional: notes about financial sensitivity that should be handled with care"
-}
-</task>
-
-<distributed_review_packet>
-${reviewPacket.substring(0, 36000)}
-</distributed_review_packet>
-`;
 };
 
 export const validateMetadataPayload = (payload: any): boolean => {

@@ -1,6 +1,9 @@
 export interface ParsedDelimitedTable {
   delimiter: ',' | '\t';
   headers: string[];
+  /** Complete normalized row population for local deterministic processing. */
+  analysisRows: string[][];
+  /** Bounded and clipped rows eligible for model context. */
   rows: string[][];
   rowCount: number;
   clippedCellCount: number;
@@ -10,9 +13,13 @@ export interface ParsedDelimitedTable {
 
 const MAX_RENDERED_ROWS = 150;
 const MAX_CELL_CHARS = 240;
+const MAX_COLUMNS = 200;
+const MAX_ANALYSIS_ROWS = 250_000;
+
+const normalizeAnalysisCell = (value: string): string => value.replace(/\s+/g, ' ').trim();
 
 const normalizeCell = (value: string): { value: string; originalLength: number; retainedLength: number } => {
-  const normalized = value.replace(/\s+/g, ' ').trim();
+  const normalized = normalizeAnalysisCell(value);
   return {
     value: normalized.length > MAX_CELL_CHARS ? `${normalized.slice(0, MAX_CELL_CHARS)}...` : normalized,
     originalLength: normalized.length,
@@ -22,7 +29,7 @@ const normalizeCell = (value: string): { value: string; originalLength: number; 
 
 export const parseDelimitedTable = (raw: string, delimiter: ',' | '\t'): ParsedDelimitedTable => {
   let headerRow: string[] | undefined;
-  const retainedRows: string[][] = [];
+  const analysisRows: string[][] = [];
   let rowCount = 0;
   let current = '';
   let row: string[] = [];
@@ -33,7 +40,8 @@ export const parseDelimitedTable = (raw: string, delimiter: ',' | '\t'): ParsedD
     if (!headerRow) headerRow = row;
     else {
       rowCount++;
-      if (retainedRows.length < MAX_RENDERED_ROWS) retainedRows.push(row);
+      if (rowCount > MAX_ANALYSIS_ROWS) throw new Error('DELIMITED_TABLE_ROW_LIMIT_EXCEEDED');
+      analysisRows.push(row.map(normalizeAnalysisCell));
     }
   };
 
@@ -82,8 +90,13 @@ export const parseDelimitedTable = (raw: string, delimiter: ',' | '\t'): ParsedD
   row.push(current);
   commitRow();
 
-  const headerCells = (headerRow || []).map(normalizeCell);
-  const renderedRows = retainedRows.map(cells => cells.map(normalizeCell));
+  if ((headerRow?.length || 0) > MAX_COLUMNS || analysisRows.some(rowValue => rowValue.length > MAX_COLUMNS)) {
+    throw new Error('DELIMITED_TABLE_COLUMN_LIMIT_EXCEEDED');
+  }
+
+  const analysisHeaders = (headerRow || []).map(normalizeAnalysisCell);
+  const headerCells = analysisHeaders.map(normalizeCell);
+  const renderedRows = analysisRows.slice(0, MAX_RENDERED_ROWS).map(cells => cells.map(normalizeCell));
   const renderedCells = [...headerCells, ...renderedRows.flat()];
   const originalCharacters = renderedCells.reduce((sum, cell) => sum + cell.originalLength, 0);
   const retainedCharacters = renderedCells.reduce((sum, cell) => sum + cell.retainedLength, 0);
@@ -97,6 +110,7 @@ export const parseDelimitedTable = (raw: string, delimiter: ',' | '\t'): ParsedD
   return {
     delimiter,
     headers: headerCells.map(cell => cell.value),
+    analysisRows,
     rows: renderedRows.map(cells => cells.map(cell => cell.value)),
     rowCount,
     clippedCellCount,
@@ -110,13 +124,10 @@ export const renderDelimitedTableForAnalysis = (
   opts: { fileName: string; delimiter: ',' | '\t' }
 ): { text: string; warnings: string[]; rowCount: number; renderedRowCount: number; clippedCellCount: number; cellCharacterCoverageRatio: number; structuredTable: import('../types').StructuredTableData } => {
   const table = parseDelimitedTable(raw, opts.delimiter);
-  const structuredHeaders = table.headers.slice(0, 200);
-  const structuredRows = table.rows.map(row => row.slice(0, 200));
-  const structuredColumnTruncated = table.headers.length > structuredHeaders.length || table.rows.some(row => row.length > 200);
   const delimiterLabel = opts.delimiter === '\t' ? 'TSV' : 'CSV';
   const lines = [
     `Format: ${delimiterLabel}`,
-    `Source table: ${opts.fileName}`,
+    'Source table: browser-local tabular evidence',
     `Rows: ${table.rowCount}`,
     `Columns: ${table.headers.length}`,
     table.headers.length > 0 ? `Headers: ${table.headers.join(' | ')}` : 'Headers: not detected',
@@ -140,10 +151,13 @@ export const renderDelimitedTableForAnalysis = (
     cellCharacterCoverageRatio: table.cellCharacterCoverageRatio,
     structuredTable: {
       schema_version: 'structured_table_v1',
-      headers: structuredHeaders,
-      rows: structuredRows,
+      headers: table.headers,
+      rows: table.rows,
+      analysis_rows: table.analysisRows,
+      sampled_row_numbers: table.rows.map((_, index) => index + 1),
       total_row_count: table.rowCount,
-      truncated: table.rowCount > table.rows.length || table.clippedCellCount > 0 || structuredColumnTruncated
+      analysis_complete: table.analysisRows.length === table.rowCount,
+      truncated: table.rowCount > table.rows.length || table.clippedCellCount > 0
     }
   };
 };

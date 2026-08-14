@@ -21,7 +21,6 @@ export interface ModelProfile {
 }
 
 export type StageId =
-  | 'preflight'
   | 'forensic_audit'
   | 'targeted_rescan'
   | 'evidence_check'

@@ -27,14 +27,17 @@ const populated=(value:string|undefined):boolean=>Boolean(value&&value.trim()&&!
 const percent=(count:number,total:number):number|null=>total>0?Math.round((count/total)*100):null;
 const hash=(value:string):string=>{let h=0x811c9dc5;for(let i=0;i<value.length;i++){h^=value.charCodeAt(i);h=Math.imul(h,0x01000193);}return(h>>>0).toString(16).padStart(8,'0');};
 
+const analysisRows=(table:StructuredTableData):string[][]=>table.analysis_rows||table.rows;
 const coverageFor=(table:StructuredTableData,indexes:number[]):number|null=>{
-  if(indexes.length===0||table.rows.length===0)return null;
-  return percent(table.rows.filter(row=>indexes.some(index=>populated(row[index]))).length,table.rows.length);
+  const rows=analysisRows(table);
+  if(indexes.length===0||rows.length===0)return null;
+  return percent(rows.filter(row=>indexes.some(index=>populated(row[index]))).length,rows.length);
 };
 
 export const analyzeTaggingAllocationTable=(source:SourceRecord):DerivedAnalyticalEvidence|null=>{
   const table=source.structured_table;
   if(!table)return null;
+  const rows=analysisRows(table);
   const headers=table.headers.map(normalizeHeader);
   const mappingIndexes=headers.flatMap((header,index)=>matches(header,DATA_SIGNAL_REGISTRY[0].canonical_fields)?[index]:[]);
   const taggingIndexes=headers.flatMap((header,index)=>matches(header,DATA_SIGNAL_REGISTRY[1].canonical_fields)?[index]:[]);
@@ -52,7 +55,7 @@ export const analyzeTaggingAllocationTable=(source:SourceRecord):DerivedAnalytic
     evidence_type:'deterministic_analytical',source_id:source.source_id,
     targets:[{stream:'maturity',criterion_id:'A1'},{stream:'antipattern',criterion_id:'A1'}],
     derivation:{analyzer_id:analyzerId,analyzer_version:TAGGING_ALLOCATION_ANALYZER_VERSION,registry_version:DATA_SIGNAL_REGISTRY_VERSION,method},
-    result:{status:detectedSignalCount>0&&table.rows.length>0?'OBSERVED':'INSUFFICIENT_SIGNAL',source_row_count:table.total_row_count,analyzed_row_count:table.rows.length,row_scope:table.total_row_count>table.rows.length?'bounded_prefix':'full_table',row_truncated:table.truncated,detected_signal_count:detectedSignalCount,mapping_population_coverage:mappingCoverage,tagging_population_coverage:taggingCoverage,allocation_population_coverage:allocationCoverage},
+    result:{status:detectedSignalCount>0&&rows.length>0?'OBSERVED':'INSUFFICIENT_SIGNAL',source_row_count:table.total_row_count,analyzed_row_count:rows.length,row_scope:rows.length<table.total_row_count?'bounded_prefix':'full_table',row_truncated:table.analysis_complete===false||rows.length<table.total_row_count,detected_signal_count:detectedSignalCount,mapping_population_coverage:mappingCoverage,tagging_population_coverage:taggingCoverage,allocation_population_coverage:allocationCoverage},
     raw_value_exposure:false
   };
 };

@@ -71,6 +71,8 @@ interface Phase1IntegrityInput {
 const stableRegistryValue = (registry: SourceRegistry): string => JSON.stringify({
   source_count: registry.source_count,
   chunk_count: registry.chunk_count,
+  source_acquisition: [...(registry.source_acquisition || [])]
+    .sort((a, b) => a.source_id.localeCompare(b.source_id)),
   extraction: {
     overall_completeness: registry.extraction.overall_completeness,
     status: registry.extraction.status,

@@ -20,6 +20,7 @@ const CHUNK_TARGET_CHARS = 2200;
 const CHUNK_OVERLAP_CHARS = 200;
 const SOURCE_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
 const SOURCE_KINDS = new Set(['text', 'pdf', 'html', 'csv', 'tsv', 'json']);
+const SHA256_PATTERN = /^sha256_[a-f0-9]{64}$/;
 
 const DOMAIN_TERMS: Record<string, string[]> = {
   A: [
@@ -218,6 +219,14 @@ const validateSourceRecords = (records: SourceRecord[]): void => {
       || !SOURCE_KINDS.has(record.kind)
       || (record.text !== undefined && typeof record.text !== 'string')
       || (record.parse_warnings !== undefined && (!Array.isArray(record.parse_warnings) || record.parse_warnings.some(warning => typeof warning !== 'string' || warning.length > 1000)))
+      || (record.acquisition !== undefined && (
+        record.acquisition.schema_version !== 'evidence_source_acquisition_v1'
+        || record.acquisition.source_role !== 'CUSTOMER_EVIDENCE'
+        || !SHA256_PATTERN.test(record.acquisition.original_sha256)
+        || !Number.isInteger(record.acquisition.byte_size) || record.acquisition.byte_size < 0
+        || record.acquisition.validation_status !== 'PASS'
+        || !Array.isArray(record.acquisition.validation_codes) || record.acquisition.validation_codes.length !== 0
+      ))
       || (record.extraction !== undefined && (
         !['document', 'page', 'row'].includes(record.extraction.unit)
         || !Number.isInteger(record.extraction.total_units) || record.extraction.total_units < 0
@@ -260,7 +269,16 @@ const validateSourceRecords = (records: SourceRecord[]): void => {
         ||table.total_row_count<table.rows.length||typeof table.truncated!=='boolean'
         ||(table.total_row_count>table.rows.length&&!table.truncated)
         ||table.headers.some(header=>typeof header!=='string'||header.length>243)
-        ||table.rows.some(row=>!Array.isArray(row)||row.length>200||row.some(cell=>typeof cell!=='string'||cell.length>243))) {
+        ||table.rows.some(row=>!Array.isArray(row)||row.length>200||row.some(cell=>typeof cell!=='string'||cell.length>243))
+        ||(table.analysis_rows!==undefined&&(
+          !Array.isArray(table.analysis_rows)||table.analysis_rows.length!==table.total_row_count
+          ||table.analysis_complete!==true
+          ||table.analysis_rows.some(row=>!Array.isArray(row)||row.length>200||row.some(cell=>typeof cell!=='string'))
+        ))
+        ||(table.sampled_row_numbers!==undefined&&(
+          !Array.isArray(table.sampled_row_numbers)||table.sampled_row_numbers.length!==table.rows.length
+          ||table.sampled_row_numbers.some(rowNumber=>!Number.isInteger(rowNumber)||rowNumber<1||rowNumber>table.total_row_count)
+        ))) {
         throw new Error('INVALID_STRUCTURED_TABLE');
       }
     }
@@ -334,6 +352,15 @@ export const buildSourceRegistry = (records: SourceRecord[]): SourceRegistry => 
     source_count: new Set(chunks.map(chunk => chunk.source_id)).size,
     chunk_count: chunks.length,
     chunks,
+    source_acquisition: records.map(record => ({
+      source_id: record.source_id,
+      original_sha256: record.acquisition?.original_sha256,
+      byte_size: record.acquisition?.byte_size,
+      declared_media_type: record.acquisition?.declared_media_type,
+      detected_media_type: record.acquisition?.detected_media_type,
+      format: record.kind,
+      validation_status: record.acquisition ? 'PASS' as const : 'NOT_RECORDED' as const
+    })),
     warnings,
     extraction: buildExtractionQuality(records)
   };

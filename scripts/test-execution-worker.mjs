@@ -5,9 +5,9 @@ import { approveRequest,inspectOutput,POLICY_VERSION,STAGE_PACKET_REQUEST_VERSIO
 import { providerHandler } from '../lib/providerGateway.js';
 import { issueCookie } from '../lib/auth.js';
 
-const packet=approveRequest({schema_version:STAGE_PACKET_REQUEST_VERSION,policy_version:POLICY_VERSION,run_id:'run-1',stage:'preflight',provider:'openai',model:'gpt-5.5',destination:'openai:external_model',system_instruction:'safe',parts:[{type:'text',text:'public information'}],settings:{max_tokens:4096,reasoning_effort:'low'}});
+const packet=approveRequest({schema_version:STAGE_PACKET_REQUEST_VERSION,policy_version:POLICY_VERSION,run_id:'run-1',stage:'forensic_audit',provider:'openai',model:'gpt-5.5',destination:'openai:external_model',system_instruction:'safe',parts:[{type:'text',text:'public information'}],settings:{max_tokens:12000,reasoning_effort:'medium'}});
 class Repo{
-  constructor(state='queued'){this.a={attempt_id:'a',run_id:'run-1',packet_id:packet.packet_id,packet_hash:packet.packet_hash,provider:'openai',model:'gpt-5.5',stage:'preflight',state,run_state:'active',created_at:new Date(),effective_expires_at:new Date(Date.now()+60e3),absolute_deadline_at:new Date(Date.now()+60e3),lease_token:0};}
+  constructor(state='queued'){this.a={attempt_id:'a',run_id:'run-1',packet_id:packet.packet_id,packet_hash:packet.packet_hash,provider:'openai',model:'gpt-5.5',stage:'forensic_audit',state,run_state:'active',created_at:new Date(),effective_expires_at:new Date(Date.now()+60e3),absolute_deadline_at:new Date(Date.now()+60e3),lease_token:0};}
   async claimAttempt(_id,owner){if(!['queued','dispatch_intent'].includes(this.a.state)||this.a.leased)return null;this.a.leased=true;this.a.lease_owner=owner;this.a.lease_token++;return {...this.a};}async getAttempt(){return {...this.a};}
   async transitionAttempt(_id,from,to,c={}){if(this.a.state!==from)return null;this.a.state=to;this.a.outcome_code=c.outcomeCode;return {...this.a};}async authorizeAttempt(_id,owner,t){if(this.a.state!=='dispatch_intent'||this.a.lease_owner!==owner||this.a.lease_token!==t)return null;this.a.state='send_authorized';return {...this.a};}async renewAttemptLease(){this.renewals=(this.renewals||0)+1;return this.renew!==false;}async reconcileStale(){}async listReconciliationCandidates(){return [this.a];}async recoverSucceeded(){this.a.state='succeeded';return this.a;}
 }

@@ -4,12 +4,13 @@ import { scanInputText, sanitizeInput } from './services/preFlightService';
 import { extractPagesFromPdf } from './services/pdfService';
 import type { PdfParseQuality } from './services/pdfService';
 import { renderDelimitedTableForAnalysis } from './services/tableService';
+import { inspectEvidenceFile } from './services/evidenceFileService';
 import { downloadMasterDataReport, downloadRunTraceJson, downloadSummaryReport } from './services/exportService';
 import { forensicSanitizeImport } from './services/securityService';
 import { extractDiagnosticResultFromHtmlReport, isDiagnosticResultPayload, parseDiagnosticResultJson, serializeDiagnosticResultForHtml } from './services/reportImportService';
 import { findGeneratedReportPrivacyFindings, scrubDiagnosticResultForPrivacy } from './services/privacyService';
 import { PerformanceMonitor } from './services/debugService';
-import { DiagnosticResult, ScanResult, PersonaId, PERSONA_IDS, PERSONA_LABELS, PipelineProgressStage, PipelineProgressUpdate, SourcePage, SourceRecord, StructuredTableData } from './types';
+import { DiagnosticResult, EvidenceSourceAcquisition, ScanResult, PersonaId, PERSONA_IDS, PERSONA_LABELS, PipelineProgressStage, PipelineProgressUpdate, SourcePage, SourceRecord, StructuredTableData } from './types';
 import { METRIC_DESCRIPTIONS } from './constants';
 import { GaugeCard, AuditGrid, StrategicRoadmap, ComparisonChart, ReferenceLibrary, QualityGateBanner, BenchmarkingChart, TransferProtocol, MarkdownRenderer, NeuralLoadingGrid } from './components/DashboardComponents';
 import { ReportView } from './components/ReportView';
@@ -144,6 +145,7 @@ interface UploadedFile {
   text: string;
   pages?: SourcePage[];
   structuredTable?: StructuredTableData;
+  acquisition?: EvidenceSourceAcquisition;
   kind?: 'pdf' | 'html' | 'csv' | 'tsv' | 'json';
   status: 'parsed' | 'error';
   scan?: ScanResult;
@@ -152,6 +154,8 @@ interface UploadedFile {
     parsedTextPages?: number;
     rowCount?: number;
     renderedRowCount?: number;
+    analyzedRowCount?: number;
+    analysisComplete?: boolean;
     clippedCellCount?: number;
     cellCharacterCoverageRatio?: number;
     parseQuality?: PdfParseQuality;
@@ -749,6 +753,10 @@ const App: React.FC = () => {
         let kind: UploadedFile['kind'] = undefined;
         let parseMetadata: UploadedFile['parseMetadata'] | undefined;
         const lowerName = file.name.toLowerCase();
+        const acquisition = await inspectEvidenceFile(file);
+        if (acquisition.validation_status !== 'PASS') {
+          throw new Error(`File ${file.name} failed deterministic type validation (${acquisition.validation_codes.join(', ')}).`);
+        }
 
         if (file.type === 'application/pdf' || lowerName.endsWith('.pdf')) {
           const { text: pdfText, pages, metadata } = await extractPagesFromPdf(file);
@@ -770,14 +778,14 @@ const App: React.FC = () => {
           const rendered = renderDelimitedTableForAnalysis(raw, { fileName: file.name, delimiter: ',' });
           text = rendered.text;
           kind = 'csv';
-          parseMetadata = { rowCount: rendered.rowCount, renderedRowCount: rendered.renderedRowCount, clippedCellCount: rendered.clippedCellCount, cellCharacterCoverageRatio: rendered.cellCharacterCoverageRatio, warnings: rendered.warnings };
+          parseMetadata = { rowCount: rendered.rowCount, renderedRowCount: rendered.renderedRowCount, analyzedRowCount: rendered.structuredTable.analysis_rows?.length || 0, analysisComplete: rendered.structuredTable.analysis_complete, clippedCellCount: rendered.clippedCellCount, cellCharacterCoverageRatio: rendered.cellCharacterCoverageRatio, warnings: rendered.warnings };
           (file as any).__structuredTable = rendered.structuredTable;
         } else if (file.type === 'text/tab-separated-values' || lowerName.endsWith('.tsv')) {
           const raw = await file.text();
           const rendered = renderDelimitedTableForAnalysis(raw, { fileName: file.name, delimiter: '\t' });
           text = rendered.text;
           kind = 'tsv';
-          parseMetadata = { rowCount: rendered.rowCount, renderedRowCount: rendered.renderedRowCount, clippedCellCount: rendered.clippedCellCount, cellCharacterCoverageRatio: rendered.cellCharacterCoverageRatio, warnings: rendered.warnings };
+          parseMetadata = { rowCount: rendered.rowCount, renderedRowCount: rendered.renderedRowCount, analyzedRowCount: rendered.structuredTable.analysis_rows?.length || 0, analysisComplete: rendered.structuredTable.analysis_complete, clippedCellCount: rendered.clippedCellCount, cellCharacterCoverageRatio: rendered.cellCharacterCoverageRatio, warnings: rendered.warnings };
           (file as any).__structuredTable = rendered.structuredTable;
         } else if (file.type === 'application/json' || lowerName.endsWith('.json')) {
           const raw = await file.text();
@@ -794,6 +802,7 @@ const App: React.FC = () => {
           text,
           pages: (file as any).__structuredPages,
           structuredTable: (file as any).__structuredTable,
+          acquisition,
           kind,
           status: 'parsed',
           scan: scanParseableFile(text, kind, false),
@@ -819,12 +828,13 @@ const App: React.FC = () => {
     PerformanceMonitor.start('FullAnalysis');
     try {
       const sources: SourceRecord[] = opts?.sourcesOverride ?? (opts?.textOverride !== undefined
-        ? [{ schema_version:'source_record_v1', source_id:'src-001', source_name:opts.label || 'fixture', kind:'text', text:sanitizeInput(opts.textOverride) }]
+        ? [{ schema_version:'source_record_v1', source_id:'src-001', source_name:opts.label || 'fixture', kind:'text', text:opts.textOverride }]
         : files.map((file,index) => ({
             schema_version:'source_record_v1' as const,
             source_id:`src-${String(index+1).padStart(3,'0')}`,
             source_name:file.name,
             kind:file.kind || 'text',
+            acquisition:file.acquisition,
             parse_warnings:file.parseMetadata?.warnings || file.parseMetadata?.parseQuality?.warnings,
             extraction: file.kind === 'pdf' && file.parseMetadata
               ? {
@@ -840,14 +850,13 @@ const App: React.FC = () => {
                 ? {
                     unit: 'row' as const,
                     total_units: file.parseMetadata.rowCount || 0,
-                    processed_units: file.parseMetadata.renderedRowCount || 0,
-                    text_coverage_ratio: file.parseMetadata.cellCharacterCoverageRatio,
-                    truncated: (file.parseMetadata.renderedRowCount || 0) < (file.parseMetadata.rowCount || 0)
-                      || (file.parseMetadata.clippedCellCount || 0) > 0
+                    processed_units: file.parseMetadata.analyzedRowCount || 0,
+                    text_coverage_ratio: file.parseMetadata.analysisComplete ? 1 : 0,
+                    truncated: !file.parseMetadata.analysisComplete
                   }
                 : { unit: 'document' as const, total_units: 1, processed_units: 1, truncated: false },
             structured_table:file.structuredTable,
-            ...(file.pages?.length ? {pages:file.pages} : {text:sanitizeInput(file.text)})
+            ...(file.pages?.length ? {pages:file.pages} : {text:file.text})
           })));
       const data = await analyzeDocument(sources, update => {
         setPipelineProgress(current => ({ ...current, [update.stage]: update }));
@@ -860,6 +869,9 @@ const App: React.FC = () => {
         data.meta = { ...data.meta, document_analyzed: opts.label };
       }
       const source_parse_warnings = sourceParseWarningsForFiles(files);
+      if ((data.meta.evidence_privacy?.redaction_count || 0) > 0) {
+        source_parse_warnings.push(`Deterministic privacy controls redacted ${data.meta.evidence_privacy!.redaction_count} prohibited contact, identifier, or financial-value occurrence(s) before model processing.`);
+      }
       if (source_parse_warnings.length > 0) {
         data.meta = { ...data.meta, source_parse_warnings };
       }

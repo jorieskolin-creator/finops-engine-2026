@@ -27,7 +27,7 @@ const originalLog = console.log;
 try {
   console.log = value => logged.push(String(value));
   workerOperationalLog('info', 'execution_attempt_claimed', {
-    run_id: 'run-1', attempt_id: 'attempt-1', stage: 'preflight', provider: 'openai', model: 'gpt-5.5', queue_age_ms: 17,
+    run_id: 'run-1', attempt_id: 'attempt-1', stage: 'forensic_audit', provider: 'openai', model: 'gpt-5.5', queue_age_ms: 17,
     prompt: 'private source content', filename: 'private.pdf', response_body: 'private model output',
   });
 } finally {

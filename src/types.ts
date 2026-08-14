@@ -280,12 +280,12 @@ export interface AnalysisMeta {
   run_trace?: RunTrace;
   run_trace_summary?: RunTraceSummary;
   acquisition_quality?: AcquisitionQualitySnapshot;
+  evidence_privacy?: EvidencePrivacyDecision;
   model_mode?: string;
   model_routing_policy_version?: string;
   primary_model_provider?: 'ANTHROPIC' | 'OPENAI' | 'QWEN' | null;
   fallback_model_provider?: 'ANTHROPIC' | 'OPENAI' | 'QWEN' | 'NONE' | null;
   model_config: {
-    preflight: string;
     forensic_audit: string;
     targeted_rescan?: string;
     evidence_check: string;
@@ -470,11 +470,32 @@ export interface SourcePage {
   text: string;
 }
 
+export type EvidenceSourceFormat = 'pdf' | 'html' | 'csv' | 'tsv' | 'json' | 'xlsx' | 'png' | 'jpeg' | 'webp';
+
+export interface EvidenceSourceAcquisition {
+  schema_version: 'evidence_source_acquisition_v1';
+  source_role: 'CUSTOMER_EVIDENCE';
+  original_sha256: string;
+  byte_size: number;
+  declared_media_type: string;
+  detected_media_type: string;
+  format: EvidenceSourceFormat;
+  detection_method: 'magic_bytes' | 'structured_text';
+  validation_status: 'PASS' | 'BLOCK';
+  validation_codes: string[];
+}
+
 export interface StructuredTableData {
   schema_version: 'structured_table_v1';
   headers: string[];
+  /** Bounded, cell-clipped rows eligible for model context. */
   rows: string[][];
+  /** Complete normalized population retained only for local deterministic analysis and privacy scanning. */
+  analysis_rows?: string[][];
+  sampled_row_numbers?: number[];
   total_row_count: number;
+  analysis_complete?: boolean;
+  /** Describes bounded model context, not deterministic analysis population. */
   truncated: boolean;
 }
 
@@ -488,6 +509,42 @@ export interface SourceRecord {
   structured_table?: StructuredTableData;
   parse_warnings?: string[];
   extraction?: SourceExtractionMetadata;
+  acquisition?: EvidenceSourceAcquisition;
+}
+
+export type EvidencePrivacyFindingKind =
+  | 'email'
+  | 'phone'
+  | 'ip'
+  | 'billing_identifier'
+  | 'invoice_identifier'
+  | 'cloud_key'
+  | 'api_key'
+  | 'private_key'
+  | 'credential_assignment'
+  | 'bearer_token'
+  | 'government_identifier'
+  | 'personal_financial_identifier'
+  | 'home_address'
+  | 'sensitive_financial_value';
+
+export interface EvidencePrivacyFinding {
+  kind: EvidencePrivacyFindingKind;
+  severity: 'redact' | 'block';
+  count: number;
+  source_ids: string[];
+}
+
+export interface EvidencePrivacyDecision {
+  schema_version: 'evidence_privacy_decision_v1';
+  policy_version: 'deterministic_evidence_privacy_v1';
+  decision: 'PASS' | 'PASS_WITH_REDACTIONS' | 'BLOCK';
+  scanned_source_count: number;
+  scanned_text_unit_count: number;
+  scanned_table_cell_count: number;
+  redaction_count: number;
+  findings: EvidencePrivacyFinding[];
+  blocking_codes: string[];
 }
 
 export interface SourceChunkRoutingHint {
@@ -518,6 +575,15 @@ export interface SourceRegistry {
   source_count: number;
   chunk_count: number;
   chunks: SourceChunk[];
+  source_acquisition?: Array<{
+    source_id: string;
+    original_sha256?: string;
+    byte_size?: number;
+    declared_media_type?: string;
+    detected_media_type?: string;
+    format: SourceRecord['kind'];
+    validation_status: 'PASS' | 'NOT_RECORDED';
+  }>;
   warnings: string[];
   extraction: SourceExtractionQuality;
 }

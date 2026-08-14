@@ -11,7 +11,6 @@ import { bracketFromValidation, explainBracket } from "./confidenceBracket";
 import { runPhase1Audit } from "../orchestrator";
 import { knowledgeBaseService, BATCH_DEFINITIONS, FINOPS_TACTICS_LOCAL, FINOPS_TACTIC_ACTIVITY_PLAYBOOK, FINOPS_TAXONOMY_REGISTRY, buildTacticIdTable, validTacticIdSet } from "../knowledge_base";
 import { DiagnosticResult, Phase1AuditLogs, Phase2Validation, AuditItem, EvidenceQuote, EvidenceCategory, EVIDENCE_CATEGORIES, PersonaId, PERSONA_IDS, PipelineProgressStage, PipelineProgressUpdate, SourceRecord } from "../types";
-import { generateSafetyAuditPrompt } from "./securityService";
 import { validatePhase1Output, validatePhase3Grounding } from "./validatorService";
 import { runQualityGate, runQualityGateExplanation } from "./qualityGateService";
 import { calculateMetrics } from "./metricsService";
@@ -31,7 +30,6 @@ import { completeRun, createRun, failRun, getRun } from "./runLifecycleService";
 import { sanitizeRoadmapTacticGrounding, TacticGroundingAdjustment } from "./tacticGroundingService";
 import { sanitizeBlockedStrategy, sanitizeStrategyAfterFactCheck } from "./strategySanitationService";
 import {
-  buildDlpReviewPacket,
   buildDomainPackets,
   buildSourceRegistry,
   renderPseudonymousSourceContext,
@@ -42,6 +40,7 @@ import { buildRunTrace, clearStageTraces, consumeStageTraces, summarizeRunTrace 
 import { acquisitionQualityPersistence, buildAcquisitionQualitySnapshot, shadowTelemetryPersistence } from "./acquisitionQualityService";
 import { analyzeStructuredSources, buildDataSignalCoverageReport } from "./structuredDataAnalysisService";
 import { buildBoundedRetrievalTrace } from "./boundedRetrievalService";
+import { sanitizeEvidenceSources } from "./deterministicPrivacyService";
 import { parseGovernedJsonObject, validateFindingsModePayload } from "./jsonResponseService";
 import {
   PipelineIntegrityError,
@@ -232,7 +231,6 @@ export const analyzeDocument = async (
   };
   const pipelineStarted = Date.now();
   const actuals: Record<string, string> = {
-    preflight: modelRouting.routes.preflight[0].id,
     forensic_audit: modelRouting.routes.forensic_audit[0].id,
     targeted_rescan: modelRouting.routes.targeted_rescan[0].id,
     evidence_check: modelRouting.routes.evidence_check[0].id,
@@ -251,18 +249,24 @@ export const analyzeDocument = async (
   });
 
   try {
-    const extractionWarnings = sources.filter(source => source.extraction?.truncated || source.extraction?.quality === 'poor' || (source.parse_warnings?.length || 0) > 0).length;
+    // Authoritative customer-content boundary. No model route is invoked until
+    // the complete source population has passed this deterministic scan.
+    const privacy = sanitizeEvidenceSources(sources);
+    if (privacy.decision.decision === 'BLOCK') {
+      throw new Error(`Deterministic privacy gate blocked the evidence set (${privacy.decision.blocking_codes.join(', ')}). Remove prohibited secrets before running the assessment.`);
+    }
+    const acquiredSources = privacy.sources;
+    const extractionWarnings = acquiredSources.filter(source => source.extraction?.truncated || source.extraction?.quality === 'poor' || (source.parse_warnings?.length || 0) > 0).length;
     emitProgress({ stage: 'extraction', status: extractionWarnings > 0 ? 'completed_with_warnings' : 'completed' });
     emitProgress({ stage: 'packetization', status: 'in_progress' });
-    const sourceRegistry = buildSourceRegistry(sources);
-    const derivedAnalyticalEvidence = analyzeStructuredSources(sources);
+    const sourceRegistry = buildSourceRegistry(acquiredSources);
+    const derivedAnalyticalEvidence = analyzeStructuredSources(acquiredSources);
     const dataSignalCoverage = buildDataSignalCoverageReport();
     const text = renderPseudonymousSourceContext(sourceRegistry, 50000);
     const sourcePackets = buildDomainPackets(sourceRegistry);
     const boundedRetrieval = buildBoundedRetrievalTrace(sourceRegistry, sourcePackets);
     const dlpScan = scanRegistryDlp(sourceRegistry);
-    const dlpReview = buildDlpReviewPacket(sourceRegistry);
-    const sourceRegistryStatus = sourceRegistryRuntimeStatus(sourceRegistry, sourcePackets, dlpReview.selected_chunk_count, dlpScan);
+    const sourceRegistryStatus = sourceRegistryRuntimeStatus(sourceRegistry, sourcePackets, 0, dlpScan);
     const packetWarnings = Object.values(sourcePackets).filter(packet => packet.weak_coverage).length;
     emitProgress({ stage: 'packetization', status: packetWarnings > 0 ? 'completed_with_warnings' : 'completed' });
     emitProgress({ stage: 'privacy', status: 'in_progress' });
@@ -276,7 +280,7 @@ export const analyzeDocument = async (
     serverLog(runId, 'info', 'source_registry_created', {
       sources: sourceRegistry.source_count,
       chunks: sourceRegistry.chunk_count,
-      dlp_review_chunks: dlpReview.selected_chunk_count,
+      dlp_review_chunks: 0,
       images: 0,
     });
     for (const [domain, packet] of Object.entries(sourcePackets)) {
@@ -298,7 +302,7 @@ export const analyzeDocument = async (
     if (dlpScan.blocked) {
       throw new Error(`Security Alert: high-risk secret material detected in source chunks (${dlpScan.high_risk_hits.map(hit => `${hit.kind}:${hit.count}`).join(', ')}). Remove or redact secrets before running the assessment.`);
     }
-    const evidenceIntegrity = validateEvidenceAcquisition(sources, sourceRegistry, sourcePackets);
+    const evidenceIntegrity = validateEvidenceAcquisition(acquiredSources, sourceRegistry, sourcePackets);
     serverLog(runId, 'info', 'pipeline_integrity_passed', {
       gate: 'acquisition',
       sources: sourceRegistry.source_count,
@@ -308,33 +312,11 @@ export const analyzeDocument = async (
       packet_manifest_hash: evidenceIntegrity.packet_manifest_hash,
     });
 
-    console.log(`[FinOps] [${runId}] Running Security Pre-Flight (DLP)...`);
-    const dlpPrompt = generateSafetyAuditPrompt(dlpReview.text, dlpReview.images, {
-      scannedChunkCount: dlpScan.scanned_chunk_count,
-      selectedChunkCount: dlpReview.selected_chunk_count,
-      cautionNotes: dlpScan.warnings.filter(w => !/high-risk/i.test(w)).slice(0, 12),
-    });
-
-    const dlpStarted = Date.now();
-    const dlpResponse = await runStage('preflight', {
-      userText: dlpPrompt,
-      images: dlpReview.images,
-    }, { runId });
-    actuals.preflight = dlpResponse.modelUsed.id;
-    serverLog(runId, 'info', 'stage_complete', {
-      stage: 'preflight',
-      model: dlpResponse.modelUsed.id,
-      duration_ms: Date.now() - dlpStarted,
-    });
-    const dlpResult = parseAiResponse(dlpResponse.text);
-
-    if (dlpResult && dlpResult.safe === false && dlpResult.risk_detected !== 'FinancialSensitivity') {
-      throw new Error(`Security Alert: Document rejected due to ${dlpResult.risk_detected} content. (${dlpResult.reason})`);
-    } else if (dlpResult?.risk_detected === 'FinancialSensitivity') {
-      sourceParseWarnings.push(`DLP caution: model reviewer flagged financial sensitivity. ${dlpResult.caution_notes || dlpResult.reason || ''}`.trim());
+    if (privacy.decision.redaction_count > 0) {
+      sourceParseWarnings.push(`Deterministic privacy controls redacted ${privacy.decision.redaction_count} prohibited contact, identifier, or financial-value occurrence(s) before packet assembly.`);
     }
-    console.log("[FinOps] DLP Scan Passed.");
-    const privacyWarnings = dlpScan.caution_hits.length > 0 || dlpResult?.risk_detected === 'FinancialSensitivity';
+    console.log("[FinOps] Deterministic privacy scan passed. Phase 1 is the first generative stage.");
+    const privacyWarnings = dlpScan.caution_hits.length > 0 || privacy.decision.redaction_count > 0;
     emitProgress({ stage: 'privacy', status: privacyWarnings ? 'completed_with_warnings' : 'completed' });
 
     console.log("[FinOps] Pre-fetching Tactics Database for Phase 3...");
@@ -1081,12 +1063,12 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => `  ${cat}
         source_parse_warnings: sourceParseWarnings.length > 0 ? sourceParseWarnings : undefined,
         source_registry: sourceRegistryStatus,
         knowledge_base: referenceKbIndex.status,
+        evidence_privacy: privacy.decision,
         model_mode: modelRoutingMode,
         model_routing_policy_version: modelRouting.policy_version,
         primary_model_provider: modelRouting.primary_provider,
         fallback_model_provider: modelRouting.fallback_provider,
         model_config: {
-          preflight: actuals.preflight,
           forensic_audit: actuals.forensic_audit,
           targeted_rescan: actuals.targeted_rescan,
           evidence_check: actuals.evidence_check,
@@ -1110,7 +1092,7 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => `  ${cat}
       sourceRegistry,
       sourcePackets,
       dlpScan,
-      dlpReviewChunkCount: dlpReview.selected_chunk_count,
+      dlpReviewChunkCount: 0,
       referenceKbIndex,
       stageTraces: consumeStageTraces(runId),
       auditLogs,
