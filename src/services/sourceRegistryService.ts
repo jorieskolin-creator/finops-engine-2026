@@ -172,8 +172,13 @@ const validStructuredTable = (table: NonNullable<SourceRecord['structured_table'
   && (table.hidden_column_count === undefined || table.privacy_scan_headers === undefined
     || table.privacy_scan_headers.length === table.headers.length + table.hidden_column_count)
   && (table.active_filter_range === undefined || (typeof table.active_filter_range === 'string' && table.active_filter_range.length <= 64))
+  && (table.formula_cell_count === undefined || (Number.isInteger(table.formula_cell_count) && table.formula_cell_count >= 0))
+  && (table.formula_cached_value_missing_count === undefined || table.formula_cached_value_missing_count === 0)
+  && (table.merged_range_count === undefined || (Number.isInteger(table.merged_range_count) && table.merged_range_count >= 0))
   && (table.merged_ranges === undefined || (Array.isArray(table.merged_ranges) && table.merged_ranges.length === table.merged_range_count
-    && table.merged_ranges.every(range => typeof range === 'string' && range.length <= 64)));
+    && table.merged_ranges.every(range => typeof range === 'string' && /^[A-Z]+\d+(?::[A-Z]+\d+)?$/.test(range))))
+  && (table.unsupported_objects === undefined || (Array.isArray(table.unsupported_objects) && table.unsupported_objects.length <= 20
+    && table.unsupported_objects.every(code => typeof code === 'string' && /^[A-Z0-9_]+$/.test(code))));
 
 const escapeXml = (value: string): string => value
   .replace(/&/g, '&amp;')
