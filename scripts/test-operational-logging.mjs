@@ -38,7 +38,7 @@ assert.match(logged[0], /event=execution_attempt_claimed/);
 assert.match(logged[0], /run_id=run-1/);
 assert.doesNotMatch(logged[0], /private source content|private\.pdf|private model output/);
 
-for (const file of ['../api/openai-generate.js', '../api/anthropic-generate.js']) {
+for (const file of ['../api/openai-generate.js', '../api/anthropic-generate.js', '../api/qwen-generate.js']) {
   const source = await readFile(new URL(file, import.meta.url), 'utf8');
   assert.doesNotMatch(source, /errorText\.substring|errorText\.replace/);
   assert.doesNotMatch(source, /msg=\\?"\$\{msg/);

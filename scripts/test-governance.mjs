@@ -12,4 +12,8 @@ const packet=approveRequest(request,1000);const output=inspectOutput('Email a@b.
 for(const mutate of [o=>({...o,text:'changed'}),o=>({...o,source_packet_hash:'0'.repeat(64)}),o=>({...o,schema_version:'old'})])assert.throws(()=>validateGovernedOutput(mutate(output),{source_packet_hash:packet.packet_hash}),/INVALID_GOVERNED_OUTPUT/);
 for(const text of ['password=[REDACTED:password]','data:image/png;base64,AAAA','contract value: $250000','invoice number: INV-99887','bad\uD800',''])assert.throws(()=>inspectOutput(text,packet),/OUTPUT_INSPECTION_REJECTED/);
 assert.throws(()=>authorizeDestination('preflight','anthropic','claude-opus-4-7',{}),/DESTINATION_NOT_AUTHORIZED/);
+const qwenRequest={...request,provider:'qwen',model:'qwen3.8-max',destination:'qwen:external_model',system_instruction:'Return JSON only',settings:{}};
+assert.equal(approveRequest(qwenRequest).provider,'qwen');
+assert.throws(()=>approveRequest({...qwenRequest,system_instruction:'Return one object'}),/QWEN_JSON_PROMPT_REQUIRED/);
+assert.throws(()=>authorizeDestination('preflight','qwen','qwen3.8-max',{max_tokens:4096}),/INVALID_MODEL_SETTINGS/);
 console.log('governance behavioral tests passed');

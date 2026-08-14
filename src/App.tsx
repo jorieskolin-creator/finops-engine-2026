@@ -192,7 +192,7 @@ const PrivacyProtocolCard = () => (
       ))}
     </div>
     <p className="mt-5 text-center text-[11px] leading-relaxed text-slate-400 max-w-4xl mx-auto">
-      Only extracted text that passes the governed packet policy is transmitted to the configured OpenAI and Anthropic services. Direct images and scanned PDF pages are not processed because local OCR is unavailable. Provider retention depends on the configured account terms. Generated reports are kept in browser session storage for crash recovery. Sanitized packets and governed model results may remain in Redis for up to 30 minutes and are tombstoned for logical deletion when the run completes, fails, expires, or is deleted.
+      Only extracted text that passes the governed packet policy is transmitted to the configured OpenAI, Anthropic, and Qwen services. Direct images and scanned PDF pages are not processed because local OCR is unavailable. Provider retention depends on the configured account terms. Generated reports are kept in browser session storage for crash recovery. Sanitized packets and governed model results may remain in Redis for up to 30 minutes and are tombstoned for logical deletion when the run completes, fails, expires, or is deleted.
     </p>
   </div>
 );

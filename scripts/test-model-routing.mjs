@@ -18,10 +18,10 @@ const orchestratorSource = await readFile(new URL('../src/orchestrator.ts', impo
 
 if (!ts) {
   assert.match(source, /export const NORMAL_STAGE_MODELS[\s\S]*?preflight:\s+PROFILES\.GPT_55_PREFLIGHT/);
-  assert.match(source, /export const CHEAP_TEST_STAGE_MODELS[\s\S]*?preflight:\s+PROFILES\.GPT_54_MINI_PREFLIGHT/);
-  assert.match(source, /forensic_audit:\s+PROFILES\.HAIKU_45/);
-  assert.match(source, /roadmap_synthesis:\s+PROFILES\.GPT_54_MINI_ROADMAP/);
-  assert.match(source, /export const CHEAP_TEST_FALLBACK_CHAIN[\s\S]*?quality_gate:\s+\[PROFILES\.SONNET_46\]/);
+  assert.match(source, /export const CHEAP_TEST_STAGE_MODELS[\s\S]*?preflight:\s+PROFILES\.QWEN_38_MAX/);
+  assert.match(source, /forensic_audit:\s+PROFILES\.QWEN_38_MAX/);
+  assert.match(source, /roadmap_synthesis:\s+PROFILES\.QWEN_38_MAX/);
+  assert.match(source, /export const CHEAP_TEST_FALLBACK_CHAIN[\s\S]*?quality_gate:\s+\[PROFILES\.GPT_54_MINI_QUALITY_GATE, PROFILES\.SONNET_46\]/);
   assert.match(source, /MODEL_ROUTING_MODE === 'cheap_test' \? CHEAP_TEST_STAGE_MODELS : NORMAL_STAGE_MODELS/);
   assert.match(source, /MODEL_ROUTING_MODE === 'cheap_test' \? CHEAP_TEST_FALLBACK_CHAIN : NORMAL_FALLBACK_CHAIN/);
   assert.match(analysisServiceSource, /model_mode: MODEL_ROUTING_MODE/);
@@ -153,19 +153,11 @@ const cheap = await import(`file://${cheapModulePath}`);
 delete globalThis.window;
 
 assert.equal(cheap.MODEL_ROUTING_MODE, 'cheap_test');
-assert.equal(cheap.STAGE_MODELS.preflight.id, 'gpt-5.4-mini');
-assert.deepEqual(cheap.STAGE_MODELS.preflight.openaiReasoning, { effort: 'low' });
-assert.equal(cheap.STAGE_MODELS.forensic_audit.id, 'claude-haiku-4-5-20251001');
-assert.equal(cheap.STAGE_MODELS.synthesis.id, 'claude-haiku-4-5-20251001');
-assert.equal(cheap.STAGE_MODELS.targeted_rescan.id, 'gpt-5.4-mini');
-assert.equal(cheap.STAGE_MODELS.evidence_check.id, 'gpt-5.4-mini');
-assert.equal(cheap.STAGE_MODELS.evidence_adjudication.id, 'gpt-5.4-mini');
-assert.equal(cheap.STAGE_MODELS.roadmap_synthesis.id, 'gpt-5.4-mini');
-assert.equal(cheap.STAGE_MODELS.synthesis_escalation.id, 'gpt-5.4-mini');
-assert.equal(cheap.STAGE_MODELS.fact_check.id, 'gpt-5.4-mini');
-assert.equal(cheap.STAGE_MODELS.fact_check_high.id, 'gpt-5.4-mini');
-assert.deepEqual(cheap.STAGE_MODELS.fact_check_high.openaiReasoning, { effort: 'high' });
-assert.equal(cheap.STAGE_MODELS.quality_gate.id, 'gpt-5.4-mini');
+for (const profile of Object.values(cheap.STAGE_MODELS)) {
+  assert.equal(profile.provider, 'qwen');
+  assert.equal(profile.id, 'qwen3.8-max');
+  assert.equal(profile.maxTokens, undefined);
+}
 
 for (const stage of Object.keys(cheap.STAGE_MODELS)) {
   const chain = cheap.modelsFor(stage);
@@ -175,6 +167,7 @@ for (const stage of Object.keys(cheap.STAGE_MODELS)) {
     ...(profile.anthropicThinking ? { thinking_budget_tokens: profile.anthropicThinking.budget_tokens } : {}),
   });
   assert.equal(chain.at(-1).id, 'claude-sonnet-4-6', `${stage} should use Sonnet as the one cheap-mode backup`);
+  assert.equal(chain[1].id, 'gpt-5.4-mini', `${stage} should try GPT mini before the final Sonnet backup`);
   assert.equal(
     chain.some((profile) => profile.id === 'claude-opus-4-7'),
     false,

@@ -23,6 +23,7 @@
     "test:fact-check-validation": "node scripts/test-fact-check-validation.mjs",
     "test:json-response": "node scripts/test-json-response.mjs",
     "test:model-routing": "node scripts/test-model-routing.mjs",
+    "test:provider-invocation": "node scripts/test-provider-invocation.mjs",
     "test:internal-call-protection": "node scripts/test-internal-call-protection.mjs",
     "test:internal-result-recovery": "node scripts/test-internal-result-recovery.mjs",
     "test:internal-result-store": "node scripts/test-internal-result-store.mjs",

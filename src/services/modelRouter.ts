@@ -48,7 +48,8 @@ const OUTPUT_SCHEMA = 'governed_output_v1';
 const POLICY = 'llm_egress_policy_v1';
 async function governedCall(profile: ModelProfile, prompt: NormalizedPrompt, stage: StageId, ctx: RunContext): Promise<{ text: string; usage?: any }> {
   if (prompt.images?.length) throw new Error('IMAGE_PAYLOAD_DISABLED: external image processing is disabled until local OCR/redaction exists');
-  const settings: any = { max_tokens: profile.maxTokens ?? 4096 };
+  const settings: any = {};
+  if (profile.maxTokens !== undefined) settings.max_tokens = profile.maxTokens;
   if (profile.openaiReasoning) settings.reasoning_effort = profile.openaiReasoning.effort;
   if (profile.anthropicThinking) settings.thinking_budget_tokens = profile.anthropicThinking.budget_tokens;
   const approval = await fetch('/api/governed-packet', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ schema_version:REQUEST_SCHEMA, policy_version:POLICY, run_id:ctx.runId, stage, provider:profile.provider, model:profile.id, destination:`${profile.provider}:external_model`, system_instruction:prompt.systemInstruction || '', parts:[{type:'text',text:prompt.userText}], settings }) });
@@ -71,8 +72,7 @@ const validOutput = async (output: any, body: any, approval: any): Promise<boole
   && typeof output.text === 'string' && output.char_count === output.text.length && output.output_hash === await sha256Hex(output.text)
 );
 
-// Reads the NDJSON stream emitted by api/anthropic-generate.js and
-// api/openai-generate.js.
+// Reads the NDJSON stream emitted by the provider generate endpoints.
 //
 // Wire frames:
 //   { type: 'text',      delta: string }    incremental text (accumulated)
@@ -254,7 +254,7 @@ async function postWithTimeout(url: string, body: any, approval: any): Promise<{
 }
 
 export async function callModel(profile: ModelProfile, prompt: NormalizedPrompt, stage: StageId, ctx: RunContext): Promise<{ text: string; usage?: any }> {
-  if (profile.provider === 'anthropic' || profile.provider === 'openai') return governedCall(profile, prompt, stage, ctx);
+  if (profile.provider === 'anthropic' || profile.provider === 'openai' || profile.provider === 'qwen') return governedCall(profile, prompt, stage, ctx);
   throw new Error(`Unknown provider: ${(profile as any).provider}`);
 }
 

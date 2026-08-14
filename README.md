@@ -1,6 +1,6 @@
 # FinOps Engine
 
-Evidence-gated FinOps Maturity Assessment prototype. The React, TypeScript, and Vite client parses source documents in the browser and orchestrates a multi-stage assessment through authenticated OpenAI and Anthropic proxy endpoints under `api/`.
+Evidence-gated FinOps Maturity Assessment prototype. The React, TypeScript, and Vite client parses source documents in the browser and orchestrates a multi-stage assessment through authenticated OpenAI, Anthropic, and Qwen proxy endpoints under `api/`.
 
 The repository is currently intended for solution development, structural validation, and accuracy/reproducibility testing. It is not yet a production-ready multi-user service.
 
@@ -13,7 +13,7 @@ npm ci
 cp .env.example .env.local
 ```
 
-Set `SECRET_KEY`, `OPENAI_API_KEY` (or `GPT_API_KEY`), and `ANTHROPIC_API_KEY`. Provider keys remain server-side and are never included in the Vite client bundle.
+Set `SECRET_KEY` and the keys required by your selected routing mode: `OPENAI_API_KEY` (or `GPT_API_KEY`), `ANTHROPIC_API_KEY`, and/or `QWEN_API_KEY`. Provider keys remain server-side and are never included in the Vite client bundle.
 
 For the simplest full-stack development environment, use Vercel's local runtime, which loads `.env.local` and serves Vite together with the API handlers:
 
@@ -25,7 +25,7 @@ For UI-only work, run `npm run dev`. The UI will load, but assessments cannot co
 
 ## Active model architecture
 
-Model profiles, stage assignments, and fallback chains are centralized in `src/models.ts`. The active providers are OpenAI and Anthropic; Gemini is not part of the current runtime.
+Model profiles, stage assignments, and fallback chains are centralized in `src/models.ts`. The active providers are OpenAI, Anthropic, and Qwen; Gemini is not part of the current runtime.
 
 | Stage group | Normal primary provider/profile |
 |-------------|---------------------------------|
@@ -37,7 +37,7 @@ Model profiles, stage assignments, and fallback chains are centralized in `src/m
 | Roadmap synthesis | Anthropic Claude Opus 4.7 |
 | Fact check and quality-gate explanation | OpenAI GPT-5.5 |
 
-Every stage has an ordered fallback chain. Treat `src/models.ts`, rather than this summary, as the source of truth when changing model routing. The optional `cheap_test` mode is a development cost-control mode, not an authorization boundary.
+Every stage has an ordered fallback chain. Treat `src/models.ts`, rather than this summary, as the source of truth when changing model routing. The optional `cheap_test` mode uses Qwen3.8-Max first, then GPT-5.4-mini and finally Sonnet as a reliability fallback. It is a development cost-control mode, not an authorization boundary. Activate it for the browser session with `?model_mode=cheap_test`, or set `VITE_FINOPS_MODEL_MODE=cheap_test` at build time.
 
 ## Environment variables
 
@@ -46,6 +46,7 @@ Every stage has an ordered fallback chain. Treat `src/models.ts`, rather than th
 | `SECRET_KEY` | Yes | Shared assessment password and HMAC key for session cookies. Use at least 32 random characters. Rotation invalidates active sessions. |
 | `OPENAI_API_KEY` or `GPT_API_KEY` | Yes for OpenAI stages | Server-side OpenAI credential. `GPT_API_KEY` takes precedence when both are set. |
 | `ANTHROPIC_API_KEY` | Yes for Anthropic stages | Server-side Anthropic credential. |
+| `QWEN_API_KEY` | Yes for Qwen stages | Server-side Qwen Cloud credential used with the international OpenAI-compatible endpoint. |
 | `DATABASE_URL` | Yes for the Node server | PostgreSQL control-plane connection. Startup fails closed if unavailable or unmigrated. |
 | `REDIS_URL` | Yes for the Node server | Redis execution-plane connection. Startup fails closed if unavailable. |
 | `VITE_FINOPS_TACTICS_URL` | No | Public remote tactics database URL exposed to the browser. |
@@ -68,6 +69,7 @@ The UI is public, but assessment and supporting API operations require an HMAC-s
 | `/api/governed-packet` | POST | Authenticated approval of versioned, sanitized text-only stage packets. |
 | `/api/openai-generate` | POST | Packet-ID-only governed OpenAI dispatch. |
 | `/api/anthropic-generate` | POST | Packet-ID-only governed Anthropic dispatch. |
+| `/api/qwen-generate` | POST | Packet-ID-only governed Qwen dispatch. |
 
 Milestone C uses structured source/page records and blocks image processing until local OCR/redaction is available. Approval is deterministic pattern-based risk reduction, not proof that arbitrary source content is public. PostgreSQL stores only content-free control metadata; Redis holds transient packets and governed results for at most 30 minutes and never beyond the immutable 24-hour run deadline.
 | `/api/model-result` | POST | Recover a completed governed result from Redis. |
@@ -82,7 +84,7 @@ The authentication implementation lives in `lib/auth.js`. The current shared-pas
 The current implementation provides the following controls and limitations:
 
 - Source files are parsed in the browser; the original files are not uploaded as files by this application.
-- Only browser-extracted text is sent through the server proxies to the configured OpenAI and Anthropic services. Direct images are rejected, PDF pages are not rasterized, and scanned/visual-only pages are not processed because local OCR is unavailable. Provider-side storage and retention depend on the configured provider account and contract terms.
+- Only browser-extracted text is sent through the server proxies to the configured OpenAI, Anthropic, and Qwen services. Direct images are rejected, PDF pages are not rasterized, and scanned/visual-only pages are not processed because local OCR is unavailable. Provider-side storage and retention depend on the configured provider account and contract terms.
 - A deterministic pattern scan blocks recognized high-risk secret and contextual financial-value patterns before the main assessment. A model-assisted review checks distributed text samples. This is policy approval and risk reduction, not proof of public classification or comprehensive PII/data-classification prevention; source material must be reviewed before upload.
 - The completed report, including report-visible evidence, is stored in browser `sessionStorage` for crash recovery until the tab/session data is cleared.
 - Transient packets and model output may be retained in Redis for up to 30 minutes for dispatch/recovery. Completion, failure, expiry, and user deletion synchronously tombstone the run and logically delete indexed transient keys; retryable cleanup is resumed by the worker. Content-free operational metadata expires after 90 days.

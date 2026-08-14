@@ -7,12 +7,13 @@
 // -----------------------
 // Anthropic (Sonnet/Opus/Haiku): maxTokens, optional extended thinking budget
 // OpenAI (GPT-5.x): reasoning.effort, maxTokens
+// Qwen (Qwen3.8-Max): non-thinking JSON mode; output limit left to provider
 //
 // Model IDs may need adjustment as providers rename previews → GA. The router
 // reads `id` verbatim and forwards it to the provider, so a typo here is the
 // only thing that breaks a swap.
 
-export type Provider = 'anthropic' | 'openai';
+export type Provider = 'anthropic' | 'openai' | 'qwen';
 
 export interface AnthropicThinkingConfig {
   type: 'enabled';
@@ -183,6 +184,13 @@ export const PROFILES = {
     openaiReasoning: { effort: 'medium' },
     maxTokens: 8192,
   } satisfies ModelProfile,
+
+  // Qwen Cloud structured output must run with thinking disabled. Do not set
+  // maxTokens: Qwen documents that output caps can truncate JSON mid-object.
+  QWEN_38_MAX: {
+    id: 'qwen3.8-max',
+    provider: 'qwen',
+  } satisfies ModelProfile,
 } as const;
 
 // ============================================================================
@@ -204,26 +212,26 @@ export const NORMAL_STAGE_MODELS: Record<StageId, ModelProfile> = {
 };
 
 export const CHEAP_TEST_STAGE_MODELS: Record<StageId, ModelProfile> = {
-  preflight:            PROFILES.GPT_54_MINI_PREFLIGHT,
-  forensic_audit:       PROFILES.HAIKU_45,
-  targeted_rescan:      PROFILES.GPT_54_MINI_AUDIT,
-  evidence_check:       PROFILES.GPT_54_MINI_EVIDENCE_CHECK,
-  evidence_adjudication: PROFILES.GPT_54_MINI_FACT_CHECK,
-  synthesis:            PROFILES.HAIKU_45,
-  roadmap_synthesis:    PROFILES.GPT_54_MINI_ROADMAP,
-  synthesis_escalation: PROFILES.GPT_54_MINI_SYNTHESIS,
-  fact_check:           PROFILES.GPT_54_MINI_FACT_CHECK,
-  fact_check_high:      PROFILES.GPT_54_MINI_FACT_CHECK_HIGH,
-  quality_gate:         PROFILES.GPT_54_MINI_QUALITY_GATE,
+  preflight:            PROFILES.QWEN_38_MAX,
+  forensic_audit:       PROFILES.QWEN_38_MAX,
+  targeted_rescan:      PROFILES.QWEN_38_MAX,
+  evidence_check:       PROFILES.QWEN_38_MAX,
+  evidence_adjudication: PROFILES.QWEN_38_MAX,
+  synthesis:            PROFILES.QWEN_38_MAX,
+  roadmap_synthesis:    PROFILES.QWEN_38_MAX,
+  synthesis_escalation: PROFILES.QWEN_38_MAX,
+  fact_check:           PROFILES.QWEN_38_MAX,
+  fact_check_high:      PROFILES.QWEN_38_MAX,
+  quality_gate:         PROFILES.QWEN_38_MAX,
 };
 
 // ============================================================================
 // Fallback chains — tried in order if primary fails
 //
 // Tiering rule: order fallbacks by task fit, not only provider family.
-// This deployment intentionally excludes Gemini providers. Fast safety checks,
-// independent verification, synthesis, and validation route through GPT-5.5
-// and Claude profiles only.
+// This deployment intentionally excludes Gemini providers. Normal mode routes
+// through GPT-5.5 and Claude; cheap_test adds Qwen and GPT-5.4-mini before its
+// final Sonnet reliability fallback.
 // ============================================================================
 
 export const NORMAL_FALLBACK_CHAIN: Record<StageId, ModelProfile[]> = {
@@ -241,17 +249,17 @@ export const NORMAL_FALLBACK_CHAIN: Record<StageId, ModelProfile[]> = {
 };
 
 export const CHEAP_TEST_FALLBACK_CHAIN: Record<StageId, ModelProfile[]> = {
-  preflight:            [PROFILES.SONNET_46],
-  forensic_audit:       [PROFILES.SONNET_46],
-  targeted_rescan:      [PROFILES.SONNET_46],
-  evidence_check:       [PROFILES.SONNET_46],
-  evidence_adjudication: [PROFILES.SONNET_46],
-  synthesis:            [PROFILES.SONNET_46],
-  roadmap_synthesis:    [PROFILES.SONNET_46],
-  synthesis_escalation: [PROFILES.SONNET_46],
-  fact_check:           [PROFILES.SONNET_46],
-  fact_check_high:      [PROFILES.SONNET_46],
-  quality_gate:         [PROFILES.SONNET_46],
+  preflight:            [PROFILES.GPT_54_MINI_PREFLIGHT, PROFILES.SONNET_46],
+  forensic_audit:       [PROFILES.GPT_54_MINI_AUDIT, PROFILES.SONNET_46],
+  targeted_rescan:      [PROFILES.GPT_54_MINI_AUDIT, PROFILES.SONNET_46],
+  evidence_check:       [PROFILES.GPT_54_MINI_EVIDENCE_CHECK, PROFILES.SONNET_46],
+  evidence_adjudication: [PROFILES.GPT_54_MINI_FACT_CHECK, PROFILES.SONNET_46],
+  synthesis:            [PROFILES.GPT_54_MINI_SYNTHESIS, PROFILES.SONNET_46],
+  roadmap_synthesis:    [PROFILES.GPT_54_MINI_ROADMAP, PROFILES.SONNET_46],
+  synthesis_escalation: [PROFILES.GPT_54_MINI_SYNTHESIS, PROFILES.SONNET_46],
+  fact_check:           [PROFILES.GPT_54_MINI_FACT_CHECK, PROFILES.SONNET_46],
+  fact_check_high:      [PROFILES.GPT_54_MINI_FACT_CHECK_HIGH, PROFILES.SONNET_46],
+  quality_gate:         [PROFILES.GPT_54_MINI_QUALITY_GATE, PROFILES.SONNET_46],
 };
 
 const RUNTIME_MODEL_MODE_KEY = 'finops_model_mode';
