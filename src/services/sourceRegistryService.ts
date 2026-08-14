@@ -91,6 +91,34 @@ const validNativeCharts = (charts: NonNullable<SourceRecord['structured_table']>
   });
 };
 
+const validDeterministicInspection = (table: NonNullable<SourceRecord['structured_table']>): boolean => {
+  const inspection = table.deterministic_inspection;
+  if (inspection === undefined) return true;
+  return inspection.schema_version === 'deterministic_table_inspection_v1'
+    && inspection.population_scope === 'FULL_TABLE'
+    && inspection.row_count === table.total_row_count
+    && inspection.column_count === table.headers.length
+    && inspection.duplicate_definition === 'REPEATED_ROWS_AFTER_FIRST_OCCURRENCE'
+    && inspection.type_consistency_definition === 'DOMINANT_NON_EMPTY_TYPE_SHARE'
+    && ['EXACT', 'NOT_CALCULATED_LIMIT'].includes(inspection.duplicate_calculation_state)
+    && ((inspection.duplicate_calculation_state === 'EXACT'
+      && Number.isInteger(inspection.duplicate_row_count) && inspection.duplicate_row_count! >= 0
+      && Number.isFinite(inspection.duplicate_row_rate_percent))
+      || (inspection.duplicate_calculation_state === 'NOT_CALCULATED_LIMIT'
+        && inspection.duplicate_row_count === null && inspection.duplicate_row_rate_percent === null))
+    && Array.isArray(inspection.columns) && inspection.columns.length === table.headers.length
+    && inspection.columns.every((column, index) => column.column_index === index
+      && ['EMPTY', 'STRING', 'INTEGER', 'DECIMAL', 'BOOLEAN', 'DATE', 'MIXED'].includes(column.inferred_type)
+      && Number.isInteger(column.non_empty_count) && column.non_empty_count >= 0
+      && Number.isInteger(column.blank_count) && column.blank_count >= 0
+      && column.non_empty_count + column.blank_count === inspection.row_count
+      && Number.isFinite(column.blank_rate_percent) && column.blank_rate_percent >= 0 && column.blank_rate_percent <= 100
+      && (column.type_consistency_percent === null || (Number.isFinite(column.type_consistency_percent) && column.type_consistency_percent >= 0 && column.type_consistency_percent <= 100))
+      && Number.isInteger(column.distinct_value_count) && column.distinct_value_count >= 0
+      && ['EXACT', 'LOWER_BOUND'].includes(column.distinct_count_state)
+      && Array.isArray(column.detected_currencies) && column.detected_currencies.every(currency => typeof currency === 'string' && currency.length <= 32));
+};
+
 const validStructuredTable = (table: NonNullable<SourceRecord['structured_table']>): boolean =>
   table.schema_version === 'structured_table_v1'
   && Array.isArray(table.headers) && table.headers.length <= 200
@@ -100,6 +128,7 @@ const validStructuredTable = (table: NonNullable<SourceRecord['structured_table'
   && table.headers.every(header => typeof header === 'string' && header.length <= 243)
   && table.rows.every(row => Array.isArray(row) && row.length <= 200 && row.every(cell => typeof cell === 'string' && cell.length <= 243))
   && validNativeCharts(table.native_charts)
+  && validDeterministicInspection(table)
   && (table.analysis_rows === undefined || (
     Array.isArray(table.analysis_rows) && table.analysis_rows.length === table.total_row_count
     && table.analysis_complete === true

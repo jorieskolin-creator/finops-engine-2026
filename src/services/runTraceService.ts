@@ -19,6 +19,7 @@ import {
   SourceManifestTrace,
   SourceRegistry,
   StageTrace,
+  TableInspectionTrace,
   TacticPathTrace
 } from '../types';
 import {
@@ -54,6 +55,7 @@ interface BuildRunTraceInput {
   qualityGate: QualityGateResult;
   tacticGroundingAdjustments: TacticGroundingTraceAdjustment[];
   derivedAnalyticalEvidence?: DerivedAnalyticalEvidence[];
+  tableInspections?: TableInspectionTrace[];
   dataSignalCoverage?: DataSignalCoverageReport;
   boundedRetrieval?: BoundedRetrievalTrace;
 }
@@ -336,6 +338,7 @@ export const buildRunTrace = (input: BuildRunTraceInput): RunTrace => {
     created_at: new Date().toISOString(),
     input_manifest: sourceManifest(input.sourceRegistry),
     context_packets: contextPackets,
+    table_inspections: input.tableInspections,
     derived_analytical_evidence: input.derivedAnalyticalEvidence,
     data_signal_coverage: input.dataSignalCoverage,
     bounded_retrieval: input.boundedRetrieval,

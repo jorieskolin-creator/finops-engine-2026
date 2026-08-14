@@ -3,6 +3,7 @@ import type {
   EvidencePrivacyFindingKind,
   SourceRecord
 } from '../types';
+import { buildDeterministicTableInspection } from './tableService';
 
 type Pattern = {
   kind: EvidencePrivacyFindingKind;
@@ -89,15 +90,19 @@ export const sanitizeEvidenceSources = (sources: SourceRecord[]): {
         scannedTableCellCount++;
         return sanitizeText(cell, source.source_id, findings);
       }));
+      const sanitizedHeaders = table.headers.map(header => {
+        scannedTableCellCount++;
+        return sanitizeText(header, source.source_id, findings);
+      });
       return {
         ...table,
         sheet_name: table.sheet_name ? sanitizeText(table.sheet_name, source.source_id, findings) : undefined,
-        headers: table.headers.map(header => {
-          scannedTableCellCount++;
-          return sanitizeText(header, source.source_id, findings);
-        }),
+        headers: sanitizedHeaders,
         rows: table.rows.map(row => row.map(applyKnownRedactions)),
         analysis_rows: table.analysis_rows ? sanitizedCompleteRows : undefined,
+        deterministic_inspection: table.deterministic_inspection
+          ? buildDeterministicTableInspection(sanitizedHeaders, sanitizedCompleteRows)
+          : undefined,
         native_charts: table.native_charts?.map(chart => ({
           ...chart,
           chart_part: sanitizeChartText(chart.chart_part),

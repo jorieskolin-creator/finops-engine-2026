@@ -60,6 +60,19 @@ assert.ok(deterministicSampleA.structuredTable.sampled_row_numbers.includes(242)
 assert.ok(deterministicSampleA.structuredTable.sampled_row_reasons.some(reasons => reasons.includes('MISSING_RECOGNIZED_FIELD')));
 assert.match(deterministicSampleA.text, /\[ROW 242 reasons=[^\]]*NUMERIC_EXTREME/);
 
+const profiledCsv = renderDelimitedTableForAnalysis('owner,cost,date,active\nAlice,USD 10,2026-01,true\n,EUR 20,2026-02,false\n,EUR 20,2026-02,false', { fileName: 'profile.csv', delimiter: ',' });
+const inspection = profiledCsv.structuredTable.deterministic_inspection;
+assert.equal(inspection.schema_version, 'deterministic_table_inspection_v1');
+assert.equal(inspection.population_scope, 'FULL_TABLE');
+assert.equal(inspection.duplicate_row_count, 1);
+assert.equal(inspection.duplicate_row_rate_percent, 33.33);
+assert.equal(inspection.duplicate_definition, 'REPEATED_ROWS_AFTER_FIRST_OCCURRENCE');
+assert.equal(inspection.type_consistency_definition, 'DOMINANT_NON_EMPTY_TYPE_SHARE');
+assert.deepEqual(inspection.columns.map(column => column.inferred_type), ['STRING', 'INTEGER', 'DATE', 'BOOLEAN']);
+assert.equal(inspection.columns[0].blank_rate_percent, 66.67);
+assert.deepEqual(inspection.columns[1].detected_currencies, ['EUR', 'USD']);
+assert.doesNotMatch(profiledCsv.text, /deterministic_table_inspection|duplicate_row_rate/, 'unapproved inspection metrics must remain local and outside model context');
+
 const clippedCsv = renderDelimitedTableForAnalysis(`service,description\ncompute,${'x'.repeat(300)}`, {
   fileName: 'long-cell.csv',
   delimiter: ',',

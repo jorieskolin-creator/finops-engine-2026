@@ -14,7 +14,8 @@ const compile = source => ts.transpileModule(source, {
 
 const dir = await mkdtemp(join(tmpdir(), 'finops-evidence-acquisition-'));
 for (const name of ['evidenceFileService', 'deterministicPrivacyService', 'tableService']) {
-  const source = await readFile(new URL(`../src/services/${name}.ts`, import.meta.url), 'utf8');
+  const source = (await readFile(new URL(`../src/services/${name}.ts`, import.meta.url), 'utf8'))
+    .replace("'./tableService'", "'./tableService.mjs'");
   await writeFile(join(dir, `${name}.mjs`), compile(source), 'utf8');
 }
 
@@ -81,6 +82,11 @@ assert.equal(contactPrivacy.decision.redaction_count, 2);
 assert.equal(contactPrivacy.sources[0].pages[0].text, 'Owner [EMAIL_REDACTED] uses host [IP_REDACTED].');
 assert.throws(() => assertDeterministicEgressText(['owner alice@example.com']), /DETERMINISTIC_EGRESS_SCAN_FAILED/);
 assert.doesNotThrow(() => assertDeterministicEgressText([contactPrivacy.sources[0].pages[0].text]));
+
+const contactTable = renderDelimitedTableForAnalysis('owner\nalice@example.com\nbob@example.com', { fileName: 'contacts.csv', delimiter: ',' });
+const contactTablePrivacy = sanitizeEvidenceSources([{ schema_version: 'source_record_v1', source_id: 'src-contacts', source_name: 'contacts.csv', kind: 'csv', text: contactTable.text, structured_table: contactTable.structuredTable }]);
+assert.equal(contactTable.structuredTable.deterministic_inspection.columns[0].distinct_value_count, 2);
+assert.equal(contactTablePrivacy.sources[0].structured_table.deterministic_inspection.columns[0].distinct_value_count, 1, 'inspection metrics must be recomputed from sanitized full-table values');
 
 const financialPrivacy = sanitizeEvidenceSources([{
   schema_version: 'source_record_v1', source_id: 'src-contract', source_name: 'contract.pdf', kind: 'pdf',

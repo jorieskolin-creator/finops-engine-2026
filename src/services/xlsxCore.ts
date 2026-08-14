@@ -1,7 +1,7 @@
 import { TextWriter, Uint8ArrayReader, ZipReader, type FileEntry } from '@zip.js/zip.js';
 import * as XLSX from 'xlsx';
 import type { NativeChartEvidenceUnit, StructuredTableData } from '../types';
-import { renderStructuredTableContext, selectDeterministicTableSample, TABLE_SAMPLE_STRATEGY_VERSION } from './tableService';
+import { buildDeterministicTableInspection, renderStructuredTableContext, selectDeterministicTableSample, TABLE_SAMPLE_STRATEGY_VERSION } from './tableService';
 
 const MAX_ARCHIVE_ENTRIES = 5_000;
 const MAX_UNCOMPRESSED_BYTES = 100 * 1024 * 1024;
@@ -278,6 +278,7 @@ export const parseXlsxBytes = async (bytes: Uint8Array, sourceHash?: string): Pr
       sampled_row_reasons: sample.reasons,
       sample_strategy_version: TABLE_SAMPLE_STRATEGY_VERSION,
       sample_seed_hash: sample.seedHash,
+      deterministic_inspection: buildDeterministicTableInspection(headers, analysisRows),
       total_row_count: dataRows.length,
       analysis_complete: true,
       formula_cell_count: formulaCellCount,

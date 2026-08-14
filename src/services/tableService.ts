@@ -1,3 +1,5 @@
+import type { DeterministicTableInspection } from '../types';
+
 export interface ParsedDelimitedTable {
   delimiter: ',' | '\t';
   headers: string[];
@@ -19,6 +21,92 @@ const MAX_CELL_CHARS = 240;
 const MAX_COLUMNS = 200;
 const MAX_ANALYSIS_ROWS = 250_000;
 export const TABLE_SAMPLE_STRATEGY_VERSION = 'deterministic_table_sample_v1' as const;
+const DISTINCT_VALUE_LIMIT = 10_000;
+const DUPLICATE_ANALYSIS_ROW_LIMIT = 100_000;
+
+const roundedPercent = (value: number): number => Math.round(value * 100) / 100;
+const valueType = (value: string): Exclude<DeterministicTableInspection['columns'][number]['inferred_type'], 'EMPTY' | 'MIXED'> => {
+  const trimmed = value.trim();
+  if (/^(?:true|false|yes|no)$/i.test(trimmed)) return 'BOOLEAN';
+  if (/^\d{4}-(?:0[1-9]|1[0-2])(?:-(?:0[1-9]|[12]\d|3[01]))?(?:[T ]\d{2}:\d{2}(?::\d{2})?(?:Z|[+-]\d{2}:?\d{2})?)?$/.test(trimmed)) return 'DATE';
+  const normalized = trimmed.replace(/[A-Z]{3}/gi, '').replace(/[$€£¥,\s]/g, '');
+  const signed = /^\(.*\)$/.test(normalized) ? `-${normalized.slice(1, -1)}` : normalized;
+  if (/^-?\d+$/.test(signed)) return 'INTEGER';
+  if (/^-?\d+\.\d+$/.test(signed)) return 'DECIMAL';
+  return 'STRING';
+};
+
+const currenciesIn = (value: string): string[] => {
+  const found = new Set<string>();
+  if (/\$/.test(value)) found.add('USD_OR_DOLLAR');
+  if (/€/.test(value)) found.add('EUR');
+  if (/£/.test(value)) found.add('GBP');
+  if (/¥/.test(value)) found.add('JPY_OR_CNY');
+  for (const match of value.matchAll(/\b(USD|EUR|GBP|JPY|CNY|CAD|AUD)\b/gi)) found.add(match[1].toUpperCase());
+  if (found.has('USD')) found.delete('USD_OR_DOLLAR');
+  return [...found];
+};
+
+export const buildDeterministicTableInspection = (headers: string[], rows: string[][]): DeterministicTableInspection => {
+  const states = headers.map(() => ({
+    nonEmpty: 0,
+    types: new Map<string, number>(),
+    distinct: new Set<string>(),
+    distinctCapped: false,
+    currencies: new Set<string>()
+  }));
+  for (const row of rows) {
+    for (let column = 0; column < headers.length; column++) {
+      const value = (row[column] || '').trim();
+      if (!value) continue;
+      const state = states[column];
+      state.nonEmpty++;
+      const type = valueType(value);
+      state.types.set(type, (state.types.get(type) || 0) + 1);
+      if (state.distinct.size <= DISTINCT_VALUE_LIMIT) {
+        state.distinct.add(value);
+        if (state.distinct.size > DISTINCT_VALUE_LIMIT) state.distinctCapped = true;
+      }
+      currenciesIn(value).forEach(currency => state.currencies.add(currency));
+    }
+  }
+  let duplicateRowCount: number | null = null;
+  if (rows.length <= DUPLICATE_ANALYSIS_ROW_LIMIT) {
+    const seen = new Set<string>();
+    duplicateRowCount = 0;
+    for (const row of rows) {
+      const signature = JSON.stringify(row);
+      if (seen.has(signature)) duplicateRowCount++;
+      else seen.add(signature);
+    }
+  }
+  return {
+    schema_version: 'deterministic_table_inspection_v1',
+    population_scope: 'FULL_TABLE',
+    row_count: rows.length,
+    column_count: headers.length,
+    duplicate_row_count: duplicateRowCount,
+    duplicate_row_rate_percent: duplicateRowCount === null || rows.length === 0 ? null : roundedPercent(duplicateRowCount / rows.length * 100),
+    duplicate_calculation_state: duplicateRowCount === null ? 'NOT_CALCULATED_LIMIT' : 'EXACT',
+    duplicate_definition: 'REPEATED_ROWS_AFTER_FIRST_OCCURRENCE',
+    type_consistency_definition: 'DOMINANT_NON_EMPTY_TYPE_SHARE',
+    columns: states.map((state, columnIndex) => {
+      const sortedTypes = [...state.types.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+      const inferredType = state.nonEmpty === 0 ? 'EMPTY' : sortedTypes.length === 1 ? sortedTypes[0][0] : 'MIXED';
+      return {
+        column_index: columnIndex,
+        inferred_type: inferredType as DeterministicTableInspection['columns'][number]['inferred_type'],
+        non_empty_count: state.nonEmpty,
+        blank_count: rows.length - state.nonEmpty,
+        blank_rate_percent: rows.length === 0 ? 0 : roundedPercent((rows.length - state.nonEmpty) / rows.length * 100),
+        type_consistency_percent: state.nonEmpty === 0 ? null : roundedPercent((sortedTypes[0]?.[1] || 0) / state.nonEmpty * 100),
+        distinct_value_count: state.distinct.size,
+        distinct_count_state: state.distinctCapped ? 'LOWER_BOUND' : 'EXACT',
+        detected_currencies: [...state.currencies].sort()
+      };
+    })
+  };
+};
 
 const fnv1a = (value: string): number => {
   let hash = 0x811c9dc5;
@@ -275,6 +363,7 @@ export const renderDelimitedTableForAnalysis = (
       sampled_row_reasons: table.sampledRowReasons,
       sample_strategy_version: TABLE_SAMPLE_STRATEGY_VERSION,
       sample_seed_hash: table.sampleSeedHash,
+      deterministic_inspection: buildDeterministicTableInspection(table.headers, table.analysisRows),
       total_row_count: table.rowCount,
       analysis_complete: table.analysisRows.length === table.rowCount,
       truncated: table.rowCount > table.rows.length || table.clippedCellCount > 0

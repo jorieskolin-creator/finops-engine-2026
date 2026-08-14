@@ -262,6 +262,15 @@ export const analyzeDocument = async (
     emitProgress({ stage: 'packetization', status: 'in_progress' });
     const sourceRegistry = buildSourceRegistry(acquiredSources);
     const derivedAnalyticalEvidence = analyzeStructuredSources(acquiredSources);
+    const tableInspections = acquiredSources.flatMap(source =>
+      [...(source.structured_tables || []), ...(source.structured_table ? [source.structured_table] : [])]
+        .flatMap(table => table.deterministic_inspection ? [{
+          source_id: source.source_id,
+          sheet_name: table.sheet_name,
+          model_eligible: table.model_eligible !== false,
+          inspection: table.deterministic_inspection
+        }] : [])
+    );
     const dataSignalCoverage = buildDataSignalCoverageReport();
     const text = renderPseudonymousSourceContext(sourceRegistry, 50000);
     const sourcePackets = buildDomainPackets(sourceRegistry);
@@ -1118,6 +1127,7 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => `  ${cat}
       qualityGate,
       tacticGroundingAdjustments,
       derivedAnalyticalEvidence,
+      tableInspections,
       dataSignalCoverage,
       boundedRetrieval
     });

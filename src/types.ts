@@ -506,6 +506,7 @@ export interface StructuredTableData {
   sampled_row_reasons?: string[][];
   sample_strategy_version?: 'deterministic_table_sample_v1';
   sample_seed_hash?: string;
+  deterministic_inspection?: DeterministicTableInspection;
   total_row_count: number;
   analysis_complete?: boolean;
   formula_cell_count?: number;
@@ -515,6 +516,29 @@ export interface StructuredTableData {
   unsupported_objects?: string[];
   /** Describes bounded model context, not deterministic analysis population. */
   truncated: boolean;
+}
+
+export interface DeterministicTableInspection {
+  schema_version: 'deterministic_table_inspection_v1';
+  population_scope: 'FULL_TABLE';
+  row_count: number;
+  column_count: number;
+  duplicate_row_count: number | null;
+  duplicate_row_rate_percent: number | null;
+  duplicate_calculation_state: 'EXACT' | 'NOT_CALCULATED_LIMIT';
+  duplicate_definition: 'REPEATED_ROWS_AFTER_FIRST_OCCURRENCE';
+  type_consistency_definition: 'DOMINANT_NON_EMPTY_TYPE_SHARE';
+  columns: Array<{
+    column_index: number;
+    inferred_type: 'EMPTY' | 'STRING' | 'INTEGER' | 'DECIMAL' | 'BOOLEAN' | 'DATE' | 'MIXED';
+    non_empty_count: number;
+    blank_count: number;
+    blank_rate_percent: number;
+    type_consistency_percent: number | null;
+    distinct_value_count: number;
+    distinct_count_state: 'EXACT' | 'LOWER_BOUND';
+    detected_currencies: string[];
+  }>;
 }
 
 export interface NativeChartEvidenceUnit {
@@ -783,6 +807,7 @@ export interface RunTrace {
   created_at: string;
   input_manifest: SourceManifestTrace[];
   context_packets: ContextPacketTrace[];
+  table_inspections?: TableInspectionTrace[];
   derived_analytical_evidence?: DerivedAnalyticalEvidence[];
   data_signal_coverage?: DataSignalCoverageReport;
   bounded_retrieval?: BoundedRetrievalTrace;
@@ -806,6 +831,13 @@ export interface RunTrace {
     api_keys_included: false;
     note: string;
   };
+}
+
+export interface TableInspectionTrace {
+  source_id: string;
+  sheet_name?: string;
+  model_eligible: boolean;
+  inspection: DeterministicTableInspection;
 }
 
 export interface DataSignalCoverageReport {
