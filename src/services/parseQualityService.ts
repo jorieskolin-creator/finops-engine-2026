@@ -1,4 +1,5 @@
 export type PdfParseQualityLevel = 'good' | 'mixed' | 'poor';
+import type { PdfPageAcquisitionState } from '../types';
 
 export interface PdfPageParseStats {
   pageNumber: number;
@@ -14,6 +15,7 @@ export interface PdfParseQuality {
   visualPagesIncluded: number;
   visualPagesSkipped: number;
   likelyScannedPdf: boolean;
+  pageStates?: Array<{ pageNumber: number; state: PdfPageAcquisitionState }>;
   warnings: string[];
 }
 
@@ -45,6 +47,7 @@ export const assessPdfParseQuality = (input: {
   visualPagesSkipped: number;
   truncatedTextPages?: boolean;
   imageBudgetReached?: boolean;
+  pageStates?: Array<{ pageNumber: number; state: PdfPageAcquisitionState }>;
 }): PdfParseQuality => {
   const totalPages = input.pages.length;
   if (totalPages === 0) {
@@ -66,22 +69,30 @@ export const assessPdfParseQuality = (input: {
   const nearZeroRatio = nearZeroPages / totalPages;
   const likelyScannedPdf = nearZeroRatio >= SCANNED_PAGE_RATIO;
 
+  const pageStates = input.pageStates;
+  const unresolvedRequiredPage = pageStates?.some(page => page.state === 'OCR_REQUIRED' || page.state === 'VISUAL_REGION_WITHHELD' || page.state === 'EXTRACTION_FAILED');
+  const unresolvedSparsePages = pageStates?.filter(page => page.state === 'SPARSE_TEXT_ONLY').length || 0;
+  const declaredVisualLimitation = pageStates?.some(page => page.state === 'VISUAL_INTERPRETATION_REQUIRED' || page.state === 'VISUAL_REGION_WITHHELD');
   let quality: PdfParseQualityLevel = 'good';
-  if (likelyScannedPdf || sparseRatio >= POOR_SPARSE_RATIO) {
+  if (pageStates) {
+    if (unresolvedRequiredPage || input.truncatedTextPages
+      || (unresolvedSparsePages > 1 && unresolvedSparsePages / totalPages >= MIXED_SPARSE_RATIO)) quality = 'poor';
+    else if (declaredVisualLimitation || unresolvedSparsePages > 0 || input.visualPagesSkipped > 0) quality = 'mixed';
+  } else if (likelyScannedPdf || sparseRatio >= POOR_SPARSE_RATIO) {
     quality = 'poor';
   } else if (sparseRatio >= MIXED_SPARSE_RATIO || input.visualPagesSkipped > 0 || input.truncatedTextPages) {
     quality = 'mixed';
   }
 
   const warnings: string[] = [];
-  if (quality === 'mixed') {
+  if (quality === 'mixed' && !pageStates) {
     warnings.push('Some PDF pages appeared image-heavy or sparse-text. Visual fallback is disabled; those pages were not visually inspected.');
   }
-  if (quality === 'poor') {
+  if (quality === 'poor' && !pageStates) {
     warnings.push('PDF appears scanned or image-heavy. Visual fallback is disabled; sparse/scanned pages were not visually inspected.');
   }
   if (input.visualPagesSkipped > 0) {
-    warnings.push(`${input.visualPagesSkipped} visual candidate page(s) were not inspected because visual fallback is disabled.`);
+    warnings.push(`${input.visualPagesSkipped} sparse visual candidate page(s) retained native text but could not complete local OCR.`);
   }
   if (input.truncatedTextPages) {
     warnings.push('PDF text extraction was capped before the end of the document.');
@@ -97,6 +108,7 @@ export const assessPdfParseQuality = (input: {
     visualPagesIncluded: input.visualPagesIncluded,
     visualPagesSkipped: input.visualPagesSkipped,
     likelyScannedPdf,
+    pageStates,
     warnings
   };
 };

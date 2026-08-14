@@ -463,11 +463,14 @@ export interface KnowledgeBaseRuntimeStatus {
 export type SourceChunkType = 'text' | 'pdf_page' | 'table_profile' | 'table_row' | 'image' | 'metadata';
 export type SourceRelevanceTier = 'high' | 'medium' | 'low' | 'unknown';
 
+export type PdfPageAcquisitionState = 'TEXT_EXTRACTED' | 'SPARSE_TEXT_ONLY' | 'OCR_REQUIRED' | 'OCR_COMPLETE' | 'VISUAL_INTERPRETATION_REQUIRED' | 'VISUAL_REGION_WITHHELD' | 'EXTRACTION_FAILED';
+
 export interface SourcePage {
   schema_version: 'source_page_v1';
   page_id: string;
   page_number: number;
   text: string;
+  acquisition_state?: PdfPageAcquisitionState;
 }
 
 export type EvidenceSourceFormat = 'pdf' | 'html' | 'csv' | 'tsv' | 'json' | 'xlsx' | 'png' | 'jpeg' | 'webp';
@@ -591,9 +594,10 @@ export interface VisualEvidenceUnit {
   schema_version: 'visual_evidence_unit_v1';
   unit_id: string;
   source_id?: string;
+  page_number?: number;
   extraction_method: 'local_ocr';
   engine_version: 'tesseract.js@7.0.0';
-  language: 'eng';
+  language: 'eng' | 'eng+fin';
   width: number;
   height: number;
   confidence: number;

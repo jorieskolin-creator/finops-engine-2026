@@ -58,6 +58,7 @@
   },
   "dependencies": {
     "@tesseract.js-data/eng": "1.0.0",
+    "@tesseract.js-data/fin": "1.0.0",
     "@zip.js/zip.js": "2.8.49",
     "dompurify": "^3.1.0",
     "express": "^4.19.0",

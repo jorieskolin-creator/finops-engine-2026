@@ -12,7 +12,8 @@ import type {
   SourceRegistryRuntimeStatus,
   SourceExtractionQuality,
   SourceRelevanceTier,
-  EvidencePrivacyDecision
+  EvidencePrivacyDecision,
+  VisualEvidenceUnit
 } from '../types';
 import { renderStructuredTableContext } from './tableService';
 
@@ -22,6 +23,7 @@ const CHUNK_TARGET_CHARS = 2200;
 const CHUNK_OVERLAP_CHARS = 200;
 const SOURCE_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
 const SOURCE_KINDS = new Set(['text', 'pdf', 'html', 'csv', 'tsv', 'json', 'xlsx', 'image']);
+const PDF_PAGE_STATES = new Set(['TEXT_EXTRACTED', 'SPARSE_TEXT_ONLY', 'OCR_REQUIRED', 'OCR_COMPLETE', 'VISUAL_INTERPRETATION_REQUIRED', 'VISUAL_REGION_WITHHELD', 'EXTRACTION_FAILED']);
 const SHA256_PATTERN = /^sha256_[a-f0-9]{64}$/;
 
 const DOMAIN_TERMS: Record<string, string[]> = {
@@ -376,7 +378,7 @@ const validateSourceRecords = (records: SourceRecord[]): void => {
     if (record.kind === 'image') {
       if (hasText || hasPages || !hasVisualUnits
         || record.acquisition?.extraction_method !== 'local_ocr') throw new Error('INVALID_SOURCE_CONTENT');
-    } else if (hasText === hasPages || hasVisualUnits) throw new Error('INVALID_SOURCE_CONTENT');
+    } else if (hasText === hasPages || (hasVisualUnits && record.kind !== 'pdf')) throw new Error('INVALID_SOURCE_CONTENT');
     if (hasPages) {
       const pageIds = new Set<string>();
       const pageNumbers = new Set<number>();
@@ -385,7 +387,8 @@ const validateSourceRecords = (records: SourceRecord[]): void => {
         if (!page || page.schema_version !== 'source_page_v1'
           || typeof page.page_id !== 'string' || !SOURCE_ID_PATTERN.test(page.page_id) || pageIds.has(page.page_id)
           || !Number.isInteger(page.page_number) || page.page_number < 1 || pageNumbers.has(page.page_number)
-          || typeof page.text !== 'string') {
+          || typeof page.text !== 'string'
+          || (page.acquisition_state !== undefined && !PDF_PAGE_STATES.has(page.acquisition_state))) {
           throw new Error('INVALID_SOURCE_PAGE');
         }
         if (page.text.trim().length > 0) nonEmptyPageCount++;
@@ -418,7 +421,10 @@ const validateSourceRecords = (records: SourceRecord[]): void => {
           || !SOURCE_ID_PATTERN.test(unit.unit_id) || unitIds.has(unit.unit_id)
           || unit.source_id !== record.source_id
           || unit.extraction_method !== 'local_ocr' || unit.engine_version !== 'tesseract.js@7.0.0'
-          || unit.language !== 'eng'
+          || !['eng', 'eng+fin'].includes(unit.language)
+          || (record.kind === 'pdf' && (!Number.isInteger(unit.page_number) || !record.pages?.some(page => page.page_number === unit.page_number)))
+          || (record.kind === 'pdf' && unit.words.length === 0)
+          || (record.kind === 'image' && unit.page_number !== undefined)
           || !Number.isInteger(unit.width) || unit.width < 1 || unit.width > 10000
           || !Number.isInteger(unit.height) || unit.height < 1 || unit.height > 10000
           || unit.width * unit.height > 20_000_000
@@ -529,8 +535,12 @@ export const buildSourceRegistry = (records: SourceRecord[]): SourceRegistry => 
       }
       return;
     }
-    const pages: Array<{ pageNumber?: number; text: string }> = doc.pages?.length
-      ? doc.pages.filter(page => page.text.trim().length > 0).map(page => ({ pageNumber:page.page_number, text:page.text }))
+    const pages: Array<{ pageNumber?: number; text: string; visualUnit?: VisualEvidenceUnit }> = doc.pages?.length
+      ? doc.pages.filter(page => page.text.trim().length > 0).map(page => ({
+          pageNumber: page.page_number,
+          text: page.text,
+          visualUnit: doc.visual_units?.find(unit => unit.page_number === page.page_number)
+        }))
       : [{ text:doc.text || '' }];
     for (const page of pages) {
       const isTable = !page.pageNumber && /\[TABLE_SAMPLE\]/.test(page.text);
@@ -574,6 +584,15 @@ export const buildSourceRegistry = (records: SourceRecord[]): SourceRegistry => 
           text: chunkText,
           page_id: page.pageNumber ? `${sourceId}-p${String(page.pageNumber).padStart(3, '0')}` : undefined,
           page_number: page.pageNumber,
+          visual_unit_id: page.visualUnit?.unit_id,
+          bounding_box: page.visualUnit ? { x0: 0, y0: 0, x1: page.visualUnit.width, y1: page.visualUnit.height } : undefined,
+          ocr_confidence: page.visualUnit?.confidence,
+          ocr_extraction_method: page.visualUnit?.extraction_method,
+          ocr_engine_version: page.visualUnit?.engine_version,
+          ocr_language: page.visualUnit?.language,
+          post_ocr_redaction_status: page.visualUnit?.post_ocr_redaction_status as Exclude<VisualEvidenceUnit['post_ocr_redaction_status'], 'PENDING'> | undefined,
+          visual_interpretation_status: page.visualUnit?.visual_interpretation_status,
+          withheld_visual_region_count: page.visualUnit?.withheld_regions.length,
           char_start: part.start,
           char_end: part.end,
           routing: routeChunk(chunkText),

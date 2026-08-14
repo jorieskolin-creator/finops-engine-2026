@@ -68,7 +68,7 @@ assert.deepEqual(registry.chunks[0].bounding_box, { x0: 0, y0: 0, x1: 800, y1: 6
 assert.equal(registry.chunks[0].ocr_confidence, 66.5);
 assert.equal(registry.chunks[0].ocr_extraction_method, 'local_ocr');
 assert.equal(registry.chunks[0].ocr_engine_version, 'tesseract.js@7.0.0');
-assert.equal(registry.chunks[0].ocr_language, 'eng');
+assert.equal(registry.chunks[0].ocr_language, 'eng+fin');
 assert.equal(registry.chunks[0].post_ocr_redaction_status, 'PASSED_WITH_REDACTIONS');
 assert.equal(registry.chunks[0].visual_interpretation_status, 'OCR_TEXT_ONLY');
 assert.equal(registry.chunks[0].withheld_visual_region_count, 1);
@@ -95,6 +95,36 @@ const readiness = sourceRegistryRuntimeStatus(
 assert.equal(readiness.acquisition_readiness.status, 'READY_WITH_WARNINGS');
 assert.ok(readiness.acquisition_readiness.reasons.includes('EXTRACTION_WARNINGS_PRESENT'));
 assert.equal(readiness.acquisition_readiness.registry_hash, 'registry-hash');
+
+const pendingPdfUnit = normalizeOcrResult({
+  sourceHash,
+  unitSuffix: 'p001',
+  pageNumber: 1,
+  width: 1200,
+  height: 1600,
+  text: 'Scanned allocation owner alice@example.com',
+  confidence: 88,
+  blocks: [{ paragraphs: [{ lines: [{ words: [
+    { text: 'Scanned', confidence: 94, bbox: { x0: 20, y0: 20, x1: 120, y1: 50 } },
+    { text: 'alice@example.com', confidence: 87, bbox: { x0: 130, y0: 20, x1: 330, y1: 50 } },
+  ] }] }] }]
+});
+const pdfPrivacy = sanitizeEvidenceSources([{
+  schema_version: 'source_record_v1', source_id: 'src-pdf-ocr', source_name: 'private.pdf', kind: 'pdf',
+  acquisition: { ...acquisition, declared_media_type: 'application/pdf', detected_media_type: 'application/pdf', format: 'pdf', extraction_method: 'browser_pdfjs' },
+  extraction: { unit: 'page', total_units: 1, processed_units: 1, truncated: false, quality: 'good' },
+  pages: [{ schema_version: 'source_page_v1', page_id: 'page-1', page_number: 1, acquisition_state: 'OCR_COMPLETE', text: pendingPdfUnit.text }],
+  visual_units: [{ ...pendingPdfUnit, source_id: 'src-pdf-ocr' }]
+}]);
+assert.equal(pdfPrivacy.decision.decision, 'PASS_WITH_REDACTIONS');
+const pdfRegistry = buildSourceRegistry(pdfPrivacy.sources);
+assert.equal(pdfRegistry.chunks[0].type, 'pdf_page');
+assert.equal(pdfRegistry.chunks[0].page_number, 1);
+assert.equal(pdfRegistry.chunks[0].visual_unit_id, pendingPdfUnit.unit_id);
+assert.equal(pdfRegistry.chunks[0].ocr_confidence, 88);
+assert.equal(pdfRegistry.chunks[0].post_ocr_redaction_status, 'PASSED_WITH_REDACTIONS');
+assert.doesNotMatch(JSON.stringify(pdfRegistry), /alice@example\.com/);
+assert.deepEqual(buildDomainPackets(pdfRegistry).A.images, [], 'rendered PDF page bytes must remain outside model packets');
 
 assert.throws(() => buildSourceRegistry([{
   ...privacy.sources[0],

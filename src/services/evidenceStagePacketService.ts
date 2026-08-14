@@ -116,7 +116,7 @@ export const buildEvidenceLaneStagePackets = (input: {
       || item.ocr_confidence === undefined
       || item.ocr_extraction_method !== 'local_ocr'
       || item.ocr_engine_version !== 'tesseract.js@7.0.0'
-      || item.ocr_language !== 'eng'
+      || !['eng', 'eng+fin'].includes(item.ocr_language || '')
       || !['PASSED', 'PASSED_WITH_REDACTIONS'].includes(item.post_ocr_redaction_status || '')
       || item.visual_interpretation_status !== 'OCR_TEXT_ONLY'
       || !Number.isInteger(item.withheld_visual_region_count)
@@ -226,7 +226,7 @@ export const assertEvidenceLaneStagePacket = (packet: EvidenceLaneStagePacket): 
       || item.ocr_confidence === undefined
       || item.ocr_extraction_method !== 'local_ocr'
       || item.ocr_engine_version !== 'tesseract.js@7.0.0'
-      || item.ocr_language !== 'eng'
+      || !['eng', 'eng+fin'].includes(item.ocr_language || '')
       || !['PASSED', 'PASSED_WITH_REDACTIONS'].includes(item.post_ocr_redaction_status || '')
       || item.visual_interpretation_status !== 'OCR_TEXT_ONLY'
       || !Number.isInteger(item.withheld_visual_region_count)

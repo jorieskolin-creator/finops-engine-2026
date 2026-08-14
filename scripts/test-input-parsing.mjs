@@ -121,10 +121,11 @@ assert.doesNotMatch(appSource, /Irrelevant File Detected/, 'low-relevance files 
 
 const pdfSource = await readFile(new URL('../src/services/pdfService.ts', import.meta.url), 'utf8');
 assert.match(pdfSource, /DEFAULT_MAX_TEXT_PAGES = 100/, 'PDF text extraction should cover up to 100 pages');
-assert.match(pdfSource, /schema_version:'source_page_v1'/, 'PDF extraction should preserve structured page identity');
+assert.match(pdfSource, /schema_version:\s*'source_page_v1'/, 'PDF extraction should preserve structured page identity');
 assert.doesNotMatch(pdfSource, /canvas\.toDataURL|PDF_PAGE source=/, 'PDF extraction must not rasterize or create sentinel pages');
 assert.match(pdfSource, /assessPdfParseQuality/, 'PDF extraction should calculate deterministic parse quality');
-assert.match(pdfSource, /pageStats\.every\(stats => stats\.charCount === 0\)/, 'unreadable PDFs should be detected from extracted text stats, not page markers');
+assert.match(pdfSource, /createLocalOcrSession/, 'sparse PDF pages should use browser-local OCR');
+assert.match(pdfSource, /PDF_REQUIRED_PAGE_OCR_FAILED_/, 'required OCR failure should stop technical-loss cases');
 assert.doesNotMatch(pdfSource, /pageTexts\.join\(''\)\.trim\(\)\.length === 0/, 'page markers must not be used as the unreadable-PDF test');
 
 const goodParse = assessPdfParseQuality({
@@ -158,6 +159,44 @@ const mixedParse = assessPdfParseQuality({
 assert.equal(mixedParse.quality, 'mixed');
 assert.equal(mixedParse.sparseTextPages, 1);
 
+const sparseTitleRecovered = assessPdfParseQuality({
+  pages: [
+    { pageNumber: 1, charCount: 50, wordCount: 6, textItemCount: 3 },
+    { pageNumber: 2, charCount: 1600, wordCount: 210, textItemCount: 95 }
+  ],
+  visualPagesIncluded: 1,
+  visualPagesSkipped: 0,
+  pageStates: [{ pageNumber: 1, state: 'OCR_COMPLETE' }, { pageNumber: 2, state: 'TEXT_EXTRACTED' }]
+});
+assert.equal(sparseTitleRecovered.quality, 'good', 'a locally OCR-acquired title page must not condemn a useful short PDF');
+
+const sparseTitleUnresolved = assessPdfParseQuality({
+  pages: [
+    { pageNumber: 1, charCount: 50, wordCount: 6, textItemCount: 3 },
+    { pageNumber: 2, charCount: 1600, wordCount: 210, textItemCount: 95 }
+  ],
+  visualPagesIncluded: 0,
+  visualPagesSkipped: 1,
+  pageStates: [{ pageNumber: 1, state: 'SPARSE_TEXT_ONLY' }, { pageNumber: 2, state: 'TEXT_EXTRACTED' }]
+});
+assert.equal(sparseTitleUnresolved.quality, 'mixed', 'one sparse title page is a warning, not whole-document failure');
+
+const unresolvedMixedDocument = assessPdfParseQuality({
+  pages: Array.from({ length: 10 }, (_, index) => ({ pageNumber: index + 1, charCount: index < 3 ? 80 : 1200, wordCount: index < 3 ? 10 : 180, textItemCount: index < 3 ? 4 : 80 })),
+  visualPagesIncluded: 0,
+  visualPagesSkipped: 3,
+  pageStates: Array.from({ length: 10 }, (_, index) => ({ pageNumber: index + 1, state: index < 3 ? 'SPARSE_TEXT_ONLY' : 'TEXT_EXTRACTED' }))
+});
+assert.equal(unresolvedMixedDocument.quality, 'poor', 'multiple unresolved sparse pages are technical loss and must block');
+
+const unresolvedMaterialVisual = assessPdfParseQuality({
+  pages: [{ pageNumber: 1, charCount: 1200, wordCount: 180, textItemCount: 80 }],
+  visualPagesIncluded: 0,
+  visualPagesSkipped: 1,
+  pageStates: [{ pageNumber: 1, state: 'VISUAL_REGION_WITHHELD' }]
+});
+assert.equal(unresolvedMaterialVisual.quality, 'poor', 'failed inspection of a detected material raster region must block');
+
 const budgetParse = assessPdfParseQuality({
   pages: Array.from({ length: 6 }, (_, idx) => ({ pageNumber: idx + 1, charCount: idx < 3 ? 100 : 900, wordCount: idx < 3 ? 15 : 130, textItemCount: idx < 3 ? 4 : 50 })),
   visualPagesIncluded: 2,
@@ -168,8 +207,8 @@ assert.match(budgetParse.warnings.join(' '), /image budget/);
 
 const appParseSource = appSource;
 assert.match(appParseSource, /parse_warnings:file\.parseMetadata/, 'PDF parse quality should be carried structurally on source records');
-assert.match(appParseSource, /Good text extraction/, 'upload card should label good PDF extraction');
-assert.match(appParseSource, /Mixed extraction: sparse\/scanned pages were not visually inspected/, 'upload card should warn about sparse PDF extraction');
-assert.match(appParseSource, /Poor extraction: visual fallback is disabled/, 'upload card should warn about poor PDF extraction');
+assert.match(appParseSource, /Complete text\/OCR acquisition/, 'upload card should label complete PDF acquisition');
+assert.match(appParseSource, /Acquired with declared sparse\/visual limitations/, 'upload card should declare sparse PDF limitations');
+assert.match(appParseSource, /Blocked: required page acquisition incomplete/, 'upload card should identify blocking PDF acquisition');
 
 console.log('input parsing regression tests passed');

@@ -22,5 +22,9 @@ await cp(
   dependency('@tesseract.js-data', 'eng', '4.0.0_best_int', 'eng.traineddata.gz'),
   path.join(output, 'lang', 'eng.traineddata.gz')
 );
+await cp(
+  dependency('@tesseract.js-data', 'fin', '4.0.0_best_int', 'fin.traineddata.gz'),
+  path.join(output, 'lang', 'fin.traineddata.gz')
+);
 
-console.log('Prepared same-origin OCR worker, core, and English language assets.');
+console.log('Prepared same-origin OCR worker, core, and English/Finnish language assets.');

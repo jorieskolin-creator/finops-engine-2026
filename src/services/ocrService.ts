@@ -14,6 +14,8 @@ const nestedWords = (blocks: any): OcrWordLike[] => (Array.isArray(blocks) ? blo
 
 export const normalizeOcrResult = (input: {
   sourceHash: string;
+  unitSuffix?: string;
+  pageNumber?: number;
   width: number;
   height: number;
   text?: string;
@@ -21,10 +23,11 @@ export const normalizeOcrResult = (input: {
   blocks?: unknown;
 }): VisualEvidenceUnit => ({
   schema_version: 'visual_evidence_unit_v1',
-  unit_id: `visual-${input.sourceHash.replace(/^sha256_/, '').slice(0, 24)}`,
+  unit_id: `visual-${input.sourceHash.replace(/^sha256_/, '').slice(0, 24)}${input.unitSuffix ? `-${input.unitSuffix}` : ''}`,
+  page_number: input.pageNumber,
   extraction_method: 'local_ocr',
   engine_version: 'tesseract.js@7.0.0',
-  language: 'eng',
+  language: 'eng+fin',
   width: input.width,
   height: input.height,
   confidence: Number.isFinite(input.confidence) ? Math.max(0, Math.min(100, input.confidence!)) : 0,
@@ -63,30 +66,54 @@ const imageDimensions = async (file: File): Promise<{ width: number; height: num
 
 export const extractImageOcr = async (file: File, sourceHash: string): Promise<VisualEvidenceUnit> => {
   const dimensions = await imageDimensions(file);
+  const session = await createLocalOcrSession();
+  try {
+    return await session.recognize(file, sourceHash, dimensions);
+  } finally {
+    await session.terminate();
+  }
+};
+
+export const createLocalOcrSession = async (): Promise<{
+  recognize: (
+    image: Blob,
+    sourceHash: string,
+    dimensions: { width: number; height: number },
+    unitSuffix?: string,
+    pageNumber?: number
+  ) => Promise<VisualEvidenceUnit>;
+  terminate: () => Promise<unknown>;
+}> => {
   const { createWorker } = await import('tesseract.js');
-  const worker = await createWorker('eng', 1, {
+  const worker = await createWorker(['eng', 'fin'], 1, {
     workerPath: '/ocr-assets/worker.min.js',
     corePath: '/ocr-assets/core',
     langPath: '/ocr-assets/lang'
   });
-  let timeout: number | undefined;
-  try {
-    const timedOut = new Promise<never>((_, reject) => {
-      timeout = window.setTimeout(() => reject(new Error('OCR_WORKER_TIMEOUT')), OCR_TIMEOUT_MS);
-    });
-    const recognition = worker.recognize(file, {}, { text: true, blocks: true });
-    const result = await Promise.race([recognition, timedOut]);
-    const unit = normalizeOcrResult({
-      sourceHash,
-      ...dimensions,
-      text: result.data.text,
-      confidence: result.data.confidence,
-      blocks: result.data.blocks
-    });
-    if (!unit.text) throw new Error('OCR_NO_TEXT_DETECTED');
-    return unit;
-  } finally {
-    if (timeout !== undefined) window.clearTimeout(timeout);
-    await worker.terminate();
-  }
+  return {
+    recognize: async (image, sourceHash, dimensions, unitSuffix, pageNumber) => {
+      let timeout: number | undefined;
+      try {
+        const timedOut = new Promise<never>((_, reject) => {
+          timeout = window.setTimeout(() => reject(new Error('OCR_WORKER_TIMEOUT')), OCR_TIMEOUT_MS);
+        });
+        const recognition = worker.recognize(image, {}, { text: true, blocks: true });
+        const result = await Promise.race([recognition, timedOut]);
+        const unit = normalizeOcrResult({
+          sourceHash,
+          unitSuffix,
+          pageNumber,
+          ...dimensions,
+          text: result.data.text,
+          confidence: result.data.confidence,
+          blocks: result.data.blocks
+        });
+        if (!unit.text) throw new Error('OCR_NO_TEXT_DETECTED');
+        return unit;
+      } finally {
+        if (timeout !== undefined) window.clearTimeout(timeout);
+      }
+    },
+    terminate: () => worker.terminate()
+  };
 };
