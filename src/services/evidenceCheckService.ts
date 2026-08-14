@@ -1,4 +1,4 @@
-import { BATCH_DEFINITIONS, knowledgeBaseService } from '../knowledge_base';
+import { BATCH_DEFINITIONS, BATCH_IDS, knowledgeBaseService } from '../knowledge_base';
 import {
   AuditItem,
   EvidenceCheckAdjustment,
@@ -6,10 +6,12 @@ import {
   EvidenceCheckResult,
   EvidenceCheckStatus,
   ImageInput,
-  AntiPatternAbsenceStatus
+  AntiPatternAbsenceStatus,
+  RoutedSourcePacket,
+  SourceRegistry,
 } from '../types';
 import { runStage, RunContext, serverLog } from './modelRouter';
-import { isValidEvidenceVerifierItem, verifyTextEvidenceSupport } from './evidenceSupport';
+import { isEvidenceQuoteBoundToChunk, isValidEvidenceVerifierItem, verifyTextEvidenceSupport } from './evidenceSupport';
 import {
   antiPatternStatusDescription,
   normalizeAntiPatternAbsenceStatus,
@@ -640,5 +642,113 @@ export const mergeEvidenceCheckResults = (results: EvidenceCheckResult[]): Evide
     failed: results.some(r => r.failed),
     adjudication_model_used: Array.from(new Set(results.map(r => r.adjudication_model_used).filter(Boolean))).join(',') || undefined,
     failure_reason: results.filter(r => r.failure_reason).map(r => `${r.batch_id}: ${r.failure_reason}`).join(' | ') || undefined
+  };
+};
+
+interface ProvenancePhase1Result {
+  phase_1_audit_logs: {
+    maturity: Record<string, any>;
+    antipattern: Record<string, any>;
+  };
+  evidence_check: EvidenceCheckResult;
+}
+
+export const reconcileEvidenceProvenance = <T extends ProvenancePhase1Result>(
+  phase1: T,
+  registry: SourceRegistry,
+  packets: Record<string, RoutedSourcePacket>,
+): { result: T; adjustedCriteria: string[]; removedQuoteCount: number } => {
+  const logs = {
+    maturity: { ...phase1.phase_1_audit_logs.maturity },
+    antipattern: { ...phase1.phase_1_audit_logs.antipattern },
+  };
+  const chunks = new Map(registry.chunks.map(chunk => [chunk.chunk_id, chunk]));
+  const evidenceItems = phase1.evidence_check.items.map(item => ({ ...item }));
+  const evidenceItemsByKey = new Map(evidenceItems.map(item => [`${item.stream}.${item.id}`, item]));
+  const adjustmentsByKey = new Map(phase1.evidence_check.adjustments.map(item => [`${item.stream}.${item.id}`, { ...item }]));
+  const adjustedCriteria = new Set<string>();
+  let removedQuoteCount = 0;
+
+  for (const domain of BATCH_IDS) {
+    const manifest = new Map((packets[domain]?.manifest || []).map(item => [item.chunk_id, item]));
+    for (const stream of STREAMS) {
+      for (let index = 1; index <= 5; index++) {
+        const id = `${domain}${index}`;
+        const existing = logs[stream][id];
+        if (!existing || !Array.isArray(existing.evidence_quotes)) continue;
+        const validQuotes = existing.evidence_quotes.filter((quote: any) => {
+          const located = typeof quote?.chunk_id === 'string' ? manifest.get(quote.chunk_id) : undefined;
+          return isEvidenceQuoteBoundToChunk(quote || {}, located, located ? chunks.get(located.chunk_id) : undefined);
+        });
+        const count = Number.isInteger(existing.count) ? Math.max(0, Math.min(3, existing.count)) : 0;
+        if (validQuotes.length === existing.evidence_quotes.length && (count === 0 || validQuotes.length > 0)) continue;
+
+        removedQuoteCount += existing.evidence_quotes.length - validQuotes.length;
+        adjustedCriteria.add(id);
+        logs[stream][id] = { ...existing, evidence_quotes: validQuotes };
+        if (count === 0 || validQuotes.length > 0) continue;
+
+        const key = `${stream}.${id}`;
+        const verdict = evidenceItemsByKey.get(key);
+        const originalCount = Math.max(count, verdict?.original_count || 0, existing.original_count || 0);
+        const reason = 'Deterministic provenance validation removed the score because no quote was bound to its cited source chunk.';
+        logs[stream][id] = {
+          ...logs[stream][id],
+          count: 0,
+          status: stream === 'antipattern' ? 'OK' : 'NOK',
+          evidence: reason,
+          evidence_quotes: [],
+          is_silent: true,
+          evidence_check_status: 'unsupported',
+          original_count: originalCount,
+          verified_count: 0,
+          adjustment_reason: reason,
+          ...(stream === 'antipattern' ? {
+            antipattern_absence_status: 'unknown_absent',
+            coverage_reason: 'The prior anti-pattern signal lacked source-bound evidence, so absence is not established.',
+          } : {}),
+        };
+        if (verdict) {
+          Object.assign(verdict, {
+            status: 'unsupported',
+            verified_count: 0,
+            rationale: reason,
+            quote_supported: false,
+            rescan_recommended: false,
+            ...(stream === 'antipattern' ? {
+              antipattern_absence_status: 'unknown_absent',
+              coverage_reason: 'The prior anti-pattern signal lacked source-bound evidence, so absence is not established.',
+            } : {}),
+          });
+        }
+        const priorAdjustment = adjustmentsByKey.get(key);
+        adjustmentsByKey.set(key, {
+          stream,
+          id,
+          original_count: originalCount,
+          verified_count: 0,
+          status: 'unsupported',
+          reason,
+          rescan_attempted: priorAdjustment?.rescan_attempted || existing.rescan_attempted === true,
+        });
+      }
+    }
+  }
+
+  const summarized = summarizeEvidenceCheck(undefined, evidenceItems, [...adjustmentsByKey.values()]);
+  return {
+    result: {
+      ...phase1,
+      phase_1_audit_logs: logs,
+      evidence_check: {
+        ...phase1.evidence_check,
+        ...summarized,
+        failed: phase1.evidence_check.failed,
+        failure_reason: phase1.evidence_check.failure_reason,
+        adjudication_model_used: phase1.evidence_check.adjudication_model_used,
+      },
+    },
+    adjustedCriteria: [...adjustedCriteria].sort(),
+    removedQuoteCount,
   };
 };

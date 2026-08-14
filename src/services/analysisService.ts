@@ -43,9 +43,11 @@ import { buildEvidenceLaneStagePackets } from "./evidenceStagePacketService";
 import { buildBoundedRetrievalTrace } from "./boundedRetrievalService";
 import { sanitizeEvidenceSources } from "./deterministicPrivacyService";
 import { parseGovernedJsonObject, validateFindingsModePayload } from "./jsonResponseService";
+import { reconcileEvidenceProvenance } from "./evidenceCheckService";
 import {
   PipelineIntegrityError,
   validateEvidenceAcquisition,
+  validateEvidenceContinuity,
   validateKnowledgeAcquisition,
   validatePreSynthesisIntegrity,
 } from "./pipelineIntegrityService";
@@ -377,7 +379,7 @@ export const analyzeDocument = async (
     emitProgress({ stage: 'analysis', status: 'in_progress', completed: 0, total: Object.keys(BATCH_DEFINITIONS).length });
     emitProgress({ stage: 'evidence', status: 'in_progress', completed: 0, total: Object.keys(BATCH_DEFINITIONS).length });
     const phase1Started = Date.now();
-    const aggregatedRawData = await runPhase1Audit(text, images, (completed, total, batchId) => {
+    let aggregatedRawData = await runPhase1Audit(text, images, (completed, total, batchId) => {
       emitProgress({ stage: 'analysis', status: 'in_progress', completed, total, domain_id: batchId });
       emitProgress({ stage: 'evidence', status: 'in_progress', completed, total, domain_id: batchId });
     }, { runId }, { packets: evidenceStagePackets });
@@ -392,6 +394,16 @@ export const analyzeDocument = async (
     }
     if (aggregatedRawData.evidence_adjudication_models_used.length > 0) {
       actuals.evidence_adjudication = aggregatedRawData.evidence_adjudication_models_used.join(',');
+    }
+    validateEvidenceContinuity(evidenceIntegrity, sourceRegistry, sourcePackets);
+    const provenanceReconciliation = reconcileEvidenceProvenance(aggregatedRawData, sourceRegistry, sourcePackets);
+    aggregatedRawData = provenanceReconciliation.result;
+    if (provenanceReconciliation.adjustedCriteria.length > 0) {
+      serverLog(runId, 'warn', 'finding_provenance_adjusted', {
+        domains: [...new Set(provenanceReconciliation.adjustedCriteria.map(id => id.charAt(0)))].join(','),
+        criteria_count: provenanceReconciliation.adjustedCriteria.length,
+        removed_quotes: provenanceReconciliation.removedQuoteCount,
+      });
     }
     serverLog(runId, 'info', 'stage_complete', {
       stage: 'forensic_audit',

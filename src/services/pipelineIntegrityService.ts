@@ -10,6 +10,7 @@ import {
   BATCH_IDS,
   buildShadowKnowledgePacket,
 } from '../knowledge_base';
+import { isEvidenceQuoteBoundToChunk } from './evidenceSupport';
 import { hashString } from './runTraceService';
 
 export type IntegrityGate = 'acquisition' | 'knowledge' | 'pre_synthesis';
@@ -29,7 +30,13 @@ export class PipelineIntegrityError extends Error {
       return 'The uploaded material could not be extracted completely or was truncated. No assessment was started. Check the source files and start a new analysis.';
     }
     if (code === 'EVIDENCE_PACKET_INTEGRITY_FAILED') {
+      return 'The acquired evidence packet was invalid. No assessment was finalized. Check the source material and start a new analysis.';
+    }
+    if (code === 'EVIDENCE_PACKET_CONTINUITY_FAILED') {
       return 'Acquired evidence was lost or changed during processing. No assessment was finalized. Start a new analysis.';
+    }
+    if (code === 'FINDING_PROVENANCE_INVALID') {
+      return 'Material analysis returned evidence claims that could not be bound to the acquired source material. No unsupported assessment was finalized. Start a new analysis.';
     }
     if (code === 'KNOWLEDGE_PACKET_INTEGRITY_FAILED') {
       return 'The assessment knowledge packet was incomplete or changed during processing. No assessment was finalized. Start a new analysis.';
@@ -184,8 +191,6 @@ const hasCompleteDelimitedPopulation = (source: SourceRecord): boolean => {
     && source.extraction.truncated === false);
 };
 
-const normalizedEvidenceText = (value: string): string => value.replace(/\s+/g, ' ').trim().toLocaleLowerCase();
-
 export const validateEvidenceAcquisition = (
   sources: SourceRecord[],
   registry: SourceRegistry,
@@ -293,6 +298,21 @@ export const validateKnowledgeAcquisition = (
   };
 };
 
+export const validateEvidenceContinuity = (
+  evidenceSnapshot: EvidenceIntegritySnapshot,
+  registry: SourceRegistry,
+  packets: Record<string, RoutedSourcePacket>,
+): void => {
+  if (evidenceSnapshot.registry_hash !== hashString(stableRegistryValue(registry))) {
+    throw new PipelineIntegrityError('EVIDENCE_PACKET_CONTINUITY_FAILED', 'pre_synthesis');
+  }
+  for (const domain of BATCH_IDS) {
+    if (!packets[domain] || evidenceSnapshot.packet_hashes[domain] !== hashRoutedSourcePacket(packets[domain])) {
+      throw new PipelineIntegrityError('EVIDENCE_PACKET_CONTINUITY_FAILED', 'pre_synthesis', [domain]);
+    }
+  }
+};
+
 export const validatePreSynthesisIntegrity = (
   evidenceSnapshot: EvidenceIntegritySnapshot,
   knowledgeSnapshot: KnowledgeIntegritySnapshot,
@@ -301,14 +321,7 @@ export const validatePreSynthesisIntegrity = (
   knowledgeIndex: RemoteKnowledgeBaseIndex,
   phase1: Phase1IntegrityInput,
 ): void => {
-  if (evidenceSnapshot.registry_hash !== hashString(stableRegistryValue(registry))) {
-    throw new PipelineIntegrityError('EVIDENCE_PACKET_INTEGRITY_FAILED', 'pre_synthesis');
-  }
-  for (const domain of BATCH_IDS) {
-    if (!packets[domain] || evidenceSnapshot.packet_hashes[domain] !== hashRoutedSourcePacket(packets[domain])) {
-      throw new PipelineIntegrityError('EVIDENCE_PACKET_INTEGRITY_FAILED', 'pre_synthesis', [domain]);
-    }
-  }
+  validateEvidenceContinuity(evidenceSnapshot, registry, packets);
   const currentKnowledgeMode = remoteKnowledgeReady(knowledgeIndex) ? 'remote_blob' : 'built_in';
   const currentKnowledgeHash = currentKnowledgeMode === 'remote_blob'
     ? knowledgeIndexHash(knowledgeIndex)
@@ -349,24 +362,13 @@ export const validatePreSynthesisIntegrity = (
           evidence_quotes?: Array<{ quote?: string; chunk_id?: string; source_id?: string; page_id?: string; page_number?: number; sheet_name?: string; row_number?: number }>;
         } | undefined;
         if ((item?.count || 0) > 0 && (item?.evidence_quotes?.length || 0) === 0) {
-          throw new PipelineIntegrityError('EVIDENCE_PACKET_INTEGRITY_FAILED', 'pre_synthesis', [domain]);
+          throw new PipelineIntegrityError('FINDING_PROVENANCE_INVALID', 'pre_synthesis', [domain]);
         }
         for (const quote of item?.evidence_quotes || []) {
-          if (!quote.chunk_id || !quote.source_id || typeof quote.quote !== 'string') {
-            throw new PipelineIntegrityError('EVIDENCE_PACKET_INTEGRITY_FAILED', 'pre_synthesis', [domain]);
-          }
-          const located = manifest.get(quote.chunk_id);
+          const located = quote.chunk_id ? manifest.get(quote.chunk_id) : undefined;
           const chunk = registry.chunks.find(candidate => candidate.chunk_id === quote.chunk_id);
-          if (!located
-            || !chunk
-            || quote.source_id !== located.source_id
-            || quote.page_id !== located.page_id
-            || quote.page_number !== located.page_number
-            || quote.sheet_name !== located.sheet_name
-            || quote.row_number !== located.row_number
-            || normalizedEvidenceText(quote.quote).length < 4
-            || !normalizedEvidenceText(chunk.text).includes(normalizedEvidenceText(quote.quote))) {
-            throw new PipelineIntegrityError('EVIDENCE_PACKET_INTEGRITY_FAILED', 'pre_synthesis', [domain]);
+          if (!isEvidenceQuoteBoundToChunk(quote, located, chunk)) {
+            throw new PipelineIntegrityError('FINDING_PROVENANCE_INVALID', 'pre_synthesis', [domain]);
           }
         }
       }

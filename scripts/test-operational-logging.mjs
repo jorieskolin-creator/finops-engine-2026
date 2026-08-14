@@ -19,6 +19,9 @@ assert.deepEqual(filterOperationalMetadata('pipeline_integrity_failed', {
 assert.deepEqual(filterOperationalMetadata('source_packet_used', {
   batch: 'A', chunks: 2, evidence_stage_packet_hash: 'fnv1a_12345678', source_text: 'private source content',
 }), { batch: 'A', chunks: 2, evidence_stage_packet_hash: 'fnv1a_12345678' });
+assert.deepEqual(filterOperationalMetadata('finding_provenance_adjusted', {
+  domains: 'A,C', criteria_count: 2, removed_quotes: 3, quote_text: 'private source content',
+}), { domains: 'A,C', criteria_count: 2, removed_quotes: 3 });
 assert.equal(safeOperationalIdentifier('gpt-5.2/model:v1'), 'gpt-5.2/model:v1');
 assert.equal(safeOperationalIdentifier('private.pdf'), '?');
 assert.equal(safeOperationalIdentifier('private.pdf\nsource contents'), '?');

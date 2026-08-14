@@ -13,6 +13,7 @@
     "integration": "node scripts/integration-infrastructure.mjs",
     "test": "node scripts/run-tests.mjs",
     "test:evidence-check": "node scripts/test-evidence-check.mjs",
+    "test:evidence-provenance": "node scripts/test-evidence-provenance.mjs",
     "test:antipattern-semantics": "node scripts/test-antipattern-semantics.mjs",
     "test:metrics": "node scripts/test-metrics.mjs",
     "test:input-parsing": "node scripts/test-input-parsing.mjs",

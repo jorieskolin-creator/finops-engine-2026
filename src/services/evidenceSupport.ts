@@ -1,4 +1,11 @@
-import type { AntiPatternAbsenceStatus, AuditItem, EvidenceCheckStatus } from '../types';
+import type {
+  AntiPatternAbsenceStatus,
+  AuditItem,
+  EvidenceCheckStatus,
+  EvidenceQuote,
+  SourceChunk,
+  SourcePacketManifestItem,
+} from '../types';
 
 const EVIDENCE_CHECK_STATUSES: EvidenceCheckStatus[] = ['supported', 'weak', 'unsupported', 'missing'];
 const ANTIPATTERN_ABSENCE_STATUSES: AntiPatternAbsenceStatus[] = ['confirmed_present', 'partially_present', 'tested_absent', 'unknown_absent'];
@@ -10,6 +17,25 @@ const clampScore = (value: unknown): number => {
 
 export const normalizeEvidenceText = (value: string): string =>
   value.toLowerCase().replace(/\s+/g, ' ').replace(/[“”]/g, '"').replace(/[‘’]/g, "'").trim();
+
+export const isEvidenceQuoteBoundToChunk = (
+  quote: Partial<EvidenceQuote>,
+  manifestItem: SourcePacketManifestItem | undefined,
+  chunk: SourceChunk | undefined,
+): boolean => Boolean(
+  quote.chunk_id
+  && quote.source_id
+  && typeof quote.quote === 'string'
+  && manifestItem
+  && chunk
+  && quote.source_id === manifestItem.source_id
+  && quote.page_id === manifestItem.page_id
+  && quote.page_number === manifestItem.page_number
+  && quote.sheet_name === manifestItem.sheet_name
+  && quote.row_number === manifestItem.row_number
+  && normalizeEvidenceText(quote.quote).length >= 4
+  && normalizeEvidenceText(chunk.text).includes(normalizeEvidenceText(quote.quote))
+);
 
 export const isValidEvidenceVerifierItem = (input: {
   raw: any;

@@ -7,6 +7,10 @@ import ts from 'typescript';
 
 const sourcePath = new URL('../src/services/pipelineIntegrityService.ts', import.meta.url);
 const dir = await mkdtemp(join(tmpdir(), 'finops-pipeline-integrity-'));
+const evidenceSupportSource = await readFile(new URL('../src/services/evidenceSupport.ts', import.meta.url), 'utf8');
+await writeFile(join(dir, 'evidenceSupport.mjs'), ts.transpileModule(evidenceSupportSource, {
+  compilerOptions: { module: ts.ModuleKind.ES2022, target: ts.ScriptTarget.ES2020 },
+}).outputText, 'utf8');
 let source = await readFile(sourcePath, 'utf8');
 source = source
   .replace(/import type \{[\s\S]*?\} from '\.\.\/types';\n/, '')
@@ -15,6 +19,7 @@ const BATCH_IDS = ['A', 'B', 'C', 'D', 'E', 'F'];
 const BATCH_DEFINITIONS = Object.fromEntries(BATCH_IDS.map(domain => [domain, { title: domain, maturity: { one: true }, antipattern: { one: true } }]));
 const buildShadowKnowledgePacket = () => ({ readiness: 'NOT_READY' });
 `)
+  .replace("import { isEvidenceQuoteBoundToChunk } from './evidenceSupport';", "import { isEvidenceQuoteBoundToChunk } from './evidenceSupport.mjs';")
   .replace("import { hashString } from './runTraceService';", `
 const hashString = value => {
   let hash = 0x811c9dc5;
@@ -128,7 +133,7 @@ assert.throws(
 );
 assert.throws(
   () => validatePreSynthesisIntegrity(evidenceSnapshot, knowledgeSnapshot, registry, { ...packets, A: { ...packets.A, text: `${packets.A.text} changed`, char_count: packets.A.char_count + 8 } }, knowledgeIndex, phase1),
-  error => error instanceof PipelineIntegrityError && error.code === 'EVIDENCE_PACKET_INTEGRITY_FAILED',
+  error => error instanceof PipelineIntegrityError && error.code === 'EVIDENCE_PACKET_CONTINUITY_FAILED',
 );
 assert.throws(
   () => validatePreSynthesisIntegrity(evidenceSnapshot, knowledgeSnapshot, registry, packets, knowledgeIndex, { ...phase1, evidence_check: { ...phase1.evidence_check, items: phase1.evidence_check.items.map((item, index) => index === 0 ? { ...item, verification_unresolved: true } : item) } }),
@@ -136,7 +141,7 @@ assert.throws(
 );
 assert.throws(
   () => validatePreSynthesisIntegrity(evidenceSnapshot, knowledgeSnapshot, { ...registry, chunk_count: 2 }, packets, knowledgeIndex, phase1),
-  error => error instanceof PipelineIntegrityError && error.code === 'EVIDENCE_PACKET_INTEGRITY_FAILED',
+  error => error instanceof PipelineIntegrityError && error.code === 'EVIDENCE_PACKET_CONTINUITY_FAILED',
   'registry metadata mutation must be detected before synthesis',
 );
 assert.throws(
@@ -144,7 +149,7 @@ assert.throws(
     ...registry,
     acquisition_limitations: { ...registry.acquisition_limitations, withheld_row_count: 1 },
   }, packets, knowledgeIndex, phase1),
-  error => error instanceof PipelineIntegrityError && error.code === 'EVIDENCE_PACKET_INTEGRITY_FAILED',
+  error => error instanceof PipelineIntegrityError && error.code === 'EVIDENCE_PACKET_CONTINUITY_FAILED',
   'withheld-content accounting mutation must be detected before synthesis',
 );
 const routedPacket = {
@@ -176,7 +181,7 @@ const missingProvenancePhase1 = {
 };
 assert.throws(
   () => validatePreSynthesisIntegrity(routedSnapshot, knowledgeSnapshot, registry, routedPackets, knowledgeIndex, missingProvenancePhase1),
-  error => error instanceof PipelineIntegrityError && error.code === 'EVIDENCE_PACKET_INTEGRITY_FAILED',
+  error => error instanceof PipelineIntegrityError && error.code === 'FINDING_PROVENANCE_INVALID',
   'positive evidence without mandatory provenance must block synthesis',
 );
 const forgedQuotePhase1 = {
@@ -188,7 +193,7 @@ const forgedQuotePhase1 = {
 };
 assert.throws(
   () => validatePreSynthesisIntegrity(routedSnapshot, knowledgeSnapshot, registry, routedPackets, knowledgeIndex, forgedQuotePhase1),
-  error => error instanceof PipelineIntegrityError && error.code === 'EVIDENCE_PACKET_INTEGRITY_FAILED',
+  error => error instanceof PipelineIntegrityError && error.code === 'FINDING_PROVENANCE_INVALID',
   'a quote that is absent from its cited chunk must block synthesis',
 );
 const invalidLocatorPhase1 = {
@@ -200,7 +205,7 @@ const invalidLocatorPhase1 = {
 };
 assert.throws(
   () => validatePreSynthesisIntegrity(routedSnapshot, knowledgeSnapshot, registry, routedPackets, knowledgeIndex, invalidLocatorPhase1),
-  error => error instanceof PipelineIntegrityError && error.code === 'EVIDENCE_PACKET_INTEGRITY_FAILED',
+  error => error instanceof PipelineIntegrityError && error.code === 'FINDING_PROVENANCE_INVALID',
   'evidence locators must resolve within the governed domain packet',
 );
 const mismatchedSheetPhase1 = {
@@ -212,7 +217,7 @@ const mismatchedSheetPhase1 = {
 };
 assert.throws(
   () => validatePreSynthesisIntegrity(routedSnapshot, knowledgeSnapshot, registry, routedPackets, knowledgeIndex, mismatchedSheetPhase1),
-  error => error instanceof PipelineIntegrityError && error.code === 'EVIDENCE_PACKET_INTEGRITY_FAILED',
+  error => error instanceof PipelineIntegrityError && error.code === 'FINDING_PROVENANCE_INVALID',
   'model-supplied sheet and row locators must match the governed packet manifest',
 );
 
