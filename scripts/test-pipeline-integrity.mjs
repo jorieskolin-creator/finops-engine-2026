@@ -62,6 +62,14 @@ assert.throws(
   () => validateEvidenceAcquisition([sourceRecord], registry, { ...packets, F: undefined }),
   error => error instanceof PipelineIntegrityError && error.code === 'EVIDENCE_PACKET_INTEGRITY_FAILED',
 );
+assert.throws(
+  () => validateEvidenceAcquisition([sourceRecord], registry, {
+    ...packets,
+    A: { ...packets.A, total_candidate_chunks: 1 },
+  }),
+  error => error instanceof PipelineIntegrityError && error.code === 'EVIDENCE_PACKET_INTEGRITY_FAILED' && error.domains[0] === 'A',
+  'routed content that could not fit the governed packet is acquisition loss, not source silence',
+);
 const truncatedRegistry = structured => ({
   ...registry,
   extraction: { ...registry.extraction, status: 'PARTIAL', sources: [{ ...registry.extraction.sources[0], kind: structured ? 'csv' : 'text', unit: structured ? 'row' : 'document', total_units: 10, processed_units: 5, truncated: true }] },

@@ -686,6 +686,7 @@ export interface EvidenceLaneStagePacket {
   knowledge_context: [];
   coverage: {
     weak: boolean;
+    signal_state: 'ROUTED_EVIDENCE' | 'ACQUIRED_SOURCE_SILENCE';
     candidate_chunks: number;
     included_chunks: number;
     omitted_relevant_chunks: number;
@@ -703,7 +704,12 @@ export interface EvidenceLaneStagePacket {
   };
   privacy_decision: EvidencePrivacyDecision['decision'];
   acquisition_readiness: SourceRegistryRuntimeStatus['acquisition_readiness']['status'];
-  source_packet_hash: string;
+  acquisition_binding: {
+    registry_hash: string;
+    packet_manifest_hash: string;
+    source_packet_hash: string;
+    privacy_decision_hash: string;
+  };
   integrity_hash: string;
   text: string;
   images: [];

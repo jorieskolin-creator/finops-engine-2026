@@ -111,7 +111,7 @@ const stableRegistryValue = (registry: SourceRegistry): string => JSON.stringify
     })),
 });
 
-const packetHash = (packet: RoutedSourcePacket): string => hashString(JSON.stringify({
+export const hashRoutedSourcePacket = (packet: RoutedSourcePacket): string => hashString(JSON.stringify({
   domain_id: packet.domain_id,
   text: packet.text,
   images: packet.images.map(image => ({
@@ -200,7 +200,8 @@ export const validateEvidenceAcquisition = (
   for (const domain of BATCH_IDS) {
     const packet = packets[domain];
     if (!packet || packet.domain_id !== domain || packet.char_count !== packet.text.length
-      || packet.included_chunk_count !== packet.manifest.length) {
+      || packet.included_chunk_count !== packet.manifest.length
+      || (packet.total_candidate_chunks > 0 && packet.included_chunk_count === 0)) {
       throw new PipelineIntegrityError('EVIDENCE_PACKET_INTEGRITY_FAILED', 'acquisition', [domain]);
     }
     if (packet.manifest.length === 0 && !packet.text.includes('<NO_ROUTED_CHUNKS>')) {
@@ -220,7 +221,7 @@ export const validateEvidenceAcquisition = (
       }
       packetChunkIds.add(item.chunk_id);
     }
-    packetHashes[domain] = packetHash(packet);
+    packetHashes[domain] = hashRoutedSourcePacket(packet);
   }
   if (Object.keys(packets).some(domain => !BATCH_IDS.includes(domain))) {
     throw new PipelineIntegrityError('EVIDENCE_PACKET_INTEGRITY_FAILED', 'acquisition');
@@ -262,7 +263,7 @@ export const validatePreSynthesisIntegrity = (
     throw new PipelineIntegrityError('EVIDENCE_PACKET_INTEGRITY_FAILED', 'pre_synthesis');
   }
   for (const domain of BATCH_IDS) {
-    if (!packets[domain] || evidenceSnapshot.packet_hashes[domain] !== packetHash(packets[domain])) {
+    if (!packets[domain] || evidenceSnapshot.packet_hashes[domain] !== hashRoutedSourcePacket(packets[domain])) {
       throw new PipelineIntegrityError('EVIDENCE_PACKET_INTEGRITY_FAILED', 'pre_synthesis', [domain]);
     }
   }
