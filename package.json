@@ -42,6 +42,7 @@
     "test:control-plane": "node scripts/test-control-plane.mjs",
     "test:execution-worker": "node scripts/test-execution-worker.mjs",
     "test:run-lifecycle": "node scripts/test-run-lifecycle.mjs",
+    "test:pipeline-integrity": "node scripts/test-pipeline-integrity.mjs",
     "preview": "vite preview",
     "start": "node server.js"
   },

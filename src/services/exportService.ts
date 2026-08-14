@@ -966,10 +966,6 @@ export const generateSummaryReportHtml = (result: DiagnosticResult): string => {
     ${renderDomainSignalOverview(result)}
     ${renderAssessmentHeatmapSummary(result)}
     ${renderAntiPatternDisposition(result)}
-    <section class="summary-section">
-      <h2>Evidence-Backed Findings</h2>
-      ${renderEvidenceBackedFindings(result)}
-    </section>
     ${renderSummaryDiagnosis(result)}
     ${renderSummaryPlanningDecision(result)}
     ${renderSummaryRoadmap(result)}

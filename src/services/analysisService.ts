@@ -43,6 +43,12 @@ import { acquisitionQualityPersistence, buildAcquisitionQualitySnapshot, shadowT
 import { analyzeStructuredSources, buildDataSignalCoverageReport } from "./structuredDataAnalysisService";
 import { buildBoundedRetrievalTrace } from "./boundedRetrievalService";
 import { parseGovernedJsonObject, validateFindingsModePayload } from "./jsonResponseService";
+import {
+  PipelineIntegrityError,
+  validateEvidenceAcquisition,
+  validateKnowledgeAcquisition,
+  validatePreSynthesisIntegrity,
+} from "./pipelineIntegrityService";
 
 const FACT_CHECK_MAX_RETRIES = 2;
 const ID_VALIDATION_MAX_REGENS = 2;
@@ -290,6 +296,15 @@ export const analyzeDocument = async (
     if (dlpScan.blocked) {
       throw new Error(`Security Alert: high-risk secret material detected in source chunks (${dlpScan.high_risk_hits.map(hit => `${hit.kind}:${hit.count}`).join(', ')}). Remove or redact secrets before running the assessment.`);
     }
+    const evidenceIntegrity = validateEvidenceAcquisition(sources, sourceRegistry, sourcePackets);
+    serverLog(runId, 'info', 'pipeline_integrity_passed', {
+      gate: 'acquisition',
+      sources: sourceRegistry.source_count,
+      chunks: sourceRegistry.chunk_count,
+      domains: Object.keys(sourcePackets).length,
+      registry_hash: evidenceIntegrity.registry_hash,
+      packet_manifest_hash: evidenceIntegrity.packet_manifest_hash,
+    });
 
     console.log(`[FinOps] [${runId}] Running Security Pre-Flight (DLP)...`);
     const dlpPrompt = generateSafetyAuditPrompt(dlpReview.text, dlpReview.images, {
@@ -325,6 +340,12 @@ export const analyzeDocument = async (
     const tacticsPromise = knowledgeBaseService.fetchStrategicPlaybook();
     const referenceKbPromise = knowledgeBaseService.fetchReferenceKnowledgeBaseIndex();
     const referenceKbIndex = await referenceKbPromise;
+    const knowledgeIntegrity = validateKnowledgeAcquisition(referenceKbIndex);
+    serverLog(runId, 'info', 'pipeline_integrity_passed', {
+      gate: 'knowledge',
+      knowledge_mode: knowledgeIntegrity.mode,
+      knowledge_hash: knowledgeIntegrity.index_hash,
+    });
     serverLog(runId, referenceKbIndex.status.source === 'remote_blob' ? 'info' : 'warn', referenceKbIndex.status.source === 'remote_blob' ? 'kb_index_loaded' : 'kb_index_fallback', {
       documents: referenceKbIndex.status.document_count,
       failures: referenceKbIndex.status.failure_count,
@@ -367,10 +388,27 @@ export const analyzeDocument = async (
       evidence_rescans: aggregatedRawData.evidence_check.rescan_count,
     });
 
+    validatePreSynthesisIntegrity(
+      evidenceIntegrity,
+      knowledgeIntegrity,
+      sourceRegistry,
+      sourcePackets,
+      referenceKbIndex,
+      aggregatedRawData,
+    );
+    serverLog(runId, 'info', 'pipeline_integrity_passed', {
+      gate: 'pre_synthesis',
+      domains: Object.keys(sourcePackets).length,
+      criteria: aggregatedRawData.evidence_check.items.length,
+      registry_hash: evidenceIntegrity.registry_hash,
+      packet_manifest_hash: evidenceIntegrity.packet_manifest_hash,
+      knowledge_hash: knowledgeIntegrity.index_hash,
+    });
+
     const auditLogs = validateAndSanitizeLogs(aggregatedRawData);
     const phase1Validation = validatePhase1Output({ phase_1_audit_logs: auditLogs });
     if (!phase1Validation.valid) {
-      console.warn(`[FinOps] Phase 1 validation produced ${phase1Validation.errors.length} blocking issue(s); continuing with explicit unavailable criteria.`);
+      throw new PipelineIntegrityError('ANALYSIS_OUTPUT_INCOMPLETE', 'pre_synthesis');
     }
     if (phase1Validation.warnings.length > 0) {
       console.warn(`[FinOps] Phase 1 validation produced ${phase1Validation.warnings.length} warning(s); content omitted by logging policy.`);
@@ -1108,10 +1146,19 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => `  ${cat}
       if (authoritative?.state === 'active') await failRun(runId).catch(() => undefined);
     }
     const duration = Date.now() - pipelineStarted;
-    console.error(`[FinOps] [${runId}] === Pipeline FAILED === duration_ms=${duration} error_code=PIPELINE_FAILED`);
+    const integrityError = error instanceof PipelineIntegrityError ? error : null;
+    const errorCode = integrityError?.code || 'PIPELINE_FAILED';
+    if (integrityError) {
+      serverLog(runId, 'error', 'pipeline_integrity_failed', {
+        gate: integrityError.gate,
+        error_code: integrityError.code,
+        domains: integrityError.domains.join(',') || 'none',
+      });
+    }
+    console.error(`[FinOps] [${runId}] === Pipeline FAILED === duration_ms=${duration} error_code=${errorCode}`);
     serverLog(runId, 'error', 'pipeline_failed', {
       duration_ms: duration,
-      error_code: 'PIPELINE_FAILED',
+      error_code: errorCode,
       models: actuals,
       model_mode: MODEL_ROUTING_MODE,
     });

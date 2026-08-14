@@ -65,12 +65,18 @@ assert.match(dashboardSource, />What</, 'Dashboard roadmap should render WHAT co
 assert.match(dashboardSource, />How</, 'Dashboard roadmap should preserve HOW action list');
 
 const exportSource = await readFile(new URL('../src/services/exportService.ts', import.meta.url), 'utf8');
+const summaryExportSource = exportSource.slice(
+  exportSource.indexOf('export const generateSummaryReportHtml'),
+  exportSource.indexOf('export const generateReportHtml'),
+);
+const masterDataExportSource = exportSource.slice(exportSource.indexOf('export const generateReportHtml'));
 assert.match(exportSource, /roadmap-context-label">Why/, 'HTML export should render roadmap WHY context');
 assert.match(exportSource, /roadmap-context-label">What/, 'HTML export should render roadmap WHAT context');
 assert.match(exportSource, /roadmap-how-label">How/, 'HTML export should label action bullets as HOW');
 assert.match(exportSource, /renderDomainSignalOverview/, 'HTML exports should render the domain signal overview');
 assert.match(exportSource, /renderAssessmentHeatmapSummary\(result\)/, 'HTML exports should render the shared criterion heatmap');
-assert.match(exportSource, /Evidence-Backed Findings/, 'HTML exports should use the governed evidence findings section');
+assert.doesNotMatch(summaryExportSource, /Evidence-Backed Findings|renderEvidenceBackedFindings/, 'Summary Report should remain concise and leave detailed evidence-backed findings to Master Data');
+assert.match(masterDataExportSource, /<h2>Evidence-Backed Findings<\/h2>[\s\S]*renderEvidenceBackedFindings\(result\)/, 'Master Data should retain the governed evidence findings section');
 assert.doesNotMatch(exportSource, /<h2>Executive Summary<\/h2>/, 'HTML exports should not render the legacy Executive Summary');
 assert.doesNotMatch(exportSource, /Evidence summary for the/, 'HTML exports should not render repetitive persona summaries');
 assert.match(exportSource, /Candidate inclusion measures/, 'Master Data should distinguish retrieval candidate inclusion from evidence sufficiency');

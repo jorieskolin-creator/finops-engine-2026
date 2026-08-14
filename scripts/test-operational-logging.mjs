@@ -13,6 +13,9 @@ assert.deepEqual(filterOperationalMetadata('internal_result_error', {
   message: 'raw provider excerpt', cause: 'raw exception',
 }), { internal_call_id: 'call-1', error_code: 'upstream_http_error', http_status: 429 });
 assert.deepEqual(filterOperationalMetadata('pipeline_complete', { models: { secret: 'value' }, outcome: 'ok' }), { outcome: 'ok' });
+assert.deepEqual(filterOperationalMetadata('pipeline_integrity_failed', {
+  gate: 'pre_synthesis', error_code: 'DOMAIN_ANALYSIS_FAILED', domains: 'F', source_text: 'private source content',
+}), { gate: 'pre_synthesis', error_code: 'DOMAIN_ANALYSIS_FAILED', domains: 'F' });
 assert.equal(safeOperationalIdentifier('gpt-5.2/model:v1'), 'gpt-5.2/model:v1');
 assert.equal(safeOperationalIdentifier('private.pdf'), '?');
 assert.equal(safeOperationalIdentifier('private.pdf\nsource contents'), '?');
