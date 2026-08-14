@@ -97,11 +97,26 @@ assert.match(tsv.text, /Format: TSV/);
 assert.match(tsv.text, /Rows: 1/);
 assert.match(tsv.text, /platform \| finance/);
 
+const semicolonCsv = renderDelimitedTableForAnalysis('\uFEFFquestion;answer;notes\n"What is tracked?";"Cost and\nownership";"Contains, commas"', {
+  fileName: 'responses.csv',
+  delimiter: 'auto',
+});
+assert.equal(semicolonCsv.structuredTable.delimiter, ';');
+assert.equal(semicolonCsv.structuredTable.parser_version, 'delimited_parser_v3');
+assert.deepEqual(semicolonCsv.structuredTable.headers, ['question', 'answer', 'notes']);
+assert.deepEqual(semicolonCsv.structuredTable.analysis_rows, [['What is tracked?', 'Cost and ownership', 'Contains, commas']]);
+assert.throws(
+  () => renderDelimitedTableForAnalysis('single column\nvalue', { fileName: 'ambiguous.csv', delimiter: 'auto' }),
+  /DELIMITED_TABLE_DELIMITER_UNDETECTED/
+);
+
 const appSource = await readFile(new URL('../src/App.tsx', import.meta.url), 'utf8');
 assert.match(appSource, /const MAX_FILES = 20;/, 'artifact limit should be raised to 20');
 assert.match(appSource, /const MAX_TOTAL_UPLOAD_MB = 25;/, 'upload limit should be applied to the total set');
 assert.doesNotMatch(appSource, /MAX_FILE_SIZE_MB/, 'per-file 25MB cap should not be used');
 assert.match(appSource, /\.tsv/, 'TSV files should be accepted');
+assert.match(appSource, /delimiter: 'auto'/, 'CSV delimiter should be detected deterministically');
+assert.match(appSource, /rejectedFiles\.push/, 'each selected file should fail independently');
 assert.doesNotMatch(appSource, /Irrelevant File Detected/, 'low-relevance files should warn, not hard-block');
 
 const pdfSource = await readFile(new URL('../src/services/pdfService.ts', import.meta.url), 'utf8');

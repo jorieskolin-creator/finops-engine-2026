@@ -490,6 +490,8 @@ export interface EvidenceSourceAcquisition {
 
 export interface StructuredTableData {
   schema_version: 'structured_table_v1';
+  delimiter?: ',' | ';' | '\t';
+  parser_version?: 'delimited_parser_v3';
   sheet_name?: string;
   sheet_visibility?: 'visible' | 'hidden' | 'very_hidden';
   /** Hidden/non-evidence workbook sheets are scanned locally but never routed to model context. */

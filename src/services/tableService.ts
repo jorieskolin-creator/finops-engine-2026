@@ -1,7 +1,9 @@
 import type { DeterministicTableInspection } from '../types';
 
+export type DelimitedTableDelimiter = ',' | ';' | '\t';
+
 export interface ParsedDelimitedTable {
-  delimiter: ',' | '\t';
+  delimiter: DelimitedTableDelimiter;
   headers: string[];
   /** Complete normalized row population for local deterministic processing. */
   analysisRows: string[][];
@@ -220,7 +222,8 @@ const normalizeCell = (value: string): { value: string; originalLength: number; 
   };
 };
 
-export const parseDelimitedTable = (raw: string, delimiter: ',' | '\t', sourceHash?: string): ParsedDelimitedTable => {
+export const parseDelimitedTable = (raw: string, delimiter: DelimitedTableDelimiter, sourceHash?: string): ParsedDelimitedTable => {
+  raw = raw.replace(/^\uFEFF/, '');
   let headerRow: string[] | undefined;
   const analysisRows: string[][] = [];
   let rowCount = 0;
@@ -321,12 +324,31 @@ export const parseDelimitedTable = (raw: string, delimiter: ',' | '\t', sourceHa
   };
 };
 
+export const detectDelimitedTableDelimiter = (raw: string): DelimitedTableDelimiter => {
+  const candidates = ([',', ';', '\t'] as const).flatMap(delimiter => {
+    try {
+      const parsed = parseDelimitedTable(raw, delimiter);
+      const width = parsed.headers.length;
+      const stableWidth = width >= 2
+        && parsed.analysisRows.length > 0
+        && parsed.analysisRows.every(row => row.length === width);
+      return stableWidth ? [{ delimiter }] : [];
+    } catch {
+      return [];
+    }
+  });
+  if (candidates.length === 0) throw new Error('DELIMITED_TABLE_DELIMITER_UNDETECTED');
+  if (candidates.length > 1) throw new Error('DELIMITED_TABLE_DELIMITER_AMBIGUOUS');
+  return candidates[0].delimiter;
+};
+
 export const renderDelimitedTableForAnalysis = (
   raw: string,
-  opts: { fileName: string; delimiter: ',' | '\t'; sourceHash?: string }
+  opts: { fileName: string; delimiter: DelimitedTableDelimiter | 'auto'; sourceHash?: string }
 ): { text: string; warnings: string[]; rowCount: number; renderedRowCount: number; clippedCellCount: number; cellCharacterCoverageRatio: number; structuredTable: import('../types').StructuredTableData } => {
-  const table = parseDelimitedTable(raw, opts.delimiter, opts.sourceHash);
-  const delimiterLabel = opts.delimiter === '\t' ? 'TSV' : 'CSV';
+  const delimiter = opts.delimiter === 'auto' ? detectDelimitedTableDelimiter(raw) : opts.delimiter;
+  const table = parseDelimitedTable(raw, delimiter, opts.sourceHash);
+  const delimiterLabel = delimiter === '\t' ? 'TSV' : 'CSV';
   const lines = [
     `Format: ${delimiterLabel}`,
     'Source table: browser-local tabular evidence',
@@ -355,6 +377,8 @@ export const renderDelimitedTableForAnalysis = (
     cellCharacterCoverageRatio: table.cellCharacterCoverageRatio,
     structuredTable: {
       schema_version: 'structured_table_v1',
+      delimiter,
+      parser_version: 'delimited_parser_v3',
       headers: table.headers,
       rows: table.rows,
       analysis_rows: table.analysisRows,

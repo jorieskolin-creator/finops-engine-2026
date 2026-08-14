@@ -175,6 +175,11 @@ const extractTextFromHtml = (html: string): string => {
   return doc.body.textContent || "";
 };
 
+const acquisitionErrorCode = (error: unknown): string => {
+  const message = error instanceof Error ? error.message : '';
+  return message.match(/\b[A-Z][A-Z0-9_]{2,}\b/)?.[0] || 'EVIDENCE_FILE_REJECTED';
+};
+
 const PrivacyProtocolCard = () => (
   <div className="max-w-[85rem] mx-auto mt-12 mb-20 animate-fade-in relative z-10 px-4">
     <div className="flex items-center justify-center gap-2 mb-8 opacity-90">
@@ -746,11 +751,16 @@ const App: React.FC = () => {
     setParsing(true);
     setError(null);
     const processedFiles: UploadedFile[] = [];
-    try {
-      for (const file of newFiles) {
+    const rejectedFiles: Array<{ name: string; code: string }> = [];
+    for (const file of newFiles) {
+      try {
         let text = "";
         let kind: UploadedFile['kind'] = undefined;
         let parseMetadata: UploadedFile['parseMetadata'] | undefined;
+        let pages: SourcePage[] | undefined;
+        let structuredTable: StructuredTableData | undefined;
+        let structuredTables: StructuredTableData[] | undefined;
+        let visualUnits: VisualEvidenceUnit[] | undefined;
         const lowerName = file.name.toLowerCase();
         let acquisition = await inspectEvidenceFile(file);
         if (acquisition.validation_status !== 'PASS') {
@@ -758,7 +768,7 @@ const App: React.FC = () => {
         }
 
         if (file.type === 'application/pdf' || lowerName.endsWith('.pdf')) {
-          const { text: pdfText, pages, metadata } = await extractPagesFromPdf(file);
+          const { text: pdfText, pages: extractedPages, metadata } = await extractPagesFromPdf(file);
           text = pdfText;
           parseMetadata = {
             totalPages: metadata.totalPages,
@@ -766,7 +776,7 @@ const App: React.FC = () => {
             parseQuality: metadata.parseQuality,
             warnings: metadata.warnings
           };
-          (file as any).__structuredPages = pages;
+          pages = extractedPages;
           kind = 'pdf';
         } else if (file.type === 'text/html' || lowerName.endsWith('.html')) {
           const rawHtml = await file.text();
@@ -774,18 +784,18 @@ const App: React.FC = () => {
           kind = 'html';
         } else if (file.type === 'text/csv' || lowerName.endsWith('.csv')) {
           const raw = await file.text();
-          const rendered = renderDelimitedTableForAnalysis(raw, { fileName: file.name, delimiter: ',', sourceHash: acquisition.original_sha256 });
+          const rendered = renderDelimitedTableForAnalysis(raw, { fileName: file.name, delimiter: 'auto', sourceHash: acquisition.original_sha256 });
           text = rendered.text;
           kind = 'csv';
           parseMetadata = { rowCount: rendered.rowCount, renderedRowCount: rendered.renderedRowCount, analyzedRowCount: rendered.structuredTable.analysis_rows?.length || 0, analysisComplete: rendered.structuredTable.analysis_complete, clippedCellCount: rendered.clippedCellCount, cellCharacterCoverageRatio: rendered.cellCharacterCoverageRatio, warnings: rendered.warnings };
-          (file as any).__structuredTable = rendered.structuredTable;
+          structuredTable = rendered.structuredTable;
         } else if (file.type === 'text/tab-separated-values' || lowerName.endsWith('.tsv')) {
           const raw = await file.text();
           const rendered = renderDelimitedTableForAnalysis(raw, { fileName: file.name, delimiter: '\t', sourceHash: acquisition.original_sha256 });
           text = rendered.text;
           kind = 'tsv';
           parseMetadata = { rowCount: rendered.rowCount, renderedRowCount: rendered.renderedRowCount, analyzedRowCount: rendered.structuredTable.analysis_rows?.length || 0, analysisComplete: rendered.structuredTable.analysis_complete, clippedCellCount: rendered.clippedCellCount, cellCharacterCoverageRatio: rendered.cellCharacterCoverageRatio, warnings: rendered.warnings };
-          (file as any).__structuredTable = rendered.structuredTable;
+          structuredTable = rendered.structuredTable;
         } else if (lowerName.endsWith('.xlsx')) {
           const extracted = await extractXlsx(file, acquisition.original_sha256);
           text = extracted.text;
@@ -799,7 +809,7 @@ const App: React.FC = () => {
             cellCharacterCoverageRatio: extracted.tables.some(table => table.truncated) ? undefined : 1,
             warnings: extracted.warnings
           };
-          (file as any).__structuredTables = extracted.tables;
+          structuredTables = extracted.tables;
         } else if (file.type.startsWith('image/') || /\.(png|jpe?g|webp)$/i.test(lowerName)) {
           const visualUnit = await extractImageOcr(file, acquisition.original_sha256);
           text = `Format: IMAGE_OCR\nOCR confidence: ${visualUnit.confidence}\nVisual interpretation: OCR text only; non-text visual semantics withheld.\n\n${visualUnit.text}`;
@@ -810,7 +820,7 @@ const App: React.FC = () => {
               ...(visualUnit.confidence < 70 ? [`OCR confidence ${visualUnit.confidence.toFixed(1)} is observationally low; extracted text requires cautious interpretation.`] : [])
             ]
           };
-          (file as any).__visualUnits = [visualUnit];
+          visualUnits = [visualUnit];
         } else if (file.type === 'application/json' || lowerName.endsWith('.json')) {
           const raw = await file.text();
           text = `Format: JSON\n\n${raw}`;
@@ -824,7 +834,7 @@ const App: React.FC = () => {
           : kind === 'html'
             ? { extraction_method: 'browser_dom' as const, extraction_version: 'dompurify@3' }
             : kind === 'csv' || kind === 'tsv'
-              ? { extraction_method: 'browser_delimited' as const, extraction_version: 'delimited_parser_v2' }
+              ? { extraction_method: 'browser_delimited' as const, extraction_version: 'delimited_parser_v3' }
               : kind === 'xlsx'
                 ? { extraction_method: 'browser_xlsx_worker' as const, extraction_version: 'sheetjs-ce@0.20.3+zipjs@2.8.49' }
                 : kind === 'image'
@@ -837,24 +847,28 @@ const App: React.FC = () => {
           name: file.name,
           size: file.size,
           text,
-          pages: (file as any).__structuredPages,
-          structuredTable: (file as any).__structuredTable,
-          structuredTables: (file as any).__structuredTables,
+          pages,
+          structuredTable,
+          structuredTables,
           acquisition,
-          visualUnits: (file as any).__visualUnits,
+          visualUnits,
           kind,
           status: 'parsed',
           scan: scanParseableFile(text, kind, false),
           parseMetadata
         });
+      } catch (error) {
+        rejectedFiles.push({ name: file.name, code: acquisitionErrorCode(error) });
       }
-      setFiles(prev => [...prev, ...processedFiles]);
-    } catch (e: any) {
-      setError(e.message || "Failed to parse files.");
-    } finally {
-      setParsing(false);
-      if (fileInputRef.current) fileInputRef.current.value = '';
     }
+    if (processedFiles.length > 0) {
+      setFiles(prev => [...prev, ...processedFiles]);
+    }
+    if (rejectedFiles.length > 0) {
+      setError(`Rejected ${rejectedFiles.length} file(s): ${rejectedFiles.map(file => `${file.name} (${file.code})`).join('; ')}. Other valid files were retained.`);
+    }
+    setParsing(false);
+    if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
   const removeFile = (id: string) => setFiles(files.filter(f => f.id !== id));
