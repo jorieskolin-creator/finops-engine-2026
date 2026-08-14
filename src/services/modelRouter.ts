@@ -91,9 +91,12 @@ async function governedCall(profile: ModelProfile, prompt: NormalizedPrompt, sta
   if (profile.openaiReasoning) settings.reasoning_effort = profile.openaiReasoning.effort;
   if (profile.anthropicThinking) settings.thinking_budget_tokens = profile.anthropicThinking.budget_tokens;
   const approval = await fetch('/api/governed-packet', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ schema_version:REQUEST_SCHEMA, policy_version:POLICY, run_id:ctx.runId, stage, provider:profile.provider, model:profile.id, destination:`${profile.provider}:external_model`, system_instruction:prompt.systemInstruction || '', parts:[{type:'text',text:prompt.userText}], settings, ...(prompt.outputContract ? { output_contract: prompt.outputContract } : {}) }) });
-  if (!approval.ok) throw new Error(`STAGE_PACKET_REJECTED HTTP ${approval.status}`);
+  if (!approval.ok) {
+    const failure = await approval.json().catch(() => null);
+    throw new StageExecutionError(typeof failure?.error === 'string' ? failure.error : 'STAGE_PACKET_REJECTED');
+  }
   const packet = await approval.json();
-  if (packet.classification_method !== 'deterministic_pattern_screen_v1' || packet.approval_basis !== 'policy_approved_after_pattern_screening' || packet.run_id !== ctx.runId || packet.stage !== stage || packet.provider !== profile.provider || packet.model !== profile.id || packet.output_contract !== prompt.outputContract) throw new Error('INVALID_PACKET_APPROVAL');
+  if (packet.classification_method !== 'deterministic_pattern_screen_v1' || packet.approval_basis !== 'policy_approved_after_pattern_screening' || packet.run_id !== ctx.runId || packet.stage !== stage || packet.provider !== profile.provider || packet.model !== profile.id || packet.output_contract !== prompt.outputContract) throw new StageExecutionError('INVALID_PACKET_APPROVAL');
   const body = { packet_id:packet.packet_id, packet_hash:packet.packet_hash, schema_version:APPROVED_SCHEMA, policy_version:POLICY, run_id:ctx.runId, stage, internal_pipeline_call:true, internal_call_id:newInternalCallId() };
   return postWithTimeout(`/api/${profile.provider}-generate`, body, packet);
 }

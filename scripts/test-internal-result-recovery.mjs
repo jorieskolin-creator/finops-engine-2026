@@ -23,7 +23,8 @@ for(const [status,fallbackAllowed] of [['outcome_unknown',false],['fallback_allo
   const calls=[];
   const packet={
     schema_version:'approved_stage_packet_v1',policy_version:'llm_egress_policy_v1',
-    packet_id:'packet',packet_hash:'hash',run_id:'run',stage:'forensic_audit',provider:'openai',model:'model',
+    packet_id:'packet',packet_hash:'hash',run_id:'run',stage:'synthesis',provider:'openai',model:'model',
+    output_contract:'finops_evidence_synthesis_v1',
     classification_method:'deterministic_pattern_screen_v1',approval_basis:'policy_approved_after_pattern_screening'
   };
   globalThis.fetch=async(url)=>{
@@ -35,7 +36,7 @@ for(const [status,fallbackAllowed] of [['outcome_unknown',false],['fallback_allo
   };
   try{
     await assert.rejects(
-      ()=>callModel({id:'model',provider:'openai',maxTokens:100},{userText:'safe'},'forensic_audit',{runId:'run'}),
+      ()=>callModel({id:'model',provider:'openai',maxTokens:100},{userText:'safe',outputContract:'finops_evidence_synthesis_v1'},'synthesis',{runId:'run'}),
       error=>error instanceof StageExecutionError&&error.code==='FALLBACK_ALLOWED'&&error.fallbackAllowed
     );
     assert.equal(calls.filter(url=>url==='/api/model-result').length,0,'a pre-reservation 404 must not enter ambiguous-result recovery');

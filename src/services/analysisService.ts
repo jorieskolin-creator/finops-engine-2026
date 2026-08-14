@@ -859,6 +859,33 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => `  ${cat}
       ]
     });
 
+    const buildDeterministicLowConfidenceStrategy = () => {
+      const outcome = `The assessment completed deterministic acquisition and analysis, but evidence density was ${Math.round(validationData.metrics.evidence_density)}% and ${validationData.silent_areas.length} criteria remained silent. This supports a blocking decision, not a directive summary or roadmap.`;
+      const boundary = 'Decision: NO_GO. No remediation roadmap is issued. Gather the missing evidence identified below, validate the candidate themes, and rerun the assessment before authorizing implementation.';
+      return {
+        phase_3_strategy: {
+          executive_summaries: {
+            finops_lead: `${outcome}\n\n${boundary}`,
+            cfo: `${outcome}\n\nThe available evidence is insufficient to support investment prioritization or claimed financial outcomes. ${boundary}`,
+            engineering_lead: `${outcome}\n\nThe available evidence is insufficient to prescribe engineering controls or operating changes. ${boundary}`,
+          },
+          executive_summary: `${outcome}\n\n${boundary}`,
+          active_persona: DEFAULT_PERSONA,
+          evidence_summary: buildFallbackEvidenceSummary(),
+          diagnosis: buildFallbackDiagnosis(),
+          planning_decision: buildFallbackPlanningDecision(),
+          visual_scorecard: {
+            headline: 'Insufficient Evidence — Findings Only',
+            maturity_score: `${Math.round(validationData.metrics.finops_readiness)}/100 evidence-gated readiness`,
+            burden_score: `${Math.round(validationData.metrics.antipattern_burden)}% anti-pattern burden`,
+          },
+          remediation_roadmap: [],
+          findings_mode: buildFallbackFindingsMode(),
+          confidence_bracket: 'LOW',
+        },
+      };
+    };
+
     const normalizeStrategy = (raw: any): any => {
       if (!raw?.phase_3_strategy) return raw;
       const normalized = normalizePersonaSummaries(raw.phase_3_strategy);
@@ -941,8 +968,22 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => `  ${cat}
       unsupported_signatures: fc.unsupported_claims.map(c => c.claim.substring(0, 80)),
     });
 
-    let strategyData: any = await callPhase3Validated();
-    emitProgress({ stage: 'synthesis', status: 'completed' });
+    let strategyData: any;
+    let deterministicSynthesisFallback = false;
+    try {
+      strategyData = await callPhase3Validated();
+    } catch (error: any) {
+      if (confidenceBracket !== 'LOW') throw error;
+      deterministicSynthesisFallback = true;
+      strategyData = buildDeterministicLowConfidenceStrategy();
+      serverLog(runId, 'warn', 'synthesis_deterministic_fallback', {
+        stage: synthesisStage,
+        reason_code: typeof error?.code === 'string' ? error.code : 'SYNTHESIS_UNAVAILABLE',
+        evidence_density: Math.round(validationData.metrics.evidence_density),
+        silent_areas: validationData.silent_areas.length,
+      });
+    }
+    emitProgress({ stage: 'synthesis', status: deterministicSynthesisFallback ? 'completed_with_warnings' : 'completed' });
     emitProgress({ stage: 'verification', status: 'in_progress' });
     let factCheck = await runFactCheck(strategyData, 1);
     let lastUnsupported: FactCheckClaim[] = factCheck.unsupported_claims;
