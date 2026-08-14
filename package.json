@@ -19,6 +19,7 @@
     "test:evidence-acquisition": "node scripts/test-evidence-acquisition.mjs",
     "test:xlsx-acquisition": "node scripts/test-xlsx-acquisition.mjs",
     "test:visual-acquisition": "node scripts/test-visual-acquisition.mjs",
+    "test:evidence-stage-packet": "node scripts/test-evidence-stage-packet.mjs",
     "test:report-import": "node scripts/test-report-import.mjs",
     "test:report-rendering": "node scripts/test-report-rendering.mjs",
     "test:report-diagnostics": "node scripts/test-report-diagnostics.mjs",

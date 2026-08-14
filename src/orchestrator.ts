@@ -3,7 +3,8 @@ import { generateBatchSystemInstruction, generateBatchUserPrompt, generateTarget
 import { BATCH_DEFINITIONS, BATCH_IDS, knowledgeBaseService } from './knowledge_base';
 import { runStage, serverLog, RunContext, StageExecutionError } from './services/modelRouter';
 import { StageId } from './models';
-import { EvidenceCheckItem, EvidenceCheckResult, ImageInput, RoutedSourcePacket } from './types';
+import { EvidenceCheckItem, EvidenceCheckResult, EvidenceLaneStagePacket, ImageInput } from './types';
+import { assertEvidenceLaneStagePacket } from './services/evidenceStagePacketService';
 import {
   applyEvidenceCheckToBatch,
   BatchAuditResult,
@@ -32,7 +33,7 @@ const parseAiResponse = (text: string): any => {
 };
 
 export interface Phase1SourcePackets {
-  packets: Record<string, RoutedSourcePacket>;
+  packets: Record<string, EvidenceLaneStagePacket>;
 }
 
 export interface Phase1Result {
@@ -65,7 +66,15 @@ const runSingleBatch = async (
     label: userPromptOverride ? 'targeted_rescan' : 'forensic_audit',
   });
 
-  const userText = `${userPrompt}\n\n${referenceKbContext}\n\n<UNTRUSTED_CONTENT>\n${text}\n</UNTRUSTED_CONTENT>`;
+  const userText = `${userPrompt}
+
+<KNOWLEDGE_CONTEXT source_role="GOVERNED_KNOWLEDGE">
+${referenceKbContext}
+</KNOWLEDGE_CONTEXT>
+
+<EVIDENCE_CONTEXT source_role="CUSTOMER_EVIDENCE">
+${text}
+</EVIDENCE_CONTEXT>`;
 
   const response = await runStage(stage, {
     userText,
@@ -80,7 +89,7 @@ const runSingleBatch = async (
 const packetForBatch = (
   batchId: string,
   sourcePackets?: Phase1SourcePackets
-): { text: string; images: ImageInput[]; packet: RoutedSourcePacket } => {
+): { text: string; images: ImageInput[]; packet: EvidenceLaneStagePacket } => {
   if (!sourcePackets) {
     throw new Error(`Governed source packets are required for batch ${batchId}.`);
   }
@@ -88,6 +97,7 @@ const packetForBatch = (
   if (!packet) {
     throw new Error(`Governed source packet is missing for batch ${batchId}.`);
   }
+  assertEvidenceLaneStagePacket(packet);
   return { text: packet.text, images: packet.images, packet };
 };
 
@@ -191,14 +201,15 @@ export const runPhase1Audit = async (
     for (let attempt = 1; attempt <= 2; attempt++) {
       try {
         const packetInput = packetForBatch(batchId, sourcePackets);
-        serverLog(ctx.runId, packetInput.packet.weak_coverage ? 'warn' : 'info', 'source_packet_used', {
+        serverLog(ctx.runId, packetInput.packet.coverage.weak ? 'warn' : 'info', 'source_packet_used', {
           batch: batchId,
-          chunks: packetInput.packet.included_chunk_count,
-          candidates: packetInput.packet.total_candidate_chunks,
-          weak_coverage: packetInput.packet.weak_coverage,
+          chunks: packetInput.packet.coverage.included_chunks,
+          candidates: packetInput.packet.coverage.candidate_chunks,
+          weak_coverage: packetInput.packet.coverage.weak,
           fallback: 'none',
           chars: packetInput.text.length,
           images: packetInput.images.length,
+          evidence_stage_packet_hash: packetInput.packet.integrity_hash,
         });
 
         let batchResult = await runSingleBatch(batchId, packetInput.text, packetInput.images, ctx);

@@ -16,6 +16,9 @@ assert.deepEqual(filterOperationalMetadata('pipeline_complete', { models: { secr
 assert.deepEqual(filterOperationalMetadata('pipeline_integrity_failed', {
   gate: 'pre_synthesis', error_code: 'DOMAIN_ANALYSIS_FAILED', domains: 'F', source_text: 'private source content',
 }), { gate: 'pre_synthesis', error_code: 'DOMAIN_ANALYSIS_FAILED', domains: 'F' });
+assert.deepEqual(filterOperationalMetadata('source_packet_used', {
+  batch: 'A', chunks: 2, evidence_stage_packet_hash: 'fnv1a_12345678', source_text: 'private source content',
+}), { batch: 'A', chunks: 2, evidence_stage_packet_hash: 'fnv1a_12345678' });
 assert.equal(safeOperationalIdentifier('gpt-5.2/model:v1'), 'gpt-5.2/model:v1');
 assert.equal(safeOperationalIdentifier('private.pdf'), '?');
 assert.equal(safeOperationalIdentifier('private.pdf\nsource contents'), '?');

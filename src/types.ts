@@ -676,6 +676,39 @@ export interface RoutedSourcePacket {
   char_count: number;
 }
 
+export interface EvidenceLaneStagePacket {
+  schema_version: 'evidence_lane_stage_packet_v1';
+  domain_id: string;
+  source_role: 'CUSTOMER_EVIDENCE';
+  evidence: SourcePacketManifestItem[];
+  sanitized_visual_evidence: SourcePacketManifestItem[];
+  derived_evidence: DerivedAnalyticalEvidence[];
+  knowledge_context: [];
+  coverage: {
+    weak: boolean;
+    candidate_chunks: number;
+    included_chunks: number;
+    omitted_relevant_chunks: number;
+    notes: string[];
+  };
+  withheld_content: {
+    shadow_derived_evidence_count: number;
+    uninspected_visual_region_count: number;
+    raw_image_payload_count: 0;
+    reasons: string[];
+  };
+  policy: {
+    permitted_uses: string[];
+    forbidden_uses: string[];
+  };
+  privacy_decision: EvidencePrivacyDecision['decision'];
+  acquisition_readiness: SourceRegistryRuntimeStatus['acquisition_readiness']['status'];
+  source_packet_hash: string;
+  integrity_hash: string;
+  text: string;
+  images: [];
+}
+
 export interface DlpPatternHit {
   kind: 'email' | 'phone' | 'ip' | 'secret' | 'cloud_key' | 'private_key' | 'financial_caution';
   count: number;
@@ -809,9 +842,26 @@ export interface DataSignalRegistryEntry {
   readonly canonical_fields: readonly string[];
 }
 
+export interface EvidenceAnalysisRegistryEntry {
+  readonly analyzer_id: 'tagging_allocation_v1';
+  readonly analyzer_version: '1.1.0';
+  readonly registry_version: 'evidence_analysis_registry_v1';
+  readonly approval_status: 'SHADOW_ONLY' | 'APPROVED';
+  readonly approved_for_model_packet: boolean;
+  readonly accepted_source_kinds: readonly ['csv', 'tsv', 'xlsx'];
+  readonly targets: ReadonlyArray<{ readonly stream: 'maturity' | 'antipattern'; readonly criterion_id: 'A1' }>;
+  readonly calculations: ReadonlyArray<{
+    readonly calculation_id: string;
+    readonly formula: string;
+    readonly output_fields: readonly string[];
+    readonly eligibility_rule: string;
+  }>;
+  readonly forbidden_interpretations: readonly string[];
+}
+
 export interface DerivedAnalyticalEvidence {
   schema_version: 'derived_analytical_evidence_v1';
-  mode: 'shadow';
+  mode: 'shadow' | 'authoritative';
   evidence_id: string;
   evidence_type: 'deterministic_analytical';
   source_id: string;
@@ -819,13 +869,16 @@ export interface DerivedAnalyticalEvidence {
   derivation: {
     analyzer_id: 'tagging_allocation_v1';
     analyzer_version: '1.1.0';
-    registry_version: 'data_signal_registry_v1';
+    registry_version: 'evidence_analysis_registry_v1';
     method: 'tagging_allocation_coverage_analysis';
+    calculation_ids: string[];
   };
   result: {
     status: 'OBSERVED' | 'INSUFFICIENT_SIGNAL';
     source_row_count: number;
     analyzed_row_count: number;
+    eligible_row_count: number;
+    excluded_total_row_count: number;
     row_scope: 'full_table' | 'bounded_prefix';
     row_truncated: boolean;
     detected_signal_count: number;
@@ -842,7 +895,16 @@ export interface DerivedAnalyticalEvidence {
       row_coverage_percent: number | null;
       eligible_cost: number | null;
       valid_cost: number | null;
+      uncovered_cost: number | null;
       cost_coverage_percent: number | null;
+      distinct_valid_value_count: number | null;
+      valid_value_cardinality_percent: number | null;
+      conflicting_assignment_count: number | null;
+      top_uncovered_contributors: Array<{
+        row_number: number;
+        cost: number;
+        eligible_cost_percent: number;
+      }>;
     }>;
     cost_basis: {
       state: 'NOT_PRESENT' | 'VALID' | 'AMBIGUOUS_CURRENCY' | 'INVALID_VALUES';
@@ -858,8 +920,12 @@ export interface DerivedAnalyticalEvidence {
     };
   };
   locator: { sheet?: string; range?: string; header_row?: number };
+  eligibility: {
+    state: 'SHADOW_ONLY' | 'INELIGIBLE' | 'ELIGIBLE';
+    reasons: string[];
+  };
   unit_fingerprint: string;
-  report_eligible: false;
+  report_eligible: boolean;
   raw_value_exposure: false;
 }
 
@@ -881,6 +947,10 @@ export interface ContextPacketTrace {
   domain_id: string;
   title: string;
   context_packet_hash: string;
+  evidence_stage_packet_hash?: string;
+  evidence_stage_packet_schema?: EvidenceLaneStagePacket['schema_version'];
+  acquisition_readiness?: EvidenceLaneStagePacket['acquisition_readiness'];
+  privacy_decision?: EvidenceLaneStagePacket['privacy_decision'];
   included_chunk_ids: string[];
   included_chunk_count: number;
   total_candidate_chunks: number;

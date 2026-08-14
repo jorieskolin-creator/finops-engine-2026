@@ -5,6 +5,7 @@ import {
   DiagnosticResult,
   DlpScanResult,
   DerivedAnalyticalEvidence,
+  EvidenceLaneStagePacket,
   EvidenceQuote,
   Phase1AuditLogs,
   Phase2Validation,
@@ -41,6 +42,7 @@ interface BuildRunTraceInput {
   engineVersion: string;
   sourceRegistry: SourceRegistry;
   sourcePackets: Record<string, RoutedSourcePacket>;
+  evidenceStagePackets?: Record<string, EvidenceLaneStagePacket>;
   dlpScan: DlpScanResult;
   dlpReviewChunkCount: number;
   referenceKbIndex: RemoteKnowledgeBaseIndex;
@@ -295,6 +297,10 @@ export const buildRunTrace = (input: BuildRunTraceInput): RunTrace => {
     domain_id: domain,
     title: packet.title,
     context_packet_hash: hashString(packet.text),
+    evidence_stage_packet_hash: input.evidenceStagePackets?.[domain]?.integrity_hash,
+    evidence_stage_packet_schema: input.evidenceStagePackets?.[domain]?.schema_version,
+    acquisition_readiness: input.evidenceStagePackets?.[domain]?.acquisition_readiness,
+    privacy_decision: input.evidenceStagePackets?.[domain]?.privacy_decision,
     included_chunk_ids: packet.manifest.map(item => item.chunk_id),
     included_chunk_count: packet.included_chunk_count,
     total_candidate_chunks: packet.total_candidate_chunks,

@@ -79,6 +79,7 @@ assert.throws(() => authorizeConfiguredDestination(
 const modelContracts = await readFile(new URL('../src/models.ts', import.meta.url), 'utf8');
 const router = await readFile(new URL('../src/services/modelRouter.ts', import.meta.url), 'utf8');
 const analysis = await readFile(new URL('../src/services/analysisService.ts', import.meta.url), 'utf8');
+const orchestrator = await readFile(new URL('../src/orchestrator.ts', import.meta.url), 'utf8');
 const server = await readFile(new URL('../server.js', import.meta.url), 'utf8');
 assert.doesNotMatch(modelContracts, /cheap_test|VITE_FINOPS_MODEL_MODE|URLSearchParams/);
 assert.match(router, /fetch\('\/api\/model-routing'/);
@@ -89,6 +90,13 @@ assert.ok(
   analysis.indexOf('sanitizeEvidenceSources(sources)') < analysis.indexOf('runPhase1Audit('),
   'deterministic acquisition must precede the first generative Phase 1 call',
 );
+assert.ok(
+  analysis.indexOf('buildEvidenceLaneStagePackets({') < analysis.indexOf('runPhase1Audit('),
+  'the role-separated Evidence-lane stage packet must be assembled before Phase 1',
+);
+assert.match(orchestrator, /<KNOWLEDGE_CONTEXT source_role="GOVERNED_KNOWLEDGE">/);
+assert.match(orchestrator, /<EVIDENCE_CONTEXT source_role="CUSTOMER_EVIDENCE">/);
+assert.match(orchestrator, /assertEvidenceLaneStagePacket\(packet\)/);
 assert.doesNotMatch(modelContracts, /\| 'preflight'/);
 assert.match(analysis, /model_mode: modelRoutingMode/);
 assert.match(server, /resolveModelRouting\(process\.env\)/);

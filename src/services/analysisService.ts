@@ -39,6 +39,7 @@ import {
 import { buildRunTrace, clearStageTraces, consumeStageTraces, summarizeRunTrace } from "./runTraceService";
 import { acquisitionQualityPersistence, buildAcquisitionQualitySnapshot, shadowTelemetryPersistence } from "./acquisitionQualityService";
 import { analyzeStructuredSources, buildDataSignalCoverageReport } from "./structuredDataAnalysisService";
+import { buildEvidenceLaneStagePackets } from "./evidenceStagePacketService";
 import { buildBoundedRetrievalTrace } from "./boundedRetrievalService";
 import { sanitizeEvidenceSources } from "./deterministicPrivacyService";
 import { parseGovernedJsonObject, validateFindingsModePayload } from "./jsonResponseService";
@@ -310,6 +311,13 @@ export const analyzeDocument = async (
       privacy.decision,
       evidenceIntegrity
     );
+    const evidenceStagePackets = buildEvidenceLaneStagePackets({
+      source_packets: sourcePackets,
+      source_packet_hashes: evidenceIntegrity.packet_hashes,
+      derived_evidence: derivedAnalyticalEvidence,
+      privacy_decision: privacy.decision,
+      acquisition_readiness: sourceRegistryStatus.acquisition_readiness
+    });
     serverLog(runId, 'info', 'pipeline_integrity_passed', {
       gate: 'acquisition',
       sources: sourceRegistry.source_count,
@@ -354,7 +362,7 @@ export const analyzeDocument = async (
     const aggregatedRawData = await runPhase1Audit(text, images, (completed, total, batchId) => {
       emitProgress({ stage: 'analysis', status: 'in_progress', completed, total, domain_id: batchId });
       emitProgress({ stage: 'evidence', status: 'in_progress', completed, total, domain_id: batchId });
-    }, { runId }, { packets: sourcePackets });
+    }, { runId }, { packets: evidenceStagePackets });
     if (aggregatedRawData.models_used.length > 0) {
       actuals.forensic_audit = aggregatedRawData.models_used.join(',');
     }
@@ -1098,6 +1106,7 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => `  ${cat}
       engineVersion: ENGINE_VERSION,
       sourceRegistry,
       sourcePackets,
+      evidenceStagePackets,
       dlpScan,
       dlpReviewChunkCount: 0,
       referenceKbIndex,
