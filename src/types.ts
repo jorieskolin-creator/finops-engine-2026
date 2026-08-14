@@ -693,8 +693,21 @@ export interface SourceRegistry {
     extraction_version?: string;
     extraction_status?: EvidenceSourceAcquisition['extraction_status'];
   }>;
+  acquisition_limitations: EvidenceAcquisitionLimitations;
   warnings: string[];
   extraction: SourceExtractionQuality;
+}
+
+export interface EvidenceAcquisitionLimitations {
+  schema_version: 'evidence_acquisition_limitations_v1';
+  withheld_sheet_count: number;
+  withheld_row_count: number;
+  withheld_column_count: number;
+  active_filter_table_count: number;
+  merged_range_count: number;
+  uninspected_workbook_image_source_count: number;
+  partial_native_chart_count: number;
+  unsupported_object_codes: string[];
 }
 
 export interface SourcePacketManifestItem {
@@ -750,6 +763,14 @@ export interface EvidenceLaneStagePacket {
   withheld_content: {
     shadow_derived_evidence_count: number;
     uninspected_visual_region_count: number;
+    withheld_sheet_count: number;
+    withheld_row_count: number;
+    withheld_column_count: number;
+    active_filter_table_count: number;
+    merged_range_count: number;
+    uninspected_workbook_image_source_count: number;
+    partial_native_chart_count: number;
+    unsupported_object_codes: string[];
     raw_image_payload_count: 0;
     reasons: string[];
   };
@@ -1026,6 +1047,7 @@ export interface ContextPacketTrace {
   acquisition_readiness?: EvidenceLaneStagePacket['acquisition_readiness'];
   acquisition_readiness_reasons?: EvidenceLaneStagePacket['acquisition_readiness_reasons'];
   privacy_decision?: EvidenceLaneStagePacket['privacy_decision'];
+  withheld_content?: EvidenceLaneStagePacket['withheld_content'];
   included_chunk_ids: string[];
   included_chunk_count: number;
   total_candidate_chunks: number;

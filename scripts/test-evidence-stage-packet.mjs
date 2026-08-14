@@ -14,7 +14,7 @@ await build({
   outfile,
   logLevel: 'silent',
 });
-const { assertEvidenceLaneStagePacket, buildEvidenceLaneStagePackets } = await import(`file://${outfile}`);
+const { assertEvidenceLaneStagePacket, buildEvidenceLaneStagePackets: buildEvidenceLaneStagePacketsRaw } = await import(`file://${outfile}`);
 
 const hashString = value => {
   let hash = 0x811c9dc5;
@@ -84,6 +84,16 @@ const readiness = {
   status: 'READY_WITH_WARNINGS', reasons: ['PACKET_COVERAGE_WARNINGS_PRESENT'], privacy_decision: 'PASS_WITH_REDACTIONS',
   registry_hash: 'registry-hash', packet_manifest_hash: hashString(JSON.stringify(sourcePacketHashes))
 };
+const acquisitionLimitations = {
+  schema_version: 'evidence_acquisition_limitations_v1', withheld_sheet_count: 1,
+  withheld_row_count: 2, withheld_column_count: 1, active_filter_table_count: 1, merged_range_count: 1,
+  uninspected_workbook_image_source_count: 1, partial_native_chart_count: 0,
+  unsupported_object_codes: ['WORKBOOK_IMAGE_REQUIRES_VISUAL_INSPECTION']
+};
+const buildEvidenceLaneStagePackets = input => buildEvidenceLaneStagePacketsRaw({
+  acquisition_limitations: acquisitionLimitations,
+  ...input
+});
 
 const packets = buildEvidenceLaneStagePackets({
   source_packets: { A: sourcePacket }, source_packet_hashes: sourcePacketHashes,
@@ -103,15 +113,31 @@ assert.deepEqual(packet.acquisition_readiness_reasons, readiness.reasons);
 assert.equal(packet.acquisition_binding.packet_manifest_hash, readiness.packet_manifest_hash);
 assert.equal(packet.withheld_content.shadow_derived_evidence_count, 1);
 assert.equal(packet.withheld_content.uninspected_visual_region_count, 1);
+assert.equal(packet.withheld_content.withheld_sheet_count, 1);
+assert.equal(packet.withheld_content.withheld_row_count, 2);
+assert.equal(packet.withheld_content.withheld_column_count, 1);
+assert.equal(packet.withheld_content.uninspected_workbook_image_source_count, 1);
+assert.deepEqual(packet.withheld_content.unsupported_object_codes, ['WORKBOOK_IMAGE_REQUIRES_VISUAL_INSPECTION']);
 assert.equal(packet.withheld_content.raw_image_payload_count, 0);
 assert.match(packet.text, /knowledge_context\[\] is intentionally empty/);
 assert.match(packet.text, /<EVIDENCE_MANIFEST count="1">/);
 assert.match(packet.text, /<SANITIZED_VISUAL_EVIDENCE_MANIFEST count="1">/);
 assert.match(packet.text, /PACKET_COVERAGE_WARNINGS_PRESENT/);
+assert.match(packet.text, /withheld_sheets="1" withheld_rows="2" withheld_columns="1"/);
+assert.match(packet.text, /Workbook images from 1 source\(s\) remain uninspected and withheld/);
 assert.match(packet.text, /No report-eligible deterministic analytical evidence is approved/);
 assert.match(packet.text, /<CUSTOMER_EVIDENCE>[\s\S]*owner allocation evidence/);
 assert.doesNotThrow(() => assertEvidenceLaneStagePacket(packet));
 assert.throws(() => assertEvidenceLaneStagePacket({ ...packet, text: `${packet.text} tampered` }), /INTEGRITY_FAILED/);
+assert.throws(() => assertEvidenceLaneStagePacket({
+  ...packet,
+  withheld_content: { ...packet.withheld_content, withheld_row_count: packet.withheld_content.withheld_row_count + 1 }
+}), /INTEGRITY_FAILED/, 'withheld acquisition metadata is part of the governed packet integrity boundary');
+assert.throws(() => buildEvidenceLaneStagePacketsRaw({
+  source_packets: { A: sourcePacket }, source_packet_hashes: sourcePacketHashes,
+  derived_evidence: [], privacy_decision: privacyDecision, acquisition_readiness: readiness,
+  acquisition_limitations: { ...acquisitionLimitations, unsupported_object_codes: ['invalid code'] }
+}), /ACQUISITION_LIMITATIONS_INVALID/);
 assert.throws(() => buildEvidenceLaneStagePackets({
   source_packets: { A: { ...sourcePacket, manifest: [textualManifest, { ...visualManifest, ocr_engine_version: undefined }] } },
   source_packet_hashes: { A: hashSourcePacket({ ...sourcePacket, manifest: [textualManifest, { ...visualManifest, ocr_engine_version: undefined }] }) },

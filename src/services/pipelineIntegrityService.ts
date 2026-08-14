@@ -71,6 +71,7 @@ interface Phase1IntegrityInput {
 const stableRegistryValue = (registry: SourceRegistry): string => JSON.stringify({
   source_count: registry.source_count,
   chunk_count: registry.chunk_count,
+  acquisition_limitations: registry.acquisition_limitations,
   source_acquisition: [...(registry.source_acquisition || [])]
     .sort((a, b) => a.source_id.localeCompare(b.source_id)),
   extraction: {
@@ -176,6 +177,16 @@ export const validateEvidenceAcquisition = (
   packets: Record<string, RoutedSourcePacket>,
 ): EvidenceIntegritySnapshot => {
   const sourceIds = new Set(sources.map(source => source.source_id));
+  const limitations = registry.acquisition_limitations;
+  const limitationCounts = limitations && [limitations.withheld_sheet_count, limitations.withheld_row_count,
+    limitations.withheld_column_count, limitations.active_filter_table_count, limitations.merged_range_count,
+    limitations.uninspected_workbook_image_source_count, limitations.partial_native_chart_count];
+  if (!limitations || limitations.schema_version !== 'evidence_acquisition_limitations_v1'
+    || !limitationCounts!.every(value => Number.isInteger(value) && value >= 0)
+    || !Array.isArray(limitations.unsupported_object_codes)
+    || limitations.unsupported_object_codes.some(code => !/^[A-Z0-9_]+$/.test(code))) {
+    throw new PipelineIntegrityError('EVIDENCE_PACKET_INTEGRITY_FAILED', 'acquisition');
+  }
   const extractionFailed = registry.extraction.status === 'FAILED'
     || registry.extraction.sources.some(extraction => {
       const source = sources.find(candidate => candidate.source_id === extraction.source_id);

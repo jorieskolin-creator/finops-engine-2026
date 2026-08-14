@@ -44,6 +44,7 @@ const sourceRecord = {
 const chunk = { chunk_id: 'src-001-c001', source_id: 'src-001', source_name: 'input.txt', type: 'text', text: sourceRecord.text, routing: [] };
 const registry = {
   source_count: 1, chunk_count: 1, chunks: [chunk], warnings: [],
+  acquisition_limitations: { schema_version: 'evidence_acquisition_limitations_v1', withheld_sheet_count: 0, withheld_row_count: 0, withheld_column_count: 0, active_filter_table_count: 0, merged_range_count: 0, uninspected_workbook_image_source_count: 0, partial_native_chart_count: 0, unsupported_object_codes: [] },
   extraction: {
     overall_completeness: 80, status: 'PARTIAL', warning_count: 0,
     sources: [{ source_id: 'src-001', source_name: 'input.txt', kind: 'text', completeness: 80, status: 'PARTIAL', unit: 'document', total_units: 1, processed_units: 1, text_coverage_ratio: 0.8, truncated: false, quality: 'mixed', warning_count: 0, warning_codes: ['MIXED_QUALITY'] }],
@@ -110,6 +111,14 @@ assert.throws(
   () => validatePreSynthesisIntegrity(evidenceSnapshot, knowledgeSnapshot, { ...registry, chunk_count: 2 }, packets, knowledgeIndex, phase1),
   error => error instanceof PipelineIntegrityError && error.code === 'EVIDENCE_PACKET_INTEGRITY_FAILED',
   'registry metadata mutation must be detected before synthesis',
+);
+assert.throws(
+  () => validatePreSynthesisIntegrity(evidenceSnapshot, knowledgeSnapshot, {
+    ...registry,
+    acquisition_limitations: { ...registry.acquisition_limitations, withheld_row_count: 1 },
+  }, packets, knowledgeIndex, phase1),
+  error => error instanceof PipelineIntegrityError && error.code === 'EVIDENCE_PACKET_INTEGRITY_FAILED',
+  'withheld-content accounting mutation must be detected before synthesis',
 );
 const routedPacket = {
   ...packets.A,

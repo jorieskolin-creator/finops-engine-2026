@@ -1,5 +1,6 @@
 import type {
   DerivedAnalyticalEvidence,
+  EvidenceAcquisitionLimitations,
   EvidenceLaneStagePacket,
   EvidencePrivacyDecision,
   RoutedSourcePacket,
@@ -45,7 +46,7 @@ ${packet.acquisition_readiness_reasons.join('\n') || 'No acquisition readiness w
 <COVERAGE weak="${packet.coverage.weak}" signal_state="${packet.coverage.signal_state}" candidates="${packet.coverage.candidate_chunks}" included="${packet.coverage.included_chunks}" omitted="${packet.coverage.omitted_relevant_chunks}">
 ${packet.coverage.notes.join('\n')}
 </COVERAGE>
-<WITHHELD_CONTENT shadow_derived_evidence="${packet.withheld_content.shadow_derived_evidence_count}" uninspected_visual_regions="${packet.withheld_content.uninspected_visual_region_count}" raw_image_payloads="0">
+<WITHHELD_CONTENT shadow_derived_evidence="${packet.withheld_content.shadow_derived_evidence_count}" uninspected_visual_regions="${packet.withheld_content.uninspected_visual_region_count}" withheld_sheets="${packet.withheld_content.withheld_sheet_count}" withheld_rows="${packet.withheld_content.withheld_row_count}" withheld_columns="${packet.withheld_content.withheld_column_count}" active_filter_tables="${packet.withheld_content.active_filter_table_count}" merged_ranges="${packet.withheld_content.merged_range_count}" uninspected_workbook_image_sources="${packet.withheld_content.uninspected_workbook_image_source_count}" partial_native_charts="${packet.withheld_content.partial_native_chart_count}" raw_image_payloads="0">
 ${packet.withheld_content.reasons.join('\n')}
 </WITHHELD_CONTENT>
 <PERMITTED_USES>
@@ -72,11 +73,22 @@ export const buildEvidenceLaneStagePackets = (input: {
   source_packets: Record<string, RoutedSourcePacket>;
   source_packet_hashes: Record<string, string>;
   derived_evidence: DerivedAnalyticalEvidence[];
+  acquisition_limitations: EvidenceAcquisitionLimitations;
   privacy_decision: EvidencePrivacyDecision;
   acquisition_readiness: SourceRegistryRuntimeStatus['acquisition_readiness'];
 }): Record<string, EvidenceLaneStagePacket> => {
   if (input.privacy_decision.decision === 'BLOCK' || input.acquisition_readiness.status === 'BLOCKED') {
     throw new Error('EVIDENCE_STAGE_PACKET_NOT_APPROVED');
+  }
+  const limitationCounts = [input.acquisition_limitations.withheld_sheet_count, input.acquisition_limitations.withheld_row_count,
+    input.acquisition_limitations.withheld_column_count, input.acquisition_limitations.active_filter_table_count,
+    input.acquisition_limitations.merged_range_count, input.acquisition_limitations.uninspected_workbook_image_source_count,
+    input.acquisition_limitations.partial_native_chart_count];
+  if (input.acquisition_limitations.schema_version !== 'evidence_acquisition_limitations_v1'
+    || limitationCounts.some(value => !Number.isInteger(value) || value < 0)
+    || !Array.isArray(input.acquisition_limitations.unsupported_object_codes)
+    || input.acquisition_limitations.unsupported_object_codes.some(code => !/^[A-Z0-9_]+$/.test(code))) {
+    throw new Error('EVIDENCE_ACQUISITION_LIMITATIONS_INVALID');
   }
   if (!input.acquisition_readiness.registry_hash
     || !input.acquisition_readiness.packet_manifest_hash
@@ -132,6 +144,13 @@ export const buildEvidenceLaneStagePackets = (input: {
     const reasons = [
       ...(shadowDerivedCount > 0 ? [`${shadowDerivedCount} shadow-only deterministic result(s) were withheld from model context.`] : []),
       ...(sanitizedVisualEvidence.length > 0 ? ['Non-text visual semantics remain UNINSPECTED_VISUAL_REGION.'] : []),
+      ...(input.acquisition_limitations.withheld_sheet_count > 0 ? [`${input.acquisition_limitations.withheld_sheet_count} workbook sheet(s) were withheld from evidence routing.`] : []),
+      ...(input.acquisition_limitations.withheld_row_count > 0 || input.acquisition_limitations.withheld_column_count > 0
+        ? [`${input.acquisition_limitations.withheld_row_count} hidden row(s) and ${input.acquisition_limitations.withheld_column_count} hidden column(s) were privacy-scanned and withheld.`] : []),
+      ...(input.acquisition_limitations.uninspected_workbook_image_source_count > 0
+        ? [`Workbook images from ${input.acquisition_limitations.uninspected_workbook_image_source_count} source(s) remain uninspected and withheld.`] : []),
+      ...(input.acquisition_limitations.unsupported_object_codes.length > 0
+        ? [`Unsupported workbook object codes: ${input.acquisition_limitations.unsupported_object_codes.join(', ')}.`] : []),
       ...(sourcePacket.total_candidate_chunks > sourcePacket.included_chunk_count ? ['Relevant routed chunks were omitted by bounded packet limits.'] : [])
     ];
     const base: Omit<EvidenceLaneStagePacket, 'integrity_hash' | 'text'> = {
@@ -153,6 +172,14 @@ export const buildEvidenceLaneStagePackets = (input: {
       withheld_content: {
         shadow_derived_evidence_count: shadowDerivedCount,
         uninspected_visual_region_count: withheldVisualRegionCount,
+        withheld_sheet_count: input.acquisition_limitations.withheld_sheet_count,
+        withheld_row_count: input.acquisition_limitations.withheld_row_count,
+        withheld_column_count: input.acquisition_limitations.withheld_column_count,
+        active_filter_table_count: input.acquisition_limitations.active_filter_table_count,
+        merged_range_count: input.acquisition_limitations.merged_range_count,
+        uninspected_workbook_image_source_count: input.acquisition_limitations.uninspected_workbook_image_source_count,
+        partial_native_chart_count: input.acquisition_limitations.partial_native_chart_count,
+        unsupported_object_codes: [...input.acquisition_limitations.unsupported_object_codes],
         raw_image_payload_count: 0,
         reasons
       },
@@ -184,6 +211,11 @@ export const assertEvidenceLaneStagePacket = (packet: EvidenceLaneStagePacket): 
     || packet.knowledge_context.length !== 0
     || packet.images.length !== 0
     || packet.withheld_content.raw_image_payload_count !== 0
+    || packet.withheld_content.unsupported_object_codes.some(code => !/^[A-Z0-9_]+$/.test(code))
+    || [packet.withheld_content.withheld_sheet_count, packet.withheld_content.withheld_row_count,
+      packet.withheld_content.withheld_column_count, packet.withheld_content.active_filter_table_count,
+      packet.withheld_content.merged_range_count, packet.withheld_content.uninspected_workbook_image_source_count,
+      packet.withheld_content.partial_native_chart_count].some(value => !Number.isInteger(value) || value < 0)
     || packet.privacy_decision === 'BLOCK'
     || packet.acquisition_readiness === 'BLOCKED'
     || (packet.acquisition_readiness === 'READY_WITH_WARNINGS' && packet.acquisition_readiness_reasons.length === 0)

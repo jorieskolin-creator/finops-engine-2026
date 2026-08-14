@@ -324,6 +324,7 @@ export const analyzeDocument = async (
       source_packets: sourcePackets,
       source_packet_hashes: evidenceIntegrity.packet_hashes,
       derived_evidence: derivedAnalyticalEvidence,
+      acquisition_limitations: sourceRegistry.acquisition_limitations,
       privacy_decision: privacy.decision,
       acquisition_readiness: sourceRegistryStatus.acquisition_readiness
     });

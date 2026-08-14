@@ -446,6 +446,22 @@ export const buildSourceRegistry = (records: SourceRecord[]): SourceRegistry => 
   validateSourceRecords(records);
   const chunks: SourceChunk[] = [];
   const warnings: string[] = [];
+  const workbookTables = records.flatMap(record => record.structured_tables || []);
+  const unsupportedObjectCodes = [...new Set(workbookTables.flatMap(table => table.unsupported_objects || []))].sort();
+  const acquisitionLimitations: SourceRegistry['acquisition_limitations'] = {
+    schema_version: 'evidence_acquisition_limitations_v1',
+    withheld_sheet_count: workbookTables.filter(table => table.model_eligible === false).length,
+    withheld_row_count: workbookTables.reduce((sum, table) => sum + (table.hidden_row_count || 0), 0),
+    withheld_column_count: workbookTables.reduce((sum, table) => sum + (table.hidden_column_count || 0), 0),
+    active_filter_table_count: workbookTables.filter(table => Boolean(table.active_filter_range)).length,
+    merged_range_count: workbookTables.reduce((sum, table) => sum + (table.merged_range_count || 0), 0),
+    uninspected_workbook_image_source_count: records.filter(record =>
+      record.structured_tables?.some(table => table.unsupported_objects?.includes('WORKBOOK_IMAGE_REQUIRES_VISUAL_INSPECTION'))
+    ).length,
+    partial_native_chart_count: workbookTables.flatMap(table => table.native_charts || [])
+      .filter(chart => chart.extraction_status === 'PARTIAL').length,
+    unsupported_object_codes: unsupportedObjectCodes
+  };
   records.forEach((doc, docIndex) => {
     const sourceId = doc.source_id || sourceIdFor(docIndex);
     if (doc.kind === 'image') {
@@ -579,6 +595,7 @@ export const buildSourceRegistry = (records: SourceRecord[]): SourceRegistry => 
       extraction_version: record.acquisition?.extraction_version,
       extraction_status: record.acquisition?.extraction_status
     })),
+    acquisition_limitations: acquisitionLimitations,
     warnings,
     extraction: buildExtractionQuality(records)
   };
