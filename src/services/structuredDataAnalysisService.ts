@@ -1,7 +1,7 @@
 import type { DataSignalCoverageReport, DataSignalRegistryEntry, DerivedAnalyticalEvidence, EvidenceAnalysisRegistryEntry, SourceRecord, StructuredTableData } from '../types';
 
 export const DATA_SIGNAL_REGISTRY_VERSION = 'data_signal_registry_v1' as const;
-export const TAGGING_ALLOCATION_ANALYZER_VERSION = '1.1.0' as const;
+export const TAGGING_ALLOCATION_ANALYZER_VERSION = '1.2.0' as const;
 export const EVIDENCE_ANALYSIS_REGISTRY_VERSION = 'evidence_analysis_registry_v1' as const;
 
 const targets=Object.freeze([Object.freeze({stream:'maturity' as const,criterion_id:'A1' as const}),Object.freeze({stream:'antipattern' as const,criterion_id:'A1' as const})]);
@@ -128,6 +128,7 @@ export const analyzeTaggingAllocationTable=(source:SourceRecord, tableOverride?:
   const costWeightEligible=costState==='VALID'&&validCosts.length>0;
   const eligibleCost=costWeightEligible?validCosts.reduce((sum,value)=>sum+value,0):null;
   const eligibleRowNumbers=(table.analysis_row_numbers||table.sampled_row_numbers||rows.map((_,index)=>index+1)).filter((_,index)=>!totalRow(rows[index]||[]));
+  const sourceColumnNumbers=table.source_column_numbers||headers.map((_,index)=>index+1);
   const entityIndexes=headers.flatMap((header,index)=>matches(header,entityPatterns)?[index]:[]);
   const fieldCoverage=(Object.keys(fieldPatterns) as CoverageField[]).map(field=>{
     const indexes=headers.flatMap((header,index)=>matches(header,fieldPatterns[field])?[index]:[]);
@@ -152,7 +153,7 @@ export const analyzeTaggingAllocationTable=(source:SourceRecord, tableOverride?:
       :validRows.length===0?'FIELD_PRESENT_EMPTY' as const
       :validRows.length<eligibleRows.length?'FIELD_PRESENT_PARTIAL' as const
       :'FIELD_PRESENT_VALID' as const;
-    return{field,state,column_indexes:indexes,eligible_row_count:eligibleRows.length,valid_row_count:validRows.length,invalid_placeholder_count:invalidPlaceholderCount,row_coverage_percent:indexes.length>0?percent(validRows.length,eligibleRows.length):null,eligible_cost:fieldEligibleCost===null?null:rounded(fieldEligibleCost),valid_cost:validCost===null?null:rounded(validCost),uncovered_cost:uncoveredCost,cost_coverage_percent:fieldEligibleCost&&validCost!==null?rounded(validCost/fieldEligibleCost*100):null,distinct_valid_value_count:distinctValidValueCount,valid_value_cardinality_percent:cardinalityPercent,conflicting_assignment_count:conflictingAssignmentCount,top_uncovered_contributors:topUncoveredContributors};
+    return{field,state,column_indexes:indexes,source_column_numbers:indexes.map(index=>sourceColumnNumbers[index]),eligible_row_count:eligibleRows.length,valid_row_count:validRows.length,invalid_placeholder_count:invalidPlaceholderCount,row_coverage_percent:indexes.length>0?percent(validRows.length,eligibleRows.length):null,eligible_cost:fieldEligibleCost===null?null:rounded(fieldEligibleCost),valid_cost:validCost===null?null:rounded(validCost),uncovered_cost:uncoveredCost,cost_coverage_percent:fieldEligibleCost&&validCost!==null?rounded(validCost/fieldEligibleCost*100):null,distinct_valid_value_count:distinctValidValueCount,valid_value_cardinality_percent:cardinalityPercent,conflicting_assignment_count:conflictingAssignmentCount,top_uncovered_contributors:topUncoveredContributors};
   });
   const calculatedTotal=eligibleCost;
   const declaredTotals=costIndex===null?[]:declaredTotalRows.map(row=>parseCost(row[costIndex])).filter((value):value is number=>value!==null);
@@ -166,6 +167,7 @@ export const analyzeTaggingAllocationTable=(source:SourceRecord, tableOverride?:
   const eligibilityReasons=[
     'REGISTRY_SHADOW_ONLY',
     ...(table.analysis_complete===false||rows.length<table.total_row_count?['INCOMPLETE_POPULATION']:[]),
+    ...((table.hidden_row_count||0)>0||(table.hidden_column_count||0)>0?['HIDDEN_SOURCE_STRUCTURE_WITHHELD']:[]),
     ...(reconciliationState==='FAILED'?['RECONCILIATION_FAILED']:[]),
     ...(costState==='AMBIGUOUS_CURRENCY'?['AMBIGUOUS_CURRENCY']:[])
   ];
@@ -175,7 +177,7 @@ export const analyzeTaggingAllocationTable=(source:SourceRecord, tableOverride?:
     evidence_type:'deterministic_analytical',source_id:source.source_id,
     targets:[{stream:'maturity',criterion_id:'A1'},{stream:'antipattern',criterion_id:'A1'}],
     derivation:{analyzer_id:analyzerId,analyzer_version:TAGGING_ALLOCATION_ANALYZER_VERSION,registry_version:EVIDENCE_ANALYSIS_REGISTRY_VERSION,method,calculation_ids:calculationIds},
-    result:{status:detectedSignalCount>0&&rows.length>0?'OBSERVED':'INSUFFICIENT_SIGNAL',source_row_count:table.total_row_count,analyzed_row_count:rows.length,eligible_row_count:eligibleRows.length,excluded_total_row_count:declaredTotalRows.length,row_scope:rows.length<table.total_row_count?'bounded_prefix':'full_table',row_truncated:table.analysis_complete===false||rows.length<table.total_row_count,detected_signal_count:detectedSignalCount,mapping_population_coverage:mappingCoverage,tagging_population_coverage:taggingCoverage,allocation_population_coverage:allocationCoverage,field_coverage:fieldCoverage,cost_basis:{state:costState,column_index:costIndex,currencies,excluded_row_count:excludedCostRows},reconciliation:{state:reconciliationState,calculated_total:calculatedTotal===null?null:rounded(calculatedTotal),declared_total:declaredTotal===null?null:rounded(declaredTotal),difference}},
+    result:{status:detectedSignalCount>0&&rows.length>0?'OBSERVED':'INSUFFICIENT_SIGNAL',source_row_count:table.source_total_row_count??table.total_row_count,withheld_source_row_count:table.hidden_row_count||0,withheld_source_column_count:table.hidden_column_count||0,analyzed_row_count:rows.length,eligible_row_count:eligibleRows.length,excluded_total_row_count:declaredTotalRows.length,row_scope:rows.length<table.total_row_count?'bounded_prefix':'full_table',row_truncated:table.analysis_complete===false||rows.length<table.total_row_count,detected_signal_count:detectedSignalCount,mapping_population_coverage:mappingCoverage,tagging_population_coverage:taggingCoverage,allocation_population_coverage:allocationCoverage,field_coverage:fieldCoverage,cost_basis:{state:costState,column_index:costIndex,source_column_number:costIndex===null?null:sourceColumnNumbers[costIndex],currencies,excluded_row_count:excludedCostRows},reconciliation:{state:reconciliationState,calculated_total:calculatedTotal===null?null:rounded(calculatedTotal),declared_total:declaredTotal===null?null:rounded(declaredTotal),difference}},
     locator:{sheet:table.sheet_name,range:table.source_range,header_row:table.header_row_number},eligibility:{state:'SHADOW_ONLY',reasons:eligibilityReasons},unit_fingerprint:hash(JSON.stringify(table)),report_eligible:false,
     raw_value_exposure:false
   };

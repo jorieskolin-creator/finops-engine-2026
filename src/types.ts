@@ -405,7 +405,7 @@ export interface ShadowTelemetryPersistence {
   schema_version: 'shadow_telemetry_v1';
   retrieval_policy_version: 'bounded_retrieval_policy_v1';
   derived_evidence_schema_version: 'derived_analytical_evidence_v1';
-  analyzer_version: 'tagging_allocation_v1@1.1.0';
+  analyzer_version: 'tagging_allocation_v1@1.2.0';
   scale_registry_version: 'data_signal_registry_v1';
   retrieval_domain_count: number;
   retrieval_triggered_domain_count: number;
@@ -502,6 +502,15 @@ export interface StructuredTableData {
   /** Complete normalized population retained only for local deterministic analysis and privacy scanning. */
   analysis_rows?: string[][];
   analysis_row_numbers?: number[];
+  /** Complete source population used only by deterministic privacy controls when workbook structures are withheld. */
+  privacy_scan_headers?: string[];
+  privacy_scan_rows?: string[][];
+  /** One-based physical worksheet columns corresponding to headers/analysis rows. */
+  source_column_numbers?: number[];
+  source_total_row_count?: number;
+  hidden_row_count?: number;
+  hidden_column_count?: number;
+  active_filter_range?: string;
   sampled_row_numbers?: number[];
   sampled_row_reasons?: string[][];
   sample_strategy_version?: 'deterministic_table_sample_v1';
@@ -512,6 +521,7 @@ export interface StructuredTableData {
   formula_cell_count?: number;
   formula_cached_value_missing_count?: number;
   merged_range_count?: number;
+  merged_ranges?: string[];
   native_charts?: NativeChartEvidenceUnit[];
   unsupported_objects?: string[];
   /** Describes bounded model context, not deterministic analysis population. */
@@ -904,7 +914,7 @@ export interface DataSignalRegistryEntry {
 
 export interface EvidenceAnalysisRegistryEntry {
   readonly analyzer_id: 'tagging_allocation_v1';
-  readonly analyzer_version: '1.1.0';
+  readonly analyzer_version: '1.2.0';
   readonly registry_version: 'evidence_analysis_registry_v1';
   readonly approval_status: 'SHADOW_ONLY' | 'APPROVED';
   readonly approved_for_model_packet: boolean;
@@ -928,7 +938,7 @@ export interface DerivedAnalyticalEvidence {
   targets: Array<{ stream: 'maturity' | 'antipattern'; criterion_id: 'A1' }>;
   derivation: {
     analyzer_id: 'tagging_allocation_v1';
-    analyzer_version: '1.1.0';
+    analyzer_version: '1.2.0';
     registry_version: 'evidence_analysis_registry_v1';
     method: 'tagging_allocation_coverage_analysis';
     calculation_ids: string[];
@@ -936,6 +946,8 @@ export interface DerivedAnalyticalEvidence {
   result: {
     status: 'OBSERVED' | 'INSUFFICIENT_SIGNAL';
     source_row_count: number;
+    withheld_source_row_count: number;
+    withheld_source_column_count: number;
     analyzed_row_count: number;
     eligible_row_count: number;
     excluded_total_row_count: number;
@@ -949,6 +961,7 @@ export interface DerivedAnalyticalEvidence {
       field: 'owner' | 'cost_center' | 'product' | 'application' | 'environment' | 'tagging' | 'allocation';
       state: 'FIELD_NOT_PRESENT' | 'FIELD_PRESENT_EMPTY' | 'FIELD_PRESENT_PARTIAL' | 'FIELD_PRESENT_VALID' | 'FIELD_PRESENT_AMBIGUOUS' | 'FIELD_PRESENT_INVALID' | 'INSUFFICIENT_COVERAGE';
       column_indexes: number[];
+      source_column_numbers: number[];
       eligible_row_count: number;
       valid_row_count: number;
       invalid_placeholder_count: number;
@@ -969,6 +982,7 @@ export interface DerivedAnalyticalEvidence {
     cost_basis: {
       state: 'NOT_PRESENT' | 'VALID' | 'AMBIGUOUS_CURRENCY' | 'INVALID_VALUES';
       column_index: number | null;
+      source_column_number: number | null;
       currencies: string[];
       excluded_row_count: number;
     };

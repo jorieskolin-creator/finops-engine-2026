@@ -147,7 +147,33 @@ const validStructuredTable = (table: NonNullable<SourceRecord['structured_table'
   && (table.analysis_row_numbers === undefined || (
     Array.isArray(table.analysis_row_numbers) && table.analysis_row_numbers.length === (table.analysis_rows?.length || 0)
     && table.analysis_row_numbers.every(rowNumber => Number.isInteger(rowNumber) && rowNumber >= 1)
-  ));
+  ))
+  && (table.privacy_scan_headers === undefined || (
+    Array.isArray(table.privacy_scan_headers)
+    && table.privacy_scan_headers.every(header => typeof header === 'string' && header.length <= 243)
+  ))
+  && ((table.privacy_scan_headers === undefined) === (table.privacy_scan_rows === undefined))
+  && (table.privacy_scan_rows === undefined || (
+    Array.isArray(table.privacy_scan_rows)
+    && table.privacy_scan_rows.length === table.source_total_row_count
+    && table.privacy_scan_rows.every(row => Array.isArray(row) && row.length === table.privacy_scan_headers!.length
+      && row.every(cell => typeof cell === 'string'))
+  ))
+  && (table.source_column_numbers === undefined || (
+    Array.isArray(table.source_column_numbers) && table.source_column_numbers.length === table.headers.length
+    && new Set(table.source_column_numbers).size === table.source_column_numbers.length
+    && table.source_column_numbers.every(column => Number.isInteger(column) && column >= 1 && column <= 200)
+  ))
+  && (table.source_total_row_count === undefined || (Number.isInteger(table.source_total_row_count) && table.source_total_row_count >= table.total_row_count))
+  && (table.hidden_row_count === undefined || (Number.isInteger(table.hidden_row_count) && table.hidden_row_count >= 0))
+  && (table.hidden_column_count === undefined || (Number.isInteger(table.hidden_column_count) && table.hidden_column_count >= 0))
+  && (table.privacy_scan_rows === undefined || table.source_total_row_count !== undefined)
+  && (table.hidden_row_count === undefined || table.source_total_row_count === table.total_row_count + table.hidden_row_count)
+  && (table.hidden_column_count === undefined || table.privacy_scan_headers === undefined
+    || table.privacy_scan_headers.length === table.headers.length + table.hidden_column_count)
+  && (table.active_filter_range === undefined || (typeof table.active_filter_range === 'string' && table.active_filter_range.length <= 64))
+  && (table.merged_ranges === undefined || (Array.isArray(table.merged_ranges) && table.merged_ranges.length === table.merged_range_count
+    && table.merged_ranges.every(range => typeof range === 'string' && range.length <= 64)));
 
 const escapeXml = (value: string): string => value
   .replace(/&/g, '&amp;')

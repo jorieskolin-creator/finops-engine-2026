@@ -86,20 +86,30 @@ export const sanitizeEvidenceSources = (sources: SourceRecord[]): {
     };
     const sanitizeTable = (table: NonNullable<SourceRecord['structured_table']>) => {
       const completeRows = table.analysis_rows || table.rows;
-      const sanitizedCompleteRows = completeRows.map(row => row.map(cell => {
+      const privacyRows = table.privacy_scan_rows || completeRows;
+      const privacyHeaders = table.privacy_scan_headers || table.headers;
+      const sanitizedPrivacyRows = privacyRows.map(row => row.map(cell => {
         scannedTableCellCount++;
         return sanitizeText(cell, source.source_id, findings);
       }));
-      const sanitizedHeaders = table.headers.map(header => {
+      const sanitizedPrivacyHeaders = privacyHeaders.map(header => {
         scannedTableCellCount++;
         return sanitizeText(header, source.source_id, findings);
       });
+      const sanitizedCompleteRows = table.privacy_scan_rows
+        ? completeRows.map(row => row.map(applyKnownRedactions))
+        : sanitizedPrivacyRows;
+      const sanitizedHeaders = table.privacy_scan_headers
+        ? table.headers.map(applyKnownRedactions)
+        : sanitizedPrivacyHeaders;
       return {
         ...table,
         sheet_name: table.sheet_name ? sanitizeText(table.sheet_name, source.source_id, findings) : undefined,
         headers: sanitizedHeaders,
         rows: table.rows.map(row => row.map(applyKnownRedactions)),
         analysis_rows: table.analysis_rows ? sanitizedCompleteRows : undefined,
+        privacy_scan_headers: table.privacy_scan_headers ? sanitizedPrivacyHeaders : undefined,
+        privacy_scan_rows: table.privacy_scan_rows ? sanitizedPrivacyRows : undefined,
         deterministic_inspection: table.deterministic_inspection
           ? buildDeterministicTableInspection(sanitizedHeaders, sanitizedCompleteRows)
           : undefined,
@@ -154,7 +164,11 @@ export const sanitizeEvidenceSources = (sources: SourceRecord[]): {
     (source.text !== undefined && containsProhibitedRawValue(source.text))
     || Boolean(source.pages?.some(page => containsProhibitedRawValue(page.text)))
     || Boolean([...(source.structured_tables || []), ...(source.structured_table ? [source.structured_table] : [])].some(table => (
-      [table.sheet_name || '', ...table.headers, ...table.rows.flat(), ...(table.analysis_rows?.flat() || [])].some(containsProhibitedRawValue)
+      [
+        table.sheet_name || '',
+        ...(table.privacy_scan_headers || table.headers),
+        ...(table.privacy_scan_rows?.flat() || table.analysis_rows?.flat() || table.rows.flat())
+      ].some(containsProhibitedRawValue)
       || table.native_charts?.some(chart => [
           chart.chart_part, chart.sheet_name || '', chart.title || '', ...chart.axis_titles,
           ...chart.series.flatMap(series => [series.name || '', series.category_range || '', series.value_range || '', ...series.categories])

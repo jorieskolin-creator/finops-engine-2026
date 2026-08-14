@@ -64,7 +64,7 @@ const shadowDerived = {
   schema_version: 'derived_analytical_evidence_v1', mode: 'shadow', evidence_id: 'EVID-DER-12345678',
   evidence_type: 'deterministic_analytical', source_id: 'src-001',
   targets: [{ stream: 'maturity', criterion_id: 'A1' }, { stream: 'antipattern', criterion_id: 'A1' }],
-  derivation: { analyzer_id: 'tagging_allocation_v1', analyzer_version: '1.1.0', registry_version: 'evidence_analysis_registry_v1', method: 'tagging_allocation_coverage_analysis', calculation_ids: ['field_row_coverage'] },
+  derivation: { analyzer_id: 'tagging_allocation_v1', analyzer_version: '1.2.0', registry_version: 'evidence_analysis_registry_v1', method: 'tagging_allocation_coverage_analysis', calculation_ids: ['field_row_coverage'] },
   result: {
     status: 'OBSERVED', source_row_count: 2, analyzed_row_count: 2, eligible_row_count: 2, excluded_total_row_count: 0, row_scope: 'full_table', row_truncated: false,
     detected_signal_count: 1, mapping_population_coverage: 50, tagging_population_coverage: null, allocation_population_coverage: 50,

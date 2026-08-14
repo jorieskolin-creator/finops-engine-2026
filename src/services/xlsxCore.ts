@@ -198,6 +198,7 @@ export const parseXlsxBytes = async (bytes: Uint8Array, sourceHash?: string): Pr
     cellFormula: true,
     cellNF: true,
     cellText: true,
+    cellStyles: true,
     cellDates: false,
     bookVBA: false,
     WTF: false
@@ -227,6 +228,13 @@ export const parseXlsxBytes = async (bytes: Uint8Array, sourceHash?: string): Pr
     let formulaCellCount = 0;
     let formulaCachedValueMissingCount = 0;
     let headerRow = -1;
+    const hiddenRows = new Set((detail.sheet['!rows'] || [])
+      .flatMap((row, index) => row?.hidden ? [index] : []));
+    const hiddenColumns = new Set((detail.sheet['!cols'] || [])
+      .flatMap((column, index) => column?.hidden ? [index] : []));
+    const visibleColumnOffsets = Array.from({ length: columnCount }, (_, index) => index)
+      .filter(offset => !hiddenColumns.has(range.s.c + offset));
+    if (visibleColumnOffsets.length === 0) throw new Error('XLSX_NO_VISIBLE_COLUMNS');
     const physicalRows: Array<{ rowNumber: number; values: string[] }> = [];
     for (let rowIndex = range.s.r; rowIndex <= range.e.r; rowIndex++) {
       const values: string[] = [];
@@ -245,9 +253,17 @@ export const parseXlsxBytes = async (bytes: Uint8Array, sourceHash?: string): Pr
       }
     }
     if (headerRow < 0 || physicalRows.length === 0) continue;
-    const headers = uniqueHeaders(physicalRows[0].values, range.s.c);
-    const dataRows = physicalRows.slice(1);
-    totalDataRows += dataRows.length;
+    if (formulaCachedValueMissingCount > 0) {
+      throw new Error('XLSX_FORMULA_CACHED_VALUE_MISSING');
+    }
+    if (hiddenRows.has(headerRow)) throw new Error('XLSX_HIDDEN_HEADER_ROW_REJECTED');
+    const privacyHeaders = uniqueHeaders(physicalRows[0].values, range.s.c);
+    const headers = visibleColumnOffsets.map(offset => privacyHeaders[offset]);
+    const sourceDataRows = physicalRows.slice(1);
+    const dataRows = sourceDataRows
+      .filter(row => !hiddenRows.has(row.rowNumber - 1))
+      .map(row => ({ ...row, values: visibleColumnOffsets.map(offset => row.values[offset]) }));
+    totalDataRows += sourceDataRows.length;
     if (totalDataRows > MAX_ROWS) throw new Error('XLSX_TOTAL_ROW_LIMIT_EXCEEDED');
     const analysisRows = dataRows.map(row => row.values);
     const analysisRowNumbers = dataRows.map(row => row.rowNumber);
@@ -259,10 +275,18 @@ export const parseXlsxBytes = async (bytes: Uint8Array, sourceHash?: string): Pr
     });
     if (dataRows.length > sample.rows.length) warnings.push(`Workbook sheet ${detail.sheetIndex + 1} has ${dataRows.length} data rows; a deterministic bounded sample of ${sample.rows.length} rows was included for model context.`);
     if (formulaCellCount > 0) warnings.push(`Workbook sheet ${detail.sheetIndex + 1} contains ${formulaCellCount} formula cell(s); cached values were recorded and formulas were not executed.`);
-    if (formulaCachedValueMissingCount > 0) warnings.push(`Workbook sheet ${detail.sheetIndex + 1} contains ${formulaCachedValueMissingCount} formula cell(s) without cached values; they were treated as empty.`);
+    const withheldRowCount = sourceDataRows.length - dataRows.length;
+    const hiddenColumnCount = columnCount - visibleColumnOffsets.length;
+    if (withheldRowCount > 0) warnings.push(`Workbook sheet ${detail.sheetIndex + 1} has ${withheldRowCount} hidden data row(s); all were privacy-scanned locally and withheld from analysis and model context.`);
+    if (hiddenColumnCount > 0) warnings.push(`Workbook sheet ${detail.sheetIndex + 1} has ${hiddenColumnCount} hidden column(s); all were privacy-scanned locally and withheld from analysis and model context.`);
+    if (detail.sheet['!autofilter']?.ref) warnings.push(`Workbook sheet ${detail.sheetIndex + 1} has an active filter range; filter metadata was recorded but did not reduce the inspected population.`);
+    if ((detail.sheet['!merges']?.length || 0) > 0) warnings.push(`Workbook sheet ${detail.sheetIndex + 1} has ${detail.sheet['!merges']!.length} merged range(s); merge metadata was recorded for interpretation warnings.`);
     const nativeCharts = archive.nativeCharts.filter(chart =>
       chart.sheet_name === detail.sheetName || ((!chart.sheet_name || !extractedSheetNames.has(chart.sheet_name)) && tableIndex === 0)
     );
+    if (nativeCharts.length > 0 && (withheldRowCount > 0 || hiddenColumnCount > 0)) {
+      throw new Error('XLSX_HIDDEN_STRUCTURE_CHART_BINDING_UNRESOLVED');
+    }
     tables.push({
       schema_version: 'structured_table_v1',
       sheet_name: detail.sheetName,
@@ -274,6 +298,13 @@ export const parseXlsxBytes = async (bytes: Uint8Array, sourceHash?: string): Pr
       rows: sample.rows.map(row => row.map(boundedCell)),
       analysis_rows: analysisRows,
       analysis_row_numbers: analysisRowNumbers,
+      privacy_scan_headers: privacyHeaders,
+      privacy_scan_rows: sourceDataRows.map(row => row.values),
+      source_column_numbers: visibleColumnOffsets.map(offset => range.s.c + offset + 1),
+      source_total_row_count: sourceDataRows.length,
+      hidden_row_count: withheldRowCount,
+      hidden_column_count: hiddenColumnCount,
+      active_filter_range: detail.sheet['!autofilter']?.ref,
       sampled_row_numbers: sample.rowNumbers,
       sampled_row_reasons: sample.reasons,
       sample_strategy_version: TABLE_SAMPLE_STRATEGY_VERSION,
@@ -284,6 +315,7 @@ export const parseXlsxBytes = async (bytes: Uint8Array, sourceHash?: string): Pr
       formula_cell_count: formulaCellCount,
       formula_cached_value_missing_count: formulaCachedValueMissingCount,
       merged_range_count: detail.sheet['!merges']?.length || 0,
+      merged_ranges: detail.sheet['!merges']?.map(merge => XLSX.utils.encode_range(merge)) || [],
       native_charts: nativeCharts,
       unsupported_objects: archive.unsupportedObjects,
       truncated: dataRows.length > sample.rows.length || sample.rows.some(row => row.some(value => value.length > MAX_CELL_CHARS))

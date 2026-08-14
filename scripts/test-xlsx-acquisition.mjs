@@ -17,6 +17,16 @@ await build({
   logLevel: 'silent',
 });
 const { inspectXlsxArchive, parseNativeChartXml, parseXlsxBytes } = await import(`file://${outfile}`);
+const privacyOutfile = join(dir, 'deterministicPrivacyService.mjs');
+await build({
+  entryPoints: [new URL('../src/services/deterministicPrivacyService.ts', import.meta.url).pathname],
+  bundle: true,
+  platform: 'node',
+  format: 'esm',
+  outfile: privacyOutfile,
+  logLevel: 'silent',
+});
+const { sanitizeEvidenceSources } = await import(`file://${privacyOutfile}`);
 
 const nativeChartXml = `
   <c:chartSpace xmlns:c="chart" xmlns:a="drawing">
@@ -88,6 +98,56 @@ assert.equal(largeParsed.tables[0].sample_seed_hash, `${'d'.repeat(64)}:0`);
 assert.ok(largeParsed.tables[0].sampled_row_numbers.includes(182), 'XLSX numeric extreme must retain its physical worksheet row');
 assert.ok(largeParsed.tables[0].sampled_row_numbers.includes(201), 'XLSX last-row boundary must be represented');
 assert.match(largeParsed.warnings.join(' '), /deterministic bounded sample of 150 rows/);
+
+const uncachedFormulaWorkbook = XLSX.utils.book_new();
+const uncachedFormulaSheet = XLSX.utils.aoa_to_sheet([['Owner', 'Calculated Spend'], ['Alice', null]]);
+uncachedFormulaSheet.B2 = { t: 'n', f: '100+50' };
+uncachedFormulaSheet['!ref'] = 'A1:B2';
+XLSX.utils.book_append_sheet(uncachedFormulaWorkbook, uncachedFormulaSheet, 'Uncached Formula');
+const uncachedFormulaBytes = new Uint8Array(XLSX.write(uncachedFormulaWorkbook, { type: 'buffer', bookType: 'xlsx' }));
+await assert.rejects(
+  () => parseXlsxBytes(uncachedFormulaBytes),
+  /XLSX_FORMULA_CACHED_VALUE_MISSING/,
+  'formula cells without cached values are technical acquisition loss, not ordinary blank evidence'
+);
+
+const hiddenStructureWorkbook = XLSX.utils.book_new();
+const hiddenStructureSheet = XLSX.utils.aoa_to_sheet([
+  ['Owner', 'Private Contact', 'Spend'],
+  ['Alice', 'visible@example.com', 100],
+  ['Bob', 'hidden@example.com', 50],
+]);
+hiddenStructureSheet['!rows'] = [{}, {}, { hidden: true }];
+hiddenStructureSheet['!cols'] = [{}, { hidden: true }, {}];
+hiddenStructureSheet['!autofilter'] = { ref: 'A1:C3' };
+hiddenStructureSheet['!merges'] = [XLSX.utils.decode_range('C2:C2')];
+XLSX.utils.book_append_sheet(hiddenStructureWorkbook, hiddenStructureSheet, 'Governed Costs');
+const hiddenStructureBytes = new Uint8Array(XLSX.write(hiddenStructureWorkbook, { type: 'buffer', bookType: 'xlsx' }));
+const hiddenStructureParsed = await parseXlsxBytes(hiddenStructureBytes, 'f'.repeat(64));
+const hiddenStructureTable = hiddenStructureParsed.tables[0];
+assert.deepEqual(hiddenStructureTable.headers, ['Owner', 'Spend']);
+assert.deepEqual(hiddenStructureTable.analysis_rows, [['Alice', '100']]);
+assert.deepEqual(hiddenStructureTable.analysis_row_numbers, [2]);
+assert.deepEqual(hiddenStructureTable.source_column_numbers, [1, 3]);
+assert.equal(hiddenStructureTable.total_row_count, 1);
+assert.equal(hiddenStructureTable.source_total_row_count, 2);
+assert.equal(hiddenStructureTable.hidden_row_count, 1);
+assert.equal(hiddenStructureTable.hidden_column_count, 1);
+assert.equal(hiddenStructureTable.active_filter_range, 'A1:C3');
+assert.equal(hiddenStructureTable.merged_range_count, 1);
+assert.deepEqual(hiddenStructureTable.merged_ranges, ['C2']);
+assert.doesNotMatch(hiddenStructureParsed.text, /Private Contact|visible@example\.com|hidden@example\.com|Bob/);
+assert.match(hiddenStructureParsed.warnings.join(' '), /privacy-scanned locally and withheld/);
+assert.match(hiddenStructureParsed.warnings.join(' '), /active filter range/);
+assert.match(hiddenStructureParsed.warnings.join(' '), /merged range/);
+const hiddenStructurePrivacy = sanitizeEvidenceSources([{
+  schema_version: 'source_record_v1', source_id: 'src-hidden-structure', source_name: 'private.xlsx', kind: 'xlsx',
+  structured_tables: hiddenStructureParsed.tables
+}]);
+assert.equal(hiddenStructurePrivacy.decision.decision, 'PASS_WITH_REDACTIONS');
+assert.equal(hiddenStructurePrivacy.decision.scanned_table_cell_count, 9);
+assert.match(hiddenStructurePrivacy.sources[0].structured_tables[0].privacy_scan_rows.flat().join(' '), /\[EMAIL_REDACTED\]/);
+assert.doesNotMatch(JSON.stringify(hiddenStructurePrivacy.sources[0].structured_tables[0].analysis_rows), /example\.com|Bob/);
 
 const multisheetWorkbook = XLSX.utils.book_new();
 XLSX.utils.book_append_sheet(multisheetWorkbook, XLSX.utils.aoa_to_sheet([['Owner'], ['Alice']]), 'First');
