@@ -280,7 +280,10 @@ export interface AnalysisMeta {
   run_trace?: RunTrace;
   run_trace_summary?: RunTraceSummary;
   acquisition_quality?: AcquisitionQualitySnapshot;
-  model_mode?: 'normal' | 'cheap_test';
+  model_mode?: string;
+  model_routing_policy_version?: string;
+  primary_model_provider?: 'ANTHROPIC' | 'OPENAI' | 'QWEN' | null;
+  fallback_model_provider?: 'ANTHROPIC' | 'OPENAI' | 'QWEN' | 'NONE' | null;
   model_config: {
     preflight: string;
     forensic_audit: string;

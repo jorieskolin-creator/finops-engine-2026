@@ -13,6 +13,7 @@ import { initializeInfrastructure } from './lib/infrastructure.js';
 import { safeErrorCode } from './lib/safeErrors.js';
 import { AttemptReconciler,ExecutionWorker,OutboxPublisher } from './lib/executionWorker.js';
 import { CleanupWorker } from './lib/runLifecycleService.js';
+import { resolveModelRouting } from './lib/modelRoutingPolicy.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const distDir = path.join(__dirname, 'dist');
@@ -20,6 +21,8 @@ const apiDir = path.join(__dirname, 'api');
 
 let accepting=false;
 let infrastructure;
+try { resolveModelRouting(process.env); }
+catch { console.error('[server] STARTUP_FAILED code=MODEL_ROUTING_CONFIGURATION_INVALID'); process.exit(1); }
 try { infrastructure=await initializeInfrastructure(); }
 catch { console.error('[server] STARTUP_FAILED code=INFRASTRUCTURE_UNAVAILABLE'); process.exit(1); }
 const app = express();

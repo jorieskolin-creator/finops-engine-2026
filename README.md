@@ -25,7 +25,7 @@ For UI-only work, run `npm run dev`. The UI will load, but assessments cannot co
 
 ## Active model architecture
 
-Model profiles, stage assignments, and fallback chains are centralized in `src/models.ts`. The active providers are OpenAI, Anthropic, and Qwen; Gemini is not part of the current runtime.
+Model profiles, stage assignments, and fallback chains are centralized in the server-owned `lib/modelRoutingPolicy.js`. The active providers are OpenAI, Anthropic, and Qwen; Gemini is not part of the current runtime. The browser obtains the effective content-free route from `/api/model-routing`, while governed-packet approval independently enforces the same Railway policy.
 
 | Stage group | Normal primary provider/profile |
 |-------------|---------------------------------|
@@ -37,7 +37,7 @@ Model profiles, stage assignments, and fallback chains are centralized in `src/m
 | Roadmap synthesis | Anthropic Claude Opus 4.7 |
 | Fact check and quality-gate explanation | OpenAI GPT-5.5 |
 
-Every stage has an ordered fallback chain. Treat `src/models.ts`, rather than this summary, as the source of truth when changing model routing. The optional `cheap_test` mode uses Qwen3.8-Max first, then GPT-5.4-mini and finally Sonnet as a reliability fallback. It is a development cost-control mode, not an authorization boundary. Activate it for the browser session with `?model_mode=cheap_test`, or set `VITE_FINOPS_MODEL_MODE=cheap_test` at build time.
+When provider variables are absent, the established mixed-provider routing above remains active. Set `PRIMARY_MODEL_PROVIDER` and `FALLBACK_MODEL_PROVIDER` to choose providers for all model stages; code-owned stage profiles still select the exact model and reasoning settings. OpenAI uses GPT-5.4-mini for lighter stages and GPT-5.5 with medium/high reasoning for deeper stages; Anthropic uses Haiku/Sonnet/Opus by stage; Qwen uses Qwen3.8-Max in non-thinking JSON mode. Fallback `NONE` disables automatic provider fallback. Post-send uncertainty never becomes fallback.
 
 ## Environment variables
 
@@ -47,12 +47,13 @@ Every stage has an ordered fallback chain. Treat `src/models.ts`, rather than th
 | `OPENAI_API_KEY` or `GPT_API_KEY` | Yes for OpenAI stages | Server-side OpenAI credential. `GPT_API_KEY` takes precedence when both are set. |
 | `ANTHROPIC_API_KEY` | Yes for Anthropic stages | Server-side Anthropic credential. |
 | `QWEN_API_KEY` | Yes for Qwen stages | Server-side Qwen Cloud credential used with the international OpenAI-compatible endpoint. |
+| `PRIMARY_MODEL_PROVIDER` | No | Server-side primary provider: `ANTHROPIC`, `OPENAI`, or `QWEN`. Omit to preserve established mixed routing. |
+| `FALLBACK_MODEL_PROVIDER` | No | Server-side fallback provider: `ANTHROPIC`, `OPENAI`, `QWEN`, or `NONE`. Requires a primary; defaults to `NONE` when a primary is configured. |
 | `DATABASE_URL` | Yes for the Node server | PostgreSQL control-plane connection. Startup fails closed if unavailable or unmigrated. |
 | `REDIS_URL` | Yes for the Node server | Redis execution-plane connection. Startup fails closed if unavailable. |
 | `VITE_FINOPS_TACTICS_URL` | No | Public remote tactics database URL exposed to the browser. |
 | `BLOB_READ_WRITE_TOKEN` | No | Vercel Blob credential used by `/api/kb-index` for the remote PDF knowledge base. |
 | `FINOPS_KB_BLOB_PREFIX` | No | Blob path prefix; defaults to `Knowledge Base/`. |
-| `VITE_FINOPS_MODEL_MODE` | No | Set to `cheap_test` only for development runs. |
 | `PORT` | No | Node server port; defaults to 3000. Hosting platforms normally provide it. |
 
 Do not commit populated `.env` or `.env.local` files.
@@ -66,6 +67,7 @@ The UI is public, but assessment and supporting API operations require an HMAC-s
 | `/api/login` | POST | Verify the shared password and issue an eight-hour HttpOnly, Secure, SameSite=Lax session cookie. |
 | `/api/logout` | POST | Clear the session cookie. |
 | `/api/session` | GET | Check the current session. |
+| `/api/model-routing` | GET | Return the authenticated, content-free effective model route. |
 | `/api/governed-packet` | POST | Authenticated approval of versioned, sanitized text-only stage packets. |
 | `/api/openai-generate` | POST | Packet-ID-only governed OpenAI dispatch. |
 | `/api/anthropic-generate` | POST | Packet-ID-only governed Anthropic dispatch. |

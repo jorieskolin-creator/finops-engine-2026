@@ -25,8 +25,8 @@ import {
   SUMMARY_FACT_CHECK_CONTRACT
 } from "./factCheckService";
 import { FactCheckClaim, FactCheckResult, FactCheckPassSnapshot } from "../types";
-import { MODEL_ROUTING_MODE, STAGE_MODELS, StageId } from "../models";
-import { runStage, serverLog } from "./modelRouter";
+import { StageId } from "../models";
+import { getModelRoutingConfig, runStage, serverLog } from "./modelRouter";
 import { completeRun, createRun, failRun, getRun } from "./runLifecycleService";
 import { sanitizeRoadmapTacticGrounding, TacticGroundingAdjustment } from "./tacticGroundingService";
 import { sanitizeBlockedStrategy, sanitizeStrategyAfterFactCheck } from "./strategySanitationService";
@@ -217,6 +217,8 @@ export const analyzeDocument = async (
   options: AnalyzeOptions = {}
 ): Promise<DiagnosticResult> => {
   const images: never[] = [];
+  const modelRouting = await getModelRoutingConfig();
+  const modelRoutingMode = modelRouting.label;
   // This is deliberately the first content-processing action: PostgreSQL owns
   // the UUID and deadlines before source text is inspected or packetized.
   const authoritativeRun = await createRun();
@@ -230,22 +232,22 @@ export const analyzeDocument = async (
   };
   const pipelineStarted = Date.now();
   const actuals: Record<string, string> = {
-    preflight: STAGE_MODELS.preflight.id,
-    forensic_audit: STAGE_MODELS.forensic_audit.id,
-    targeted_rescan: STAGE_MODELS.targeted_rescan.id,
-    evidence_check: STAGE_MODELS.evidence_check.id,
-    evidence_adjudication: STAGE_MODELS.evidence_adjudication.id,
-    synthesis: STAGE_MODELS.synthesis.id,
-    roadmap_synthesis: STAGE_MODELS.roadmap_synthesis.id,
-    fact_check: STAGE_MODELS.fact_check.id,
-    fact_check_high: STAGE_MODELS.fact_check_high.id,
+    preflight: modelRouting.routes.preflight[0].id,
+    forensic_audit: modelRouting.routes.forensic_audit[0].id,
+    targeted_rescan: modelRouting.routes.targeted_rescan[0].id,
+    evidence_check: modelRouting.routes.evidence_check[0].id,
+    evidence_adjudication: modelRouting.routes.evidence_adjudication[0].id,
+    synthesis: modelRouting.routes.synthesis[0].id,
+    roadmap_synthesis: modelRouting.routes.roadmap_synthesis[0].id,
+    fact_check: modelRouting.routes.fact_check[0].id,
+    fact_check_high: modelRouting.routes.fact_check_high[0].id,
   };
 
   console.log(`[FinOps] === Pipeline start === run=${runId} deepMode=${!!options.deepMode}`);
   serverLog(runId, 'info', 'pipeline_start', {
     source_chars: sources.reduce((n,s) => n + (s.text?.length || 0) + (s.pages?.reduce((m,p)=>m+p.text.length,0) || 0), 0),
     images: 0,
-    model_mode: MODEL_ROUTING_MODE,
+    model_mode: modelRoutingMode,
   });
 
   try {
@@ -378,9 +380,9 @@ export const analyzeDocument = async (
     }
     serverLog(runId, 'info', 'stage_complete', {
       stage: 'forensic_audit',
-      model: aggregatedRawData.models_used.join(',') || STAGE_MODELS.forensic_audit.id,
+      model: aggregatedRawData.models_used.join(',') || actuals.forensic_audit,
       targeted_rescan_model: aggregatedRawData.targeted_rescan_models_used.join(',') || 'n/a',
-      evidence_check_model: aggregatedRawData.evidence_check_models_used.join(',') || STAGE_MODELS.evidence_check.id,
+      evidence_check_model: aggregatedRawData.evidence_check_models_used.join(',') || actuals.evidence_check,
       evidence_adjudication_model: aggregatedRawData.evidence_adjudication_models_used.join(',') || 'n/a',
       duration_ms: Date.now() - phase1Started,
       failed_batches: aggregatedRawData.failed_batches.join(',') || 'none',
@@ -1048,7 +1050,7 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => `  ${cat}
       fact_check_supported: factCheck.supported_count,
       fact_check_total: factCheck.total_claims,
       models: actuals,
-      model_mode: MODEL_ROUTING_MODE,
+      model_mode: modelRoutingMode,
     });
 
     const fallbackStrategy = {
@@ -1079,7 +1081,10 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => `  ${cat}
         source_parse_warnings: sourceParseWarnings.length > 0 ? sourceParseWarnings : undefined,
         source_registry: sourceRegistryStatus,
         knowledge_base: referenceKbIndex.status,
-        model_mode: MODEL_ROUTING_MODE,
+        model_mode: modelRoutingMode,
+        model_routing_policy_version: modelRouting.policy_version,
+        primary_model_provider: modelRouting.primary_provider,
+        fallback_model_provider: modelRouting.fallback_provider,
         model_config: {
           preflight: actuals.preflight,
           forensic_audit: actuals.forensic_audit,
@@ -1160,7 +1165,7 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => `  ${cat}
       duration_ms: duration,
       error_code: errorCode,
       models: actuals,
-      model_mode: MODEL_ROUTING_MODE,
+      model_mode: modelRoutingMode,
     });
     throw error;
   }

@@ -10,7 +10,7 @@
 // can emit correlated structured logs visible in Railway.
 
 import { ImageInput } from '../types';
-import { ModelProfile, StageId, modelsFor } from '../models';
+import { ModelProfile, ModelRoutingConfig, Provider, StageId } from '../models';
 import { estimateTokens, hashString, recordStageTrace } from './runTraceService';
 // @ts-expect-error Pure JS policy is also consumed by the serverless API.
 import { filterOperationalMetadata } from '../../lib/operationalLogPolicy.js';
@@ -33,6 +33,43 @@ const RECOVERY_PROPAGATION_MS = 120_000;
 const INTERNAL_RESULT_POLL_INTERVAL_MS = 2_000;
 const INTERNAL_RESULT_MISSING_GRACE_MS = 10_000;
 export class StageExecutionError extends Error { constructor(public code:string,public fallbackAllowed=false){super(code);} }
+
+const STAGES: StageId[] = ['preflight','forensic_audit','targeted_rescan','evidence_check','evidence_adjudication','synthesis','roadmap_synthesis','synthesis_escalation','fact_check','fact_check_high','quality_gate'];
+const PROVIDERS = new Set<Provider>(['anthropic', 'openai', 'qwen']);
+let routingConfigPromise: Promise<ModelRoutingConfig> | undefined;
+
+const validProfile = (value: any): value is ModelProfile => Boolean(
+  value && typeof value === 'object' && !Array.isArray(value)
+  && typeof value.id === 'string' && /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(value.id)
+  && PROVIDERS.has(value.provider)
+  && (value.maxTokens === undefined || (Number.isInteger(value.maxTokens) && value.maxTokens > 0))
+  && (value.openaiReasoning === undefined || ['none','low','medium','high','xhigh'].includes(value.openaiReasoning?.effort))
+  && (value.anthropicThinking === undefined || (value.anthropicThinking?.type === 'enabled' && Number.isInteger(value.anthropicThinking?.budget_tokens) && value.anthropicThinking.budget_tokens > 0))
+);
+
+const validRoutingConfig = (value: any): value is ModelRoutingConfig => Boolean(
+  value && value.schema_version === 'model_routing_config_v1'
+  && typeof value.policy_version === 'string'
+  && (value.mode === 'legacy' || value.mode === 'provider_policy')
+  && typeof value.label === 'string' && /^[a-z_]{1,64}$/.test(value.label)
+  && STAGES.every(stage => Array.isArray(value.routes?.[stage]) && value.routes[stage].length > 0 && value.routes[stage].every(validProfile))
+);
+
+export function getModelRoutingConfig(): Promise<ModelRoutingConfig> {
+  if (!routingConfigPromise) {
+    const request = fetch('/api/model-routing', { method: 'GET' }).then(async response => {
+      if (!response.ok) throw new Error(`MODEL_ROUTING_UNAVAILABLE HTTP ${response.status}`);
+      const config = await response.json();
+      if (!validRoutingConfig(config)) throw new Error('MODEL_ROUTING_CONFIGURATION_INVALID');
+      return config;
+    });
+    routingConfigPromise = request.catch(error => {
+      routingConfigPromise = undefined;
+      throw error;
+    });
+  }
+  return routingConfigPromise;
+}
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -276,7 +313,7 @@ const tokenUsageFromProvider = (usage: any) => ({
 
 export async function runStage(stage: StageId, prompt: NormalizedPrompt, ctx: RunContext): Promise<RunStageResult> {
   if (prompt.images?.length) throw new Error('IMAGE_PAYLOAD_DISABLED: external image processing is disabled until local OCR/redaction exists');
-  const chain = modelsFor(stage);
+  const chain = (await getModelRoutingConfig()).routes[stage];
   const failures: Array<{ profile: ModelProfile; error: string }> = [];
   const stageStarted = Date.now();
   const startedAt = new Date(stageStarted).toISOString();

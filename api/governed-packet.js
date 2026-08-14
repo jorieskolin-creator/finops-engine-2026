@@ -1,12 +1,12 @@
 import { requireSession } from '../lib/auth.js';
-import { approveRequest, GovernanceError } from '../lib/governance.js';
+import { approveRequest, authorizeConfiguredDestination, GovernanceError } from '../lib/governance.js';
 import { getInfrastructure } from '../lib/infrastructure.js';
 import { LIFETIMES_MS } from '../lib/controlPlanePolicy.js';
 import { safeErrorCode,safeErrorStatus } from '../lib/safeErrors.js';
 export function governedPacketHandler(repository,redis){return async function handler(req,res) {
   if (req.method !== 'POST') return res.status(405).json({error:'METHOD_NOT_ALLOWED'});
   if (!requireSession(req)) return res.status(401).json({error:'AUTHENTICATION_REQUIRED'});
-  try { const p=approveRequest(req.body); const run=await repository.getRun(p.run_id);if(!run||run.state!=='active'||Date.now()>=new Date(run.effective_expires_at).getTime())throw new GovernanceError('RUN_INACTIVE',409);
+  try { const p=approveRequest(req.body);authorizeConfiguredDestination(p.stage,p.provider,p.model,p.settings,process.env); const run=await repository.getRun(p.run_id);if(!run||run.state!=='active'||Date.now()>=new Date(run.effective_expires_at).getTime())throw new GovernanceError('RUN_INACTIVE',409);
     const serialized=JSON.stringify(p);const staged=await redis.stagePacket({runId:p.run_id,packetId:p.packet_id,body:serialized,deadline:run.absolute_deadline_at,ttlMs:LIFETIMES_MS.packet});if(staged!==1)throw new GovernanceError('DEPENDENCY_UNAVAILABLE',503);
     const partCount=p.parts.length,charCount=p.parts.reduce((n,x)=>n+x.text.length,0)+p.system_instruction.length;
     const committed=await repository.commitPacket({packetId:p.packet_id,runId:p.run_id,packetHash:p.packet_hash,schemaVersion:p.schema_version,policyVersion:p.policy_version,classificationCode:p.residual_classification,provider:p.provider,model:p.model,stage:p.stage,partCount,charCount});if(!committed)throw new GovernanceError('RUN_INACTIVE',409);

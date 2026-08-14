@@ -268,7 +268,7 @@ export const runQualityGate = (
 };
 
 // LLM-augmented reasoning. Only runs when the deterministic gate decided
-// WARN or BLOCK — we use the configured quality_gate model (see STAGE_MODELS)
+// WARN or BLOCK — use the server-configured quality_gate route.
 // to write a plain-language explanation that grounds each reason in source
 // quotes. This does NOT change the decision; it only annotates it.
 
