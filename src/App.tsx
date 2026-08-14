@@ -19,7 +19,8 @@ import { ReportView } from './components/ReportView';
 import { LoginModal } from './components/LoginModal';
 import { AppErrorBoundary } from './components/AppErrorBoundary';
 import { checkSession, logout } from './services/authService';
-import { deleteRun } from './services/runLifecycleService';
+import { acknowledgeRun, deleteRun, getRun } from './services/runLifecycleService';
+import { recoverCheckpointResult } from './services/checkpointRecoveryService';
 import { buildReportViewModel } from './services/reportViewModel';
 import tier1GovernancePolicy from '../test/tier1-governance-policy.txt?raw';
 import tier1TaggingPolicy from '../test/tier1-tagging-policy.txt?raw';
@@ -33,6 +34,7 @@ const DEMO_SIMULATION_LABEL = 'Engine Simulation — Northstar Retail Demo Pack'
 const SAVED_ASSESSMENT_KEY = 'finops:last-assessment:v1';
 const SAVED_ASSESSMENT_META_KEY = 'finops:last-assessment-meta:v1';
 const LAST_CRASH_KEY = 'finops:last-crash:v1';
+const ACTIVE_RUN_KEY = 'finops:recoverable-run:v1';
 
 interface SavedAssessmentMeta {
   savedAt: string;
@@ -205,7 +207,7 @@ const PrivacyProtocolCard = () => (
       ))}
     </div>
     <p className="mt-5 text-center text-[11px] leading-relaxed text-slate-400 max-w-4xl mx-auto">
-      Files, full tables, images and sparse PDF pages are processed locally. Images and sparse pages use local OCR; OCR does not interpret graph structure or other non-text visual semantics, which remain explicitly withheld. Deterministic privacy controls scan and redact acquired content before governed packets are assembled. The first generative-model call occurs only after that boundary passes. Provider retention depends on the configured account terms. Generated reports are kept in browser session storage for crash recovery. Sanitized packets and governed model results may remain in Redis for up to 30 minutes and are tombstoned for logical deletion when the run completes, fails, expires, or is deleted.
+      Files, full tables, images and sparse PDF pages are processed locally. Images and sparse pages use local OCR; OCR does not interpret graph structure or other non-text visual semantics, which remain explicitly withheld. Deterministic privacy controls scan and redact acquired content before governed packets are assembled. The first generative-model call occurs only after that boundary passes. Provider retention depends on the configured account terms. Accepted, privacy-inspected analysis checkpoints may remain temporarily in Redis for interruption recovery. They are deleted after the browser acknowledges final report delivery, on explicit deletion, or at expiry; PostgreSQL stores metadata and hashes only.
     </p>
   </div>
 );
@@ -597,6 +599,49 @@ const App: React.FC = () => {
   }, []);
 
   useEffect(() => {
+    if (!authenticated || result || safeRecoveryResult || loading || typeof window === 'undefined') return;
+    const runId = window.localStorage.getItem(ACTIVE_RUN_KEY);
+    if (!runId) return;
+    void (async () => {
+      try {
+        const run = await getRun(runId);
+        const recoverable = ['recovery_required', 'ready_for_delivery'].includes(run.state)
+          || (run.state === 'completed' && run.cleanup_status !== 'verified');
+        if (!recoverable) {
+          window.localStorage.removeItem(ACTIVE_RUN_KEY);
+          return;
+        }
+        const recovered = await recoverCheckpointResult(runId);
+        if (!recovered) return;
+        saveAssessmentToSession(recovered.result, 'completed_assessment');
+        setPreparedResult(recovered.result, 'completed_assessment');
+        setViewMode('dashboard');
+        setRecoveryNotice(recovered.complete
+          ? 'Recovered the completed assessment from temporary storage after interruption.'
+          : 'Recovered accepted analysis checkpoints. The run did not finish verification, so the report is BLOCK / NO_GO and contains no roadmap.');
+        if (['ready_for_delivery', 'completed'].includes(run.state) && recovered.complete) {
+          await acknowledgeRun(runId);
+          window.localStorage.removeItem(ACTIVE_RUN_KEY);
+        }
+      } catch {
+        setRecoveryNotice('A recoverable run was found, but its temporary checkpoint is currently unavailable. It will remain available until expiry.');
+      }
+    })();
+  }, [authenticated, loading, result, safeRecoveryResult]);
+
+  useEffect(() => {
+    if (!authenticated || loading || !result?.meta?.run_id || typeof window === 'undefined') return;
+    const runId = window.localStorage.getItem(ACTIVE_RUN_KEY);
+    if (runId !== result.meta.run_id) return;
+    void getRun(runId).then(async run => {
+      if (run.state === 'ready_for_delivery' || (run.state === 'completed' && run.cleanup_status !== 'verified')) {
+        await acknowledgeRun(runId);
+      }
+      if (run.state !== 'recovery_required') window.localStorage.removeItem(ACTIVE_RUN_KEY);
+    }).catch(() => undefined);
+  }, [authenticated, loading, result]);
+
+  useEffect(() => {
     if (!result) return;
     saveAssessmentToSession(result, nextRecoverySourceRef.current);
     nextRecoverySourceRef.current = 'completed_assessment';
@@ -922,7 +967,12 @@ const App: React.FC = () => {
         if (update.stage === 'analysis' && update.domain_id) {
           setCompletedDomains(current => current.includes(update.domain_id!) ? current : [...current, update.domain_id!]);
         }
-      }, { deepMode });
+      }, {
+        deepMode,
+        onRunStarted: runId => {
+          if (typeof window !== 'undefined') window.localStorage.setItem(ACTIVE_RUN_KEY, runId);
+        }
+      });
       if (!data.phase_2_validation?.metrics) throw new Error("Analysis returned incomplete data.");
       if (opts?.label) {
         data.meta = { ...data.meta, document_analyzed: opts.label };
@@ -934,7 +984,16 @@ const App: React.FC = () => {
       if (source_parse_warnings.length > 0) {
         data.meta = { ...data.meta, source_parse_warnings };
       }
+      saveAssessmentToSession(data, 'completed_assessment');
       setPreparedResult(data, 'completed_assessment');
+      if (data.meta.run_id) {
+        try {
+          await acknowledgeRun(data.meta.run_id);
+          if (typeof window !== 'undefined') window.localStorage.removeItem(ACTIVE_RUN_KEY);
+        } catch {
+          setRecoveryNotice('The report is safely stored in this browser, but backend delivery acknowledgement is pending and will be retried by expiry cleanup.');
+        }
+      }
     } catch (e: any) {
       setError(e.message || "Analysis failed.");
     } finally {
@@ -999,6 +1058,7 @@ const App: React.FC = () => {
     setPrivacyNotice(null);
     setOrganizationRedactionTerm('');
     clearSavedAssessment();
+    if (typeof window !== 'undefined') window.localStorage.removeItem(ACTIVE_RUN_KEY);
   };
 
   const restoreSavedAssessment = () => {

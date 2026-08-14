@@ -1,0 +1,28 @@
+import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
+import { checkpointHandler } from '../api/checkpoint.js';
+import { issueCookie } from '../lib/auth.js';
+import { sha256 } from '../lib/governance.js';
+import { RedisExecutionPlane } from '../lib/redisExecutionPlane.js';
+process.env.SECRET_KEY='checkpoint-test-secret';
+const RUN='00000000-0000-4000-8000-000000000001';
+const CHECKPOINT='00000000-0000-4000-8000-000000000002';
+const headers={cookie:issueCookie().split(';')[0]};
+const response=()=>({statusCode:0,body:null,status(code){this.statusCode=code;return this;},json(body){this.body=body;return this;}});
+const invoke=async(handler,req)=>{const res=response();await handler({...req,headers},res);return res;};
+let value,metadata,committed;
+const run={run_id:RUN,state:'active',effective_expires_at:new Date(Date.now()+60_000),absolute_deadline_at:new Date(Date.now()+120_000)};
+const repository={async getRun(){return run;},async commitCheckpoint(m){committed=m;metadata={checkpoint_id:CHECKPOINT,run_id:m.runId,kind:m.kind,scope:m.scope,revision:1,schema_version:m.schemaVersion,payload_hash:m.payloadHash,char_count:m.charCount,parent_hash:null,state:'available'};return metadata;},async listCheckpoints(){return[metadata];},async getCheckpoint(){return metadata;}};
+const redis={async setCheckpoint(args){value=args.value;return 1;},async getCheckpoint(){return value;},async removeCheckpoint(){throw new Error('unexpected removal');}};
+const handler=checkpointHandler(repository,redis);
+const validPhase1Payload={phase_1_audit_logs:{summary:'CHECKPOINT_CANARY_DO_NOT_STORE analyst@example.com'},evidence_check:{failed:false},validation:{valid:true}};
+let res=await invoke(handler,{method:'POST',body:{run_id:RUN,kind:'phase1',scope:'cost',payload:validPhase1Payload}});
+assert.equal(res.statusCode,201);assert.equal(committed.payloadHash,sha256(value));assert.equal(committed.charCount,value.length);assert.doesNotMatch(JSON.stringify(committed),/CHECKPOINT_CANARY_DO_NOT_STORE|example\.com/,'PostgreSQL call receives metadata only');assert.match(value,/\[REDACTED_EMAIL\]/);
+res=await invoke(handler,{method:'GET',query:{run_id:RUN}});assert.equal(res.statusCode,200);assert.deepEqual(res.body,{checkpoints:[metadata]});assert.doesNotMatch(JSON.stringify(res.body),/summary|REDACTED_EMAIL/);
+res=await invoke(handler,{method:'GET',query:{run_id:RUN,checkpoint_id:CHECKPOINT}});assert.equal(res.statusCode,200);assert.equal(res.body.payload.phase_1_audit_logs.summary,'CHECKPOINT_CANARY_DO_NOT_STORE [REDACTED_EMAIL]');
+value='{"tampered":true}';res=await invoke(handler,{method:'GET',query:{run_id:RUN,checkpoint_id:CHECKPOINT}});assert.equal(res.statusCode,503,'hash mismatch must fail closed');
+for(const body of [{run_id:RUN,kind:'phase1',scope:'cost',payload:validPhase1Payload,extra:true},{run_id:RUN,kind:'unknown',scope:'cost',payload:{}},{run_id:RUN,kind:'phase1',scope:'bad scope',payload:validPhase1Payload},{run_id:RUN,kind:'phase1',scope:'cost',payload:[]},{run_id:RUN,kind:'phase1',scope:'cost',payload:{raw_source:'must not persist'}}]){res=await invoke(handler,{method:'POST',body});assert.equal(res.statusCode,400);}
+res=await invoke(handler,{method:'POST',body:{run_id:RUN,kind:'phase1',scope:'cost',payload:{...validPhase1Payload,phase_1_audit_logs:{text:'x'.repeat(1_572_865)}}}});assert.equal(res.statusCode,400);
+const evalCalls=[];const plane=new RedisExecutionPlane({async ping(){return'PONG';},async eval(_script,args){evalCalls.push(args);return 1;},async get(){},async del(){return 1;},async sRem(){}});await plane.setCheckpoint({runId:RUN,id:CHECKPOINT,value:'safe',deadline:run.absolute_deadline_at,ttlMs:86_400_000});assert.match(evalCalls[0].keys[1],/:checkpoint:/);assert.match(evalCalls[0].keys[2],/:keys$/,'checkpoint must be indexed for tombstone cleanup');
+const migration=await readFile(new URL('../migrations/004_checkpoints.sql',import.meta.url),'utf8');assert.doesNotMatch(migration,/\b(JSONB|payload|source|prompt|output|body|message|details)\b/i);assert.match(migration,/interval '90 days'/);assert.match(migration,/UNIQUE \(run_id,kind,scope,revision\)/);
+console.log('checkpoint tests passed');

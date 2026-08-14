@@ -26,7 +26,8 @@ import {
 import { FactCheckClaim, FactCheckResult, FactCheckPassSnapshot } from "../types";
 import { StageId } from "../models";
 import { getModelRoutingConfig, runStage, serverLog } from "./modelRouter";
-import { completeRun, createRun, failRun, getRun } from "./runLifecycleService";
+import { createRun, failRun, getRun, readyRun, suspendRun } from "./runLifecycleService";
+import { saveCheckpoint, type CheckpointKind } from "./checkpointService";
 import { sanitizeRoadmapTacticGrounding, TacticGroundingAdjustment } from "./tacticGroundingService";
 import { sanitizeBlockedStrategy, sanitizeStrategyAfterFactCheck } from "./strategySanitationService";
 import {
@@ -42,6 +43,7 @@ import { analyzeStructuredSources, buildDataSignalCoverageReport } from "./struc
 import { buildEvidenceLaneStagePackets } from "./evidenceStagePacketService";
 import { buildBoundedRetrievalTrace } from "./boundedRetrievalService";
 import { sanitizeEvidenceSources } from "./deterministicPrivacyService";
+import { scrubDiagnosticResultForPrivacy } from "./privacyService";
 import { parseGovernedJsonObject, validateFindingsModePayload } from "./jsonResponseService";
 import { reconcileEvidenceProvenance } from "./evidenceCheckService";
 // @ts-expect-error Pure JS contracts are also consumed by the server-side worker.
@@ -213,6 +215,7 @@ export interface AnalyzeOptions {
   // User-controlled override: forces synthesis_escalation (Opus 4.7) even when
   // auto-rules wouldn't fire. Use for high-stakes / board-level assessments.
   deepMode?: boolean;
+  onRunStarted?: (runId: string) => void;
 }
 
 export const analyzeDocument = async (
@@ -227,7 +230,20 @@ export const analyzeDocument = async (
   // the UUID and deadlines before source text is inspected or packetized.
   const authoritativeRun = await createRun();
   const runId = authoritativeRun.run_id;
+  options.onRunStarted?.(runId);
   let completionIntent = false;
+  let hasRecoverableCheckpoint = false;
+  let checkpointParentHash: string | undefined;
+  const checkpoint = async (kind: CheckpointKind, scope: string, payload: Record<string, unknown>): Promise<void> => {
+    try {
+      const saved = await saveCheckpoint(runId, kind, scope, payload, checkpointParentHash);
+      checkpointParentHash = saved.payload_hash;
+      hasRecoverableCheckpoint = true;
+      serverLog(runId, 'info', 'checkpoint_saved', { kind, scope, revision: saved.revision });
+    } catch {
+      serverLog(runId, 'warn', 'checkpoint_save_failed', { kind, scope, error_code: 'CHECKPOINT_UNAVAILABLE' });
+    }
+  };
   const activeProgressStages = new Set<PipelineProgressStage>();
   const emitProgress = (update: PipelineProgressUpdate): void => {
     if (update.status === 'in_progress') activeProgressStages.add(update.stage);
@@ -348,6 +364,12 @@ export const analyzeDocument = async (
       registry_hash: evidenceIntegrity.registry_hash,
       packet_manifest_hash: evidenceIntegrity.packet_manifest_hash,
     });
+    await checkpoint('acquisition', 'accepted', {
+      source_registry_status: sourceRegistryStatus,
+      privacy_decision: privacy.decision,
+      integrity: evidenceIntegrity,
+      source_parse_warnings: sourceParseWarnings,
+    });
 
     if (privacy.decision.redaction_count > 0) {
       sourceParseWarnings.push(`Deterministic privacy controls redacted ${privacy.decision.redaction_count} prohibited contact, identifier, or financial-value occurrence(s) before packet assembly.`);
@@ -444,6 +466,11 @@ export const analyzeDocument = async (
     if (phase1Validation.warnings.length > 0) {
       console.warn(`[FinOps] Phase 1 validation produced ${phase1Validation.warnings.length} warning(s); content omitted by logging policy.`);
     }
+    await checkpoint('phase1', 'accepted', {
+      phase_1_audit_logs: auditLogs,
+      evidence_check: aggregatedRawData.evidence_check,
+      validation: phase1Validation,
+    });
 
     const phase1Status = aggregatedRawData.evidence_check.failed || !phase1Validation.valid ? 'completed_with_warnings' : 'completed';
     emitProgress({ stage: 'analysis', status: phase1Status, completed: Object.keys(BATCH_DEFINITIONS).length, total: Object.keys(BATCH_DEFINITIONS).length });
@@ -452,6 +479,7 @@ export const analyzeDocument = async (
     emitProgress({ stage: 'calculation', status: 'in_progress' });
     await new Promise(r => setTimeout(r, 600));
     const validationData = calculateMetrics(auditLogs);
+    await checkpoint('phase2', 'accepted', { phase_2_validation: validationData });
     emitProgress({ stage: 'calculation', status: 'completed' });
 
     console.log(`[FinOps] Phase 2 Complete. Readiness: ${Math.round(validationData.metrics.finops_readiness)}%, Classification: ${validationData.crawl_walk_run}`);
@@ -983,9 +1011,11 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => `  ${cat}
         silent_areas: validationData.silent_areas.length,
       });
     }
+    await checkpoint('synthesis', 'accepted', { phase_3_strategy: strategyData.phase_3_strategy });
     emitProgress({ stage: 'synthesis', status: deterministicSynthesisFallback ? 'completed_with_warnings' : 'completed' });
     emitProgress({ stage: 'verification', status: 'in_progress' });
     let factCheck = await runFactCheck(strategyData, 1);
+    await checkpoint('fact_check', 'pass_1', { fact_check: factCheck });
     let lastUnsupported: FactCheckClaim[] = factCheck.unsupported_claims;
     if (!factCheck.failed) trajectory.push(snapshot(factCheck));
 
@@ -996,11 +1026,28 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => `  ${cat}
       attempt <= FACT_CHECK_MAX_RETRIES
     ) {
       console.log(`[FinOps] Fact-check pass ${attempt}: ${lastUnsupported.length} unsupported claims, regenerating...`);
-      strategyData = await callPhase3Validated(buildRegenerateAppendix(lastUnsupported));
-      attempt++;
-      factCheck = await runFactCheck(strategyData, attempt);
-      lastUnsupported = factCheck.unsupported_claims;
-      if (!factCheck.failed) trajectory.push(snapshot(factCheck));
+      try {
+        const candidateStrategy = await callPhase3Validated(buildRegenerateAppendix(lastUnsupported));
+        const candidateAttempt = attempt + 1;
+        const candidateFactCheck = await runFactCheck(candidateStrategy, candidateAttempt);
+        await checkpoint('fact_check', `pass_${candidateAttempt}`, { fact_check: candidateFactCheck });
+        attempt = candidateAttempt;
+        if (candidateFactCheck.failed) {
+          serverLog(runId, 'warn', 'synthesis_candidate_rejected', { attempt, reason_code: 'FACT_CHECK_FAILED' });
+          break;
+        }
+        strategyData = candidateStrategy;
+        factCheck = candidateFactCheck;
+        lastUnsupported = factCheck.unsupported_claims;
+        trajectory.push(snapshot(factCheck));
+        await checkpoint('synthesis', 'accepted', { phase_3_strategy: strategyData.phase_3_strategy });
+      } catch (error: any) {
+        serverLog(runId, 'warn', 'synthesis_candidate_rejected', {
+          attempt: attempt + 1,
+          reason_code: typeof error?.code === 'string' ? error.code : 'SYNTHESIS_REGENERATION_FAILED',
+        });
+        break;
+      }
     }
 
     factCheck.trajectory = trajectory;
@@ -1060,6 +1107,7 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => `  ${cat}
         blocking_reasons: qualityGate.blocking_reasons.length,
       });
       const highFactCheck = await runFactCheck(strategyData, factCheck.attempts + 1, 'fact_check_high');
+      await checkpoint('fact_check', 'escalated', { fact_check: highFactCheck });
       if (!highFactCheck.failed) {
         highFactCheck.trajectory = [...(factCheck.trajectory || []), snapshot(highFactCheck)];
         sanitation = applySanitation(strategyData, highFactCheck, 'claims_quarantined');
@@ -1116,6 +1164,10 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => `  ${cat}
         decision: qualityGate.decision,
       });
     }
+    await checkpoint('quality_gate', 'accepted', {
+      quality_gate: qualityGate,
+      phase_3_strategy: strategyData.phase_3_strategy,
+    });
 
     emitProgress({ stage: 'verification', status: qualityGate.decision === 'GO' ? 'completed' : 'completed_with_warnings' });
     emitProgress({ stage: 'finalization', status: 'in_progress' });
@@ -1153,7 +1205,7 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => `  ${cat}
       ? sanitizeBlockedStrategy({ phase_3_strategy: resolvedStrategy }, qualityGate.blocking_reasons).phase_3_strategy
       : resolvedStrategy;
 
-    const finalResult: DiagnosticResult = {
+    let finalResult: DiagnosticResult = {
       meta: {
         run_id: runId,
         document_analyzed: "Uploaded Text",
@@ -1216,8 +1268,10 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => `  ${cat}
       runTrace
     });
     finalResult.meta.acquisition_quality = acquisitionQuality;
+    finalResult = scrubDiagnosticResultForPrivacy(finalResult, { redactPersonNames: true }).result;
+    await checkpoint('final_report', 'ready_for_delivery', { result: finalResult });
     completionIntent = true;
-    await completeRun(
+    await readyRun(
       runId,
       acquisitionQualityPersistence(acquisitionQuality, sourceRegistryStatus),
       shadowTelemetryPersistence(boundedRetrieval, derivedAnalyticalEvidence, dataSignalCoverage)
@@ -1230,10 +1284,13 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => `  ${cat}
     clearStageTraces(runId);
     const integrityError = error instanceof PipelineIntegrityError ? error : null;
     const errorCode = integrityError?.code || (error?.code === 'SYNTHESIS_OUTPUT_INVALID' ? error.code : 'PIPELINE_FAILED');
-    if (!completionIntent) await failRun(runId, errorCode).catch(() => undefined);
+    if (!completionIntent) {
+      if (hasRecoverableCheckpoint) await suspendRun(runId, errorCode).catch(() => undefined);
+      else await failRun(runId, errorCode).catch(() => undefined);
+    }
     else {
       const authoritative = await getRun(runId).catch(() => null);
-      if (authoritative?.state === 'active') await failRun(runId, errorCode).catch(() => undefined);
+      if (authoritative?.state === 'active') await suspendRun(runId, errorCode).catch(() => undefined);
     }
     const duration = Date.now() - pipelineStarted;
     if (integrityError) {

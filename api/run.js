@@ -16,6 +16,10 @@ export function createRunHandler(repository,redis){const lifecycle=redis?new Run
     if(action==='create'&&req.method==='POST')result=await repository.createRun();
     else { const id=body.run_id||req.query?.run_id; if(typeof id!=='string'||!UUID.test(id))return res.status(400).json({error:'INVALID_REQUEST'});
       if(action==='status')result=await repository.getRun(id);
+      else if(action==='suspend'){const failureCode=typeof body.failure_code==='string'&&/^[A-Z0-9_]{1,64}$/.test(body.failure_code)?body.failure_code:'PIPELINE_FAILED';result=await repository.markRunRecoverable(id,failureCode);}
+      else if(action==='resume')result=await repository.resumeRun(id);
+      else if(action==='ready'){if(!validQualitySnapshot(body.quality)||!validShadowTelemetry(body.shadow_telemetry))return res.status(400).json({error:'INVALID_REQUEST'});result=await (lifecycle?lifecycle.readyWithQuality(id,body.quality,body.shadow_telemetry):repository.readyRunWithQuality(id,body.quality,body.shadow_telemetry));}
+      else if(action==='acknowledge')result=await (lifecycle?lifecycle.acknowledgeDelivery(id):repository.acknowledgeDelivery(id));
       else if(action==='complete'){if(!validQualitySnapshot(body.quality)||!validShadowTelemetry(body.shadow_telemetry))return res.status(400).json({error:'INVALID_REQUEST'});result=await (lifecycle?lifecycle.completeWithQuality(id,body.quality,body.shadow_telemetry):repository.completeRunWithQuality(id,body.quality,body.shadow_telemetry));}
       else if(action==='fail'){const failureCode=typeof body.failure_code==='string'&&/^[A-Z0-9_]{1,64}$/.test(body.failure_code)?body.failure_code:'PIPELINE_FAILED';result=await (lifecycle?lifecycle.transition(id,'failed',failureCode):repository.terminalRun(id,'failed',failureCode));}
       else if(action==='delete')result=await (lifecycle?lifecycle.transition(id,'deletion_requested'):repository.terminalRun(id,'deletion_requested'));

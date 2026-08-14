@@ -32,6 +32,6 @@ assert.ok(integrityGatePosition > 0 && integrityGatePosition < calculationPositi
 assert.match(analysis, /throw new PipelineIntegrityError\('ANALYSIS_OUTPUT_INCOMPLETE', 'pre_synthesis'\)/, 'invalid Phase 1 output must terminate before synthesis');
 assert.match(analysis, /safeItem\.antipattern_absence_status = item\.antipattern_absence_status/, 'sanitization must preserve validated evidence semantics');
 for (const stage of orderedStages) assert.match(analysis, new RegExp(`stage: '${stage}'`));
-assert.match(analysis, /completeRun\([\s\S]*emitProgress\(\{ stage: 'finalization', status: 'completed' \}\)/, 'finalization must complete only after governed completion and cleanup');
+assert.match(analysis, /checkpoint\('final_report'[\s\S]*readyRun\([\s\S]*emitProgress\(\{ stage: 'finalization', status: 'completed' \}\)/, 'finalization must complete only after the recoverable report is stored and marked ready for delivery');
 
 console.log('pipeline progress presentation tests passed');

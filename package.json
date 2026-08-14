@@ -49,6 +49,8 @@
     "test:governance": "node scripts/test-governance.mjs",
     "test:dlp-distributed": "node scripts/test-dlp-distributed-sampling.mjs",
     "test:control-plane": "node scripts/test-control-plane.mjs",
+    "test:checkpoints": "node scripts/test-checkpoints.mjs",
+    "test:checkpoint-recovery": "node scripts/test-checkpoint-recovery.mjs",
     "test:execution-worker": "node scripts/test-execution-worker.mjs",
     "test:run-lifecycle": "node scripts/test-run-lifecycle.mjs",
     "test:pipeline-integrity": "node scripts/test-pipeline-integrity.mjs",
