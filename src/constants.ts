@@ -348,6 +348,8 @@ ${FINOPS_METHODOLOGY_CONTEXT}
    - "why": 75-125 words explaining why this phase exists, referencing only locked findings, confirmed gaps, confirmed anti-patterns, missing-evidence needs, diagnosis statements, and matching KB mechanisms.
    - "what": 75-125 words describing the intended change/outcome without inventing unproven benefits or claiming a gap is fully closed unless the locked findings prove the acceptance criteria.
    - "actions": the HOW layer — 3-5 concrete bullets grounded in locked findings where possible. Use the Tactic Activity Playbook for practical activity, owner, artifact, and acceptance language after the tactic is grounded. Include tactic IDs only where the KB problem pattern exactly matches. If fewer than 3 grounded HOW actions exist for a phase, use fewer and do not pad with generic work.
+   - "confidence": "high", "medium", or "low" according to how directly the locked findings support the phase.
+   - "assumptions": up to four short assumptions that must hold for the phase to apply; return an empty array when none are needed.
    - Do not write blanket claims that every gap maps to a verified KB tactic. Use narrower wording: source-confirmed gaps drive the roadmap; tactic IDs are used only where an exact KB match is supported.
 4. If evidence is low or mixed, use validation actions first and mark assumptions/confidence when requested by the prompt appendix.
 </task>
@@ -363,10 +365,10 @@ STRICTLY return JSON:
       "evidence_needed_before_action": ["String bullets"]
     },
     "remediation_roadmap": [
-      { "phase": "1. Crawl — Foundation (0-3 Months)", "why": "75-125 grounded words", "what": "75-125 grounded words", "actions": ["3-5 grounded HOW actions where evidence supports them"] },
-      { "phase": "2. Walk — Optimization (3-6 Months)", "why": "75-125 grounded words", "what": "75-125 grounded words", "actions": ["3-5 grounded HOW actions where evidence supports them"] },
-      { "phase": "3. Walk — Embedding (6-12 Months)", "why": "75-125 grounded words", "what": "75-125 grounded words", "actions": ["3-5 grounded HOW actions where evidence supports them"] },
-      { "phase": "4. Run — Continuous (12+ Months)", "why": "75-125 grounded words", "what": "75-125 grounded words", "actions": ["3-5 grounded HOW actions where evidence supports them"] }
+      { "phase": "1. Crawl — Foundation (0-3 Months)", "why": "75-125 grounded words", "what": "75-125 grounded words", "actions": ["3-5 grounded HOW actions where evidence supports them"], "confidence": "high|medium|low", "assumptions": [] },
+      { "phase": "2. Walk — Optimization (3-6 Months)", "why": "75-125 grounded words", "what": "75-125 grounded words", "actions": ["3-5 grounded HOW actions where evidence supports them"], "confidence": "high|medium|low", "assumptions": [] },
+      { "phase": "3. Walk — Embedding (6-12 Months)", "why": "75-125 grounded words", "what": "75-125 grounded words", "actions": ["3-5 grounded HOW actions where evidence supports them"], "confidence": "high|medium|low", "assumptions": [] },
+      { "phase": "4. Run — Continuous (12+ Months)", "why": "75-125 grounded words", "what": "75-125 grounded words", "actions": ["3-5 grounded HOW actions where evidence supports them"], "confidence": "high|medium|low", "assumptions": [] }
     ]
   }
 }

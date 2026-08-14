@@ -44,6 +44,8 @@ import { buildBoundedRetrievalTrace } from "./boundedRetrievalService";
 import { sanitizeEvidenceSources } from "./deterministicPrivacyService";
 import { parseGovernedJsonObject, validateFindingsModePayload } from "./jsonResponseService";
 import { reconcileEvidenceProvenance } from "./evidenceCheckService";
+// @ts-expect-error Pure JS contracts are also consumed by the server-side worker.
+import { OUTPUT_CONTRACT_IDS, withOneOutputRegeneration } from "../../lib/outputContracts.js";
 import {
   PipelineIntegrityError,
   validateEvidenceAcquisition,
@@ -595,97 +597,108 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => `  ${cat}
       ].filter(Boolean).join('\n');
     }).join('\n\n---\n\n');
 
+    const callStructuredSynthesis = async ({
+      stage,
+      substage,
+      outputContract,
+      systemInstruction,
+      buildUserText,
+      recordModel,
+      validate,
+      regenerated,
+    }: {
+      stage: Extract<StageId, 'synthesis' | 'synthesis_escalation' | 'roadmap_synthesis'>;
+      substage: 'evidence_summary' | 'roadmap' | 'findings_mode';
+      outputContract: string;
+      systemInstruction: string;
+      buildUserText: (formatRetry: boolean) => string;
+      recordModel: (model: string) => void;
+      validate?: (value: any) => boolean;
+      regenerated: boolean;
+    }): Promise<any> => {
+      return withOneOutputRegeneration(async (formatRetry: boolean) => {
+        const synthStarted = Date.now();
+        const resp = await runStage(stage, {
+          userText: buildUserText(formatRetry),
+          systemInstruction,
+          outputContract,
+        }, { runId });
+        const parsed = parseAiResponse(resp.text);
+        if (validate && !validate(parsed)) throw Object.assign(new Error('INVALID_OUTPUT_CONTRACT'), { code: 'INVALID_OUTPUT_CONTRACT' });
+        recordModel(resp.modelUsed.id);
+        serverLog(runId, 'info', 'stage_complete', {
+          stage,
+          model: resp.modelUsed.id,
+          substage,
+          bracket: confidenceBracket,
+          duration_ms: Date.now() - synthStarted,
+          regen: regenerated || formatRetry ? 'yes' : 'no',
+        });
+        return parsed;
+      }, () => serverLog(runId, 'warn', 'synthesis_output_retry', {
+        stage,
+        substage,
+        reason_code: 'INVALID_OUTPUT_CONTRACT',
+        retry: 1,
+      }));
+    };
+
     const callEvidenceSynthesis = async (correctionAppendix?: string): Promise<any> => {
-      const textParts: string[] = [EVIDENCE_SYNTHESIS_USER_PROMPT];
-      textParts.push(`\n\n### DIAGNOSTIC FINDINGS (Phase 1 & 2)\nUse only these findings and the source document for summary and diagnosis:\n${handoffSummary}`);
-      textParts.push(`\n\n### ORIGINAL SOURCE CONTEXT\n<SOURCE_DOCUMENT_TO_AUDIT>\n${text.substring(0, 50000)}\n</SOURCE_DOCUMENT_TO_AUDIT>`);
-      if (confidenceBracket === 'LOW') {
-        textParts.push(`\n\n### LOW-CONFIDENCE OVERRIDE\nEvidence is LOW confidence. Keep diagnosis provisional, return low diagnostic confidence, and emphasize missing evidence rather than root-cause certainty.`);
-      }
-      if (correctionAppendix) textParts.push(correctionAppendix);
-      const synthStarted = Date.now();
-      const resp = await runStage(synthesisStage, {
-        userText: textParts.join(''),
-        systemInstruction: EVIDENCE_SYNTHESIS_SYSTEM_INSTRUCTION,
-      }, { runId });
-      actuals.synthesis = resp.modelUsed.id;
-      serverLog(runId, 'info', 'stage_complete', {
+      return callStructuredSynthesis({
         stage: synthesisStage,
-        model: resp.modelUsed.id,
         substage: 'evidence_summary',
-        bracket: confidenceBracket,
-        duration_ms: Date.now() - synthStarted,
-        regen: correctionAppendix ? 'yes' : 'no',
+        outputContract: OUTPUT_CONTRACT_IDS.evidenceSynthesis,
+        systemInstruction: EVIDENCE_SYNTHESIS_SYSTEM_INSTRUCTION,
+        regenerated: Boolean(correctionAppendix),
+        recordModel: model => { actuals.synthesis = model; },
+        buildUserText: formatRetry => [
+          EVIDENCE_SYNTHESIS_USER_PROMPT,
+          `\n\n### DIAGNOSTIC FINDINGS (Phase 1 & 2)\nUse only these findings and the source document for summary and diagnosis:\n${handoffSummary}`,
+          `\n\n### ORIGINAL SOURCE CONTEXT\n<SOURCE_DOCUMENT_TO_AUDIT>\n${text.substring(0, 50000)}\n</SOURCE_DOCUMENT_TO_AUDIT>`,
+          confidenceBracket === 'LOW' ? '\n\n### LOW-CONFIDENCE OVERRIDE\nEvidence is LOW confidence. Keep diagnosis provisional, return low diagnostic confidence, and emphasize missing evidence rather than root-cause certainty.' : '',
+          correctionAppendix || '',
+          formatRetry ? '\n\n### OUTPUT CONTRACT CORRECTION\nThe previous provider chain did not return the required JSON object. Return only the schema-compliant evidence synthesis object without commentary.' : '',
+        ].join(''),
       });
-      return parseAiResponse(resp.text);
     };
 
     const callRoadmapSynthesis = async (lockedStrategy: any, correctionAppendix?: string): Promise<any> => {
-      const textParts: string[] = [ROADMAP_SYNTHESIS_USER_PROMPT];
-      if (confidenceBracket === 'MEDIUM') textParts.push(ROADMAP_SYNTHESIS_PROMPT_CAUTIOUS_APPENDIX);
-      if (confidenceBracket !== 'LOW') {
-        textParts.push(`\n\n### THE GOLDEN STANDARD (SSOT)\nYou may ONLY prescribe solutions found in this Knowledge Base. Use it for roadmap actions only; never alter locked findings from it:\n\n${fullSSOT}`);
-      }
-      textParts.push(`\n\n### LOCKED FINDINGS JSON (IMMUTABLE)\n${compactLockedFindings(lockedStrategy)}`);
-      textParts.push(`\n\n### DIAGNOSTIC FINDINGS (Phase 1 & 2)\n${handoffSummary}`);
-      if (correctionAppendix) textParts.push(correctionAppendix);
-      const synthStarted = Date.now();
-      const resp = await runStage('roadmap_synthesis', {
-        userText: textParts.join(''),
-        systemInstruction: ROADMAP_SYNTHESIS_SYSTEM_INSTRUCTION,
-      }, { runId });
-      actuals.roadmap_synthesis = resp.modelUsed.id;
-      serverLog(runId, 'info', 'stage_complete', {
+      return callStructuredSynthesis({
         stage: 'roadmap_synthesis',
-        model: resp.modelUsed.id,
         substage: 'roadmap',
-        bracket: confidenceBracket,
-        duration_ms: Date.now() - synthStarted,
-        regen: correctionAppendix ? 'yes' : 'no',
+        outputContract: OUTPUT_CONTRACT_IDS.roadmapSynthesis,
+        systemInstruction: ROADMAP_SYNTHESIS_SYSTEM_INSTRUCTION,
+        regenerated: Boolean(correctionAppendix),
+        recordModel: model => { actuals.roadmap_synthesis = model; },
+        buildUserText: formatRetry => [
+          ROADMAP_SYNTHESIS_USER_PROMPT,
+          confidenceBracket === 'MEDIUM' ? ROADMAP_SYNTHESIS_PROMPT_CAUTIOUS_APPENDIX : '',
+          confidenceBracket !== 'LOW' ? `\n\n### THE GOLDEN STANDARD (SSOT)\nYou may ONLY prescribe solutions found in this Knowledge Base. Use it for roadmap actions only; never alter locked findings from it:\n\n${fullSSOT}` : '',
+          `\n\n### LOCKED FINDINGS JSON (IMMUTABLE)\n${compactLockedFindings(lockedStrategy)}`,
+          `\n\n### DIAGNOSTIC FINDINGS (Phase 1 & 2)\n${handoffSummary}`,
+          correctionAppendix || '',
+          formatRetry ? '\n\n### OUTPUT CONTRACT CORRECTION\nThe previous provider chain did not return the required JSON object. Return only the schema-compliant roadmap object without commentary.' : '',
+        ].join(''),
       });
-      return parseAiResponse(resp.text);
     };
 
     const callFindingsSynthesis = async (correctionAppendix?: string): Promise<any> => {
-      let formatRetry = 0;
-      while (true) {
-        const textParts: string[] = [STRATEGY_USER_PROMPT_FINDINGS];
-        textParts.push(`\n\n### DIAGNOSTIC FINDINGS (Phase 1 & 2)\nUse these findings to produce the findings-mode report:\n${handoffSummary}`);
-        textParts.push(`\n\n### ORIGINAL SOURCE CONTEXT\n<SOURCE_DOCUMENT_TO_AUDIT>\n${text.substring(0, 50000)}\n</SOURCE_DOCUMENT_TO_AUDIT>`);
-        if (correctionAppendix) textParts.push(correctionAppendix);
-        if (formatRetry > 0) {
-          textParts.push('\n\n### OUTPUT CONTRACT CORRECTION\nThe previous response was not valid against the required findings-mode JSON contract. Return exactly one JSON object and include all four findings_mode arrays with the required item counts and non-empty string items. Do not add commentary or invent evidence.');
-        }
-        const synthStarted = Date.now();
-        const resp = await runStage(synthesisStage, {
-          userText: textParts.join(''),
-          systemInstruction: EVIDENCE_SYNTHESIS_SYSTEM_INSTRUCTION,
-        }, { runId });
-        actuals.synthesis = resp.modelUsed.id;
-        serverLog(runId, 'info', 'stage_complete', {
-          stage: synthesisStage,
-          model: resp.modelUsed.id,
-          substage: 'findings_mode',
-          bracket: confidenceBracket,
-          duration_ms: Date.now() - synthStarted,
-          regen: correctionAppendix || formatRetry > 0 ? 'yes' : 'no',
-        });
-        try {
-          const parsed = parseAiResponse(resp.text);
-          const contractErrors = validateFindingsModePayload(parsed);
-          if (contractErrors.length > 0) throw new Error('Findings-mode response failed its required contract.');
-          return parsed;
-        } catch (error) {
-          if (formatRetry >= 1) throw error;
-          formatRetry++;
-          serverLog(runId, 'warn', 'synthesis_output_retry', {
-            stage: synthesisStage,
-            substage: 'findings_mode',
-            reason_code: 'INVALID_OUTPUT_CONTRACT',
-            retry: formatRetry,
-          });
-        }
-      }
+      return callStructuredSynthesis({
+        stage: synthesisStage,
+        substage: 'findings_mode',
+        outputContract: OUTPUT_CONTRACT_IDS.findingsSynthesis,
+        systemInstruction: EVIDENCE_SYNTHESIS_SYSTEM_INSTRUCTION,
+        regenerated: Boolean(correctionAppendix),
+        recordModel: model => { actuals.synthesis = model; },
+        validate: value => validateFindingsModePayload(value).length === 0,
+        buildUserText: formatRetry => [
+          STRATEGY_USER_PROMPT_FINDINGS,
+          `\n\n### DIAGNOSTIC FINDINGS (Phase 1 & 2)\nUse these findings to produce the findings-mode report:\n${handoffSummary}`,
+          `\n\n### ORIGINAL SOURCE CONTEXT\n<SOURCE_DOCUMENT_TO_AUDIT>\n${text.substring(0, 50000)}\n</SOURCE_DOCUMENT_TO_AUDIT>`,
+          correctionAppendix || '',
+          formatRetry ? '\n\n### OUTPUT CONTRACT CORRECTION\nThe previous provider chain did not return the required findings-mode object. Return only the schema-compliant JSON object without commentary or invented evidence.' : '',
+        ].join(''),
+      });
     };
 
     const mergePhase3Outputs = (summary: any, roadmapData: any): any => {
@@ -1174,14 +1187,14 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => `  ${cat}
   } catch (error: any) {
     for (const stage of activeProgressStages) onProgress({ stage, status: 'failed' });
     clearStageTraces(runId);
-    if (!completionIntent) await failRun(runId).catch(() => undefined);
+    const integrityError = error instanceof PipelineIntegrityError ? error : null;
+    const errorCode = integrityError?.code || (error?.code === 'SYNTHESIS_OUTPUT_INVALID' ? error.code : 'PIPELINE_FAILED');
+    if (!completionIntent) await failRun(runId, errorCode).catch(() => undefined);
     else {
       const authoritative = await getRun(runId).catch(() => null);
-      if (authoritative?.state === 'active') await failRun(runId).catch(() => undefined);
+      if (authoritative?.state === 'active') await failRun(runId, errorCode).catch(() => undefined);
     }
     const duration = Date.now() - pipelineStarted;
-    const integrityError = error instanceof PipelineIntegrityError ? error : null;
-    const errorCode = integrityError?.code || 'PIPELINE_FAILED';
     if (integrityError) {
       serverLog(runId, 'error', 'pipeline_integrity_failed', {
         gate: integrityError.gate,

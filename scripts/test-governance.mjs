@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { approveRequest,authorizeDestination,inspectOutput,validateGovernedOutput,POLICY_VERSION,STAGE_PACKET_REQUEST_VERSION } from '../lib/governance.js';
+import { OUTPUT_CONTRACT_IDS } from '../lib/outputContracts.js';
 const request={schema_version:STAGE_PACKET_REQUEST_VERSION,policy_version:POLICY_VERSION,run_id:'run-1',stage:'forensic_audit',provider:'openai',model:'gpt-5.6-sol',destination:'openai:external_model',system_instruction:'Review safely',parts:[{type:'text',text:'monthly invoice review, EDP pricing policy, billing account governance'}],settings:{max_tokens:32768,reasoning_effort:'high'}};
 assert.equal(approveRequest(request).approval_basis,'policy_approved_after_pattern_screening');
 const securitySource=await readFile(new URL('../src/services/securityService.ts',import.meta.url),'utf8');assert.doesNotThrow(()=>approveRequest({...request,parts:[{type:'text',text:securitySource}]}));
@@ -16,4 +17,8 @@ const qwenRequest={...request,provider:'qwen',model:'qwen3.8-max',destination:'q
 assert.equal(approveRequest(qwenRequest).provider,'qwen');
 assert.throws(()=>approveRequest({...qwenRequest,system_instruction:'Return one object'}),/QWEN_JSON_PROMPT_REQUIRED/);
 assert.throws(()=>authorizeDestination('forensic_audit','qwen','qwen3.8-max',{max_tokens:4096}),/INVALID_MODEL_SETTINGS/);
+const synthesisRequest={...request,stage:'synthesis',output_contract:OUTPUT_CONTRACT_IDS.evidenceSynthesis};
+assert.equal(approveRequest(synthesisRequest).output_contract,OUTPUT_CONTRACT_IDS.evidenceSynthesis);
+assert.throws(()=>approveRequest({...synthesisRequest,stage:'roadmap_synthesis'}),/OUTPUT_CONTRACT_NOT_AUTHORIZED/);
+assert.throws(()=>approveRequest({...synthesisRequest,output_contract:'client_schema'}),/OUTPUT_CONTRACT_NOT_AUTHORIZED/);
 console.log('governance behavioral tests passed');

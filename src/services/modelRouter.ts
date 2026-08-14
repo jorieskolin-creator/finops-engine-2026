@@ -19,6 +19,7 @@ export interface NormalizedPrompt {
   userText: string;
   systemInstruction?: string;
   images?: ImageInput[];
+  outputContract?: string;
 }
 
 export interface RunContext {
@@ -89,10 +90,10 @@ async function governedCall(profile: ModelProfile, prompt: NormalizedPrompt, sta
   if (profile.maxTokens !== undefined) settings.max_tokens = profile.maxTokens;
   if (profile.openaiReasoning) settings.reasoning_effort = profile.openaiReasoning.effort;
   if (profile.anthropicThinking) settings.thinking_budget_tokens = profile.anthropicThinking.budget_tokens;
-  const approval = await fetch('/api/governed-packet', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ schema_version:REQUEST_SCHEMA, policy_version:POLICY, run_id:ctx.runId, stage, provider:profile.provider, model:profile.id, destination:`${profile.provider}:external_model`, system_instruction:prompt.systemInstruction || '', parts:[{type:'text',text:prompt.userText}], settings }) });
+  const approval = await fetch('/api/governed-packet', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ schema_version:REQUEST_SCHEMA, policy_version:POLICY, run_id:ctx.runId, stage, provider:profile.provider, model:profile.id, destination:`${profile.provider}:external_model`, system_instruction:prompt.systemInstruction || '', parts:[{type:'text',text:prompt.userText}], settings, ...(prompt.outputContract ? { output_contract: prompt.outputContract } : {}) }) });
   if (!approval.ok) throw new Error(`STAGE_PACKET_REJECTED HTTP ${approval.status}`);
   const packet = await approval.json();
-  if (packet.classification_method !== 'deterministic_pattern_screen_v1' || packet.approval_basis !== 'policy_approved_after_pattern_screening' || packet.run_id !== ctx.runId || packet.stage !== stage || packet.provider !== profile.provider || packet.model !== profile.id) throw new Error('INVALID_PACKET_APPROVAL');
+  if (packet.classification_method !== 'deterministic_pattern_screen_v1' || packet.approval_basis !== 'policy_approved_after_pattern_screening' || packet.run_id !== ctx.runId || packet.stage !== stage || packet.provider !== profile.provider || packet.model !== profile.id || packet.output_contract !== prompt.outputContract) throw new Error('INVALID_PACKET_APPROVAL');
   const body = { packet_id:packet.packet_id, packet_hash:packet.packet_hash, schema_version:APPROVED_SCHEMA, policy_version:POLICY, run_id:ctx.runId, stage, internal_pipeline_call:true, internal_call_id:newInternalCallId() };
   return postWithTimeout(`/api/${profile.provider}-generate`, body, packet);
 }
@@ -194,7 +195,7 @@ export async function pollInternalResult(body: any, approval: any, cause: unknow
         if (!await validOutput(output, body, approval)) return null;
         return { text: output.text, usage: data.usage };
       }
-      if (data?.status === 'fallback_allowed') throw new StageExecutionError('FALLBACK_ALLOWED',true);
+      if (data?.status === 'fallback_allowed') throw new StageExecutionError(typeof data.outcome_code === 'string' ? data.outcome_code : 'FALLBACK_ALLOWED',true);
       if (['outcome_unknown','cancelled','expired','result_unavailable'].includes(data?.status)) throw new StageExecutionError(String(data.status).toUpperCase());
     } catch (err: any) {
       if (err instanceof StageExecutionError) throw err;
@@ -274,7 +275,7 @@ async function postWithTimeout(url: string, body: any, approval: any): Promise<{
       }
     }
 
-    if (streamError) throw new StageExecutionError(streamError,streamError==='FALLBACK_ALLOWED');
+    if (streamError) throw new StageExecutionError(streamError,['FALLBACK_ALLOWED','INVALID_OUTPUT_CONTRACT','UPSTREAM_HTTP_ERROR','INCOMPLETE_RESPONSE','OUTPUT_INSPECTION_REJECTED','PROVIDER_NOT_CONFIGURED'].includes(streamError));
     if (finalText === null) {
       throw new Error(`${url} → stream ended without 'done' frame`);
     }
@@ -318,7 +319,7 @@ export async function runStage(stage: StageId, prompt: NormalizedPrompt, ctx: Ru
   const stageStarted = Date.now();
   const startedAt = new Date(stageStarted).toISOString();
   const inputChars = (prompt.systemInstruction || '').length + prompt.userText.length;
-  const promptHash = hashString(`${stage}\n${prompt.systemInstruction || ''}\n${prompt.userText}`);
+  const promptHash = hashString(`${stage}\n${prompt.outputContract || 'unstructured'}\n${prompt.systemInstruction || ''}\n${prompt.userText}`);
   const contextPacketHash = hashString(prompt.userText);
   const fallbackChain = chain.map(profile => profile.id);
   for (const profile of chain) {
@@ -382,6 +383,9 @@ export async function runStage(stage: StageId, prompt: NormalizedPrompt, ctx: Ru
     completed_at: new Date().toISOString()
   });
   await serverLog(ctx.runId, 'error', 'stage_exhausted', { stage, attempt_count: failures.length, error_code: 'models_exhausted' });
+  if (prompt.outputContract && failures.some(f => f.error === 'invalid_output_contract')) {
+    throw new StageExecutionError('SYNTHESIS_OUTPUT_INVALID');
+  }
   throw new Error(`All models exhausted for stage '${stage}'. ${summary}`);
 }
 

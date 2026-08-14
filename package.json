@@ -29,6 +29,7 @@
     "test:strategy-sanitation": "node scripts/test-strategy-sanitation.mjs",
     "test:fact-check-validation": "node scripts/test-fact-check-validation.mjs",
     "test:json-response": "node scripts/test-json-response.mjs",
+    "test:output-contracts": "node scripts/test-output-contracts.mjs",
     "test:model-routing": "node scripts/test-model-routing.mjs",
     "test:provider-invocation": "node scripts/test-provider-invocation.mjs",
     "test:internal-call-protection": "node scripts/test-internal-call-protection.mjs",
