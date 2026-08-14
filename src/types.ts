@@ -813,6 +813,7 @@ export interface SourceRegistryRuntimeStatus {
   dlp_review_chunk_count: number;
   dlp_high_risk_hits: number;
   dlp_caution_hits: number;
+  acquisition_limitations: EvidenceAcquisitionLimitations;
   acquisition_readiness: {
     status: 'READY' | 'READY_WITH_WARNINGS' | 'BLOCKED';
     reasons: string[];

@@ -39,7 +39,9 @@ const {
   buildSourceRegistry,
   buildDomainPackets,
   buildDlpReviewPacket,
-  renderPseudonymousSourceContext
+  renderPseudonymousSourceContext,
+  scanRegistryDlp,
+  sourceRegistryRuntimeStatus
 } = await import(`file://${join(dir, 'sourceRegistryService.mjs')}`);
 
 const records = [{ schema_version:'source_record_v1', source_id:'src-001', source_name:'Cloud AI Platform Notes.pdf', kind:'pdf', parse_warnings:['PRIVATE_WARNING_CANARY source text'], extraction:{unit:'page',total_units:20,processed_units:15,text_coverage_ratio:0.8,sparse_units:3,truncated:true,quality:'mixed'}, pages:[
@@ -70,6 +72,7 @@ assert.ok(workbookRegistry.chunks.some(chunk=>chunk.sheet_name==='Visible Costs'
 assert.ok(workbookRegistry.chunks.every(chunk=>chunk.sheet_name!=='Hidden Notes'),'hidden sheets must be privacy-scanned but never routed');
 assert.deepEqual(workbookRegistry.acquisition_limitations,{schema_version:'evidence_acquisition_limitations_v1',withheld_sheet_count:1,withheld_row_count:0,withheld_column_count:0,active_filter_table_count:1,merged_range_count:1,uninspected_workbook_image_source_count:1,partial_native_chart_count:0,unsupported_object_codes:['WORKBOOK_IMAGE_REQUIRES_VISUAL_INSPECTION']});
 const workbookPacket=buildDomainPackets(workbookRegistry).A;assert.ok(workbookPacket.manifest.some(item=>item.sheet_name==='Visible Costs'&&item.row_number===2));assert.doesNotMatch(workbookPacket.text,/hidden-value|Hidden Notes/);
+const workbookPackets=buildDomainPackets(workbookRegistry);const workbookRuntimeStatus=sourceRegistryRuntimeStatus(workbookRegistry,workbookPackets,0,scanRegistryDlp(workbookRegistry),{decision:'PASS',blocking_codes:[]},{registry_hash:'registry-hash',packet_manifest_hash:'packet-hash'});const workbookReadiness=workbookRuntimeStatus.acquisition_readiness;assert.deepEqual(workbookRuntimeStatus.acquisition_limitations,workbookRegistry.acquisition_limitations);assert.equal(workbookReadiness.status,'READY_WITH_WARNINGS');assert.ok(workbookReadiness.reasons.includes('WITHHELD_WORKBOOK_CONTENT_PRESENT'));assert.ok(workbookReadiness.reasons.includes('UNINSPECTED_WORKBOOK_IMAGES_PRESENT'));assert.ok(workbookReadiness.reasons.includes('WORKBOOK_STRUCTURE_WARNINGS_PRESENT'));
 
 const packets = buildDomainPackets(registry);
 assert.ok(packets.A.text.includes('tagging ownership'), 'A packet should include cost visibility evidence');

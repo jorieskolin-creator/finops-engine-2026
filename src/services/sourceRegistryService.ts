@@ -858,6 +858,18 @@ export const sourceRegistryRuntimeStatus = (
   ];
   const warningReasons = [
     ...(registry.extraction.warning_count > 0 ? ['EXTRACTION_WARNINGS_PRESENT'] : []),
+    ...(registry.acquisition_limitations.withheld_sheet_count > 0
+      || registry.acquisition_limitations.withheld_row_count > 0
+      || registry.acquisition_limitations.withheld_column_count > 0
+      ? ['WITHHELD_WORKBOOK_CONTENT_PRESENT'] : []),
+    ...(registry.acquisition_limitations.uninspected_workbook_image_source_count > 0
+      ? ['UNINSPECTED_WORKBOOK_IMAGES_PRESENT'] : []),
+    ...(registry.acquisition_limitations.partial_native_chart_count > 0
+      ? ['PARTIAL_NATIVE_CHART_EXTRACTION_PRESENT'] : []),
+    ...(registry.acquisition_limitations.active_filter_table_count > 0
+      || registry.acquisition_limitations.merged_range_count > 0
+      || registry.acquisition_limitations.unsupported_object_codes.length > 0
+      ? ['WORKBOOK_STRUCTURE_WARNINGS_PRESENT'] : []),
     ...(dlpScan.caution_hits.length > 0 ? ['DLP_CAUTION_FINDINGS_PRESENT'] : []),
     ...(privacyDecision.decision === 'PASS_WITH_REDACTIONS' ? ['PRIVACY_REDACTIONS_APPLIED'] : []),
     ...(Object.values(packets).some(packet => packet.weak_coverage) ? ['PACKET_COVERAGE_WARNINGS_PRESENT'] : [])
@@ -868,6 +880,7 @@ export const sourceRegistryRuntimeStatus = (
   dlp_review_chunk_count: dlpReviewChunkCount,
   dlp_high_risk_hits: dlpScan.high_risk_hits.reduce((sum, hit) => sum + hit.count, 0),
   dlp_caution_hits: dlpScan.caution_hits.reduce((sum, hit) => sum + hit.count, 0),
+  acquisition_limitations: registry.acquisition_limitations,
   acquisition_readiness: {
     status: blockingReasons.length > 0 ? 'BLOCKED' : warningReasons.length > 0 ? 'READY_WITH_WARNINGS' : 'READY',
     reasons: blockingReasons.length > 0 ? blockingReasons : warningReasons,

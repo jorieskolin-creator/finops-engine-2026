@@ -291,6 +291,14 @@ export const analyzeDocument = async (
       chunks: sourceRegistry.chunk_count,
       dlp_review_chunks: 0,
       images: 0,
+      withheld_sheets: sourceRegistry.acquisition_limitations.withheld_sheet_count,
+      withheld_rows: sourceRegistry.acquisition_limitations.withheld_row_count,
+      withheld_columns: sourceRegistry.acquisition_limitations.withheld_column_count,
+      active_filter_tables: sourceRegistry.acquisition_limitations.active_filter_table_count,
+      merged_ranges: sourceRegistry.acquisition_limitations.merged_range_count,
+      uninspected_workbook_image_sources: sourceRegistry.acquisition_limitations.uninspected_workbook_image_source_count,
+      partial_native_charts: sourceRegistry.acquisition_limitations.partial_native_chart_count,
+      unsupported_workbook_object_codes: sourceRegistry.acquisition_limitations.unsupported_object_codes.length,
     });
     for (const [domain, packet] of Object.entries(sourcePackets)) {
       serverLog(runId, packet.weak_coverage ? 'warn' : 'info', 'source_packet_created', {
