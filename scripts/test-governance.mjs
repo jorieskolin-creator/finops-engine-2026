@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { approveRequest,authorizeDestination,inspectOutput,validateGovernedOutput,POLICY_VERSION,STAGE_PACKET_REQUEST_VERSION } from '../lib/governance.js';
-const request={schema_version:STAGE_PACKET_REQUEST_VERSION,policy_version:POLICY_VERSION,run_id:'run-1',stage:'forensic_audit',provider:'openai',model:'gpt-5.5',destination:'openai:external_model',system_instruction:'Review safely',parts:[{type:'text',text:'monthly invoice review, EDP pricing policy, billing account governance'}],settings:{max_tokens:12000,reasoning_effort:'medium'}};
+const request={schema_version:STAGE_PACKET_REQUEST_VERSION,policy_version:POLICY_VERSION,run_id:'run-1',stage:'forensic_audit',provider:'openai',model:'gpt-5.6-sol',destination:'openai:external_model',system_instruction:'Review safely',parts:[{type:'text',text:'monthly invoice review, EDP pricing policy, billing account governance'}],settings:{max_tokens:32768,reasoning_effort:'high'}};
 assert.equal(approveRequest(request).approval_basis,'policy_approved_after_pattern_screening');
 const securitySource=await readFile(new URL('../src/services/securityService.ts',import.meta.url),'utf8');assert.doesNotThrow(()=>approveRequest({...request,parts:[{type:'text',text:securitySource}]}));
 for(const text of ['negotiated discount rate: 37%','contract value: $250000','billing account id: BA-12345','invoice number: INV-99887','SSN 123-45-6789','passport number: AB123456','home address: 12 Private Street'])assert.throws(()=>approveRequest({...request,parts:[{type:'text',text}]}),/RESIDUAL_CLASSIFICATION_REJECTED/);
@@ -11,7 +11,7 @@ assert.throws(()=>approveRequest({...request,parts:[{type:'text',text:'data:imag
 const packet=approveRequest(request,1000);const output=inspectOutput('Email a@b.com 😀 𝄞',packet,2000);assert.equal(output.text,'Email [REDACTED_EMAIL] 😀 𝄞');assert.equal(validateGovernedOutput(output,{source_packet_id:packet.packet_id}),output);
 for(const mutate of [o=>({...o,text:'changed'}),o=>({...o,source_packet_hash:'0'.repeat(64)}),o=>({...o,schema_version:'old'})])assert.throws(()=>validateGovernedOutput(mutate(output),{source_packet_hash:packet.packet_hash}),/INVALID_GOVERNED_OUTPUT/);
 for(const text of ['password=[REDACTED:password]','data:image/png;base64,AAAA','contract value: $250000','invoice number: INV-99887','bad\uD800',''])assert.throws(()=>inspectOutput(text,packet),/OUTPUT_INSPECTION_REJECTED/);
-assert.throws(()=>authorizeDestination('forensic_audit','anthropic','claude-opus-4-7',{}),/INVALID_MODEL_SETTINGS/);
+assert.throws(()=>authorizeDestination('forensic_audit','anthropic','claude-opus-5',{}),/INVALID_MODEL_SETTINGS/);
 const qwenRequest={...request,provider:'qwen',model:'qwen3.8-max',destination:'qwen:external_model',system_instruction:'Return JSON only',settings:{}};
 assert.equal(approveRequest(qwenRequest).provider,'qwen');
 assert.throws(()=>approveRequest({...qwenRequest,system_instruction:'Return one object'}),/QWEN_JSON_PROMPT_REQUIRED/);

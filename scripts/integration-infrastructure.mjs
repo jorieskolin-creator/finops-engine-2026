@@ -26,11 +26,11 @@ const makePacket = run => approveRequest({
   run_id: run.run_id,
   stage: 'forensic_audit',
   provider: 'openai',
-  model: 'gpt-5.5',
+  model: 'gpt-5.6-sol',
   destination: 'openai:external_model',
   system_instruction: 'Inspect approved public material.',
   parts: [{ type: 'text', text: 'Public cloud governance summary.' }],
-  settings: { max_tokens: 12000, reasoning_effort: 'medium' },
+  settings: { max_tokens: 32768, reasoning_effort: 'high' },
 });
 
 const persistPacket = async (run, packet) => {
