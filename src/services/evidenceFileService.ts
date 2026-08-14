@@ -1,7 +1,7 @@
 import type { EvidenceSourceAcquisition, EvidenceSourceFormat } from '../types';
 
 const extensionFor = (name: string): string => name.toLowerCase().split('.').pop() || '';
-const IMPLEMENTED_EXTRACTION_FORMATS = new Set<EvidenceSourceFormat>(['pdf', 'html', 'csv', 'tsv', 'json']);
+const IMPLEMENTED_EXTRACTION_FORMATS = new Set<EvidenceSourceFormat>(['pdf', 'html', 'csv', 'tsv', 'json', 'xlsx']);
 
 const formatForExtension = (name: string): EvidenceSourceFormat | null => {
   const extension = extensionFor(name);
@@ -99,7 +99,10 @@ export const inspectEvidenceBytes = async (input: {
     format: detected?.format || expectedFormat || 'json',
     detection_method: detected?.detection_method || 'structured_text',
     validation_status: validationCodes.length === 0 ? 'PASS' : 'BLOCK',
-    validation_codes: validationCodes
+    validation_codes: validationCodes,
+    extraction_method: 'not_started',
+    extraction_version: 'not_started',
+    extraction_status: validationCodes.length === 0 ? 'PENDING' : 'BLOCK'
   };
 };
 

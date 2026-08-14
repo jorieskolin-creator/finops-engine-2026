@@ -161,3 +161,27 @@ export const renderDelimitedTableForAnalysis = (
     }
   };
 };
+
+export const renderStructuredTableContext = (
+  table: import('../types').StructuredTableData,
+  format: 'XLSX'
+): string => {
+  const lines = [
+    `Format: ${format}`,
+    `Sheet: ${table.sheet_name || 'unknown'}`,
+    `Range: ${table.source_range || 'unknown'}`,
+    `Rows: ${table.total_row_count}`,
+    `Columns: ${table.headers.length}`,
+    `Formula cells: ${table.formula_cell_count || 0}`,
+    `Formula cells missing cached values: ${table.formula_cached_value_missing_count || 0}`,
+    table.headers.length > 0 ? `Headers: ${table.headers.join(' | ')}` : 'Headers: not detected',
+    '',
+    '[TABLE_SAMPLE]',
+    table.headers.join(' | ')
+  ];
+  table.rows.forEach((row, index) => {
+    lines.push(`[ROW ${table.sampled_row_numbers?.[index] || index + 1}] ${row.join(' | ')}`);
+  });
+  lines.push('[/TABLE_SAMPLE]');
+  return lines.join('\n');
+};

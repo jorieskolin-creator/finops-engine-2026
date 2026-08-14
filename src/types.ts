@@ -405,7 +405,7 @@ export interface ShadowTelemetryPersistence {
   schema_version: 'shadow_telemetry_v1';
   retrieval_policy_version: 'bounded_retrieval_policy_v1';
   derived_evidence_schema_version: 'derived_analytical_evidence_v1';
-  analyzer_version: 'tagging_allocation_v1@1.0.0';
+  analyzer_version: 'tagging_allocation_v1@1.1.0';
   scale_registry_version: 'data_signal_registry_v1';
   retrieval_domain_count: number;
   retrieval_triggered_domain_count: number;
@@ -483,18 +483,30 @@ export interface EvidenceSourceAcquisition {
   detection_method: 'magic_bytes' | 'structured_text';
   validation_status: 'PASS' | 'BLOCK';
   validation_codes: string[];
+  extraction_method: 'not_started' | 'browser_pdfjs' | 'browser_dom' | 'browser_delimited' | 'browser_json' | 'browser_xlsx_worker';
+  extraction_version: string;
+  extraction_status: 'PENDING' | 'PASS' | 'BLOCK';
 }
 
 export interface StructuredTableData {
   schema_version: 'structured_table_v1';
+  sheet_name?: string;
+  sheet_visibility?: 'visible' | 'hidden' | 'very_hidden';
+  source_range?: string;
+  header_row_number?: number;
   headers: string[];
   /** Bounded, cell-clipped rows eligible for model context. */
   rows: string[][];
   /** Complete normalized population retained only for local deterministic analysis and privacy scanning. */
   analysis_rows?: string[][];
+  analysis_row_numbers?: number[];
   sampled_row_numbers?: number[];
   total_row_count: number;
   analysis_complete?: boolean;
+  formula_cell_count?: number;
+  formula_cached_value_missing_count?: number;
+  merged_range_count?: number;
+  unsupported_objects?: string[];
   /** Describes bounded model context, not deterministic analysis population. */
   truncated: boolean;
 }
@@ -503,7 +515,7 @@ export interface SourceRecord {
   schema_version: 'source_record_v1';
   source_id: string;
   source_name: string;
-  kind: 'text' | 'pdf' | 'html' | 'csv' | 'tsv' | 'json';
+  kind: 'text' | 'pdf' | 'html' | 'csv' | 'tsv' | 'json' | 'xlsx';
   text?: string;
   pages?: SourcePage[];
   structured_table?: StructuredTableData;
@@ -583,6 +595,9 @@ export interface SourceRegistry {
     detected_media_type?: string;
     format: SourceRecord['kind'];
     validation_status: 'PASS' | 'NOT_RECORDED';
+    extraction_method?: EvidenceSourceAcquisition['extraction_method'];
+    extraction_version?: string;
+    extraction_status?: EvidenceSourceAcquisition['extraction_status'];
   }>;
   warnings: string[];
   extraction: SourceExtractionQuality;
@@ -746,7 +761,7 @@ export interface DerivedAnalyticalEvidence {
   targets: Array<{ stream: 'maturity' | 'antipattern'; criterion_id: 'A1' }>;
   derivation: {
     analyzer_id: 'tagging_allocation_v1';
-    analyzer_version: '1.0.0';
+    analyzer_version: '1.1.0';
     registry_version: 'data_signal_registry_v1';
     method: 'tagging_allocation_coverage_analysis';
   };
@@ -760,7 +775,34 @@ export interface DerivedAnalyticalEvidence {
     mapping_population_coverage: number | null;
     tagging_population_coverage: number | null;
     allocation_population_coverage: number | null;
+    field_coverage: Array<{
+      field: 'owner' | 'cost_center' | 'product' | 'application' | 'environment' | 'tagging' | 'allocation';
+      state: 'FIELD_NOT_PRESENT' | 'FIELD_PRESENT_EMPTY' | 'FIELD_PRESENT_PARTIAL' | 'FIELD_PRESENT_VALID' | 'FIELD_PRESENT_AMBIGUOUS' | 'FIELD_PRESENT_INVALID' | 'INSUFFICIENT_COVERAGE';
+      column_indexes: number[];
+      eligible_row_count: number;
+      valid_row_count: number;
+      invalid_placeholder_count: number;
+      row_coverage_percent: number | null;
+      eligible_cost: number | null;
+      valid_cost: number | null;
+      cost_coverage_percent: number | null;
+    }>;
+    cost_basis: {
+      state: 'NOT_PRESENT' | 'VALID' | 'AMBIGUOUS_CURRENCY' | 'INVALID_VALUES';
+      column_index: number | null;
+      currencies: string[];
+      excluded_row_count: number;
+    };
+    reconciliation: {
+      state: 'NOT_AVAILABLE' | 'PASSED' | 'FAILED' | 'AMBIGUOUS';
+      calculated_total: number | null;
+      declared_total: number | null;
+      difference: number | null;
+    };
   };
+  locator: { sheet?: string; range?: string; header_row?: number };
+  unit_fingerprint: string;
+  report_eligible: false;
   raw_value_exposure: false;
 }
 

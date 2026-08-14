@@ -5,6 +5,7 @@ import { extractPagesFromPdf } from './services/pdfService';
 import type { PdfParseQuality } from './services/pdfService';
 import { renderDelimitedTableForAnalysis } from './services/tableService';
 import { inspectEvidenceFile } from './services/evidenceFileService';
+import { extractXlsx } from './services/xlsxService';
 import { downloadMasterDataReport, downloadRunTraceJson, downloadSummaryReport } from './services/exportService';
 import { forensicSanitizeImport } from './services/securityService';
 import { extractDiagnosticResultFromHtmlReport, isDiagnosticResultPayload, parseDiagnosticResultJson, serializeDiagnosticResultForHtml } from './services/reportImportService';
@@ -146,7 +147,7 @@ interface UploadedFile {
   pages?: SourcePage[];
   structuredTable?: StructuredTableData;
   acquisition?: EvidenceSourceAcquisition;
-  kind?: 'pdf' | 'html' | 'csv' | 'tsv' | 'json';
+  kind?: 'pdf' | 'html' | 'csv' | 'tsv' | 'json' | 'xlsx';
   status: 'parsed' | 'error';
   scan?: ScanResult;
   parseMetadata?: {
@@ -602,7 +603,7 @@ const App: React.FC = () => {
   const makeLowRelevanceWarning = (scan: ScanResult, kind?: UploadedFile['kind']): ScanResult => ({
     ...scan,
     status: 'PassWithWarning',
-    message: kind === 'csv' || kind === 'tsv' ? 'Tabular input accepted' : 'Low relevance warning',
+    message: kind === 'csv' || kind === 'tsv' || kind === 'xlsx' ? 'Tabular input accepted' : 'Low relevance warning',
     canRun: true,
     confidence_warning: scan.confidence_warning || 'This file has weak FinOps keyword signal. The assessment will run, but unsupported areas should be treated as insufficient evidence.',
     details: [
@@ -753,7 +754,7 @@ const App: React.FC = () => {
         let kind: UploadedFile['kind'] = undefined;
         let parseMetadata: UploadedFile['parseMetadata'] | undefined;
         const lowerName = file.name.toLowerCase();
-        const acquisition = await inspectEvidenceFile(file);
+        let acquisition = await inspectEvidenceFile(file);
         if (acquisition.validation_status !== 'PASS') {
           throw new Error(`File ${file.name} failed deterministic type validation (${acquisition.validation_codes.join(', ')}).`);
         }
@@ -787,13 +788,38 @@ const App: React.FC = () => {
           kind = 'tsv';
           parseMetadata = { rowCount: rendered.rowCount, renderedRowCount: rendered.renderedRowCount, analyzedRowCount: rendered.structuredTable.analysis_rows?.length || 0, analysisComplete: rendered.structuredTable.analysis_complete, clippedCellCount: rendered.clippedCellCount, cellCharacterCoverageRatio: rendered.cellCharacterCoverageRatio, warnings: rendered.warnings };
           (file as any).__structuredTable = rendered.structuredTable;
+        } else if (lowerName.endsWith('.xlsx')) {
+          const extracted = await extractXlsx(file);
+          text = extracted.text;
+          kind = 'xlsx';
+          parseMetadata = {
+            rowCount: extracted.table.total_row_count,
+            renderedRowCount: extracted.table.rows.length,
+            analyzedRowCount: extracted.table.analysis_rows?.length || 0,
+            analysisComplete: extracted.table.analysis_complete,
+            clippedCellCount: 0,
+            cellCharacterCoverageRatio: extracted.table.truncated ? undefined : 1,
+            warnings: extracted.warnings
+          };
+          (file as any).__structuredTable = extracted.table;
         } else if (file.type === 'application/json' || lowerName.endsWith('.json')) {
           const raw = await file.text();
           text = `Format: JSON\n\n${raw}`;
           kind = 'json';
         } else {
-          throw new Error(`File ${file.name} is not a supported format (PDF, HTML, CSV, TSV, JSON).`);
+          throw new Error(`File ${file.name} is not a supported format (PDF, HTML, CSV, TSV, XLSX, JSON).`);
         }
+
+        const extraction = kind === 'pdf'
+          ? { extraction_method: 'browser_pdfjs' as const, extraction_version: 'pdfjs-dist@4' }
+          : kind === 'html'
+            ? { extraction_method: 'browser_dom' as const, extraction_version: 'dompurify@3' }
+            : kind === 'csv' || kind === 'tsv'
+              ? { extraction_method: 'browser_delimited' as const, extraction_version: 'delimited_parser_v2' }
+              : kind === 'xlsx'
+                ? { extraction_method: 'browser_xlsx_worker' as const, extraction_version: 'sheetjs-ce@0.20.3+zipjs@2.8.49' }
+                : { extraction_method: 'browser_json' as const, extraction_version: 'json_parse_v1' };
+        acquisition = { ...acquisition, ...extraction, extraction_status: 'PASS' };
 
         processedFiles.push({
           id: Math.random().toString(36).substr(2, 9),
@@ -846,7 +872,7 @@ const App: React.FC = () => {
                   truncated: (file.parseMetadata.parsedTextPages || 0) < (file.parseMetadata.totalPages || 0),
                   quality: file.parseMetadata.parseQuality?.quality
                 }
-              : (file.kind === 'csv' || file.kind === 'tsv') && file.parseMetadata
+              : (file.kind === 'csv' || file.kind === 'tsv' || file.kind === 'xlsx') && file.parseMetadata
                 ? {
                     unit: 'row' as const,
                     total_units: file.parseMetadata.rowCount || 0,
@@ -868,10 +894,10 @@ const App: React.FC = () => {
       if (opts?.label) {
         data.meta = { ...data.meta, document_analyzed: opts.label };
       }
-      const source_parse_warnings = sourceParseWarningsForFiles(files);
-      if ((data.meta.evidence_privacy?.redaction_count || 0) > 0) {
-        source_parse_warnings.push(`Deterministic privacy controls redacted ${data.meta.evidence_privacy!.redaction_count} prohibited contact, identifier, or financial-value occurrence(s) before model processing.`);
-      }
+      const source_parse_warnings = [...new Set([
+        ...(data.meta.source_parse_warnings || []),
+        ...sourceParseWarningsForFiles(files)
+      ])];
       if (source_parse_warnings.length > 0) {
         data.meta = { ...data.meta, source_parse_warnings };
       }
@@ -1360,7 +1386,7 @@ const App: React.FC = () => {
                           Upload Cloud Cost Reports, FinOps Policies, Optimization Plans, Governance Docs, Architecture Reviews.
                         </p>
                         <div className="z-10 mt-4 flex flex-wrap justify-center gap-1.5 max-w-md">
-                          {['PDF', 'HTML', 'CSV', 'TSV', 'JSON'].map(fmt => (
+                          {['PDF', 'HTML', 'CSV', 'TSV', 'XLSX', 'JSON'].map(fmt => (
                             <span key={fmt} className="text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded-md bg-slate-800/80 border border-slate-700/60 text-slate-300">
                               {fmt}
                             </span>
@@ -1392,7 +1418,7 @@ const App: React.FC = () => {
                         <span className="font-bold">Deep analysis</span>
                       </label>
                     </div>
-                    <input type="file" ref={fileInputRef} onChange={handleFileSelect} className="hidden" accept=".pdf,.html,.csv,.tsv,.json,text/csv,text/tab-separated-values" multiple />
+                    <input type="file" ref={fileInputRef} onChange={handleFileSelect} className="hidden" accept=".pdf,.html,.csv,.tsv,.xlsx,.json,text/csv,text/tab-separated-values,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" multiple />
                     <button onClick={handleAnalyze} disabled={!scanResult.canRun || files.length < MIN_FILES || files.length > MAX_FILES} className={`px-8 py-4 rounded-xl font-bold shadow-2xl transition-all transform active:scale-[0.98] flex items-center gap-3 border ${!scanResult.canRun || files.length < MIN_FILES || files.length > MAX_FILES ? 'bg-slate-800 text-slate-500 border-slate-700 cursor-not-allowed shadow-none' : 'text-slate-900 bg-white border-white hover:bg-emerald-400 hover:border-emerald-400 hover:shadow-[0_0_30px_rgba(16,185,129,0.4)]'}`}>
                       {!scanResult.canRun || files.length < MIN_FILES || files.length > MAX_FILES ? (
                         <span>{files.length < MIN_FILES ? `Add ${MIN_FILES - files.length} more files` : files.length > MAX_FILES ? "Limit Exceeded" : "Checks Failed"}</span>

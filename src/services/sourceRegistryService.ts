@@ -19,7 +19,7 @@ const HARD_PACKET_CHARS = 45000;
 const CHUNK_TARGET_CHARS = 2200;
 const CHUNK_OVERLAP_CHARS = 200;
 const SOURCE_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
-const SOURCE_KINDS = new Set(['text', 'pdf', 'html', 'csv', 'tsv', 'json']);
+const SOURCE_KINDS = new Set(['text', 'pdf', 'html', 'csv', 'tsv', 'json', 'xlsx']);
 const SHA256_PATTERN = /^sha256_[a-f0-9]{64}$/;
 
 const DOMAIN_TERMS: Record<string, string[]> = {
@@ -176,10 +176,15 @@ const tableRowChunks = (text: string): Array<{ rowNumber: number; text: string }
     .map(line => normalize(line))
     .filter(Boolean);
   const header = lines[0] || '';
-  return lines.slice(1, 31).map((row, idx) => ({
-    rowNumber: idx + 1,
-    text: `Table evidence sample row ${idx + 1}\nHeaders: ${header}\nValues: ${row}`
-  }));
+  return lines.slice(1, 31).map((row, idx) => {
+    const located = row.match(/^\[ROW\s+(\d+)\]\s*(.*)$/i);
+    const rowNumber = located ? Number(located[1]) : idx + 1;
+    const values = located ? located[2] : row;
+    return {
+      rowNumber,
+      text: `Table evidence sample row ${rowNumber}\nHeaders: ${header}\nValues: ${values}`
+    };
+  });
 };
 
 const scoreDomain = (haystack: string, domain: string): SourceChunkRoutingHint => {
@@ -226,6 +231,9 @@ const validateSourceRecords = (records: SourceRecord[]): void => {
         || !Number.isInteger(record.acquisition.byte_size) || record.acquisition.byte_size < 0
         || record.acquisition.validation_status !== 'PASS'
         || !Array.isArray(record.acquisition.validation_codes) || record.acquisition.validation_codes.length !== 0
+        || record.acquisition.extraction_status !== 'PASS'
+        || record.acquisition.extraction_method === 'not_started'
+        || typeof record.acquisition.extraction_version !== 'string' || record.acquisition.extraction_version.length === 0
       ))
       || (record.extraction !== undefined && (
         !['document', 'page', 'row'].includes(record.extraction.unit)
@@ -263,7 +271,7 @@ const validateSourceRecords = (records: SourceRecord[]): void => {
     }
     if (record.structured_table) {
       const table=record.structured_table;
-      if((record.kind!=='csv'&&record.kind!=='tsv')||table.schema_version!=='structured_table_v1'
+      if((record.kind!=='csv'&&record.kind!=='tsv'&&record.kind!=='xlsx')||table.schema_version!=='structured_table_v1'
         ||!Array.isArray(table.headers)||table.headers.length>200
         ||!Array.isArray(table.rows)||table.rows.length>150||!Number.isInteger(table.total_row_count)
         ||table.total_row_count<table.rows.length||typeof table.truncated!=='boolean'
@@ -277,7 +285,11 @@ const validateSourceRecords = (records: SourceRecord[]): void => {
         ))
         ||(table.sampled_row_numbers!==undefined&&(
           !Array.isArray(table.sampled_row_numbers)||table.sampled_row_numbers.length!==table.rows.length
-          ||table.sampled_row_numbers.some(rowNumber=>!Number.isInteger(rowNumber)||rowNumber<1||rowNumber>table.total_row_count)
+          ||table.sampled_row_numbers.some(rowNumber=>!Number.isInteger(rowNumber)||rowNumber<1)
+        ))
+        ||(table.analysis_row_numbers!==undefined&&(
+          !Array.isArray(table.analysis_row_numbers)||table.analysis_row_numbers.length!==(table.analysis_rows?.length||0)
+          ||table.analysis_row_numbers.some(rowNumber=>!Number.isInteger(rowNumber)||rowNumber<1)
         ))) {
         throw new Error('INVALID_STRUCTURED_TABLE');
       }
@@ -359,7 +371,10 @@ export const buildSourceRegistry = (records: SourceRecord[]): SourceRegistry => 
       declared_media_type: record.acquisition?.declared_media_type,
       detected_media_type: record.acquisition?.detected_media_type,
       format: record.kind,
-      validation_status: record.acquisition ? 'PASS' as const : 'NOT_RECORDED' as const
+      validation_status: record.acquisition ? 'PASS' as const : 'NOT_RECORDED' as const,
+      extraction_method: record.acquisition?.extraction_method,
+      extraction_version: record.acquisition?.extraction_version,
+      extraction_status: record.acquisition?.extraction_status
     })),
     warnings,
     extraction: buildExtractionQuality(records)

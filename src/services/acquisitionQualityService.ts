@@ -246,7 +246,7 @@ export const shadowTelemetryPersistence = (
     schema_version: 'shadow_telemetry_v1',
     retrieval_policy_version: retrieval.policy_version,
     derived_evidence_schema_version: 'derived_analytical_evidence_v1',
-    analyzer_version: 'tagging_allocation_v1@1.0.0',
+    analyzer_version: 'tagging_allocation_v1@1.1.0',
     scale_registry_version: coverage.registry_version,
     retrieval_domain_count: retrieval.domains.length,
     retrieval_triggered_domain_count: retrieval.domains.filter(domain => domain.passes.length > 0).length,

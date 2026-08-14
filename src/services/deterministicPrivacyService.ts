@@ -87,6 +87,7 @@ export const sanitizeEvidenceSources = (sources: SourceRecord[]): {
     }));
     const sanitizedTable = table ? {
       ...table,
+      sheet_name: table.sheet_name ? sanitizeText(table.sheet_name, source.source_id, findings) : undefined,
       headers: table.headers.map(header => {
         scannedTableCellCount++;
         return sanitizeText(header, source.source_id, findings);
@@ -106,6 +107,7 @@ export const sanitizeEvidenceSources = (sources: SourceRecord[]): {
     (source.text !== undefined && containsProhibitedRawValue(source.text))
     || Boolean(source.pages?.some(page => containsProhibitedRawValue(page.text)))
     || Boolean(source.structured_table && [
+      source.structured_table.sheet_name || '',
       ...source.structured_table.headers,
       ...source.structured_table.rows.flat(),
       ...(source.structured_table.analysis_rows?.flat() || [])

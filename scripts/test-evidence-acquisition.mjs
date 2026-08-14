@@ -46,12 +46,11 @@ assert.equal(validJson.validation_status, 'PASS');
 const invalidJson = await inspectEvidenceBytes({ bytes: encoder.encode('{not-json}'), fileName: 'cost.json' });
 assert.equal(invalidJson.validation_status, 'BLOCK');
 
-const xlsxPendingParser = await inspectEvidenceBytes({
+const xlsxAcceptedForDefensiveParser = await inspectEvidenceBytes({
   bytes: Uint8Array.from([0x50, 0x4b, 0x03, 0x04, 0, 0, 0, 0]),
   fileName: 'cost.xlsx',
 });
-assert.equal(xlsxPendingParser.validation_status, 'BLOCK');
-assert.ok(xlsxPendingParser.validation_codes.includes('EXTRACTION_NOT_IMPLEMENTED'));
+assert.equal(xlsxAcceptedForDefensiveParser.validation_status, 'PASS');
 
 const rows = Array.from({ length: 151 }, (_, index) => `owner-${index},${index}`);
 rows[150] = 'AKIAABCDEFGHIJKLMNOP,150';
