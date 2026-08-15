@@ -976,7 +976,6 @@ export const generateSummaryReportHtml = (unsafeResult: DiagnosticResult): strin
 
     ${renderDomainSignalOverview(result)}
     ${renderAssessmentHeatmapSummary(result)}
-    ${renderScoreEvidenceGaps(result, 8)}
     ${renderSummaryDiagnosis(result)}
     ${renderSummaryPlanningDecision(result)}
     ${renderSummaryRoadmap(result)}

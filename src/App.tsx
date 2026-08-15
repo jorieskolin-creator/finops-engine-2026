@@ -1291,7 +1291,7 @@ const App: React.FC = () => {
             </div>
             <div className="leading-tight">
               <h1 className="text-lg font-display font-bold tracking-tight text-white group-hover:text-emerald-400 transition-colors">FinOps Engine</h1>
-              <span className="text-[10px] uppercase tracking-widest text-emerald-200 font-semibold group-hover:text-white transition-colors">Assessment Suite v1.0</span>
+              <span className="text-[10px] uppercase tracking-widest text-emerald-200 font-semibold group-hover:text-white transition-colors">FinOps Assessment Engine v2.0.0</span>
             </div>
           </div>
 
@@ -1396,7 +1396,7 @@ const App: React.FC = () => {
                   </p>
                   <div className="mt-8 flex flex-col sm:flex-row justify-center items-center gap-3">
                       <a
-                        href="https://honourable-peacock.static2.website/finops-engine-structure-thinking-14052026"
+                        href="https://evidence-driven-finops-assessment.vercel.app/"
                         target="_blank"
                         rel="noopener noreferrer"
                         className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-[0.2em] text-emerald-300 hover:text-white bg-emerald-950/30 hover:bg-emerald-700/40 border border-emerald-700/40 hover:border-emerald-400 transition-colors px-5 py-2.5 rounded-full"
@@ -1832,7 +1832,7 @@ const App: React.FC = () => {
               <span className="font-display font-bold text-slate-300">FinOps Assessment Engine</span>
             </div>
             <p className="text-xs text-slate-400 leading-relaxed max-w-xs mx-auto md:mx-0">
-              Assessment Suite v1.0<br />Governed multi-stage architecture
+              FinOps Assessment Engine v2.0.0<br />Governed multi-stage architecture
             </p>
           </div>
 
