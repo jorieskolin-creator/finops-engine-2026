@@ -99,6 +99,7 @@ assert.match(exportSource, /Candidate inclusion measures/, 'Master Data should d
 assert.match(exportSource, /How the maturity score is measured/, 'HTML exports should explain the conservative full-framework maturity score');
 assert.match(exportSource, /Assessment BLOCKED/, 'HTML exports should show blocked actionability ahead of maturity classification');
 assert.equal((exportSource.match(/grid-template-columns: repeat\(5, minmax\(0, 1fr\)\)/g) || []).length, 2, 'both HTML reports should keep all five gauges on one desktop row');
+assert.doesNotMatch(exportSource, /Anti-pattern disposition|renderAntiPatternDisposition/, 'HTML reports should omit the redundant anti-pattern disposition card');
 assert.match(exportSource, /renderScoreEvidenceGaps\(result, 8\)/, 'Summary Report should show a bounded set of deterministic evidence questions');
 assert.match(exportSource, /renderScoreEvidenceGaps\(result\)/, 'Master Data should show all deterministic evidence questions');
 assert.match(exportSource, /Evidence sufficiency/, 'context packet tables should distinguish evidence sufficiency from candidate inclusion');

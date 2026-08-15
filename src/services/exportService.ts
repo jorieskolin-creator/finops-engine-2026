@@ -491,22 +491,6 @@ const renderActionability = (result: DiagnosticResult): string => {
     </section>`;
 };
 
-const renderAntiPatternDisposition = (result: DiagnosticResult): string => {
-  const d = buildReportViewModel(result).antipatternDisposition;
-  return `
-    <section class="disposition-card">
-      <h3>Anti-pattern disposition</h3>
-      <p>Counts preserve the distinction between observed friction, tested absence, and missing evidence.</p>
-      <div class="disposition-grid">
-        <div><strong>${d.confirmed}</strong><span>Confirmed</span></div>
-        <div><strong>${d.partial}</strong><span>Partial</span></div>
-        <div><strong>${d.testedAbsent}</strong><span>Tested absent</span></div>
-        <div><strong>${d.notAssessed}</strong><span>Not assessed</span></div>
-        <div><strong>${d.unresolved}</strong><span>Unresolved</span></div>
-      </div>
-    </section>`;
-};
-
 const renderScoreEvidenceGaps = (result: DiagnosticResult, limit?: number): string => {
   const gaps = result.phase_2_validation.score_evidence_gaps || [];
   if (gaps.length === 0) return '';
@@ -836,12 +820,7 @@ export const generateSummaryReportHtml = (unsafeResult: DiagnosticResult): strin
     .actionability p { margin: 0; color: #334155; }
     .actionability-facts { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 8px; }
     .actionability-facts span { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 999px; padding: 6px 10px; color: #64748b; font-size: 0.76rem; }
-    .disposition-card, .evidence-findings { background: #fff; border: 1px solid #e2e8f0; border-radius: 16px; padding: 22px; margin: 20px 0; box-shadow: 0 12px 35px rgba(15,23,42,0.05); }
-    .disposition-card > p { color: #64748b; margin: 4px 0 16px; }
-    .disposition-grid { display: grid; grid-template-columns: repeat(5, minmax(90px, 1fr)); gap: 10px; }
-    .disposition-grid div { background: #f8fafc; border-radius: 12px; padding: 12px; text-align: center; }
-    .disposition-grid strong { display: block; font-size: 1.6rem; }
-    .disposition-grid span { color: #64748b; font-size: 0.72rem; }
+    .evidence-findings { background: #fff; border: 1px solid #e2e8f0; border-radius: 16px; padding: 22px; margin: 20px 0; box-shadow: 0 12px 35px rgba(15,23,42,0.05); }
     .source-note { margin: 16px 0 0; color: #fcd34d; font-size: 0.85rem; }
     .summary-card, .exec-lens, .decision-card, .withheld-card, .heatmap-panel, .chart-card, .summary-roadmap-phase { background: #fff; border: 1px solid #e2e8f0; border-radius: 16px; padding: 22px; box-shadow: 0 12px 35px rgba(15,23,42,0.05); }
     .summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 18px; }
@@ -955,7 +934,6 @@ export const generateSummaryReportHtml = (unsafeResult: DiagnosticResult): strin
       .hero { padding: 26px; border-radius: 18px; }
       .actionability { grid-template-columns: 1fr; }
       .actionability-facts { grid-column: 1; }
-      .disposition-grid { grid-template-columns: repeat(2, minmax(100px, 1fr)); }
       .gauge-grid { grid-template-columns: 1fr; }
       .gauge-grid > .gauge-large { grid-column: span 1; }
       .compact-heatmap-row { grid-template-columns: 1fr; }
@@ -998,7 +976,6 @@ export const generateSummaryReportHtml = (unsafeResult: DiagnosticResult): strin
 
     ${renderDomainSignalOverview(result)}
     ${renderAssessmentHeatmapSummary(result)}
-    ${renderAntiPatternDisposition(result)}
     ${renderScoreEvidenceGaps(result, 8)}
     ${renderSummaryDiagnosis(result)}
     ${renderSummaryPlanningDecision(result)}
@@ -1071,12 +1048,7 @@ export const generateReportHtml = (unsafeResult: DiagnosticResult): string => {
     .actionability p { margin: 0; color: #334155; }
     .actionability-facts { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 0.5rem; }
     .actionability-facts span { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 999px; padding: 0.35rem 0.65rem; color: #64748b; font-size: 0.75rem; }
-    .disposition-card, .evidence-findings { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 1rem; padding: 1.4rem; margin: 1.25rem 0; }
-    .disposition-card > p { color: #64748b; margin: 0.25rem 0 1rem; }
-    .disposition-grid { display: grid; grid-template-columns: repeat(5, minmax(90px, 1fr)); gap: 0.65rem; }
-    .disposition-grid div { background: #fff; border-radius: 0.75rem; padding: 0.75rem; text-align: center; }
-    .disposition-grid strong { display: block; font-size: 1.5rem; }
-    .disposition-grid span { color: #64748b; font-size: 0.7rem; }
+    .evidence-findings { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 1rem; padding: 1.4rem; margin: 1.25rem 0; }
     .chart-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); gap: 1.25rem; }
     .domain-signal-section { margin: 2rem 0; }
     .domain-signal-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1rem; }
@@ -1235,7 +1207,6 @@ export const generateReportHtml = (unsafeResult: DiagnosticResult): string => {
       body { padding: 24px 16px; }
       .actionability { grid-template-columns: 1fr; }
       .actionability-facts { grid-column: 1; }
-      .disposition-grid { grid-template-columns: repeat(2, minmax(100px, 1fr)); }
       .gauge-grid { grid-template-columns: 1fr; }
       .compact-heatmap-row { grid-template-columns: 1fr; }
       .compact-heatmap-cells { grid-template-columns: repeat(2, minmax(120px, 1fr)); }
@@ -1267,7 +1238,6 @@ export const generateReportHtml = (unsafeResult: DiagnosticResult): string => {
 
   ${renderDomainSignalOverview(result)}
   ${renderAssessmentHeatmapSummary(result)}
-  ${renderAntiPatternDisposition(result)}
   ${renderScoreEvidenceGaps(result)}
 
   <h2>Evidence-Backed Findings</h2>
