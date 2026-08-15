@@ -49,7 +49,9 @@ const openAIAnthropic = resolveModelRouting({ PRIMARY_MODEL_PROVIDER: 'OPENAI', 
 validateRoute(openAIAnthropic);
 assert.equal(openAIAnthropic.routes.forensic_audit[0].id, 'gpt-5.6-sol');
 assert.equal(openAIAnthropic.routes.forensic_audit[1].id, 'claude-sonnet-5');
+assert.equal(openAIAnthropic.routes.forensic_audit[1].maxTokens, 16384);
 assert.equal(openAIAnthropic.routes.roadmap_synthesis[1].id, 'claude-opus-5');
+assert.equal(openAIAnthropic.routes.roadmap_synthesis[1].maxTokens, 16384);
 
 const strictQwen = resolveModelRouting({ PRIMARY_MODEL_PROVIDER: 'QWEN', FALLBACK_MODEL_PROVIDER: 'NONE' });
 validateRoute(strictQwen);
@@ -99,6 +101,7 @@ assert.match(orchestrator, /<EVIDENCE_CONTEXT source_role="CUSTOMER_EVIDENCE">/)
 assert.match(orchestrator, /assertEvidenceLaneStagePacket\(packet\)/);
 assert.doesNotMatch(modelContracts, /\| 'preflight'/);
 assert.match(analysis, /model_mode: modelRoutingMode/);
+assert.match(analysis, /evidence_density < EVIDENCE_DENSITY_BLOCK[\s\S]*?reason_code: 'EVIDENCE_DENSITY_BELOW_FLOOR'/, 'sub-floor evidence must use deterministic findings instead of generative synthesis');
 assert.match(server, /resolveModelRouting\(process\.env\)/);
 
 console.log('model routing policy tests passed');

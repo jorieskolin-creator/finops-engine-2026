@@ -42,19 +42,28 @@ assert.equal(safeWorkerErrorCode(new Error('private source content')), 'INTERNAL
 
 const logged = [];
 const originalLog = console.log;
+const originalWarn = console.warn;
 try {
   console.log = value => logged.push(String(value));
+  console.warn = value => logged.push(String(value));
   workerOperationalLog('info', 'execution_attempt_claimed', {
     run_id: 'run-1', attempt_id: 'attempt-1', stage: 'forensic_audit', provider: 'openai', model: 'gpt-5.5', queue_age_ms: 17,
     prompt: 'private source content', filename: 'private.pdf', response_body: 'private model output',
   });
+  workerOperationalLog('warn', 'execution_attempt_failed', {
+    run_id: 'run-1', attempt_id: 'attempt-1', stage: 'forensic_audit', provider: 'anthropic', model: 'claude-sonnet-5',
+    outcome_code: 'INCOMPLETE_RESPONSE', termination_reason: 'MAX_OUTPUT_TOKENS', duration_ms: 42,
+  });
 } finally {
   console.log = originalLog;
+  console.warn = originalWarn;
 }
-assert.equal(logged.length, 1);
+assert.equal(logged.length, 2);
 assert.match(logged[0], /event=execution_attempt_claimed/);
 assert.match(logged[0], /run_id=run-1/);
 assert.doesNotMatch(logged[0], /private source content|private\.pdf|private model output/);
+assert.match(logged[1], /outcome_code=INCOMPLETE_RESPONSE/);
+assert.match(logged[1], /termination_reason=MAX_OUTPUT_TOKENS/);
 
 for (const file of ['../api/openai-generate.js', '../api/anthropic-generate.js', '../api/qwen-generate.js']) {
   const source = await readFile(new URL(file, import.meta.url), 'utf8');

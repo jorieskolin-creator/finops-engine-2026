@@ -12,7 +12,7 @@ import { runPhase1Audit } from "../orchestrator";
 import { knowledgeBaseService, BATCH_DEFINITIONS, FINOPS_TACTICS_LOCAL, FINOPS_TACTIC_ACTIVITY_PLAYBOOK, FINOPS_TAXONOMY_REGISTRY, buildTacticIdTable, validTacticIdSet } from "../knowledge_base";
 import { DiagnosticResult, Phase1AuditLogs, Phase2Validation, AuditItem, EvidenceQuote, EvidenceCategory, EVIDENCE_CATEGORIES, PersonaId, PERSONA_IDS, PipelineProgressStage, PipelineProgressUpdate, SourceRecord } from "../types";
 import { validatePhase1Output, validatePhase3Grounding } from "./validatorService";
-import { runQualityGate, runQualityGateExplanation } from "./qualityGateService";
+import { EVIDENCE_DENSITY_BLOCK, runQualityGate, runQualityGateExplanation } from "./qualityGateService";
 import { applyQualityGateScoreCap, calculateMetrics } from "./metricsService";
 import {
   buildRegenerateAppendix,
@@ -1014,18 +1014,29 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => `  ${cat}
 
     let strategyData: any;
     let deterministicSynthesisFallback = false;
-    try {
-      strategyData = await callPhase3Validated();
-    } catch (error: any) {
-      if (confidenceBracket !== 'LOW') throw error;
+    if (validationData.metrics.evidence_density < EVIDENCE_DENSITY_BLOCK) {
       deterministicSynthesisFallback = true;
       strategyData = buildDeterministicLowConfidenceStrategy();
       serverLog(runId, 'warn', 'synthesis_deterministic_fallback', {
         stage: synthesisStage,
-        reason_code: typeof error?.code === 'string' ? error.code : 'SYNTHESIS_UNAVAILABLE',
+        reason_code: 'EVIDENCE_DENSITY_BELOW_FLOOR',
         evidence_density: Math.round(validationData.metrics.evidence_density),
         silent_areas: validationData.silent_areas.length,
       });
+    } else {
+      try {
+        strategyData = await callPhase3Validated();
+      } catch (error: any) {
+        if (confidenceBracket !== 'LOW') throw error;
+        deterministicSynthesisFallback = true;
+        strategyData = buildDeterministicLowConfidenceStrategy();
+        serverLog(runId, 'warn', 'synthesis_deterministic_fallback', {
+          stage: synthesisStage,
+          reason_code: typeof error?.code === 'string' ? error.code : 'SYNTHESIS_UNAVAILABLE',
+          evidence_density: Math.round(validationData.metrics.evidence_density),
+          silent_areas: validationData.silent_areas.length,
+        });
+      }
     }
     await checkpoint('synthesis', 'accepted', { phase_3_strategy: strategyData.phase_3_strategy });
     emitProgress({ stage: 'synthesis', status: deterministicSynthesisFallback ? 'completed_with_warnings' : 'completed' });

@@ -52,7 +52,23 @@ await assert.rejects(
       json: async () => ({ choices: [{ finish_reason: 'length', message: { content: '{"ok"' } }] }),
     }),
   }),
-  /INCOMPLETE_RESPONSE/,
+  error => error?.code === 'INCOMPLETE_RESPONSE' && error?.terminationReason === 'MAX_OUTPUT_TOKENS',
+);
+
+await assert.rejects(
+  invokeProvider({ ...packet, provider: 'anthropic', model: 'claude-sonnet-5', settings: { max_tokens: 16384 } }, {
+    env: { ANTHROPIC_API_KEY: 'test-key' },
+    fetchFn: async () => ({ ok: true, json: async () => ({ stop_reason: 'max_tokens', content: [] }) }),
+  }),
+  error => error?.code === 'INCOMPLETE_RESPONSE' && error?.terminationReason === 'MAX_OUTPUT_TOKENS',
+);
+
+await assert.rejects(
+  invokeProvider({ ...packet, provider: 'anthropic', model: 'claude-sonnet-5', settings: { max_tokens: 16384 } }, {
+    env: { ANTHROPIC_API_KEY: 'test-key' },
+    fetchFn: async () => ({ ok: true, json: async () => ({ stop_reason: 'model_context_window_exceeded', content: [] }) }),
+  }),
+  error => error?.code === 'INCOMPLETE_RESPONSE' && error?.terminationReason === 'CONTEXT_WINDOW_EXCEEDED',
 );
 
 for (const provider of ['openai', 'anthropic']) {
