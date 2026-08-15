@@ -29,7 +29,7 @@ import { getModelRoutingConfig, runStage, serverLog } from "./modelRouter";
 import { createRun, failRun, getRun, readyRun, suspendRun } from "./runLifecycleService";
 import { saveCheckpoint, type CheckpointKind } from "./checkpointService";
 import { sanitizeRoadmapTacticGrounding, TacticGroundingAdjustment } from "./tacticGroundingService";
-import { sanitizeBlockedStrategy, sanitizeStrategyAfterFactCheck } from "./strategySanitationService";
+import { sanitizeBlockedStrategy, sanitizeEvidenceSummaryUncertainty, sanitizeStrategyAfterFactCheck } from "./strategySanitationService";
 import {
   buildDomainPackets,
   buildSourceRegistry,
@@ -294,6 +294,9 @@ export const analyzeDocument = async (
     const dataSignalCoverage = buildDataSignalCoverageReport();
     const text = renderPseudonymousSourceContext(sourceRegistry, 50000);
     const sourcePackets = buildDomainPackets(sourceRegistry);
+    const weakDomainIds = Object.entries(sourcePackets)
+      .filter(([, packet]) => packet.weak_coverage)
+      .map(([domain]) => domain);
     const boundedRetrieval = buildBoundedRetrievalTrace(sourceRegistry, sourcePackets);
     const dlpScan = scanRegistryDlp(sourceRegistry);
     const packetWarnings = Object.values(sourcePackets).filter(packet => packet.weak_coverage).length;
@@ -589,6 +592,10 @@ Silent Areas: ${validationData.silent_areas.length}
 
 SCORE EVIDENCE GAPS (zero score contribution; not proof a capability is absent):
 ${validationData.score_evidence_gaps.join('\n') || 'None'}
+
+DOMAINS WITH INCOMPLETE SOURCE COVERAGE:
+${weakDomainIds.join(', ') || 'None'}
+Do not prescribe remediation for these domains. Limit them to evidence-collection steps under Safe To Act On.
 
 CATEGORY BREAKDOWN:
 ${Object.entries(validationData.category_scores).map(([cat, score]) => `  ${cat}: ${score}/15`).join('\n')}
@@ -949,7 +956,7 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => `  ${cat}
           ? raw.phase_3_strategy.findings_mode || buildFallbackFindingsMode()
           : raw.phase_3_strategy.findings_mode
       };
-      return raw;
+      return sanitizeEvidenceSummaryUncertainty(raw);
     };
 
     // Wrap callPhase3 with a deterministic ID-validity gate. Before any
@@ -983,7 +990,7 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => `  ${cat}
           invalid_count: invalid.length,
         });
       }
-      const grounding = sanitizeRoadmapTacticGrounding(data, validationData);
+      const grounding = sanitizeRoadmapTacticGrounding(data, validationData, weakDomainIds);
       tacticGroundingWarnings = grounding.warnings;
       tacticGroundingAdjustments = grounding.adjustments;
       if (grounding.adjustments.length > 0) {
@@ -1137,6 +1144,15 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => `  ${cat}
       });
     }
     console.log(`[FinOps] [${runId}] Quality Gate decision: ${qualityGate.decision}`);
+    if (qualityGate.decision === 'WARN' && strategyData?.phase_3_strategy?.planning_decision?.decision === 'GO') {
+      const decision = strategyData.phase_3_strategy.planning_decision;
+      decision.decision = 'CONDITIONAL_GO';
+      decision.rationale = `${decision.rationale || 'The grounded roadmap may proceed with review.'} Quality Gate warnings must be resolved or explicitly accepted before scaling implementation.`;
+      decision.evidence_needed_before_action = Array.from(new Set([
+        ...(decision.evidence_needed_before_action || []),
+        ...qualityGate.warnings.filter(warning => warning.startsWith('Source routing coverage')),
+      ]));
+    }
     applyQualityGateScoreCap(validationData, qualityGate.decision);
     await checkpoint('phase2', 'accepted', { phase_2_validation: validationData });
 
@@ -1165,7 +1181,11 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => `  ${cat}
       strategyData.phase_3_strategy.effective_bracket = effectiveBracket;
     }
     if (qualityGate.decision === 'BLOCK') {
-      strategyData = sanitizeBlockedStrategy(strategyData, qualityGate.blocking_reasons);
+      strategyData = sanitizeBlockedStrategy(strategyData, qualityGate.blocking_reasons, {
+        evidenceDensity: validationData.metrics.evidence_density,
+        evidenceCheckCompleted: !aggregatedRawData.evidence_check.failed,
+        scoreEvidenceGaps: validationData.score_evidence_gaps,
+      });
     }
     if (strategyData?.phase_3_strategy?.visual_scorecard) {
       strategyData.phase_3_strategy.visual_scorecard.maturity_score =
@@ -1214,7 +1234,11 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => `  ${cat}
     };
     const resolvedStrategy = strategyData.phase_3_strategy || fallbackStrategy;
     const finalStrategy = qualityGate.decision === 'BLOCK'
-      ? sanitizeBlockedStrategy({ phase_3_strategy: resolvedStrategy }, qualityGate.blocking_reasons).phase_3_strategy
+      ? sanitizeBlockedStrategy({ phase_3_strategy: resolvedStrategy }, qualityGate.blocking_reasons, {
+        evidenceDensity: validationData.metrics.evidence_density,
+        evidenceCheckCompleted: !aggregatedRawData.evidence_check.failed,
+        scoreEvidenceGaps: validationData.score_evidence_gaps,
+      }).phase_3_strategy
       : resolvedStrategy;
 
     let finalResult: DiagnosticResult = {

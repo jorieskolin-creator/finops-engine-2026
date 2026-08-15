@@ -33,7 +33,7 @@ await writeFile(
 );
 
 const { runQualityGate } = await import(`file://${join(dir, 'qualityGateService.mjs')}`);
-const { sanitizeBlockedStrategy, sanitizeStrategyAfterFactCheck } = await import(`file://${join(dir, 'strategySanitationService.mjs')}`);
+const { sanitizeBlockedStrategy, sanitizeEvidenceSummaryUncertainty, sanitizeStrategyAfterFactCheck } = await import(`file://${join(dir, 'strategySanitationService.mjs')}`);
 
 const ids = ['A', 'B', 'C', 'D', 'E', 'F'].flatMap(batch => [1, 2, 3, 4, 5].map(n => `${batch}${n}`));
 const emptyItem = {
@@ -240,15 +240,28 @@ const unsanitizable = sanitizeStrategyAfterFactCheck(strategyData, {
 assert.equal(unsanitizable.factCheck.unsupported_claims.length, 1);
 const blockGate = runQualityGate(phase1, strongPhase2, validationOk, validationOk, evidenceCheckOk, unsanitizable.factCheck);
 assert.equal(blockGate.decision, 'BLOCK');
-const blockedStrategy = sanitizeBlockedStrategy(strategyData, blockGate.blocking_reasons);
+const blockedStrategy = sanitizeBlockedStrategy(strategyData, blockGate.blocking_reasons, {
+  evidenceDensity: 75,
+  evidenceCheckCompleted: true,
+  scoreEvidenceGaps: ['[F1] Not demonstrated by supplied material.'],
+});
 assert.deepEqual(blockedStrategy.phase_3_strategy.remediation_roadmap, []);
 assert.equal(blockedStrategy.phase_3_strategy.effective_bracket, 'LOW');
 assert.equal(blockedStrategy.phase_3_strategy.planning_decision.decision, 'NO_GO');
-assert.deepEqual(blockedStrategy.phase_3_strategy.planning_decision.safe_to_act_on, []);
+assert.ok(blockedStrategy.phase_3_strategy.planning_decision.safe_to_act_on.some(item => item.startsWith('Review confirmed')));
+assert.ok(blockedStrategy.phase_3_strategy.planning_decision.evidence_needed_before_action.some(item => item.startsWith('[F1]')));
 const missingBlockedStrategy = sanitizeBlockedStrategy({}, ['Required fact-check result is missing.']);
 assert.equal(missingBlockedStrategy.phase_3_strategy.planning_decision.decision, 'NO_GO');
 assert.equal(missingBlockedStrategy.phase_3_strategy.effective_bracket, 'LOW');
 assert.deepEqual(missingBlockedStrategy.phase_3_strategy.remediation_roadmap, []);
+assert.ok(missingBlockedStrategy.phase_3_strategy.planning_decision.safe_to_act_on.every(item => !item.startsWith('Review confirmed')));
+
+const uncertaintySanitized = sanitizeEvidenceSummaryUncertainty({ phase_3_strategy: { evidence_summary: {
+  confirmed_gaps: ['Complete absence of AI/GenAI cost visibility', 'Storage lifecycle policy is planned but not enforced'],
+  silent_or_missing_evidence: ['Existing evidence question'],
+} } });
+assert.deepEqual(uncertaintySanitized.phase_3_strategy.evidence_summary.confirmed_gaps, ['Storage lifecycle policy is planned but not enforced']);
+assert.ok(uncertaintySanitized.phase_3_strategy.evidence_summary.silent_or_missing_evidence.includes('Not demonstrated by the supplied material: AI/GenAI cost visibility'));
 
 const lowEvidenceGate = runQualityGate(
   phase1,

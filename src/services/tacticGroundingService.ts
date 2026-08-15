@@ -1,5 +1,5 @@
 import type { Phase2Validation, StrategicTactic } from '../types';
-import { FINOPS_TACTICS_LOCAL } from '../knowledge_base';
+import { FINOPS_TACTIC_ACTIVITY_PLAYBOOK, FINOPS_TACTICS_LOCAL } from '../knowledge_base';
 
 export interface TacticGroundingAdjustment {
   action_before: string;
@@ -127,6 +127,10 @@ const buildFindingCorpus = (phase2: Phase2Validation): string => [
 ].join('\n').toLowerCase();
 
 const tacticById = new Map<string, StrategicTactic>(FINOPS_TACTICS_LOCAL.map(t => [t.id, t]));
+const tacticDomainsById = new Map(FINOPS_TACTIC_ACTIVITY_PLAYBOOK.map(entry => [
+  entry.tactic_id,
+  new Set([...entry.maturity_criteria, ...entry.antipattern_criteria].map(id => id.replace(/^AP-/, '').charAt(0)))
+]));
 
 const applyReplacementOrRemoval = (
   action: string,
@@ -173,7 +177,8 @@ const removeUnsupportedActionIfNeeded = (
 
 export const sanitizeRoadmapTacticGrounding = (
   strategyData: any,
-  phase2: Phase2Validation
+  phase2: Phase2Validation,
+  weakDomains: string[] = []
 ): TacticGroundingResult => {
   const strategy = strategyData?.phase_3_strategy;
   const roadmap = strategy?.remediation_roadmap;
@@ -185,6 +190,12 @@ export const sanitizeRoadmapTacticGrounding = (
   const clonedRoadmap = data.phase_3_strategy.remediation_roadmap;
   const findingCorpus = buildFindingCorpus(phase2);
   const adjustments: TacticGroundingAdjustment[] = [];
+  const weakDomainSet = new Set(weakDomains);
+  const weakOnlyTacticFor = (action: string): string | undefined =>
+    Array.from(action.matchAll(TACTIC_RX)).map(match => match[1]).find(id => {
+      const domains = tacticDomainsById.get(id);
+      return domains && domains.size > 0 && Array.from(domains).every(domain => weakDomainSet.has(domain));
+    });
 
   for (const phase of clonedRoadmap) {
     if (!Array.isArray(phase.actions)) continue;
@@ -195,6 +206,16 @@ export const sanitizeRoadmapTacticGrounding = (
       action = groundedAction;
       const actionText = lower(action);
       const ids = Array.from(action.matchAll(TACTIC_RX)).map(m => m[1]);
+      const weakOnlyTactic = weakOnlyTacticFor(action);
+      if (weakOnlyTactic) {
+        adjustments.push({
+          action_before: action,
+          action_after: '',
+          tactic_id: weakOnlyTactic,
+          reason: `${weakOnlyTactic} was withheld because its mapped domain has incomplete source coverage. Collect domain evidence before prescribing remediation.`,
+        });
+        return '';
+      }
       for (const id of ids) {
         const rule = TACTIC_RULES[id];
         const tactic = tacticById.get(id);
@@ -227,6 +248,25 @@ export const sanitizeRoadmapTacticGrounding = (
       }
       return action.trim().replace(/\s{2,}/g, ' ');
     }).filter((action: string) => action.length > 0);
+  }
+  data.phase_3_strategy.remediation_roadmap = clonedRoadmap.filter((phase: any) =>
+    Array.isArray(phase.actions) && phase.actions.length > 0
+  );
+
+  const safeToActOn = data.phase_3_strategy.planning_decision?.safe_to_act_on;
+  if (Array.isArray(safeToActOn)) {
+    data.phase_3_strategy.planning_decision.safe_to_act_on = safeToActOn.filter((rawAction: unknown) => {
+      const action = typeof rawAction === 'string' ? rawAction : String(rawAction ?? '');
+      const weakOnlyTactic = weakOnlyTacticFor(action);
+      if (!weakOnlyTactic) return true;
+      adjustments.push({
+        action_before: action,
+        action_after: '',
+        tactic_id: weakOnlyTactic,
+        reason: `${weakOnlyTactic} was withheld from Safe To Act On because its mapped domain has incomplete source coverage.`,
+      });
+      return false;
+    });
   }
 
   const warnings = adjustments.map(a =>

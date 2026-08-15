@@ -19,12 +19,18 @@ const tactics = [
   { id: 'TAC-GOV-001', canonical_name: 'Cloud Financial Policy Framework' },
   { id: 'TAC-GOV-004', canonical_name: 'FinOps Outcome Tracking' },
   { id: 'TAC-ARCH-002', canonical_name: 'Cost Estimation in Architecture Review' },
-  { id: 'TAC-CULT-004', canonical_name: 'Blameless Cost Reviews' }
+  { id: 'TAC-CULT-004', canonical_name: 'Blameless Cost Reviews' },
+  { id: 'TAC-AI-001', canonical_name: 'AI Cost Attribution' }
 ];
+const playbook = tactics.map(tactic => ({
+  tactic_id: tactic.id,
+  maturity_criteria: tactic.id === 'TAC-AI-001' ? ['F1'] : ['A1'],
+  antipattern_criteria: tactic.id === 'TAC-AI-001' ? ['AP-F1'] : [],
+}));
 
 await writeFile(
   join(dir, 'knowledge_base.mjs'),
-  `export const FINOPS_TACTICS_LOCAL = ${JSON.stringify(tactics)};\n`,
+  `export const FINOPS_TACTICS_LOCAL = ${JSON.stringify(tactics)}; export const FINOPS_TACTIC_ACTIVITY_PLAYBOOK = ${JSON.stringify(playbook)};\n`,
   'utf8'
 );
 
@@ -76,5 +82,13 @@ assert.ok(!actions[2].includes('[TAC-GOV-004]'), 'outcome tactic should be remov
 assert.ok(!actions[3].includes('[TAC-CULT-004]'), 'culture tactic should be removed without blame-culture finding');
 assert.ok(actions.every(action => !action.includes('activity-based')), 'activity-to-outcome action should be removed without a matching finding');
 assert.ok(actions.every(action => !action.includes('product team growth')), 'product-growth action should be removed without a matching finding');
+
+const weakDomainResult = sanitizeRoadmapTacticGrounding({ phase_3_strategy: { remediation_roadmap: [{
+  phase: '1. Crawl',
+  actions: ['Implement AI cost attribution [TAC-AI-001]'],
+}], planning_decision: { safe_to_act_on: ['Implement AI cost attribution [TAC-AI-001]'] } } }, phase2, ['F']);
+assert.deepEqual(weakDomainResult.strategyData.phase_3_strategy.remediation_roadmap, []);
+assert.deepEqual(weakDomainResult.strategyData.phase_3_strategy.planning_decision.safe_to_act_on, []);
+assert.ok(weakDomainResult.warnings.some(warning => /incomplete source coverage/.test(warning)));
 
 console.log('tactic grounding unit tests passed');

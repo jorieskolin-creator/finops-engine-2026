@@ -311,8 +311,9 @@ assert.equal(isBlockingUnsupportedClaim(verifiedTacticsHygieneClaim), false);
       }
     }
   );
-  assert.equal(weakSourceCoverage.decision, 'BLOCK');
-  assert.ok(weakSourceCoverage.blocking_reasons.some(reason => reason.startsWith('Source routing coverage')));
+  assert.equal(weakSourceCoverage.decision, 'WARN', 'weak domain coverage must be scoped rather than blocking the entire assessment');
+  assert.equal(weakSourceCoverage.blocking_reasons.length, 0);
+  assert.ok(weakSourceCoverage.warnings.some(reason => reason.startsWith('Source routing coverage')));
 }
 
 console.log('quality gate severity unit tests passed');

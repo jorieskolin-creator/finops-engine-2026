@@ -27,14 +27,12 @@ export const HIGH_THRESHOLDS = {
 export const LOW_THRESHOLDS = {
   evidence_density: 30,
   delivery_integrity: 70,
-  max_silent_areas: 18,
 };
 
 export function computeConfidenceBracket(metrics: BracketInputs): ConfidenceBracket {
   if (
     metrics.evidence_density < LOW_THRESHOLDS.evidence_density ||
-    metrics.delivery_integrity < LOW_THRESHOLDS.delivery_integrity ||
-    metrics.silent_areas_count > LOW_THRESHOLDS.max_silent_areas
+    metrics.delivery_integrity < LOW_THRESHOLDS.delivery_integrity
   ) {
     return 'LOW';
   }

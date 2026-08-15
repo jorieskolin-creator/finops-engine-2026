@@ -220,7 +220,47 @@ export const sanitizeStrategyAfterFactCheck = (
   };
 };
 
-export const sanitizeBlockedStrategy = (strategyData: any, blockingReasons: string[]): any => {
+interface BlockedStrategyContext {
+  evidenceDensity?: number;
+  evidenceCheckCompleted?: boolean;
+  scoreEvidenceGaps?: string[];
+}
+
+const unsafeDiagnosticBlock = (reasons: string[]): boolean => reasons.some(reason =>
+  /integrity|security|privacy|no traceable evidence|evidence-check (?:result is missing|did not complete)|analysis unavailable/i.test(reason)
+);
+
+export const sanitizeEvidenceSummaryUncertainty = (strategyData: any): any => {
+  const data = clone(strategyData || {});
+  const summary = data?.phase_3_strategy?.evidence_summary;
+  if (!summary || !Array.isArray(summary.confirmed_gaps)) return data;
+  const retained: string[] = [];
+  const moved: string[] = [];
+  for (const value of summary.confirmed_gaps) {
+    const gap = typeof value === 'string' ? value.trim() : '';
+    if (/^(?:complete absence of|no evidence of|absence of)\b/i.test(gap)) {
+      const subject = gap
+        .replace(/^complete absence of\s*/i, '')
+        .replace(/^no evidence of\s*/i, '')
+        .replace(/^absence of\s*/i, '');
+      moved.push(`Not demonstrated by the supplied material: ${subject}`);
+    } else if (gap) {
+      retained.push(gap);
+    }
+  }
+  summary.confirmed_gaps = retained;
+  summary.silent_or_missing_evidence = Array.from(new Set([
+    ...(summary.silent_or_missing_evidence || []),
+    ...moved,
+  ]));
+  return data;
+};
+
+export const sanitizeBlockedStrategy = (
+  strategyData: any,
+  blockingReasons: string[],
+  context: BlockedStrategyContext = {}
+): any => {
   const data = clone(strategyData || {});
   const strategy = data.phase_3_strategy && typeof data.phase_3_strategy === 'object'
     ? data.phase_3_strategy
@@ -238,12 +278,26 @@ export const sanitizeBlockedStrategy = (strategyData: any, blockingReasons: stri
 
   strategy.remediation_roadmap = [];
   strategy.effective_bracket = 'LOW';
+  const mayReviewFindings =
+    (context.evidenceDensity || 0) >= 30
+    && context.evidenceCheckCompleted === true
+    && !unsafeDiagnosticBlock(blockingReasons);
+  const safeToActOn = mayReviewFindings
+    ? [
+      'Review confirmed, source-backed findings with accountable owners as diagnostic input; do not treat them as implementation authorization.',
+      'Collect and validate the evidence listed under Evidence Needed Before Action.',
+      'Rerun the assessment after the blocking conditions and evidence questions are resolved.',
+    ]
+    : [
+      'Resolve the listed validation, integrity, security, or evidence-verification blockers before relying on the assessment findings.',
+      'Rerun the assessment after the blocking conditions are resolved.',
+    ];
   strategy.planning_decision = {
     decision: 'NO_GO',
     rationale: 'Required validation did not complete or the quality gate blocked actionability. Preserve the diagnostic findings, but do not execute recommendations until the blocking reasons are resolved.',
-    safe_to_act_on: [],
-    evidence_needed_before_action: blockingReasons.length > 0
-      ? [...blockingReasons]
+    safe_to_act_on: safeToActOn,
+    evidence_needed_before_action: blockingReasons.length > 0 || (context.scoreEvidenceGaps?.length || 0) > 0
+      ? [...blockingReasons, ...(context.scoreEvidenceGaps || []).slice(0, 8)]
       : ['Resolve the quality-gate blockers and re-run required verification.']
   };
   return data;

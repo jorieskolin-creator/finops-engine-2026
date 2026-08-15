@@ -642,12 +642,12 @@ export const ReportView: React.FC<ReportViewProps> = ({ result, onBack, onDownlo
 
         <div className="mb-12 p-8 bg-slate-50 rounded-2xl border border-slate-200">
           <div className="flex items-center gap-4 mb-6">
-            <span className={`px-4 py-2 rounded-lg font-bold text-sm ${cwrClass.includes('Insufficient') || cwrClass.includes('Crawl') ? 'bg-rose-100 text-rose-700' : cwrClass.includes('Run') ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
-              {cwrClass}
+            <span className={`px-4 py-2 rounded-lg font-bold text-sm ${isBlocked || cwrClass.includes('Insufficient') || cwrClass.includes('Crawl') ? 'bg-rose-100 text-rose-700' : cwrClass.includes('Run') ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
+              {isBlocked ? 'Assessment Blocked' : cwrClass}
             </span>
             <span className="text-slate-400">|</span>
             <span className="text-sm font-mono text-slate-500">
-              Delivery {m.delivery_integrity}% · Evidence {m.evidence_density}%
+              {isBlocked ? `Observed maturity band ${cwrClass} · ` : ''}Delivery {m.delivery_integrity}% · Evidence {m.evidence_density}%
             </span>
           </div>
 
@@ -867,7 +867,9 @@ export const ReportView: React.FC<ReportViewProps> = ({ result, onBack, onDownlo
                 <div>
                   <p className="text-xs font-bold uppercase tracking-widest mb-2 opacity-80">Safe to act on</p>
                   <ul className="space-y-1.5 text-sm">
-                    {(decision.safe_to_act_on || []).map((item, i) => <li key={i}>• {item}</li>)}
+                    {(decision.safe_to_act_on || []).length > 0
+                      ? decision.safe_to_act_on.map((item, i) => <li key={i}>• {item}</li>)
+                      : <li>• No action is authorized until the listed blockers are resolved.</li>}
                   </ul>
                 </div>
                 <div>

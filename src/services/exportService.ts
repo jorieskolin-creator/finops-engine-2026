@@ -976,7 +976,8 @@ export const generateSummaryReportHtml = (unsafeResult: DiagnosticResult): strin
       <p>A shareable view of the validated assessment: executive interpretation, evidence-gated maturity, diagnosis, planning decision, roadmap, and heatmap. Detailed forensic evidence remains in the Master Data report.</p>
       <div class="hero-meta">
         <span class="pill">Generated ${escapeHtml(result.meta.timestamp)}</span>
-        <span class="pill">Classification ${escapeHtml(cwrClass)}</span>
+        <span class="pill pill-${qgTone}">${result.quality_gate.decision === 'BLOCK' ? 'Assessment BLOCKED' : `Maturity band ${escapeHtml(cwrClass)}`}</span>
+        ${result.quality_gate.decision === 'BLOCK' ? `<span class="pill">Observed maturity band ${escapeHtml(cwrClass)}</span>` : ''}
         <span class="pill pill-${qgTone}">Quality Gate ${escapeHtml(result.quality_gate.decision)}</span>
         <span class="pill">Evidence ${Math.round(m.evidence_density)}%</span>
         ${kbStatus ? `<span class="pill">${escapeHtml(kbStatus)}</span>` : ''}

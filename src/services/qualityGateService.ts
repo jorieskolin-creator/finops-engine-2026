@@ -149,8 +149,8 @@ export const runQualityGate = (
 
   const weakPackets = Object.entries(sourceRegistry?.packets || {}).filter(([, packet]) => packet.weak_coverage);
   if (weakPackets.length > 0) {
-    blocking_reasons.push(
-      `Source routing coverage is incomplete for ${weakPackets.length} domain packet(s) (${weakPackets.map(([domain]) => domain).join(', ')}). No broad-source fallback was used; collect or route sufficient evidence before acting on recommendations.`
+    warnings.push(
+      `Source routing coverage is incomplete for ${weakPackets.length} domain packet(s) (${weakPackets.map(([domain]) => domain).join(', ')}). Findings in those domains remain not demonstrated or not assessed, and remediation recommendations for them are withheld until relevant evidence is supplied.`
     );
   }
 
