@@ -72,7 +72,7 @@ export const sanitizeEvidenceSources = (sources: SourceRecord[]): {
   let scannedTextUnitCount = 0;
   let scannedTableCellCount = 0;
 
-  const sanitizedSources = sources.map(source => {
+  const sanitizedSources = sources.map((source, index) => {
     const sanitizedText = source.text === undefined
       ? undefined
       : (scannedTextUnitCount++, sanitizeText(source.text, source.source_id, findings));
@@ -152,6 +152,7 @@ export const sanitizeEvidenceSources = (sources: SourceRecord[]): {
     });
     return {
       ...source,
+      source_name: `Document ${String(index + 1).padStart(3, '0')}`,
       text: sanitizedText,
       pages: sanitizedPages,
       structured_table: sanitizedTable,

@@ -681,13 +681,14 @@ const App: React.FC = () => {
 
   const sourceParseWarningsForFiles = (sourceFiles: UploadedFile[]): string[] => {
     return sourceFiles
-      .filter(file => file.parseMetadata?.parseQuality && file.parseMetadata.parseQuality.quality !== 'good')
-      .flatMap(file => {
+      .map((file, index) => ({ file, sourceLabel: `Document ${String(index + 1).padStart(3, '0')}` }))
+      .filter(({ file }) => file.parseMetadata?.parseQuality && file.parseMetadata.parseQuality.quality !== 'good')
+      .flatMap(({ file, sourceLabel }) => {
         const parseQuality = file.parseMetadata!.parseQuality!;
         const warnings = parseQuality.warnings.length > 0
           ? parseQuality.warnings
           : ['PDF text extraction may be incomplete.'];
-        return warnings.map(warning => `${file.name}: ${warning}`);
+        return warnings.map(warning => `${sourceLabel}: ${warning}`);
       });
   };
 
@@ -927,11 +928,11 @@ const App: React.FC = () => {
     PerformanceMonitor.start('FullAnalysis');
     try {
       const sources: SourceRecord[] = opts?.sourcesOverride ?? (opts?.textOverride !== undefined
-        ? [{ schema_version:'source_record_v1', source_id:'src-001', source_name:opts.label || 'fixture', kind:'text', text:opts.textOverride }]
+        ? [{ schema_version:'source_record_v1', source_id:'src-001', source_name:'Document 001', kind:'text', text:opts.textOverride }]
         : files.map((file,index) => ({
             schema_version:'source_record_v1' as const,
             source_id:`src-${String(index+1).padStart(3,'0')}`,
-            source_name:file.name,
+            source_name:`Document ${String(index+1).padStart(3,'0')}`,
             kind:file.kind || 'text',
             acquisition:file.acquisition,
             visual_units:file.visualUnits?.map(unit => ({
@@ -1006,7 +1007,7 @@ const App: React.FC = () => {
     if (loading) return;
     const fixture = TIER1_FIXTURES.find(f => f.pack_id === packId);
     if (!fixture) return;
-    const source: SourceRecord = { schema_version:'source_record_v1', source_id:'src-001', source_name:fixture.name, kind:'text', text:sanitizeInput(fixture.text) };
+    const source: SourceRecord = { schema_version:'source_record_v1', source_id:'src-001', source_name:'Document 001', kind:'text', text:sanitizeInput(fixture.text) };
     runAnalyze({ sourcesOverride:[source], label: `Tier 1 Fixture — ${fixture.label}` });
   };
 

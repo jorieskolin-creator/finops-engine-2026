@@ -111,6 +111,33 @@ const clone = <T>(value: T): T =>
     ? structuredClone(value)
     : JSON.parse(JSON.stringify(value));
 
+const removeSourceFilenameFields = (
+  value: unknown,
+  stats?: { replacements: number; changed: boolean }
+): void => {
+  if (Array.isArray(value)) {
+    value.forEach(item => removeSourceFilenameFields(item, stats));
+    return;
+  }
+  if (!value || typeof value !== 'object') return;
+  const record = value as Record<string, unknown>;
+  for (const key of ['source_name', 'source_document']) {
+    if (!Object.prototype.hasOwnProperty.call(record, key)) continue;
+    delete record[key];
+    if (stats) {
+      stats.replacements++;
+      stats.changed = true;
+    }
+  }
+  Object.values(record).forEach(child => removeSourceFilenameFields(child, stats));
+};
+
+export const stripSourceFilenameMetadata = (result: DiagnosticResult): DiagnosticResult => {
+  const next = clone(result);
+  removeSourceFilenameFields(next);
+  return next;
+};
+
 const scrubStringDeep = (
   value: unknown,
   options: PrivacyScrubOptions,
@@ -153,6 +180,7 @@ export const scrubDiagnosticResultForPrivacy = (
     scrubbed.potentialNames.forEach(name => stats.potentialNames.add(name));
     if (scrubbed.text !== result.meta.document_analyzed) stats.changed = true;
   }
+  removeSourceFilenameFields(next, stats);
   return {
     result: next,
     changed: stats.changed,

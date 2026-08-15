@@ -41,7 +41,7 @@ const extraction = {
   status: 'PARTIAL',
   warning_count: 1,
   sources: [{
-    source_id: 'src-1', source_name: 'source.pdf', kind: 'pdf', completeness: 80, status: 'PARTIAL',
+    source_id: 'src-1', kind: 'pdf', completeness: 80, status: 'PARTIAL',
     unit: 'page', total_units: 10, processed_units: 8, truncated: true, warning_count: 1, warning_codes: ['TRUNCATED']
   }],
   blocking_reasons: ['src-1: extraction partial (80%)']
@@ -72,8 +72,8 @@ const evidencePaths = [
 ];
 const runTrace = {
   input_manifest: [
-    { source_id: 'src-1', source_name: 'src-1.txt', chunk_ids: ['src-1-c1'] },
-    { source_id: 'src-2', source_name: 'src-2.txt', chunk_ids: ['src-2-c1'] },
+    { source_id: 'src-1', chunk_ids: ['src-1-c1'] },
+    { source_id: 'src-2', chunk_ids: ['src-2-c1'] },
   ],
   evidence_paths: evidencePaths,
   dlp: { blocked: false, caution_hit_count: 1, high_risk_hit_count: 0, scanned_chunk_count: 4 }
@@ -144,8 +144,8 @@ assert.doesNotMatch(JSON.stringify(forgedSnapshot), /FORGED_SOURCE_CANARY/);
 const duplicateNameTrace = {
   ...runTrace,
   input_manifest: [
-    { source_id: 'src-1', source_name: 'duplicate.pdf', chunk_ids: ['src-1-c1'] },
-    { source_id: 'src-2', source_name: 'duplicate.pdf', chunk_ids: ['src-2-c1'] },
+    { source_id: 'src-1', chunk_ids: ['src-1-c1'] },
+    { source_id: 'src-2', chunk_ids: ['src-2-c1'] },
   ],
   evidence_paths: [{ stream: 'maturity', criterion_id: 'A1', source_document: 'duplicate.pdf' }]
 };
@@ -154,6 +154,6 @@ const ambiguousSnapshot = buildAcquisitionQualitySnapshot({ logs: duplicateNameL
 assert.equal(ambiguousSnapshot.evidence.provenance.integrity, 0, 'a duplicate filename alone must remain unresolved');
 const disambiguatedLogs = { maturity: { A1: item('supported', [{ quote: 'disambiguated evidence', source_id: 'src-1', source_document: 'duplicate.pdf', chunk_id: 'src-1-c1', category: 'Policy' }]) }, antipattern: {} };
 const disambiguatedSnapshot = buildAcquisitionQualitySnapshot({ logs: disambiguatedLogs, phase2: { metrics: { evidence_density: 100 } }, sourceRegistry, knowledgeBase, runTrace: { ...duplicateNameTrace, evidence_paths: [{ stream: 'maturity', criterion_id: 'A1', source_id: 'src-1', source_document: 'duplicate.pdf', chunk_id: 'src-1-c1' }] } });
-assert.equal(disambiguatedSnapshot.evidence.provenance.integrity, 100, 'source ID and chunk must disambiguate a duplicate filename');
+assert.equal(disambiguatedSnapshot.evidence.provenance.integrity, 100, 'source ID and chunk must establish provenance without retaining a filename');
 
 console.log('acquisition quality tests passed');

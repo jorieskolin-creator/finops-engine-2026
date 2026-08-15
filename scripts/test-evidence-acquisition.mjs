@@ -74,10 +74,12 @@ assert.ok(tablePrivacy.decision.findings.some(finding => finding.kind === 'cloud
 assert.equal(tablePrivacy.decision.scanned_table_cell_count, 304, 'headers and every full-population cell must be scanned once');
 
 const contactPrivacy = sanitizeEvidenceSources([{
-  schema_version: 'source_record_v1', source_id: 'src-pdf', source_name: 'evidence.pdf', kind: 'pdf',
+  schema_version: 'source_record_v1', source_id: 'src-pdf', source_name: 'Jane Doe - Confidential Strategy.pdf', kind: 'pdf',
   pages: [{ schema_version: 'source_page_v1', page_id: 'p1', page_number: 1, text: 'Owner alice@example.com uses host 10.0.0.1.' }],
 }]);
 assert.equal(contactPrivacy.decision.decision, 'PASS_WITH_REDACTIONS');
+assert.equal(contactPrivacy.sources[0].source_name, 'Document 001', 'the privacy boundary must replace externally supplied filenames with generated labels');
+assert.doesNotMatch(JSON.stringify(contactPrivacy), /Jane Doe - Confidential Strategy\.pdf/);
 assert.equal(contactPrivacy.decision.redaction_count, 2);
 assert.equal(contactPrivacy.sources[0].pages[0].text, 'Owner [EMAIL_REDACTED] uses host [IP_REDACTED].');
 assert.throws(() => assertDeterministicEgressText(['owner alice@example.com']), /DETERMINISTIC_EGRESS_SCAN_FAILED/);

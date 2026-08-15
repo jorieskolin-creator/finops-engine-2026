@@ -220,7 +220,6 @@ const buildExtractionQuality = (records: SourceRecord[]): SourceExtractionQualit
     ];
     return {
       source_id: record.source_id,
-      source_name: record.source_name,
       kind: record.kind,
       completeness,
       status,
@@ -283,10 +282,10 @@ const chunkIdFor = (sourceId: string, index: number, pageNumber?: number): strin
     : `${sourceId}-c${String(index + 1).padStart(3, '0')}`
 );
 
-const inferType = (sourceName: string, text: string, pageNumber?: number): SourceChunk['type'] => {
+const inferType = (kind: SourceRecord['kind'], text: string, pageNumber?: number): SourceChunk['type'] => {
   if (pageNumber) return 'pdf_page';
   if (/\[TABLE_SAMPLE\]|^Format:\s*(CSV|TSV)/im.test(text)) return 'table_profile';
-  if (/^\s*\{[\s\S]*\}\s*$/.test(text) || /\.json$/i.test(sourceName)) return 'metadata';
+  if (/^\s*\{[\s\S]*\}\s*$/.test(text) || kind === 'json') return 'metadata';
   return 'text';
 };
 
@@ -483,7 +482,6 @@ export const buildSourceRegistry = (records: SourceRecord[]): SourceRegistry => 
           chunks.push({
             chunk_id: `${sourceId}-v${String(unitIndex + 1).padStart(3, '0')}-c${String(partIndex + 1).padStart(3, '0')}`,
             source_id: sourceId,
-            source_name: doc.source_name,
             type: 'image',
             text: part.text,
             visual_unit_id: unit.unit_id,
@@ -512,7 +510,6 @@ export const buildSourceRegistry = (records: SourceRecord[]): SourceRegistry => 
         chunks.push({
           chunk_id: chunkIdFor(sourceId, chunkIndex++),
           source_id: sourceId,
-          source_name: doc.source_name,
           type: 'table_profile',
           text: context,
           sheet_name: table.sheet_name,
@@ -524,7 +521,6 @@ export const buildSourceRegistry = (records: SourceRecord[]): SourceRegistry => 
           chunks.push({
             chunk_id: chunkIdFor(sourceId, chunkIndex++),
             source_id: sourceId,
-            source_name: doc.source_name,
             type: 'table_row',
             text: row.text,
             sheet_name: table.sheet_name,
@@ -549,7 +545,6 @@ export const buildSourceRegistry = (records: SourceRecord[]): SourceRegistry => 
         chunks.push({
           chunk_id: chunkId,
           source_id: sourceId,
-          source_name: doc.source_name,
           type: 'table_profile',
           text: page.text,
           char_start: 0,
@@ -562,7 +557,6 @@ export const buildSourceRegistry = (records: SourceRecord[]): SourceRegistry => 
           chunks.push({
             chunk_id: rowChunkId,
             source_id: sourceId,
-            source_name: doc.source_name,
             type: 'table_row',
             text: row.text,
             row_number: row.rowNumber,
@@ -579,8 +573,7 @@ export const buildSourceRegistry = (records: SourceRecord[]): SourceRegistry => 
         chunks.push({
           chunk_id: chunkId,
           source_id: sourceId,
-          source_name: doc.source_name,
-          type: inferType(doc.source_name, chunkText, page.pageNumber),
+          type: inferType(doc.kind, chunkText, page.pageNumber),
           text: chunkText,
           page_id: page.pageNumber ? `${sourceId}-p${String(page.pageNumber).padStart(3, '0')}` : undefined,
           page_number: page.pageNumber,

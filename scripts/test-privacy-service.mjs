@@ -48,14 +48,22 @@ const {
 }
 
 const result = {
-  meta: { engine_version: 'test', timestamp: '2026-05-22', document_analyzed: 'HUS report', model_config: {} },
+  meta: {
+    engine_version: 'test', timestamp: '2026-05-22', document_analyzed: 'HUS report', model_config: {},
+    run_trace: {
+      input_manifest: [{ source_id: 'src-001', source_name: 'Jane Doe - Acme Strategy.pdf' }],
+      evidence_paths: [{ source_id: 'src-001', source_document: 'Jane Doe - Acme Strategy.pdf' }]
+    },
+    acquisition_quality: { extraction: { sources: [{ source_id: 'src-001', source_name: 'Jane Doe - Acme Strategy.pdf' }] } },
+    source_registry: { extraction: { sources: [{ source_id: 'src-001', source_name: 'Jane Doe - Acme Strategy.pdf' }] } }
+  },
   phase_1_audit_logs: {
     maturity: {
       A1: {
         count: 0,
         status: 'NOK',
         evidence: 'Raw quote by Toni Eskolin should remain in audit evidence.',
-        evidence_quotes: [{ quote: 'Raw quote by Toni Eskolin should remain in audit evidence.' }]
+        evidence_quotes: [{ quote: 'Raw quote by Toni Eskolin should remain in audit evidence.', source_document: 'Jane Doe - Acme Strategy.pdf' }]
       }
     },
     antipattern: {}
@@ -82,6 +90,10 @@ assert.notEqual(scrubbed.result.phase_3_strategy.executive_summary, result.phase
 assert.match(scrubbed.result.phase_3_strategy.executive_summary, /\[PERSON_NAME_REDACTED\]/);
 assert.match(scrubbed.result.phase_3_strategy.executive_summary, /\[ORGANIZATION_REDACTED\]/);
 assert.match(scrubbed.result.quality_gate.warnings[0], /\[PERSON_NAME_REDACTED\]/);
+assert.doesNotMatch(JSON.stringify(scrubbed.result), /Jane Doe - Acme Strategy\.pdf/, 'legacy filename metadata must be removed rather than heuristically redacted');
+assert.equal(Object.hasOwn(scrubbed.result.meta.run_trace.input_manifest[0], 'source_name'), false);
+assert.equal(Object.hasOwn(scrubbed.result.meta.run_trace.evidence_paths[0], 'source_document'), false);
+assert.equal(Object.hasOwn(scrubbed.result.phase_1_audit_logs.maturity.A1.evidence_quotes[0], 'source_document'), false);
 assert.equal(
   scrubbed.result.phase_1_audit_logs.maturity.A1.evidence_quotes[0].quote,
   result.phase_1_audit_logs.maturity.A1.evidence_quotes[0].quote,

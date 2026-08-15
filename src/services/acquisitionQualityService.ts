@@ -47,22 +47,14 @@ export const buildAcquisitionQualitySnapshot = (input: {
   runTrace: RunTrace;
 }): AcquisitionQualitySnapshot => {
   const manifestSourceIds = new Set(input.runTrace.input_manifest.map(source => source.source_id));
-  const sourceIdsByName = new Map<string, Set<string>>();
-  for (const source of input.runTrace.input_manifest) {
-    const matches = sourceIdsByName.get(source.source_name) || new Set<string>();
-    matches.add(source.source_id);
-    sourceIdsByName.set(source.source_name, matches);
-  }
   const sourceIdByChunk = new Map(input.runTrace.input_manifest.flatMap(
     source => source.chunk_ids.map(chunkId => [chunkId, source.source_id] as const)
   ));
-  const resolveSource = (attribution: { source_id?: string; source_document?: string; chunk_id?: string }): string | undefined => {
+  const resolveSource = (attribution: { source_id?: string; chunk_id?: string }): string | undefined => {
     if (attribution.source_id && !manifestSourceIds.has(attribution.source_id)) return undefined;
-    if (attribution.source_document && !sourceIdsByName.has(attribution.source_document)) return undefined;
     if (attribution.chunk_id && !sourceIdByChunk.has(attribution.chunk_id)) return undefined;
     const candidateSets = [
       attribution.source_id ? new Set([attribution.source_id]) : undefined,
-      attribution.source_document ? sourceIdsByName.get(attribution.source_document) : undefined,
       attribution.chunk_id ? new Set([sourceIdByChunk.get(attribution.chunk_id)!]) : undefined
     ].filter((value): value is Set<string> => Boolean(value));
     if (candidateSets.length === 0) return undefined;

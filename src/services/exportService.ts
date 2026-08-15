@@ -14,6 +14,7 @@ import { displayQualityGateDiagnostic, isReportableSourceCoverageGap, splitQuali
 import { serializeDiagnosticResultForHtml } from './reportImportService';
 import { computeDomainSignalRows, DomainSignalTone } from './domainSignalService';
 import { buildReportViewModel, MATURITY_SCORE_METHOD_NOTE } from './reportViewModel';
+import { stripSourceFilenameMetadata } from './privacyService';
 
 const BATCHES = Object.keys(BATCH_TITLES);
 const escapeHtml = (s: string): string =>
@@ -238,7 +239,7 @@ const renderAcquisitionQuality = (result: DiagnosticResult): string => {
         ${quality.extraction.sources.length > 0 ? `
         <table class="source-packet-table">
           <thead><tr><th>Source extraction</th><th>Processed</th><th>Completeness</th><th>Warnings</th></tr></thead>
-          <tbody>${quality.extraction.sources.map(source => `<tr><td><strong>${escapeHtml(source.source_id)}</strong><span>${escapeHtml(source.source_name)} · ${escapeHtml(source.kind)}</span></td><td>${source.processed_units}/${source.total_units} ${escapeHtml(source.unit)}(s)</td><td>${source.completeness}% · ${source.status}</td><td>${source.warning_count}${source.warning_codes.length > 0 ? ` · ${source.warning_codes.map(code => escapeHtml(code)).join(', ')}` : ''}</td></tr>`).join('')}</tbody>
+          <tbody>${quality.extraction.sources.map(source => `<tr><td><strong>${escapeHtml(source.source_id)}</strong><span>${escapeHtml(source.kind)}</span></td><td>${source.processed_units}/${source.total_units} ${escapeHtml(source.unit)}(s)</td><td>${source.completeness}% · ${source.status}</td><td>${source.warning_count}${source.warning_codes.length > 0 ? ` · ${source.warning_codes.map(code => escapeHtml(code)).join(', ')}` : ''}</td></tr>`).join('')}</tbody>
         </table>` : ''}
       </div>
       ${blockingReasons.length > 0 ? `<div class="gate-label">Readiness blocking reasons</div><ul class="source-packet-notes">${blockingReasons.map(reason => `<li>${escapeHtml(reason)}</li>`).join('')}</ul>` : ''}
@@ -463,7 +464,7 @@ export const downloadSummaryReport = (result: DiagnosticResult) => {
 };
 
 export const downloadRunTraceJson = (result: DiagnosticResult) => {
-  const trace = result.meta.run_trace;
+  const trace = stripSourceFilenameMetadata(result).meta.run_trace;
   downloadJson(
     trace || { available: false, reason: 'RunTrace was not present on this assessment result.' },
     `FinOps_RunTrace_${new Date().toISOString().split('T')[0]}.json`
@@ -766,7 +767,8 @@ const renderDomainSignalOverview = (result: DiagnosticResult): string => {
   </section>`;
 };
 
-export const generateSummaryReportHtml = (result: DiagnosticResult): string => {
+export const generateSummaryReportHtml = (unsafeResult: DiagnosticResult): string => {
+  const result = stripSourceFilenameMetadata(unsafeResult);
   const m = result.phase_2_validation.metrics;
   const reportView = buildReportViewModel(result);
   const summaryPayload = resultWithoutRunTrace(result);
@@ -995,7 +997,8 @@ export const generateSummaryReportHtml = (result: DiagnosticResult): string => {
 </html>`;
 };
 
-export const generateReportHtml = (result: DiagnosticResult): string => {
+export const generateReportHtml = (unsafeResult: DiagnosticResult): string => {
+  const result = stripSourceFilenameMetadata(unsafeResult);
   const reportView = buildReportViewModel(result);
   const isBlocked = result.quality_gate.decision === 'BLOCK';
   const effectiveBracket = result.phase_3_strategy.effective_bracket ?? result.phase_3_strategy.confidence_bracket;

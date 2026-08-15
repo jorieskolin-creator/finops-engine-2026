@@ -110,7 +110,6 @@ const sourceManifest = (registry: SourceRegistry): SourceManifestTrace[] => {
     const types = Array.from(new Set(chunks.map(c => c.type)));
     return {
       source_id: sourceId,
-      source_name: chunks[0]?.source_name || sourceId,
       source_hash: acquisition?.original_sha256 || hashString(chunks.map(c => `${c.chunk_id}:${c.text}`).join('\n')),
       chunk_count: chunks.length,
       chunk_ids: chunks.map(c => c.chunk_id),
@@ -148,7 +147,6 @@ const evidencePathsFor = (
     source_id: quote.source_id,
     page_id: quote.page_id,
     chunk_id: quote.chunk_id,
-    source_document: quote.source_document,
     page_number: quote.page_number,
     sheet_name: quote.sheet_name,
     row_number: quote.row_number,

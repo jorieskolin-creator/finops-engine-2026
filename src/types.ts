@@ -314,7 +314,6 @@ export interface SourceExtractionQuality {
   warning_count: number;
   sources: Array<{
     source_id: string;
-    source_name: string;
     kind: SourceRecord['kind'];
     completeness: number;
     status: 'COMPLETE' | 'PARTIAL' | 'FAILED';
@@ -660,7 +659,6 @@ export interface SourceChunkRoutingHint {
 export interface SourceChunk {
   chunk_id: string;
   source_id: string;
-  source_name: string;
   type: SourceChunkType;
   text: string;
   page_id?: string;
@@ -1033,7 +1031,6 @@ export interface DerivedAnalyticalEvidence {
 
 export interface SourceManifestTrace {
   source_id: string;
-  source_name: string;
   source_hash: string;
   chunk_count: number;
   chunk_ids: string[];
@@ -1098,7 +1095,6 @@ export interface EvidencePathTrace {
   source_id?: string;
   page_id?: string;
   chunk_id?: string;
-  source_document?: string;
   page_number?: number;
   sheet_name?: string;
   row_number?: number;
