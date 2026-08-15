@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import { AuditItem, DiagnosticResult, QualityGateResult, ConfidenceBracket, FindingsModeOutput, RemediationStep } from '../types';
 import { MarkdownRenderer } from './DashboardComponents';
 import { BATCH_TITLES, MASTER_BINGO_FINOPS } from '../knowledge_base';
-import { METRIC_DESCRIPTIONS } from '../constants';
 import { SVG_CSS, svgGaugeCard, svgRadar, svgScatter } from '../services/svgChartService';
 import {
   displayPlanningDecisionRationale,
@@ -589,12 +588,8 @@ interface ReportViewProps {
 export const ReportView: React.FC<ReportViewProps> = ({ result, onBack, onDownloadSummary, onDownloadMaster, onDownloadTrace }) => {
   const m = result.phase_2_validation.metrics;
   const reportView = buildReportViewModel(result);
-  const cwrClass = result.phase_2_validation.crawl_walk_run;
   const isBlocked = result.quality_gate.decision === 'BLOCK';
   const isInsufficientEvidence = isBlocked || m.evidence_density < 30 || m.antipattern_coverage < 60;
-  const readinessDescription = m.readiness_cap_reason || METRIC_DESCRIPTIONS.finops_readiness;
-  const capabilityAttainment = m.capability_attainment ?? m.maturity_ratio ?? 0;
-  const antipatternControl = m.antipattern_control ?? m.antipattern_clearance ?? 0;
   const gauges = reportView.metrics;
 
   return (
@@ -639,51 +634,6 @@ export const ReportView: React.FC<ReportViewProps> = ({ result, onBack, onDownlo
           effective={result.phase_3_strategy.effective_bracket ?? result.phase_3_strategy.confidence_bracket}
         />
         <EvidenceCheckSummaryBlock result={result} />
-
-        <div className="mb-12 p-8 bg-slate-50 rounded-2xl border border-slate-200">
-          <div className="flex items-center gap-4 mb-6">
-            <span className={`px-4 py-2 rounded-lg font-bold text-sm ${isBlocked || cwrClass.includes('Insufficient') || cwrClass.includes('Crawl') ? 'bg-rose-100 text-rose-700' : cwrClass.includes('Run') ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
-              {isBlocked ? 'Assessment Blocked' : cwrClass}
-            </span>
-            <span className="text-slate-400">|</span>
-            <span className="text-sm font-mono text-slate-500">
-              {isBlocked ? `Observed maturity band ${cwrClass} · ` : ''}Delivery {m.delivery_integrity}% · Evidence {m.evidence_density}%
-            </span>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div>
-              <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">FinOps Maturity Score</p>
-              <p className={`text-3xl font-bold ${isBlocked ? 'text-rose-600' : 'text-emerald-600'}`}>{Math.round(m.finops_readiness)}%</p>
-              <p className="text-xs text-slate-500 mt-1 leading-snug">{readinessDescription}</p>
-            </div>
-            <div>
-              <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Capability Attainment</p>
-              <p className="text-3xl font-bold text-teal-600">{Math.round(capabilityAttainment)}%</p>
-              <p className="text-xs text-slate-500 mt-1 leading-snug">Verified 3/3 capabilities earn one point, 2/3 earns half, and lower or unverified results earn zero.</p>
-            </div>
-            <div>
-              <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Anti-Pattern Burden</p>
-              <p className="text-3xl font-bold text-rose-600">{Math.round(m.antipattern_burden)}%</p>
-              <p className="text-xs text-slate-500 mt-1 leading-snug">{METRIC_DESCRIPTIONS.antipattern_burden}</p>
-            </div>
-            <div>
-              <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Anti-Pattern Control</p>
-              <p className="text-3xl font-bold text-emerald-600">{Math.round(antipatternControl)}%</p>
-              <p className="text-xs text-slate-500 mt-1 leading-snug">Tested absence earns one point; unknown absence earns zero and remains an evidence question.</p>
-            </div>
-            <div>
-              <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Anti-Pattern Coverage</p>
-              <p className="text-3xl font-bold text-slate-600">{Math.round(m.antipattern_coverage)}%</p>
-              <p className="text-xs text-slate-500 mt-1 leading-snug">{METRIC_DESCRIPTIONS.antipattern_coverage}</p>
-            </div>
-            <div>
-              <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Maturity Ratio</p>
-              <p className="text-3xl font-bold text-violet-600">{Math.round(m.maturity_ratio)}%</p>
-              <p className="text-xs text-slate-500 mt-1 leading-snug">{METRIC_DESCRIPTIONS.maturity_ratio}</p>
-            </div>
-          </div>
-        </div>
 
         <div className="mb-12">
           <h2 className="text-2xl font-display font-bold text-slate-900 mb-6 pb-3 border-b border-slate-200">Assessment Metrics</h2>

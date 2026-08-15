@@ -854,8 +854,8 @@ export const generateSummaryReportHtml = (unsafeResult: DiagnosticResult): strin
     .summary-prose p:last-child, .summary-paragraph:last-child { margin-bottom: 0; }
     .summary-prose strong { color: #0f172a; }
     .summary-prose em { color: #047857; font-style: normal; font-weight: 700; }
-    .gauge-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1.25rem; align-items: stretch; }
-    .gauge-grid > .gauge-large { grid-column: span 2; }
+    .gauge-grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 1.25rem; align-items: stretch; }
+    .gauge-grid > .gauge-large { grid-column: span 1; }
     .gauge-denominator { color: #334155; font-size: 0.76rem; font-weight: 700; margin-top: 8px; }
     .metric-method-note { margin: 14px 0 0; padding: 14px 16px; background: #f1f5f9; border-left: 4px solid #059669; border-radius: 10px; color: #475569; font-size: 0.86rem; }
     .chart-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 18px; }
@@ -956,6 +956,7 @@ export const generateSummaryReportHtml = (unsafeResult: DiagnosticResult): strin
       .actionability { grid-template-columns: 1fr; }
       .actionability-facts { grid-column: 1; }
       .disposition-grid { grid-template-columns: repeat(2, minmax(100px, 1fr)); }
+      .gauge-grid { grid-template-columns: 1fr; }
       .gauge-grid > .gauge-large { grid-column: span 1; }
       .compact-heatmap-row { grid-template-columns: 1fr; }
       .compact-heatmap-cells { grid-template-columns: repeat(2, minmax(120px, 1fr)); }
@@ -1057,8 +1058,8 @@ export const generateReportHtml = (unsafeResult: DiagnosticResult): string => {
     .metric-value.rose { color: #e11d48; }
     .metric-value.violet { color: #7c3aed; }
     .metric-desc { font-size: 0.8rem; color: #64748b; margin-top: 0.5rem; line-height: 1.45; }
-    .gauge-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 1.25rem; margin: 1.5rem 0 2rem; align-items: stretch; }
-    .gauge-grid > .gauge-large { grid-column: span 2; }
+    .gauge-grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 1.25rem; margin: 1.5rem 0 2rem; align-items: stretch; }
+    .gauge-grid > .gauge-large { grid-column: span 1; }
     .gauge-denominator { color: #334155; font-size: 0.76rem; font-weight: 700; margin-top: 0.5rem; }
     .metric-method-note { margin: 0 0 2rem; padding: 0.9rem 1rem; background: #f1f5f9; border-left: 4px solid #059669; border-radius: 0.65rem; color: #475569; font-size: 0.85rem; }
     .actionability { display: grid; grid-template-columns: minmax(160px, 0.35fr) 1fr; gap: 1rem 1.5rem; align-items: center; background: #fff; border: 1px solid #e2e8f0; border-left: 5px solid #94a3b8; border-radius: 1rem; padding: 1.4rem; margin: 1.5rem 0 2rem; }
@@ -1235,6 +1236,7 @@ export const generateReportHtml = (unsafeResult: DiagnosticResult): string => {
       .actionability { grid-template-columns: 1fr; }
       .actionability-facts { grid-column: 1; }
       .disposition-grid { grid-template-columns: repeat(2, minmax(100px, 1fr)); }
+      .gauge-grid { grid-template-columns: 1fr; }
       .compact-heatmap-row { grid-template-columns: 1fr; }
       .compact-heatmap-cells { grid-template-columns: repeat(2, minmax(120px, 1fr)); }
     }

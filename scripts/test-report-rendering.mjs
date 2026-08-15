@@ -72,8 +72,8 @@ assert.match(reportViewSource, />How</, 'React report should preserve action bul
 assert.match(reportViewSource, /DomainSignalOverview/, 'React report should render the domain signal overview');
 assert.match(reportViewSource, /Maturity signal/, 'React report should label maturity traffic lights');
 assert.match(reportViewSource, /Anti-pattern finding rate/, 'React report should label anti-pattern traffic lights');
-assert.match(reportViewSource, /Assessment Blocked/, 'React report should show actionability as the primary status when blocked');
-assert.match(reportViewSource, /Observed maturity band/, 'React report should preserve the maturity band as secondary context when blocked');
+assert.doesNotMatch(reportViewSource, /FinOps Maturity Score/, 'React summary should not duplicate the score-detail panel');
+assert.doesNotMatch(reportViewSource, /Capability Attainment/, 'React summary should not duplicate calculated score components');
 
 const dashboardSource = await readFile(new URL('../src/components/DashboardComponents.tsx', import.meta.url), 'utf8');
 assert.match(dashboardSource, />Why</, 'Dashboard roadmap should render WHY context');
@@ -98,6 +98,7 @@ assert.doesNotMatch(exportSource, /Evidence summary for the/, 'HTML exports shou
 assert.match(exportSource, /Candidate inclusion measures/, 'Master Data should distinguish retrieval candidate inclusion from evidence sufficiency');
 assert.match(exportSource, /How the maturity score is measured/, 'HTML exports should explain the conservative full-framework maturity score');
 assert.match(exportSource, /Assessment BLOCKED/, 'HTML exports should show blocked actionability ahead of maturity classification');
+assert.equal((exportSource.match(/grid-template-columns: repeat\(5, minmax\(0, 1fr\)\)/g) || []).length, 2, 'both HTML reports should keep all five gauges on one desktop row');
 assert.match(exportSource, /renderScoreEvidenceGaps\(result, 8\)/, 'Summary Report should show a bounded set of deterministic evidence questions');
 assert.match(exportSource, /renderScoreEvidenceGaps\(result\)/, 'Master Data should show all deterministic evidence questions');
 assert.match(exportSource, /Evidence sufficiency/, 'context packet tables should distinguish evidence sufficiency from candidate inclusion');
