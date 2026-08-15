@@ -230,25 +230,36 @@ export const runPhase1Audit = async (
             batch: batchId,
             criteria_count: needsRescan.length,
           });
-          const rescanResult = await runTargetedRescan(batchId, packetInput.text, packetInput.images, ctx, needsRescan);
-          if (rescanResult.model_used) {
-            targetedRescanModelsSeen.add(rescanResult.model_used);
-            serverLog(ctx.runId, 'info', 'targeted_rescan_model_used', {
+          try {
+            const rescanResult = await runTargetedRescan(batchId, packetInput.text, packetInput.images, ctx, needsRescan);
+            if (rescanResult.model_used) {
+              targetedRescanModelsSeen.add(rescanResult.model_used);
+              serverLog(ctx.runId, 'info', 'targeted_rescan_model_used', {
+                batch: batchId,
+                model: rescanResult.model_used,
+                criteria_count: needsRescan.length,
+              });
+            }
+            const rescannedBatchResult = mergeBatchResult(batchResult, rescanResult) as BatchAuditResult & { model_used?: string };
+            const rescannedEvidenceCheck = await runEvidenceCheck(batchId, rescannedBatchResult, packetInput.text, packetInput.images, ctx);
+            batchResult = rescannedBatchResult;
+            evidenceCheck = rescannedEvidenceCheck;
+            needsRescan.forEach(i => {
+              const key = `${i.stream}.${i.id}`;
+              rescannedKeys.add(key);
+              preRescanCounts.set(key, i.original_count);
+            });
+
+            if (evidenceCheck.model_used) evidenceModelsSeen.add(evidenceCheck.model_used);
+            if (evidenceCheck.adjudication_model_used) evidenceAdjudicationModelsSeen.add(evidenceCheck.adjudication_model_used);
+          } catch (error) {
+            serverLog(ctx.runId, 'warn', 'targeted_rescan_unavailable', {
               batch: batchId,
-              model: rescanResult.model_used,
               criteria_count: needsRescan.length,
+              error_code: batchFailureCode(error),
+              fallback: 'verified_downgrades',
             });
           }
-          batchResult = mergeBatchResult(batchResult, rescanResult) as BatchAuditResult & { model_used?: string };
-          needsRescan.forEach(i => {
-            const key = `${i.stream}.${i.id}`;
-            rescannedKeys.add(key);
-            preRescanCounts.set(key, i.original_count);
-          });
-
-          evidenceCheck = await runEvidenceCheck(batchId, batchResult, packetInput.text, packetInput.images, ctx);
-          if (evidenceCheck.model_used) evidenceModelsSeen.add(evidenceCheck.model_used);
-          if (evidenceCheck.adjudication_model_used) evidenceAdjudicationModelsSeen.add(evidenceCheck.adjudication_model_used);
         }
 
         if (evidenceCheck.items.length > 0) {

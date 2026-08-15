@@ -28,6 +28,7 @@ assert.doesNotMatch(exportedReport, /Model routing mode:|Models:|Model mode /);
 assert.match(orchestrator, /onProgress\(0, totalBatches\)/, 'parallel domain work must be announced before batches settle');
 assert.match(orchestrator, /onProgress\(completedCount, totalBatches, batchId\)/, 'domain completion must use actual settled batches');
 assert.match(orchestrator, /unavailableEvidenceCheck\(batchId, errorCode\)/, 'failed domains must produce explicit unavailable evidence decisions');
+assert.match(orchestrator, /catch \(error\) \{[\s\S]*?'targeted_rescan_unavailable'[\s\S]*?fallback: 'verified_downgrades'/, 'an unavailable targeted rescan must retain conservative verifier downgrades instead of failing the domain');
 const integrityGatePosition = analysis.indexOf('validatePreSynthesisIntegrity(');
 const calculationPosition = analysis.indexOf('const validationData = calculateMetrics');
 const synthesisPosition = analysis.indexOf("emitProgress({ stage: 'synthesis', status: 'in_progress' })");

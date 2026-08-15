@@ -31,6 +31,9 @@ assert.deepEqual(filterOperationalMetadata('source_packet_used', {
 assert.deepEqual(filterOperationalMetadata('finding_provenance_adjusted', {
   domains: 'A,C', criteria_count: 2, removed_quotes: 3, quote_text: 'private source content',
 }), { domains: 'A,C', criteria_count: 2, removed_quotes: 3 });
+assert.deepEqual(filterOperationalMetadata('targeted_rescan_unavailable', {
+  batch: 'C', criteria_count: 5, error_code: 'DEPENDENCY_UNCERTAINTY', fallback: 'verified_downgrades', error: 'private source content',
+}), { batch: 'C', criteria_count: 5, error_code: 'DEPENDENCY_UNCERTAINTY', fallback: 'verified_downgrades' });
 assert.equal(safeOperationalIdentifier('gpt-5.2/model:v1'), 'gpt-5.2/model:v1');
 assert.equal(safeOperationalIdentifier('private.pdf'), '?');
 assert.equal(safeOperationalIdentifier('private.pdf\nsource contents'), '?');
