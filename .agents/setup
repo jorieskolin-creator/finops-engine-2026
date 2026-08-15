@@ -4,6 +4,28 @@ set -euo pipefail
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$repo_root"
 
+step() {
+  echo
+  echo "[setup] $1"
+  SECONDS=0
+}
+
+done_step() {
+  echo "[setup] Completed in ${SECONDS}s"
+}
+
+step "Installing PostgreSQL and Redis when missing"
+packages=()
+dpkg-query -W -f='${Status}' postgresql 2>/dev/null | grep -Fq 'install ok installed' || packages+=(postgresql)
+dpkg-query -W -f='${Status}' redis-server 2>/dev/null | grep -Fq 'install ok installed' || packages+=(redis-server)
+if ((${#packages[@]})); then
+  sudo apt-get update
+  sudo DEBIAN_FRONTEND=noninteractive apt-get install -y "${packages[@]}"
+else
+  echo "[setup] System packages are already installed"
+fi
+done_step
+
 echo "[setup] Checking Node.js toolchain"
 command -v node >/dev/null 2>&1 || {
   echo "[setup] Node.js is required but was not found" >&2
@@ -15,8 +37,22 @@ command -v npm >/dev/null 2>&1 || {
 }
 node -e 'const major = Number(process.versions.node.split(".")[0]); if (major < 18) { console.error(`[setup] Node.js >=18 is required; found ${process.version}`); process.exit(1) }'
 
-echo "[setup] Installing locked npm dependencies"
+step "Installing locked npm dependencies"
 npm ci --no-audit --no-fund
+done_step
+
+step "Preparing local PostgreSQL and Redis"
+sudo service postgresql start
+sudo service redis-server start
+
+if ! sudo -u postgres psql -tAc "SELECT 1 FROM pg_roles WHERE rolname='finops'" | grep -Fqx 1; then
+  sudo -u postgres createuser finops
+fi
+sudo -u postgres psql -v ON_ERROR_STOP=1 -c "ALTER ROLE finops WITH LOGIN PASSWORD 'finops';" >/dev/null
+if ! sudo -u postgres psql -tAc "SELECT 1 FROM pg_database WHERE datname='finops_dev'" | grep -Fqx 1; then
+  sudo -u postgres createdb --owner=finops finops_dev
+fi
+done_step
 
 if [[ ! -f .env.local ]]; then
   echo "[setup] Creating .env.local from .env.example"
@@ -24,6 +60,15 @@ if [[ ! -f .env.local ]]; then
 else
   echo "[setup] Preserving existing .env.local"
 fi
+
+sed -i \
+  -e 's|^DATABASE_URL=$|DATABASE_URL=postgresql://finops:finops@localhost:5432/finops_dev|' \
+  -e 's|^REDIS_URL=$|REDIS_URL=redis://localhost:6379|' \
+  .env.local
+
+step "Applying database migrations"
+DATABASE_URL=postgresql://finops:finops@localhost:5432/finops_dev npm run migrate
+done_step
 
 echo "[setup] Complete (Node $(node --version), npm $(npm --version))"
 echo "[setup] Add local credentials to .env.local before running provider-backed assessments"
