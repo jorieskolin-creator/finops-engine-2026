@@ -2,12 +2,18 @@
 import { AuditItem, DiagnosticResult, QualityGateResult } from '../types';
 import { BATCH_TITLES, MASTER_BINGO_FINOPS } from '../knowledge_base';
 import { SVG_CSS, svgGaugeCard } from './svgChartService';
-import { isInsufficientEvidenceReport, renderInlineMarkdownHtml, strengthsSectionTitle } from './reportTextService';
+import {
+  displayPlanningDecisionRationale,
+  displaySourceCoverageWarning,
+  isInsufficientEvidenceReport,
+  renderInlineMarkdownHtml,
+  strengthsSectionTitle
+} from './reportTextService';
 import { antiPatternStatusLabel, inferAntiPatternAbsenceStatus } from './antiPatternSemantics';
 import { displayQualityGateDiagnostic, isReportableSourceCoverageGap, splitQualityGateDiagnostics } from './reportDiagnosticsService';
 import { serializeDiagnosticResultForHtml } from './reportImportService';
 import { computeDomainSignalRows, DomainSignalTone } from './domainSignalService';
-import { buildReportViewModel } from './reportViewModel';
+import { buildReportViewModel, MATURITY_SCORE_METHOD_NOTE } from './reportViewModel';
 
 const BATCHES = Object.keys(BATCH_TITLES);
 const escapeHtml = (s: string): string =>
@@ -153,7 +159,7 @@ const renderSourceRegistryPacketSummary = (result: DiagnosticResult): string => 
   <section class="source-packet-section">
     <h2>Source Registry &amp; Context Packets</h2>
     <div class="source-packet-card">
-      <p class="source-packet-note">This snapshot shows how parsed source material was chunked, sampled for DLP review, and routed into A-F context packets before model audit. Packetization controls attention, not truth: findings still require verified source evidence.</p>
+      <p class="source-packet-note">This snapshot shows how parsed source material was chunked, sampled for DLP review, and routed into A-F context packets before model audit. Included/candidate ratios measure retrieval candidate inclusion, not evidence coverage. A packet can include every routed candidate and still have weak substantive evidence. Findings still require verified source evidence.</p>
       <div class="source-packet-tables">
         <table class="source-packet-table source-packet-metrics-table">
           <thead><tr><th>Metric</th><th>Value</th></tr></thead>
@@ -163,7 +169,7 @@ const renderSourceRegistryPacketSummary = (result: DiagnosticResult): string => 
         </table>
         ${packetRows.length > 0 ? `
         <table class="source-packet-table">
-          <thead><tr><th>Packet</th><th>Included chunks</th><th>Candidate chunks</th><th>Coverage</th><th>Characters</th></tr></thead>
+          <thead><tr><th>Packet</th><th>Included chunks</th><th>Candidate chunks</th><th>Evidence sufficiency</th><th>Characters</th></tr></thead>
           <tbody>
             ${packetRows.map(row => `
               <tr>
@@ -570,6 +576,11 @@ const renderSummaryDiagnosis = (result: DiagnosticResult): string => {
 const renderSummaryPlanningDecision = (result: DiagnosticResult): string => {
   const decision = result.phase_3_strategy.planning_decision;
   if (!decision) return '';
+  const rationale = displayPlanningDecisionRationale(
+    decision.rationale || '',
+    result.quality_gate.decision,
+    result.quality_gate.evidence_check?.failed
+  );
   return `
     <section class="summary-section">
       <h2>Planning Decision</h2>
@@ -578,7 +589,7 @@ const renderSummaryPlanningDecision = (result: DiagnosticResult): string => {
           <span>Decision</span>
           <strong>${escapeHtml(String(decision.decision || '').replace('_', ' '))}</strong>
         </div>
-        <p>${escapeHtml(decision.rationale || '')}</p>
+        <p>${escapeHtml(rationale)}</p>
         <div class="two-col">
           <div>
             <h3>Safe to act on</h3>
@@ -768,7 +779,7 @@ export const generateSummaryReportHtml = (result: DiagnosticResult): string => {
       : 'Built-in KB fallback'
     : '';
   const sourceNote = (result.meta.source_parse_warnings?.length ?? 0) > 0
-    ? `<p class="source-note">Source parse note: ${escapeHtml(result.meta.source_parse_warnings![0])}${result.meta.source_parse_warnings!.length > 1 ? ` (+${result.meta.source_parse_warnings!.length - 1} more)` : ''}</p>`
+    ? `<p class="source-note">Source coverage note: ${escapeHtml(displaySourceCoverageWarning(result.meta.source_parse_warnings![0]))}${result.meta.source_parse_warnings!.length > 1 ? ` (+${result.meta.source_parse_warnings!.length - 1} more)` : ''}</p>`
     : '';
   const traceNote = result.meta.run_trace_summary
     ? `<p class="trace-note">RunTrace available in the Master Data report and as a separate JSON download: ${result.meta.run_trace_summary.stage_count} model stage(s), ${result.meta.run_trace_summary.evidence_path_count} evidence path(s), ${result.meta.run_trace_summary.score_path_count} score path(s).</p>`
@@ -828,6 +839,7 @@ export const generateSummaryReportHtml = (result: DiagnosticResult): string => {
     .gauge-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1.25rem; align-items: stretch; }
     .gauge-grid > .gauge-large { grid-column: span 2; }
     .gauge-denominator { color: #334155; font-size: 0.76rem; font-weight: 700; margin-top: 8px; }
+    .metric-method-note { margin: 14px 0 0; padding: 14px 16px; background: #f1f5f9; border-left: 4px solid #059669; border-radius: 10px; color: #475569; font-size: 0.86rem; }
     .chart-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 18px; }
     .chart-desc { color: #64748b; font-size: 0.88rem; margin: 0 0 12px; }
     .two-col { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 18px; }
@@ -961,6 +973,7 @@ export const generateSummaryReportHtml = (result: DiagnosticResult): string => {
       <div class="gauge-grid">
         ${gauges.map(g => svgGaugeCard(g)).join('')}
       </div>
+      <p class="metric-method-note"><strong>How the maturity score is measured:</strong> ${escapeHtml(MATURITY_SCORE_METHOD_NOTE)}</p>
     </section>
 
     ${renderDomainSignalOverview(result)}
@@ -1026,6 +1039,7 @@ export const generateReportHtml = (result: DiagnosticResult): string => {
     .gauge-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 1.25rem; margin: 1.5rem 0 2rem; align-items: stretch; }
     .gauge-grid > .gauge-large { grid-column: span 2; }
     .gauge-denominator { color: #334155; font-size: 0.76rem; font-weight: 700; margin-top: 0.5rem; }
+    .metric-method-note { margin: 0 0 2rem; padding: 0.9rem 1rem; background: #f1f5f9; border-left: 4px solid #059669; border-radius: 0.65rem; color: #475569; font-size: 0.85rem; }
     .actionability { display: grid; grid-template-columns: minmax(160px, 0.35fr) 1fr; gap: 1rem 1.5rem; align-items: center; background: #fff; border: 1px solid #e2e8f0; border-left: 5px solid #94a3b8; border-radius: 1rem; padding: 1.4rem; margin: 1.5rem 0 2rem; }
     .actionability-go { border-left-color: #10b981; }
     .actionability-warn { border-left-color: #f59e0b; }
@@ -1217,7 +1231,7 @@ export const generateReportHtml = (result: DiagnosticResult): string => {
     ${result.meta.knowledge_base ? `<p>Knowledge Base: ${result.meta.knowledge_base.source === 'remote_blob'
       ? `Remote PDF KB loaded (${escapeHtml(String(result.meta.knowledge_base.document_count))} PDFs${result.meta.knowledge_base.failure_count ? `, ${escapeHtml(String(result.meta.knowledge_base.failure_count))} issue(s)` : ''})`
       : 'Built-in KB fallback'}</p>` : ''}
-    ${(result.meta.source_parse_warnings?.length ?? 0) > 0 ? `<p>Source parse note: ${escapeHtml(result.meta.source_parse_warnings![0])}${result.meta.source_parse_warnings!.length > 1 ? ` (+${result.meta.source_parse_warnings!.length - 1} more)` : ''}</p>` : ''}
+    ${(result.meta.source_parse_warnings?.length ?? 0) > 0 ? `<p>Source coverage note: ${escapeHtml(displaySourceCoverageWarning(result.meta.source_parse_warnings![0]))}${result.meta.source_parse_warnings!.length > 1 ? ` (+${result.meta.source_parse_warnings!.length - 1} more)` : ''}</p>` : ''}
   </div>
 
   ${renderActionability(result)}
@@ -1226,6 +1240,7 @@ export const generateReportHtml = (result: DiagnosticResult): string => {
   <div class="gauge-grid">
     ${gauges.map(g => svgGaugeCard(g)).join('')}
   </div>
+  <p class="metric-method-note"><strong>How the maturity score is measured:</strong> ${escapeHtml(MATURITY_SCORE_METHOD_NOTE)}</p>
 
   ${renderDomainSignalOverview(result)}
   ${renderAssessmentHeatmapSummary(result)}

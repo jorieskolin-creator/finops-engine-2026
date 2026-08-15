@@ -29,6 +29,9 @@ export interface ReportViewModel {
   };
 }
 
+export const MATURITY_SCORE_METHOD_NOTE =
+  'The FinOps Maturity Score is conservative and input-bound: all 30 maturity criteria across domains A–F remain in the denominator, and capabilities not demonstrated by the supplied material contribute zero rather than being removed. Maturity Depth shows verified maturity points across the full 90-point framework. The Maturity Score then adjusts that depth for anti-pattern burden, tested-absence clearance when coverage is sufficient, and any evidence-density cap.';
+
 const percent = (numerator: number, denominator: number): number =>
   denominator > 0 ? Math.round((numerator / denominator) * 100) : 0;
 
@@ -50,23 +53,16 @@ export const buildReportViewModel = (result: DiagnosticResult): ReportViewModel 
   let partial = 0;
   let testedAbsent = 0;
   let notAssessed = 0;
-  let assessedBurdenPoints = 0;
-  let assessedCount = 0;
 
   for (const criterion of FINOPS_ANTIPATTERNS) {
     const item = result.phase_1_audit_logs.antipattern[criterion.id];
     const status = inferAntiPatternAbsenceStatus(item);
     if (status === 'confirmed_present') {
       confirmed++;
-      assessedCount++;
-      assessedBurdenPoints += Math.max(item?.count || 0, 3);
     } else if (status === 'partially_present') {
       partial++;
-      assessedCount++;
-      assessedBurdenPoints += Math.max(item?.count || 0, 1);
     } else if (status === 'tested_absent') {
       testedAbsent++;
-      assessedCount++;
     } else {
       if (!unresolvedAntiPatternIds.has(criterion.id)) notAssessed++;
     }
@@ -112,21 +108,19 @@ export const buildReportViewModel = (result: DiagnosticResult): ReportViewModel 
       },
       {
         value: result.phase_2_validation.metrics.maturity_depth,
-        label: 'Observed Maturity',
-        description: 'Verified maturity points demonstrated across the complete FinOps assessment framework.',
+        label: 'Maturity Depth',
+        description: 'Verified maturity points demonstrated across the complete 90-point FinOps framework.',
         denominator: `${result.phase_2_validation.raw_counts.maturity_sub_criteria_met} of ${maturityTotal * 3} maturity points`,
         trend: 'positive',
         color: '#0891b2',
       },
       {
-        value: percent(assessedBurdenPoints, assessedCount * 3),
-        label: 'Observed Friction',
-        description: 'Anti-pattern severity on the meaningfully assessed surface. Unassessed criteria are not treated as healthy.',
-        denominator: assessedCount > 0
-          ? `${assessedBurdenPoints} of ${assessedCount * 3} possible points across ${assessedCount} assessed criteria`
-          : 'No anti-pattern criteria were sufficiently assessed',
-        trend: 'negative',
-        color: '#e11d48',
+        value: result.phase_2_validation.metrics.finops_readiness,
+        label: 'FinOps Maturity Score',
+        description: 'Evidence-gated maturity based on the complete A–F framework and only the capabilities demonstrated by the supplied material.',
+        denominator: `${Math.round(result.phase_2_validation.metrics.finops_readiness)} of 100 · unproven capabilities remain zero`,
+        trend: 'positive',
+        color: '#059669',
       },
     ],
     antipatternDisposition: {

@@ -4,11 +4,17 @@ import { MarkdownRenderer } from './DashboardComponents';
 import { BATCH_TITLES, MASTER_BINGO_FINOPS } from '../knowledge_base';
 import { METRIC_DESCRIPTIONS } from '../constants';
 import { SVG_CSS, svgGaugeCard, svgRadar, svgScatter } from '../services/svgChartService';
-import { isInsufficientEvidenceReport, renderInlineMarkdownHtml, strengthsSectionTitle } from '../services/reportTextService';
+import {
+  displayPlanningDecisionRationale,
+  displaySourceCoverageWarning,
+  isInsufficientEvidenceReport,
+  renderInlineMarkdownHtml,
+  strengthsSectionTitle
+} from '../services/reportTextService';
 import { antiPatternStatusLabel, inferAntiPatternAbsenceStatus } from '../services/antiPatternSemantics';
 import { displayQualityGateDiagnostic, isReportableSourceCoverageGap, splitQualityGateDiagnostics } from '../services/reportDiagnosticsService';
 import { computeDomainSignalRows, DomainSignalTone } from '../services/domainSignalService';
-import { buildReportViewModel } from '../services/reportViewModel';
+import { buildReportViewModel, MATURITY_SCORE_METHOD_NOTE } from '../services/reportViewModel';
 
 const InlineSvg: React.FC<{ html: string; className?: string }> = ({ html, className }) => (
   <div className={className} dangerouslySetInnerHTML={{ __html: html }} />
@@ -620,7 +626,7 @@ export const ReportView: React.FC<ReportViewProps> = ({ result, onBack, onDownlo
           <p className="text-slate-500">Generated: {result.meta.timestamp} | Engine: {result.meta.engine_version}</p>
           {(result.meta.source_parse_warnings?.length ?? 0) > 0 && (
             <p className="text-xs text-amber-700 mt-2">
-              Source parse note: {result.meta.source_parse_warnings![0]}
+              Source coverage note: {displaySourceCoverageWarning(result.meta.source_parse_warnings![0])}
               {result.meta.source_parse_warnings!.length > 1 ? ` (+${result.meta.source_parse_warnings!.length - 1} more)` : ''}
             </p>
           )}
@@ -645,7 +651,7 @@ export const ReportView: React.FC<ReportViewProps> = ({ result, onBack, onDownlo
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
-              <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Evidence-Gated Readiness</p>
+              <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">FinOps Maturity Score</p>
               <p className={`text-3xl font-bold ${isBlocked ? 'text-rose-600' : 'text-emerald-600'}`}>{Math.round(m.finops_readiness)}%</p>
               <p className="text-xs text-slate-500 mt-1 leading-snug">{readinessDescription}</p>
             </div>
@@ -688,6 +694,9 @@ export const ReportView: React.FC<ReportViewProps> = ({ result, onBack, onDownlo
               />
             ))}
           </div>
+          <p className="mt-4 p-4 bg-slate-100 border-l-4 border-emerald-600 rounded-lg text-sm text-slate-600">
+            <strong className="text-slate-800">How the maturity score is measured:</strong> {MATURITY_SCORE_METHOD_NOTE}
+          </p>
         </div>
 
         <div className="mb-12">
@@ -838,7 +847,11 @@ export const ReportView: React.FC<ReportViewProps> = ({ result, onBack, onDownlo
           return (
             <div className={`mb-12 p-6 rounded-xl border ${palette}`}>
               <h2 className="text-2xl font-display font-bold mb-2">Planning Decision: {decision.decision?.replace('_', ' ')}</h2>
-              <p className="text-sm mb-5 opacity-90">{decision.rationale}</p>
+              <p className="text-sm mb-5 opacity-90">{displayPlanningDecisionRationale(
+                decision.rationale || '',
+                result.quality_gate.decision,
+                result.quality_gate.evidence_check?.failed
+              )}</p>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
                   <p className="text-xs font-bold uppercase tracking-widest mb-2 opacity-80">Safe to act on</p>

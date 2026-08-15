@@ -17,6 +17,30 @@ export const isInsufficientEvidenceReport = (
 export const strengthsSectionTitle = (isInsufficientEvidence: boolean): string =>
   isInsufficientEvidence ? sourceObservationLabel : confirmedStrengthsLabel;
 
+export const displaySourceCoverageWarning = (warning: string): string => {
+  const match = warning.match(
+    /^Source packet ([A-F]) has incomplete deterministic routing coverage \((\d+)\/(\d+) relevant chunks\); no broad-source fallback was used\.$/
+  );
+  if (!match) return warning;
+  const [, domain, included, candidates] = match;
+  return `Source packet ${domain} included ${included}/${candidates} routed candidate chunks, but the available material did not provide sufficient domain evidence. No broad-source fallback was used.`;
+};
+
+export const displayPlanningDecisionRationale = (
+  rationale: string,
+  qualityGateDecision?: QualityGateDecision,
+  evidenceCheckFailed?: boolean
+): string => {
+  if (
+    qualityGateDecision === 'BLOCK'
+    && evidenceCheckFailed === false
+    && rationale === 'Required validation did not complete or the quality gate blocked actionability. Preserve the diagnostic findings, but do not execute recommendations until the blocking reasons are resolved.'
+  ) {
+    return 'Validation completed, but the Quality Gate blocked actionability. Preserve the diagnostic findings, but do not execute recommendations until the blocking reasons are resolved.';
+  }
+  return rationale;
+};
+
 const escapeHtml = (s: string): string =>
   s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 

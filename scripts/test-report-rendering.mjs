@@ -22,6 +22,8 @@ try {
 
   const {
     isInsufficientEvidenceReport,
+    displayPlanningDecisionRationale,
+    displaySourceCoverageWarning,
     renderInlineMarkdownHtml,
     renderMarkdownSummaryHtml,
     strengthsSectionTitle,
@@ -31,6 +33,18 @@ try {
   assert.equal(strengthsSectionTitle(true), 'Source observations outside FinOps scope');
   assert.equal(isInsufficientEvidenceReport('Insufficient evidence', 0, 'BLOCK'), true);
   assert.equal(isInsufficientEvidenceReport('Run', 90, 'GO'), false);
+  assert.equal(
+    displaySourceCoverageWarning('Source packet F has incomplete deterministic routing coverage (4/4 relevant chunks); no broad-source fallback was used.'),
+    'Source packet F included 4/4 routed candidate chunks, but the available material did not provide sufficient domain evidence. No broad-source fallback was used.'
+  );
+  assert.equal(
+    displayPlanningDecisionRationale(
+      'Required validation did not complete or the quality gate blocked actionability. Preserve the diagnostic findings, but do not execute recommendations until the blocking reasons are resolved.',
+      'BLOCK',
+      false
+    ),
+    'Validation completed, but the Quality Gate blocked actionability. Preserve the diagnostic findings, but do not execute recommendations until the blocking reasons are resolved.'
+  );
   assert.equal(renderInlineMarkdownHtml('Tracked in *My Projects*'), 'Tracked in <em>My Projects</em>');
 
   const html = renderMarkdownSummaryHtml([
@@ -80,6 +94,8 @@ assert.match(masterDataExportSource, /<h2>Evidence-Backed Findings<\/h2>[\s\S]*r
 assert.doesNotMatch(exportSource, /<h2>Executive Summary<\/h2>/, 'HTML exports should not render the legacy Executive Summary');
 assert.doesNotMatch(exportSource, /Evidence summary for the/, 'HTML exports should not render repetitive persona summaries');
 assert.match(exportSource, /Candidate inclusion measures/, 'Master Data should distinguish retrieval candidate inclusion from evidence sufficiency');
+assert.match(exportSource, /How the maturity score is measured/, 'HTML exports should explain the conservative full-framework maturity score');
+assert.match(exportSource, /Evidence sufficiency/, 'context packet tables should distinguish evidence sufficiency from candidate inclusion');
 assert.match(exportSource, /Domain Signal Overview/, 'HTML exports should include the domain signal title');
 assert.match(exportSource, /Anti-pattern finding rate/, 'HTML exports should label anti-pattern traffic lights');
 assert.match(exportSource, /Acquisition Quality &amp; Readiness/, 'Master Data should visibly render acquisition quality');
@@ -88,6 +104,11 @@ assert.match(exportSource, /observability-only in this milestone/, 'Master Data 
 assert.match(exportSource, /renderAcquisitionQuality\(result\)/, 'Master Data generation should include the acquisition quality section');
 assert.match(exportSource, /Shadow deterministic A1\/AP-A1 observations/, 'Master Data should visibly label derived evidence as shadow-only');
 assert.match(exportSource, /raw values exposed/, 'Master Data should disclose the derived-evidence privacy boundary');
+
+const reportViewModelSource = await readFile(new URL('../src/services/reportViewModel.ts', import.meta.url), 'utf8');
+assert.match(reportViewModelSource, /label: 'FinOps Maturity Score'/, 'report gauges should expose the existing FinOps Maturity Score');
+assert.doesNotMatch(reportViewModelSource, /label: 'Observed Friction'/, 'Observed Friction should no longer occupy a primary report gauge');
+assert.match(reportViewModelSource, /all 30 maturity criteria across domains A–F remain in the denominator/, 'score methodology should disclose conservative treatment of unproven capabilities');
 
 console.log(functionalChecksRan
   ? 'report rendering unit tests passed'
