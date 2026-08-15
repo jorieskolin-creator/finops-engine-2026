@@ -29,20 +29,30 @@ const hasVerifiedSourceCoverage = (item: AuditItem, stream: 'maturity' | 'antipa
   return false;
 };
 
-const evidenceCapForDensity = (density: number): { cap: number; reason?: string } => {
-  if (density < EVIDENCE_DENSITY_BLOCK) {
-    return {
-      cap: density,
-      reason: `Evidence density ${density}% is below the ${EVIDENCE_DENSITY_BLOCK}% floor, so readiness is capped by available evidence.`
-    };
+const QUALITY_GATE_BLOCK_SCORE_CAP = 70;
+
+export const applyQualityGateScoreCap = (
+  phase2: Phase2Validation,
+  decision: 'GO' | 'WARN' | 'BLOCK'
+): Phase2Validation => {
+  const metrics = phase2.metrics;
+  const rawScore = metrics.raw_finops_maturity_score ?? metrics.uncapped_readiness ?? metrics.finops_readiness;
+  metrics.raw_finops_maturity_score = rawScore;
+  metrics.uncapped_readiness = rawScore;
+  metrics.readiness_cap = decision === 'BLOCK' ? QUALITY_GATE_BLOCK_SCORE_CAP : 100;
+  if (decision === 'BLOCK' && rawScore > QUALITY_GATE_BLOCK_SCORE_CAP) {
+    metrics.finops_readiness = QUALITY_GATE_BLOCK_SCORE_CAP;
+    metrics.quality_gate_score_cap = QUALITY_GATE_BLOCK_SCORE_CAP;
+    metrics.quality_gate_score_cap_reason =
+      `The calculated score was ${Math.round(rawScore)}%, but a BLOCKED assessment cannot report a FinOps Maturity Score above ${QUALITY_GATE_BLOCK_SCORE_CAP}%.`;
+    metrics.readiness_cap_reason = metrics.quality_gate_score_cap_reason;
+  } else {
+    metrics.finops_readiness = rawScore;
+    delete metrics.quality_gate_score_cap;
+    delete metrics.quality_gate_score_cap_reason;
+    delete metrics.readiness_cap_reason;
   }
-  if (density < EVIDENCE_DENSITY_WARN) {
-    return {
-      cap: EVIDENCE_DENSITY_WARN,
-      reason: `Evidence density ${density}% is below ${EVIDENCE_DENSITY_WARN}%, so readiness is capped until more current-state evidence is supplied.`
-    };
-  }
-  return { cap: 100 };
+  return phase2;
 };
 
 export const calculateMetrics = (logs: Phase1AuditLogs): Phase2Validation => {
@@ -50,8 +60,19 @@ export const calculateMetrics = (logs: Phase1AuditLogs): Phase2Validation => {
   let antipatternCount = 0; let antipatternSum = 0; const antipatternFindings: string[] = [];
   let testedAbsentCount = 0;
   let assessedAntipatternCount = 0;
+  let capabilityPoints = 0;
+  let antipatternControlPoints = 0;
+  let maturityFull = 0;
+  let maturityPartial = 0;
+  let maturityLowOrAbsent = 0;
+  let maturityNotDemonstrated = 0;
+  let antipatternTestedAbsent = 0;
+  let antipatternPartialControl = 0;
+  let antipatternUncontrolled = 0;
+  let antipatternNotAssessed = 0;
   const verifiedAntipatternAbsences: string[] = [];
   const unknownAntipatternAbsences: string[] = [];
+  const scoreEvidenceGaps: string[] = [];
   let deliveredItems = 0;
   let itemsWithEvidence = 0;
   const silentAreas: string[] = [];
@@ -78,12 +99,27 @@ export const calculateMetrics = (logs: Phase1AuditLogs): Phase2Validation => {
     tally(item, 'maturity');
     maturitySum += Math.max(item.count, 0);
     if (item.status === 'OK') maturityCount++;
+    const hasCapabilityEvidence = hasVerifiedSourceCoverage(item, 'maturity');
+    if (!hasCapabilityEvidence) {
+      maturityNotDemonstrated++;
+      scoreEvidenceGaps.push(
+        `[${key}] Not demonstrated by the supplied material. This contributes zero to the score but is not proof that the capability is absent. Evidence needed: ${item.reasoning || item.evidence || 'current-state capability evidence.'}`
+      );
+    } else if (item.count === 3) {
+      capabilityPoints += 1;
+      maturityFull++;
+    } else if (item.count === 2) {
+      capabilityPoints += 0.5;
+      maturityPartial++;
+    } else {
+      maturityLowOrAbsent++;
+    }
     const catPrefix = key.charAt(0);
     if (categoryScores[catPrefix] !== undefined) categoryScores[catPrefix] += Math.max(item.count, 0);
     if (item.count === 0) {
       const hasGapEvidence = hasVerifiedSourceCoverage(item, 'maturity');
-      if (!hasGapEvidence) silentAreas.push(`Missing Capability: ${key}`);
-      maturityGaps.push(`[${key}] ${hasGapEvidence ? 'Confirmed gap' : 'Missing'}: ${item.reasoning}`);
+      if (!hasGapEvidence) silentAreas.push(`Capability not demonstrated by supplied material: ${key}`);
+      maturityGaps.push(`[${key}] ${hasGapEvidence ? 'Confirmed gap' : 'Not demonstrated by supplied material (not proof the capability is absent)'}: ${item.reasoning}`);
     }
   });
 
@@ -101,10 +137,27 @@ export const calculateMetrics = (logs: Phase1AuditLogs): Phase2Validation => {
     if (absenceStatus !== 'unknown_absent') assessedAntipatternCount++;
     if (absenceStatus === 'tested_absent') {
       testedAbsentCount++;
+      antipatternControlPoints += 1;
+      antipatternTestedAbsent++;
       verifiedAntipatternAbsences.push(`[${key}] Tested absent: ${item.coverage_reason || item.reasoning || item.evidence}`);
     }
     if (absenceStatus === 'unknown_absent') {
+      antipatternNotAssessed++;
       unknownAntipatternAbsences.push(`[${key}] Not assessed: ${item.coverage_reason || item.reasoning || item.evidence || 'Source coverage was insufficient to verify absence.'}`);
+      scoreEvidenceGaps.push(
+        `[${key}] Anti-pattern control was not assessed. This contributes zero to the score, and no finding must be interpreted as tested absence. Evidence needed: ${item.coverage_reason || item.reasoning || 'material covering this anti-pattern.'}`
+      );
+    }
+    if (absenceStatus === 'partially_present') {
+      if (item.count === 1 && hasVerifiedSourceCoverage(item, 'antipattern')) {
+        antipatternControlPoints += 0.5;
+        antipatternPartialControl++;
+      } else {
+        antipatternUncontrolled++;
+      }
+    }
+    if (absenceStatus === 'confirmed_present') {
+      antipatternUncontrolled++;
     }
     if (absenceStatus === 'confirmed_present' || absenceStatus === 'partially_present') antipatternCount++;
     if (absenceStatus === 'confirmed_present' || absenceStatus === 'partially_present' || item.count > 0) {
@@ -127,13 +180,10 @@ export const calculateMetrics = (logs: Phase1AuditLogs): Phase2Validation => {
       ? 'confirmed'
       : 'unknown';
 
-  const burdenPenalty = antipattern_burden * 0.5;
-  const clearanceBonus = antipattern_coverage >= EVIDENCE_DENSITY_WARN
-    ? antipattern_clearance * 0.1
-    : 0;
-  const uncapped_readiness = clampPercent(maturity_depth - burdenPenalty + clearanceBonus);
-  const evidenceCap = evidenceCapForDensity(evidence_density);
-  const finops_readiness = clampPercent(Math.min(uncapped_readiness, evidenceCap.cap));
+  const capability_attainment = clampPercent((capabilityPoints / maturityCriterionTotal) * 100);
+  const antipattern_control = clampPercent((antipatternControlPoints / antipatternCriterionTotal) * 100);
+  const raw_finops_maturity_score = clampPercent((capability_attainment + antipattern_control) / 2);
+  const finops_readiness = raw_finops_maturity_score;
 
   let crawl_walk_run: Phase2Validation['crawl_walk_run'];
   if (evidence_density < EVIDENCE_DENSITY_BLOCK) {
@@ -154,10 +204,22 @@ export const calculateMetrics = (logs: Phase1AuditLogs): Phase2Validation => {
       antipattern_burden,
       antipattern_clearance,
       antipattern_coverage,
+      capability_attainment,
+      antipattern_control,
+      raw_finops_maturity_score,
       finops_readiness,
-      uncapped_readiness,
-      readiness_cap: evidenceCap.cap,
-      readiness_cap_reason: evidenceCap.reason,
+      uncapped_readiness: raw_finops_maturity_score,
+      readiness_cap: 100,
+      score_gap_breakdown: {
+        maturity_full: maturityFull,
+        maturity_partial: maturityPartial,
+        maturity_low_or_absent: maturityLowOrAbsent,
+        maturity_not_demonstrated: maturityNotDemonstrated,
+        antipattern_tested_absent: antipatternTestedAbsent,
+        antipattern_partial_control: antipatternPartialControl,
+        antipattern_uncontrolled: antipatternUncontrolled,
+        antipattern_not_assessed: antipatternNotAssessed,
+      },
       antipattern_burden_confidence,
       delivery_integrity,
       evidence_density
@@ -171,6 +233,7 @@ export const calculateMetrics = (logs: Phase1AuditLogs): Phase2Validation => {
     verified_antipattern_absences: verifiedAntipatternAbsences,
     unknown_antipattern_absences: unknownAntipatternAbsences,
     silent_areas: silentAreas,
+    score_evidence_gaps: scoreEvidenceGaps,
     category_scores: categoryScores,
     evidence_category_totals: evidenceCategoryTotals,
     crawl_walk_run

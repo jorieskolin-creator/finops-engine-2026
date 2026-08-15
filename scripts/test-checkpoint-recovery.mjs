@@ -9,6 +9,10 @@ for(const name of ['checkpointService','checkpointRecoveryService']){
   const source=await readFile(new URL(`../src/services/${name}.ts`,import.meta.url),'utf8');
   let output=ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.ES2022,target:ts.ScriptTarget.ES2020,importsNotUsedAsValues:ts.ImportsNotUsedAsValues.Remove}}).outputText;
   output=output.replace("'./checkpointService'","'./checkpointService.mjs'");
+  output=output.replace(
+    "import { applyQualityGateScoreCap } from './metricsService';",
+    "const applyQualityGateScoreCap = phase2 => phase2;"
+  );
   await writeFile(join(dir,`${name}.mjs`),output);
 }
 const {recoverCheckpointResult}=await import(`file://${join(dir,'checkpointRecoveryService.mjs')}`);

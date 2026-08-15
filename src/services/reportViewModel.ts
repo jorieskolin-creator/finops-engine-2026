@@ -30,7 +30,7 @@ export interface ReportViewModel {
 }
 
 export const MATURITY_SCORE_METHOD_NOTE =
-  'The FinOps Maturity Score is conservative and input-bound: all 30 maturity criteria across domains A–F remain in the denominator, and capabilities not demonstrated by the supplied material contribute zero rather than being removed. Maturity Depth shows verified maturity points across the full 90-point framework. The Maturity Score then adjusts that depth for anti-pattern burden, tested-absence clearance when coverage is sufficient, and any evidence-density cap.';
+  'The FinOps Maturity Score equally weights 30 capabilities and 30 anti-pattern controls. A verified 3/3 capability earns 1 point, 2/3 earns 0.5, and 1/3 or 0/3 earns zero. A tested-absent anti-pattern earns 1 point, one harmful subcriterion present earns 0.5, and two or three earn zero. Missing or unverified material always earns zero but is not proof that a capability is absent or an anti-pattern is present. All 60 criteria remain in the denominator. A BLOCKED assessment cannot report a score above 70%.';
 
 const percent = (numerator: number, denominator: number): number =>
   denominator > 0 ? Math.round((numerator / denominator) * 100) : 0;
@@ -39,6 +39,20 @@ export const buildReportViewModel = (result: DiagnosticResult): ReportViewModel 
   const maturityTotal = FINOPS_CRITERIA.length;
   const antiPatternTotal = FINOPS_ANTIPATTERNS.length;
   const criterionTotal = maturityTotal + antiPatternTotal;
+  const metrics = result.phase_2_validation.metrics;
+  const scoreGapBreakdown = metrics.score_gap_breakdown || {
+    maturity_full: 0,
+    maturity_partial: 0,
+    maturity_low_or_absent: 0,
+    maturity_not_demonstrated: maturityTotal,
+    antipattern_tested_absent: 0,
+    antipattern_partial_control: 0,
+    antipattern_uncontrolled: 0,
+    antipattern_not_assessed: antiPatternTotal,
+  };
+  const capabilityAttainment = metrics.capability_attainment ?? metrics.maturity_ratio ?? 0;
+  const antipatternControl = metrics.antipattern_control ?? metrics.antipattern_clearance ?? 0;
+  const rawMaturityScore = metrics.raw_finops_maturity_score ?? metrics.finops_readiness ?? 0;
   const evidenceCheck = result.quality_gate.evidence_check;
   const verificationCompleted = evidenceCheck
     ? evidenceCheck.items.filter(item => !item.adjudication_unresolved && !item.verification_unresolved).length
@@ -91,10 +105,10 @@ export const buildReportViewModel = (result: DiagnosticResult): ReportViewModel 
     },
     metrics: [
       {
-        value: result.phase_2_validation.metrics.evidence_density,
+        value: metrics.evidence_density,
         label: 'Evidence Coverage',
         description: 'Share of the 60-criterion assessment surface supported by relevant, verified source evidence.',
-        denominator: `${Math.round((result.phase_2_validation.metrics.evidence_density / 100) * criterionTotal)} of ${criterionTotal} criteria evidenced`,
+        denominator: `${Math.round((metrics.evidence_density / 100) * criterionTotal)} of ${criterionTotal} criteria evidenced`,
         trend: 'positive',
         color: '#475569',
       },
@@ -107,18 +121,29 @@ export const buildReportViewModel = (result: DiagnosticResult): ReportViewModel 
         color: '#7c3aed',
       },
       {
-        value: result.phase_2_validation.metrics.maturity_depth,
-        label: 'Maturity Depth',
-        description: 'Verified maturity points demonstrated across the complete 90-point FinOps framework.',
-        denominator: `${result.phase_2_validation.raw_counts.maturity_sub_criteria_met} of ${maturityTotal * 3} maturity points`,
+        value: capabilityAttainment,
+        label: 'Capability Attainment',
+        description: 'Evidence-sensitive capability score across all 30 criteria: 3/3 earns one point, 2/3 earns half, and lower or unverified results earn zero.',
+        denominator: `${scoreGapBreakdown.maturity_full} full · ${scoreGapBreakdown.maturity_partial} partial · ${scoreGapBreakdown.maturity_not_demonstrated} not demonstrated`,
         trend: 'positive',
         color: '#0891b2',
       },
       {
-        value: result.phase_2_validation.metrics.finops_readiness,
+        value: antipatternControl,
+        label: 'Anti-Pattern Control',
+        description: 'Evidence-sensitive control score: tested absence earns one point, one harmful subcriterion earns half, and unknown absence earns zero.',
+        denominator: `${scoreGapBreakdown.antipattern_tested_absent} tested absent · ${scoreGapBreakdown.antipattern_partial_control} partial · ${scoreGapBreakdown.antipattern_not_assessed} not assessed`,
+        trend: 'positive',
+        color: '#7c3aed',
+      },
+      {
+        value: metrics.finops_readiness,
         label: 'FinOps Maturity Score',
-        description: 'Evidence-gated maturity based on the complete A–F framework and only the capabilities demonstrated by the supplied material.',
-        denominator: `${Math.round(result.phase_2_validation.metrics.finops_readiness)} of 100 · unproven capabilities remain zero`,
+        description: metrics.quality_gate_score_cap_reason
+          || 'Equal-weight average of capability attainment and verified anti-pattern control across the complete A–F framework.',
+        denominator: metrics.quality_gate_score_cap_reason
+          ? `${Math.round(rawMaturityScore)} calculated · capped at 70 because Quality Gate BLOCKED`
+          : `${Math.round(capabilityAttainment)} capability · ${Math.round(antipatternControl)} anti-pattern control`,
         trend: 'positive',
         color: '#059669',
       },

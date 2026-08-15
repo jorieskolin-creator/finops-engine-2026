@@ -23,7 +23,7 @@ const source = (await readFile(sourcePath, 'utf8')).replace(
 const modulePath = join(dir, 'metricsService.mjs');
 await writeFile(modulePath, compile(source).replace('./antiPatternSemantics', './antiPatternSemantics.mjs'), 'utf8');
 
-const { calculateMetrics } = await import(`file://${modulePath}`);
+const { applyQualityGateScoreCap, calculateMetrics } = await import(`file://${modulePath}`);
 
 const reportViewSource = (await readFile(new URL('../src/services/reportViewModel.ts', import.meta.url), 'utf8'))
   .replace(
@@ -104,7 +104,7 @@ const logs = (maturityFactory, antiFactory) => ({
     () => anti(0, false)
   ));
   assert.equal(result.crawl_walk_run, 'Insufficient evidence');
-  assert.ok(result.metrics.readiness_cap_reason, 'low evidence should explain readiness cap');
+  assert.ok(result.score_evidence_gaps.length > 0, 'low evidence should produce explicit score evidence gaps');
 }
 
 {
@@ -136,7 +136,7 @@ const logs = (maturityFactory, antiFactory) => ({
   ));
   assert.equal(result.metrics.evidence_density, 0, 'silent maturity gaps should not count as source coverage');
   assert.equal(result.silent_areas.length, 30, 'silent maturity gaps should remain silent areas');
-  assert.match(result.maturity_gaps[0], /Missing/, 'silent maturity gaps should remain missing, not confirmed');
+  assert.match(result.maturity_gaps[0], /Not demonstrated by supplied material/, 'silent maturity gaps should remain evidence gaps, not confirmed capability absences');
 }
 
 {
@@ -146,6 +146,38 @@ const logs = (maturityFactory, antiFactory) => ({
   ));
   assert.equal(result.metrics.evidence_density, 50, 'unknown anti-pattern absence should not count as verified coverage');
   assert.equal(result.metrics.antipattern_clearance, 0);
+}
+
+{
+  const result = calculateMetrics(logs(
+    (_id, index) => item(index < 12 ? 3 : index < 22 ? 2 : index < 25 ? 1 : 0, true),
+    (_id, index) => index < 22
+      ? anti(0, false, 'tested_absent')
+      : index < 25
+        ? anti(1, true, 'partially_present')
+        : anti(0, false, 'unknown_absent')
+  ));
+  assert.equal(Math.round(result.metrics.capability_attainment * 10) / 10, 56.7);
+  assert.equal(Math.round(result.metrics.antipattern_control * 10) / 10, 78.3);
+  assert.equal(result.metrics.finops_readiness, 67.5, 'supplied production distribution should score 67.5%');
+  assert.equal(result.metrics.score_gap_breakdown.maturity_not_demonstrated, 0);
+  assert.equal(result.metrics.score_gap_breakdown.antipattern_not_assessed, 5);
+  assert.equal(result.score_evidence_gaps.length, 5, 'unknown anti-pattern absence should remain an evidence discussion');
+}
+
+{
+  const result = calculateMetrics(logs(
+    () => item(3, true),
+    () => anti(0, false, 'tested_absent')
+  ));
+  applyQualityGateScoreCap(result, 'BLOCK');
+  assert.equal(result.metrics.raw_finops_maturity_score, 100);
+  assert.equal(result.metrics.finops_readiness, 70, 'BLOCKED report score must never exceed 70%');
+  assert.equal(result.metrics.quality_gate_score_cap, 70);
+  assert.match(result.metrics.quality_gate_score_cap_reason, /calculated score was 100%/);
+  applyQualityGateScoreCap(result, 'GO');
+  assert.equal(result.metrics.finops_readiness, 100, 'GO must preserve the calculated score');
+  assert.equal(result.metrics.quality_gate_score_cap, undefined);
 }
 
 {
@@ -193,7 +225,7 @@ const logs = (maturityFactory, antiFactory) => ({
       },
     },
   });
-  assert.equal(view.metrics.length, 4, 'report summary should expose exactly four gauges');
+  assert.equal(view.metrics.length, 5, 'report summary should expose evidence, verification, both score dimensions, and the composite score');
   assert.equal(view.metrics[1].label, 'Verification Completion');
   assert.equal(view.metrics[1].value, 98, 'one unresolved decision should produce 59/60 completion');
   assert.equal(view.antipatternDisposition.unresolved, 1);

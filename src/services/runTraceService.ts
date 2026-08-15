@@ -124,14 +124,17 @@ const sourceManifest = (registry: SourceRegistry): SourceManifestTrace[] => {
 
 const evidencePathEffect = (stream: 'maturity' | 'antipattern', item: AuditItem): string => {
   if (stream === 'maturity') {
-    if (item.count > 0) return 'positive_evidence_contributes_to_maturity_depth';
-    return item.evidence_quotes.length > 0 ? 'quote_backed_gap_counts_as_source_coverage' : 'silent_or_unassessed_gap';
+    if (item.count === 3) return 'verified_full_capability_adds_one_maturity_point';
+    if (item.count === 2) return 'verified_partial_capability_adds_half_maturity_point';
+    return item.evidence_quotes.length > 0
+      ? 'verified_low_or_absent_capability_adds_zero_maturity_points'
+      : 'not_demonstrated_adds_zero_without_proving_capability_absence';
   }
   const status = inferAntiPatternAbsenceStatus(item);
-  if (status === 'confirmed_present') return 'confirmed_antipattern_increases_burden';
-  if (status === 'partially_present') return 'partial_antipattern_increases_burden_moderately';
-  if (status === 'tested_absent') return 'verified_absence_increases_clearance';
-  return 'unknown_absence_neutral';
+  if (status === 'tested_absent') return 'verified_absence_adds_one_control_point';
+  if (status === 'partially_present' && item.count === 1) return 'one_harmful_subcriterion_adds_half_control_point';
+  if (status === 'confirmed_present' || status === 'partially_present') return 'material_antipattern_adds_zero_control_points';
+  return 'unknown_absence_adds_zero_without_proving_control';
 };
 
 const evidencePathsFor = (

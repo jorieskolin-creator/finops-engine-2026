@@ -95,6 +95,8 @@ assert.doesNotMatch(exportSource, /<h2>Executive Summary<\/h2>/, 'HTML exports s
 assert.doesNotMatch(exportSource, /Evidence summary for the/, 'HTML exports should not render repetitive persona summaries');
 assert.match(exportSource, /Candidate inclusion measures/, 'Master Data should distinguish retrieval candidate inclusion from evidence sufficiency');
 assert.match(exportSource, /How the maturity score is measured/, 'HTML exports should explain the conservative full-framework maturity score');
+assert.match(exportSource, /renderScoreEvidenceGaps\(result, 8\)/, 'Summary Report should show a bounded set of deterministic evidence questions');
+assert.match(exportSource, /renderScoreEvidenceGaps\(result\)/, 'Master Data should show all deterministic evidence questions');
 assert.match(exportSource, /Evidence sufficiency/, 'context packet tables should distinguish evidence sufficiency from candidate inclusion');
 assert.doesNotMatch(exportSource, /source\.source_name/, 'HTML exports must not render source filenames');
 assert.match(exportSource, /stripSourceFilenameMetadata\(unsafeResult\)/, 'both HTML generators must remove legacy filename metadata at the export boundary');
@@ -110,7 +112,8 @@ assert.match(exportSource, /raw values exposed/, 'Master Data should disclose th
 const reportViewModelSource = await readFile(new URL('../src/services/reportViewModel.ts', import.meta.url), 'utf8');
 assert.match(reportViewModelSource, /label: 'FinOps Maturity Score'/, 'report gauges should expose the existing FinOps Maturity Score');
 assert.doesNotMatch(reportViewModelSource, /label: 'Observed Friction'/, 'Observed Friction should no longer occupy a primary report gauge');
-assert.match(reportViewModelSource, /all 30 maturity criteria across domains A–F remain in the denominator/, 'score methodology should disclose conservative treatment of unproven capabilities');
+assert.match(reportViewModelSource, /Missing or unverified material always earns zero but is not proof/, 'score methodology should distinguish missing evidence from capability absence');
+assert.match(reportViewModelSource, /A BLOCKED assessment cannot report a score above 70%/, 'score methodology should disclose the Quality Gate cap');
 
 console.log(functionalChecksRan
   ? 'report rendering unit tests passed'

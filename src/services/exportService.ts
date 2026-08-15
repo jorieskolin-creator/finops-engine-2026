@@ -507,6 +507,22 @@ const renderAntiPatternDisposition = (result: DiagnosticResult): string => {
     </section>`;
 };
 
+const renderScoreEvidenceGaps = (result: DiagnosticResult, limit?: number): string => {
+  const gaps = result.phase_2_validation.score_evidence_gaps || [];
+  if (gaps.length === 0) return '';
+  const visible = typeof limit === 'number' ? gaps.slice(0, limit) : gaps;
+  const remainder = gaps.length - visible.length;
+  return `
+    <section class="summary-section">
+      <h2>Evidence needed to interpret maturity</h2>
+      <div class="summary-card">
+        <p>These criteria contribute zero because they were not demonstrated by the supplied material. They are follow-up questions, not proof that capabilities are absent or anti-patterns are present.</p>
+        <ul>${visible.map(gap => `<li>${escapeHtml(gap)}</li>`).join('')}</ul>
+        ${remainder > 0 ? `<p><strong>${remainder} additional evidence question${remainder === 1 ? '' : 's'}</strong> remain in the Master Data report.</p>` : ''}
+      </div>
+    </section>`;
+};
+
 const renderEvidenceBackedFindings = (result: DiagnosticResult): string => {
   const evidence = result.phase_3_strategy.evidence_summary;
   if (!evidence) return '';
@@ -981,6 +997,7 @@ export const generateSummaryReportHtml = (unsafeResult: DiagnosticResult): strin
     ${renderDomainSignalOverview(result)}
     ${renderAssessmentHeatmapSummary(result)}
     ${renderAntiPatternDisposition(result)}
+    ${renderScoreEvidenceGaps(result, 8)}
     ${renderSummaryDiagnosis(result)}
     ${renderSummaryPlanningDecision(result)}
     ${renderSummaryRoadmap(result)}
@@ -1248,6 +1265,7 @@ export const generateReportHtml = (unsafeResult: DiagnosticResult): string => {
   ${renderDomainSignalOverview(result)}
   ${renderAssessmentHeatmapSummary(result)}
   ${renderAntiPatternDisposition(result)}
+  ${renderScoreEvidenceGaps(result)}
 
   <h2>Evidence-Backed Findings</h2>
   ${renderEvidenceBackedFindings(result)}

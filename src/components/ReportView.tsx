@@ -593,6 +593,8 @@ export const ReportView: React.FC<ReportViewProps> = ({ result, onBack, onDownlo
   const isBlocked = result.quality_gate.decision === 'BLOCK';
   const isInsufficientEvidence = isBlocked || m.evidence_density < 30 || m.antipattern_coverage < 60;
   const readinessDescription = m.readiness_cap_reason || METRIC_DESCRIPTIONS.finops_readiness;
+  const capabilityAttainment = m.capability_attainment ?? m.maturity_ratio ?? 0;
+  const antipatternControl = m.antipattern_control ?? m.antipattern_clearance ?? 0;
   const gauges = reportView.metrics;
 
   return (
@@ -656,9 +658,9 @@ export const ReportView: React.FC<ReportViewProps> = ({ result, onBack, onDownlo
               <p className="text-xs text-slate-500 mt-1 leading-snug">{readinessDescription}</p>
             </div>
             <div>
-              <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Maturity Depth</p>
-              <p className="text-3xl font-bold text-teal-600">{Math.round(m.maturity_depth)}%</p>
-              <p className="text-xs text-slate-500 mt-1 leading-snug">{METRIC_DESCRIPTIONS.maturity_depth}</p>
+              <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Capability Attainment</p>
+              <p className="text-3xl font-bold text-teal-600">{Math.round(capabilityAttainment)}%</p>
+              <p className="text-xs text-slate-500 mt-1 leading-snug">Verified 3/3 capabilities earn one point, 2/3 earns half, and lower or unverified results earn zero.</p>
             </div>
             <div>
               <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Anti-Pattern Burden</p>
@@ -666,9 +668,9 @@ export const ReportView: React.FC<ReportViewProps> = ({ result, onBack, onDownlo
               <p className="text-xs text-slate-500 mt-1 leading-snug">{METRIC_DESCRIPTIONS.antipattern_burden}</p>
             </div>
             <div>
-              <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Anti-Pattern Clearance</p>
-              <p className="text-3xl font-bold text-emerald-600">{Math.round(m.antipattern_clearance)}%</p>
-              <p className="text-xs text-slate-500 mt-1 leading-snug">{METRIC_DESCRIPTIONS.antipattern_clearance}</p>
+              <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Anti-Pattern Control</p>
+              <p className="text-3xl font-bold text-emerald-600">{Math.round(antipatternControl)}%</p>
+              <p className="text-xs text-slate-500 mt-1 leading-snug">Tested absence earns one point; unknown absence earns zero and remains an evidence question.</p>
             </div>
             <div>
               <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Anti-Pattern Coverage</p>
@@ -697,6 +699,15 @@ export const ReportView: React.FC<ReportViewProps> = ({ result, onBack, onDownlo
           <p className="mt-4 p-4 bg-slate-100 border-l-4 border-emerald-600 rounded-lg text-sm text-slate-600">
             <strong className="text-slate-800">How the maturity score is measured:</strong> {MATURITY_SCORE_METHOD_NOTE}
           </p>
+          {(result.phase_2_validation.score_evidence_gaps?.length ?? 0) > 0 && (
+            <div className="mt-4 p-4 bg-amber-50 border border-amber-200 rounded-lg text-sm text-slate-700">
+              <strong className="text-slate-900">Evidence needed to interpret maturity</strong>
+              <p className="mt-1">These items contribute zero because they were not demonstrated by the supplied material. They are questions for follow-up, not proof that capabilities are absent.</p>
+              <ul className="list-disc pl-5 mt-2 space-y-1">
+                {result.phase_2_validation.score_evidence_gaps.slice(0, 12).map(gap => <li key={gap}>{gap}</li>)}
+              </ul>
+            </div>
+          )}
         </div>
 
         <div className="mb-12">

@@ -3,7 +3,7 @@ import { STRATEGY_GUARDRAILS, FINOPS_PERSONAS } from './knowledge_base';
 
 export const METRIC_DESCRIPTIONS: Record<string, string> = {
   finops_readiness:
-    'Evidence-gated readiness score. Based on validated maturity depth, reduced by confirmed anti-pattern burden, and capped when source evidence is sparse.',
+    'Evidence-sensitive FinOps Maturity Score. Full capabilities and tested anti-pattern absences earn one point, partial control earns half a point, and missing or unverified material earns zero without proving a capability is absent.',
   maturity_ratio:
     'Share of maturity criteria that scored as fully embedded (3 of 3 sub-criteria met).',
   maturity_depth:
@@ -141,7 +141,7 @@ ${STRATEGY_PERSONAS_BLOCK}
 2. **Draft Evidence Summaries (One per Persona — Three Total):**
    For EACH persona (finops_lead, cfo, engineering_lead), write a fact-only summary using exactly this 3-paragraph structure, adapted to that persona's vocabulary and emphasis:
 
-   **1. Current-State Snapshot:** State the evidence-gated classification, readiness score, maturity depth, anti-pattern burden, anti-pattern clearance/coverage, delivery integrity, and evidence density.
+   **1. Current-State Snapshot:** State the evidence-sensitive FinOps Maturity Score, capability attainment, anti-pattern control, classification, anti-pattern burden/coverage, delivery integrity, and evidence density. Explain that missing material contributes zero but does not prove a capability is absent.
 
    **2. Evidence-Backed Findings:** Summarize confirmed FinOps maturity strengths, confirmed gaps, confirmed anti-pattern findings, verified anti-pattern absences, anti-patterns not assessable from source, and silent areas. Reference domains and scores only when present in Phase 2 or Phase 1. If source material has generic process facts but no FinOps evidence, describe them as source observations outside FinOps scope.
 
@@ -254,7 +254,7 @@ ${STRATEGY_PERSONAS_BLOCK}
 
 <task>
 1. Draft persona evidence summaries using this 3-paragraph structure:
-   **1. Current-State Snapshot:** classification, evidence-gated readiness score, maturity depth, anti-pattern burden, anti-pattern clearance/coverage, delivery integrity, and evidence density.
+   **1. Current-State Snapshot:** evidence-sensitive FinOps Maturity Score, capability attainment, anti-pattern control, classification, anti-pattern burden/coverage, delivery integrity, and evidence density. Explain that missing material contributes zero but does not prove a capability is absent.
    **2. Evidence-Backed Findings:** confirmed FinOps strengths, confirmed gaps, confirmed anti-pattern findings, verified anti-pattern absences, anti-patterns not assessable from source, and silent areas with domain scores where present. If the source has generic process facts but no FinOps evidence, describe them as source observations outside FinOps scope.
    **3. Source Confidence & Boundaries:** what the evidence can and cannot prove. No recommendations.
 2. Populate evidence_summary with concise fact-only bullets.

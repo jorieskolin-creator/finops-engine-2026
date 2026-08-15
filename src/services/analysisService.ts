@@ -13,7 +13,7 @@ import { knowledgeBaseService, BATCH_DEFINITIONS, FINOPS_TACTICS_LOCAL, FINOPS_T
 import { DiagnosticResult, Phase1AuditLogs, Phase2Validation, AuditItem, EvidenceQuote, EvidenceCategory, EVIDENCE_CATEGORIES, PersonaId, PERSONA_IDS, PipelineProgressStage, PipelineProgressUpdate, SourceRecord } from "../types";
 import { validatePhase1Output, validatePhase3Grounding } from "./validatorService";
 import { runQualityGate, runQualityGateExplanation } from "./qualityGateService";
-import { calculateMetrics } from "./metricsService";
+import { applyQualityGateScoreCap, calculateMetrics } from "./metricsService";
 import {
   buildRegenerateAppendix,
   buildRoadmapFactCheckPrompt,
@@ -569,7 +569,9 @@ ${tacticsContext}`;
     const handoffSummary = `
 FINOPS DIAGNOSTIC REPORT SUMMARY (Computed by System):
 -------------------------------------------------------
-Evidence-Gated FinOps Readiness Score: ${Math.round(validationData.metrics.finops_readiness)}/100
+FinOps Maturity Score: ${Math.round(validationData.metrics.finops_readiness)}/100
+Capability Attainment: ${Math.round(validationData.metrics.capability_attainment)}%
+Anti-Pattern Control: ${Math.round(validationData.metrics.antipattern_control)}%
 Maturity Classification: ${validationData.crawl_walk_run}
 Maturity Depth Index: ${Math.round(validationData.metrics.maturity_depth)}%
 Anti-Pattern Burden: ${Math.round(validationData.metrics.antipattern_burden)}%
@@ -584,6 +586,9 @@ Verified Anti-Pattern Absences: ${validationData.verified_antipattern_absences.l
 Unknown / Not-Assessable Anti-Pattern Absences: ${validationData.unknown_antipattern_absences.length}
 Maturity Gaps: ${validationData.maturity_gaps.length}
 Silent Areas: ${validationData.silent_areas.length}
+
+SCORE EVIDENCE GAPS (zero score contribution; not proof a capability is absent):
+${validationData.score_evidence_gaps.join('\n') || 'None'}
 
 CATEGORY BREAKDOWN:
 ${Object.entries(validationData.category_scores).map(([cat, score]) => `  ${cat}: ${score}/15`).join('\n')}
@@ -820,10 +825,12 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => `  ${cat}
     };
 
     const buildFallbackEvidenceSummary = () => ({
-      headline: `${validationData.crawl_walk_run} FinOps maturity with ${Math.round(validationData.metrics.finops_readiness)}/100 evidence-gated readiness`,
+      headline: `${validationData.crawl_walk_run} FinOps maturity with a ${Math.round(validationData.metrics.finops_readiness)}/100 evidence-sensitive score`,
       maturity_classification: validationData.crawl_walk_run,
       key_metrics: [
-        `Evidence-gated readiness: ${Math.round(validationData.metrics.finops_readiness)}/100`,
+        `FinOps Maturity Score: ${Math.round(validationData.metrics.finops_readiness)}/100`,
+        `Capability attainment: ${Math.round(validationData.metrics.capability_attainment)}%`,
+        `Anti-pattern control: ${Math.round(validationData.metrics.antipattern_control)}%`,
         `Maturity depth: ${Math.round(validationData.metrics.maturity_depth)}%`,
         `Anti-pattern burden: ${Math.round(validationData.metrics.antipattern_burden)}% (${validationData.metrics.antipattern_burden_confidence || 'unknown'} confidence)`,
         `Anti-pattern clearance: ${Math.round(validationData.metrics.antipattern_clearance)}%`,
@@ -906,7 +913,7 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => `  ${cat}
           planning_decision: buildFallbackPlanningDecision(),
           visual_scorecard: {
             headline: 'Insufficient Evidence — Findings Only',
-            maturity_score: `${Math.round(validationData.metrics.finops_readiness)}/100 evidence-gated readiness`,
+            maturity_score: `${Math.round(validationData.metrics.finops_readiness)}/100 evidence-sensitive maturity`,
             burden_score: `${Math.round(validationData.metrics.antipattern_burden)}% anti-pattern burden`,
           },
           remediation_roadmap: [],
@@ -1130,6 +1137,8 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => `  ${cat}
       });
     }
     console.log(`[FinOps] [${runId}] Quality Gate decision: ${qualityGate.decision}`);
+    applyQualityGateScoreCap(validationData, qualityGate.decision);
+    await checkpoint('phase2', 'accepted', { phase_2_validation: validationData });
 
     // LLM-augmented explanation only when the deterministic gate flagged
     // something. GO results don't need narrative — the metrics speak for them.
@@ -1158,6 +1167,21 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => `  ${cat}
     if (qualityGate.decision === 'BLOCK') {
       strategyData = sanitizeBlockedStrategy(strategyData, qualityGate.blocking_reasons);
     }
+    if (strategyData?.phase_3_strategy?.visual_scorecard) {
+      strategyData.phase_3_strategy.visual_scorecard.maturity_score =
+        `${Math.round(validationData.metrics.finops_readiness)}/100 evidence-sensitive maturity`;
+    }
+    if (qualityGate.decision === 'BLOCK' && strategyData?.phase_3_strategy?.evidence_summary) {
+      const summary = strategyData.phase_3_strategy.evidence_summary;
+      summary.headline = `BLOCKED assessment · FinOps Maturity Score ${Math.round(validationData.metrics.finops_readiness)}/100`;
+      summary.key_metrics = [
+        `FinOps Maturity Score: ${Math.round(validationData.metrics.finops_readiness)}/100`,
+        `Capability attainment: ${Math.round(validationData.metrics.capability_attainment)}%`,
+        `Anti-pattern control: ${Math.round(validationData.metrics.antipattern_control)}%`,
+        ...(validationData.metrics.quality_gate_score_cap_reason ? [validationData.metrics.quality_gate_score_cap_reason] : []),
+        ...((summary.key_metrics || []).filter((metric: string) => !/maturity score|readiness|capability attainment|anti-pattern control/i.test(metric))),
+      ];
+    }
     if (effectiveBracket !== confidenceBracket) {
       console.warn(`[FinOps] [${runId}] Strategy downgraded by QG: ${confidenceBracket} → ${effectiveBracket} (decision=${qualityGate.decision})`);
       serverLog(runId, 'warn', 'strategy_downgraded', {
@@ -1173,20 +1197,6 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => `  ${cat}
 
     emitProgress({ stage: 'verification', status: qualityGate.decision === 'GO' ? 'completed' : 'completed_with_warnings' });
     emitProgress({ stage: 'finalization', status: 'in_progress' });
-
-    const totalDuration = Date.now() - pipelineStarted;
-    console.log(`[FinOps] [${runId}] === Pipeline complete === duration_ms=${totalDuration} quality_gate=${qualityGate.decision} bracket=${effectiveBracket}`);
-    serverLog(runId, 'info', 'pipeline_complete', {
-      outcome: 'ok',
-      duration_ms: totalDuration,
-      quality_gate: qualityGate.decision,
-      bracket: effectiveBracket,
-      synthesis_bracket: confidenceBracket,
-      fact_check_supported: factCheck.supported_count,
-      fact_check_total: factCheck.total_claims,
-      models: actuals,
-      model_mode: modelRoutingMode,
-    });
 
     const fallbackStrategy = {
       executive_summary: "Strategy incomplete.",
@@ -1278,6 +1288,19 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => `  ${cat}
       acquisitionQualityPersistence(acquisitionQuality, sourceRegistryStatus),
       shadowTelemetryPersistence(boundedRetrieval, derivedAnalyticalEvidence, dataSignalCoverage)
     );
+    const totalDuration = Date.now() - pipelineStarted;
+    console.log(`[FinOps] [${runId}] === Pipeline complete === duration_ms=${totalDuration} quality_gate=${qualityGate.decision} bracket=${effectiveBracket}`);
+    serverLog(runId, 'info', 'pipeline_complete', {
+      outcome: 'ok',
+      duration_ms: totalDuration,
+      quality_gate: qualityGate.decision,
+      bracket: effectiveBracket,
+      synthesis_bracket: confidenceBracket,
+      fact_check_supported: factCheck.supported_count,
+      fact_check_total: factCheck.total_claims,
+      models: actuals,
+      model_mode: modelRoutingMode,
+    });
     emitProgress({ stage: 'finalization', status: 'completed' });
     return finalResult;
 

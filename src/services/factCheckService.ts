@@ -98,7 +98,9 @@ const compactMetrics = (phase2: Phase2Validation): string => {
     .map(([cat, score]) => `  ${cat}: ${score}/15`)
     .join('\n');
   return [
-    `finops_readiness=${Math.round(m.finops_readiness)}%`,
+    `finops_maturity_score=${Math.round(m.finops_readiness)}%`,
+    `capability_attainment=${Math.round(m.capability_attainment)}%`,
+    `antipattern_control=${Math.round(m.antipattern_control)}%`,
     `maturity_depth=${Math.round(m.maturity_depth)}%`,
     `antipattern_burden=${Math.round(m.antipattern_burden)}%`,
     `antipattern_clearance=${Math.round(m.antipattern_clearance)}%`,
@@ -109,6 +111,7 @@ const compactMetrics = (phase2: Phase2Validation): string => {
     `evidence_density=${m.evidence_density}%`,
     `classification=${phase2.crawl_walk_run}`,
     `silent_areas_count=${phase2.silent_areas.length}`,
+    `score_evidence_gaps_count=${phase2.score_evidence_gaps.length}`,
     `maturity_gaps_count=${phase2.maturity_gaps.length}`,
     `antipattern_findings_count=${phase2.antipattern_findings.length}`,
     `verified_antipattern_absences_count=${phase2.verified_antipattern_absences.length}`,

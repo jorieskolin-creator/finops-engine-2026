@@ -33,5 +33,9 @@ assert.match(analysis, /throw new PipelineIntegrityError\('ANALYSIS_OUTPUT_INCOM
 assert.match(analysis, /safeItem\.antipattern_absence_status = item\.antipattern_absence_status/, 'sanitization must preserve validated evidence semantics');
 for (const stage of orderedStages) assert.match(analysis, new RegExp(`stage: '${stage}'`));
 assert.match(analysis, /checkpoint\('final_report'[\s\S]*readyRun\([\s\S]*emitProgress\(\{ stage: 'finalization', status: 'completed' \}\)/, 'finalization must complete only after the recoverable report is stored and marked ready for delivery');
+assert.ok(
+  analysis.indexOf('await readyRun(') < analysis.indexOf("serverLog(runId, 'info', 'pipeline_complete'"),
+  'pipeline_complete must be emitted only after durable delivery readiness succeeds'
+);
 
 console.log('pipeline progress presentation tests passed');

@@ -77,10 +77,25 @@ export interface Metrics {
   antipattern_burden: number;
   antipattern_clearance: number;
   antipattern_coverage: number;
+  capability_attainment: number;
+  antipattern_control: number;
+  raw_finops_maturity_score: number;
   finops_readiness: number;
   uncapped_readiness?: number;
   readiness_cap?: number;
   readiness_cap_reason?: string;
+  quality_gate_score_cap?: number;
+  quality_gate_score_cap_reason?: string;
+  score_gap_breakdown: {
+    maturity_full: number;
+    maturity_partial: number;
+    maturity_low_or_absent: number;
+    maturity_not_demonstrated: number;
+    antipattern_tested_absent: number;
+    antipattern_partial_control: number;
+    antipattern_uncontrolled: number;
+    antipattern_not_assessed: number;
+  };
   antipattern_burden_confidence?: 'confirmed' | 'unknown';
   delivery_integrity: number;
   evidence_density: number;
@@ -99,6 +114,7 @@ export interface Phase2Validation {
   verified_antipattern_absences: string[];
   unknown_antipattern_absences: string[];
   silent_areas: string[];
+  score_evidence_gaps: string[];
   category_scores: Record<string, number>;
   evidence_category_totals?: Partial<Record<EvidenceCategory, number>>;
   crawl_walk_run: 'Insufficient evidence' | 'Crawl' | 'Walk' | 'Walk with significant friction' | 'Run';
