@@ -117,7 +117,7 @@ assert.match(exportSource, /raw values exposed/, 'Master Data should disclose th
 const reportViewModelSource = await readFile(new URL('../src/services/reportViewModel.ts', import.meta.url), 'utf8');
 assert.match(reportViewModelSource, /label: 'FinOps Maturity Score'/, 'report gauges should expose the existing FinOps Maturity Score');
 assert.doesNotMatch(reportViewModelSource, /label: 'Observed Friction'/, 'Observed Friction should no longer occupy a primary report gauge');
-assert.match(reportViewModelSource, /Missing or unverified material always earns zero but is not proof/, 'score methodology should distinguish missing evidence from capability absence');
+assert.match(reportViewModelSource, /Criteria whose verification did not complete are reported separately and excluded from the score denominator/, 'score methodology should distinguish unresolved verification from capability absence');
 assert.match(reportViewModelSource, /A BLOCKED assessment cannot report a score above 70%/, 'score methodology should disclose the Quality Gate cap');
 
 console.log(functionalChecksRan

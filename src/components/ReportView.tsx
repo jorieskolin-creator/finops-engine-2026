@@ -387,8 +387,8 @@ const ForensicCriterion: React.FC<{
         <span className="font-mono text-xs text-slate-400">{catalog.id}</span>
         <h4 className="font-bold text-slate-900 leading-snug">{catalog.title}</h4>
       </div>
-      <span className={`px-2 py-1 rounded text-xs font-bold uppercase tracking-wider shrink-0 ${stream === 'antipattern' ? antiPatternBadgeClass(item) : statusBadgeClass(item?.status ?? '')}`}>
-        {stream === 'antipattern' ? antiPatternStatusLabel(item) : (item?.status ?? 'No Data')}
+      <span className={`px-2 py-1 rounded text-xs font-bold uppercase tracking-wider shrink-0 ${item?.verification_unresolved ? 'bg-slate-100 text-slate-600' : stream === 'antipattern' ? antiPatternBadgeClass(item) : statusBadgeClass(item?.status ?? '')}`}>
+        {item?.verification_unresolved ? 'Unverified candidate' : stream === 'antipattern' ? antiPatternStatusLabel(item) : (item?.status ?? 'No Data')}
       </span>
     </div>
     {stream === 'antipattern' && item?.coverage_reason && (
@@ -399,7 +399,7 @@ const ForensicCriterion: React.FC<{
         <span className={`px-2 py-1 rounded text-xs font-bold uppercase tracking-wider ${evidenceCheckBadgeClass(item.evidence_check_status)}`}>
           Evidence-check: {item.evidence_check_status}
         </span>
-        {item.original_count !== undefined && item.verified_count !== undefined && (
+        {item.original_count !== undefined && typeof item.verified_count === 'number' && (
           <span className="text-xs font-mono text-slate-500">
             score {item.original_count}→{item.verified_count}{item.rescan_attempted ? ' · targeted rescan' : ''}
           </span>
@@ -567,7 +567,7 @@ const EvidenceCheckSummaryBlock: React.FC<{ result: DiagnosticResult }> = ({ res
           {evidenceCheck.adjustments.slice(0, 10).map((a, i) => (
             <li key={i} className="pl-3 border-l-2 border-slate-300">
               <span className="font-mono text-xs">{a.stream}.{a.id}</span>
-              <span className="text-slate-500"> · {a.original_count}→{a.verified_count} · {a.status}{a.rescan_attempted ? ' · rescanned' : ''}</span>
+              <span className="text-slate-500"> · {a.verification_unresolved ? `scanner candidate ${a.original_count} · excluded from score` : `${a.original_count}→${a.verified_count}`} · {a.status}{a.rescan_attempted ? ' · rescanned' : ''}</span>
               {a.reason && <span className="block text-xs text-slate-500 mt-0.5">{a.reason}</span>}
             </li>
           ))}

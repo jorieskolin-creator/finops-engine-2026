@@ -359,9 +359,10 @@ export const validatePreSynthesisIntegrity = (
       for (let index = 1; index <= 5; index++) {
         const item = phase1.phase_1_audit_logs[stream][`${domain}${index}`] as {
           count?: number;
+          verification_unresolved?: boolean;
           evidence_quotes?: Array<{ quote?: string; chunk_id?: string; source_id?: string; page_id?: string; page_number?: number; sheet_name?: string; row_number?: number }>;
         } | undefined;
-        if ((item?.count || 0) > 0 && (item?.evidence_quotes?.length || 0) === 0) {
+        if (!item?.verification_unresolved && (item?.count || 0) > 0 && (item?.evidence_quotes?.length || 0) === 0) {
           throw new PipelineIntegrityError('FINDING_PROVENANCE_INVALID', 'pre_synthesis', [domain]);
         }
         for (const quote of item?.evidence_quotes || []) {
@@ -380,7 +381,18 @@ export const validatePreSynthesisIntegrity = (
   const expectedDecisionKeys = new Set([...expectedIds].flatMap(id => [`maturity:${id}`, `antipattern:${id}`]));
   const unsafeUnresolved = evidence.items.some(item => {
     if (!item.adjudication_unresolved && !item.verification_unresolved) return false;
-    const auditItem = phase1.phase_1_audit_logs[item.stream][item.id] as { count?: unknown } | undefined;
+    const auditItem = phase1.phase_1_audit_logs[item.stream][item.id] as {
+      count?: unknown;
+      verified_count?: unknown;
+      verification_unresolved?: unknown;
+    } | undefined;
+    if (item.verification_unresolved) {
+      return item.verified_count !== 0
+        || item.status !== 'missing'
+        || auditItem?.verification_unresolved !== true
+        || auditItem?.verified_count !== null
+        || auditItem?.count !== item.original_count;
+    }
     return item.verified_count !== 0
       || (item.status !== 'missing' && item.status !== 'unsupported')
       || auditItem?.count !== 0;

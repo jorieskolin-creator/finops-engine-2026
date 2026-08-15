@@ -9,8 +9,6 @@ const clampPercent = (value: number): number => Math.min(Math.max(value, 0), 100
 const maturityCriterionTotal = Math.max(FINOPS_CRITERIA.length, 1);
 const antipatternCriterionTotal = Math.max(FINOPS_ANTIPATTERNS.length, 1);
 const totalCriterionCount = maturityCriterionTotal + antipatternCriterionTotal;
-const maturityMaxScore = maturityCriterionTotal * 3;
-const antipatternMaxScore = antipatternCriterionTotal * 3;
 
 const hasSourceQuote = (item: AuditItem): boolean =>
   Array.isArray(item.evidence_quotes) &&
@@ -21,6 +19,7 @@ const hasSourceQuote = (item: AuditItem): boolean =>
   );
 
 const hasVerifiedSourceCoverage = (item: AuditItem, stream: 'maturity' | 'antipattern'): boolean => {
+  if (item.verification_unresolved) return false;
   if (hasSourceQuote(item)) return true;
   if (item.evidence_check_status === 'unsupported' || item.evidence_check_status === 'missing') return false;
   if (stream === 'antipattern') {
@@ -70,9 +69,12 @@ export const calculateMetrics = (logs: Phase1AuditLogs): Phase2Validation => {
   let antipatternPartialControl = 0;
   let antipatternUncontrolled = 0;
   let antipatternNotAssessed = 0;
+  let maturityVerificationUnresolved = 0;
+  let antipatternVerificationUnresolved = 0;
   const verifiedAntipatternAbsences: string[] = [];
   const unknownAntipatternAbsences: string[] = [];
   const scoreEvidenceGaps: string[] = [];
+  const verificationUnresolved: string[] = [];
   let deliveredItems = 0;
   let itemsWithEvidence = 0;
   const silentAreas: string[] = [];
@@ -86,7 +88,7 @@ export const calculateMetrics = (logs: Phase1AuditLogs): Phase2Validation => {
     if (hasVerifiedSourceCoverage(item, stream)) {
       itemsWithEvidence++;
     }
-    if (item.category_footprint) {
+    if (item.category_footprint && !item.verification_unresolved) {
       for (const [cat, n] of Object.entries(item.category_footprint)) {
         const c = cat as EvidenceCategory;
         evidenceCategoryTotals[c] = (evidenceCategoryTotals[c] || 0) + (n as number);
@@ -97,6 +99,11 @@ export const calculateMetrics = (logs: Phase1AuditLogs): Phase2Validation => {
   Object.entries(logs.maturity).forEach(([key, rawItem]) => {
     const item = rawItem as AuditItem;
     tally(item, 'maturity');
+    if (item.verification_unresolved) {
+      maturityVerificationUnresolved++;
+      verificationUnresolved.push(`[${key}] Maturity verification unavailable; scanner candidate score ${item.original_count ?? item.count}/3 was excluded from validated scoring.`);
+      return;
+    }
     maturitySum += Math.max(item.count, 0);
     if (item.status === 'OK') maturityCount++;
     const hasCapabilityEvidence = hasVerifiedSourceCoverage(item, 'maturity');
@@ -126,6 +133,11 @@ export const calculateMetrics = (logs: Phase1AuditLogs): Phase2Validation => {
   Object.entries(logs.antipattern).forEach(([key, rawItem]) => {
     const item = rawItem as AuditItem;
     tally(item, 'antipattern');
+    if (item.verification_unresolved) {
+      antipatternVerificationUnresolved++;
+      verificationUnresolved.push(`[${key}] Anti-pattern verification unavailable; scanner candidate score ${item.original_count ?? item.count}/3 was excluded from validated scoring.`);
+      return;
+    }
     const absenceStatus = inferAntiPatternAbsenceStatus(item);
     const effectiveBurdenCount =
       absenceStatus === 'confirmed_present'
@@ -169,10 +181,12 @@ export const calculateMetrics = (logs: Phase1AuditLogs): Phase2Validation => {
   const delivery_integrity = Math.round((deliveredItems / totalCriterionCount) * 100);
   const evidence_density = Math.round((itemsWithEvidence / totalCriterionCount) * 100);
 
-  const maturity_ratio = (maturityCount / maturityCriterionTotal) * 100;
-  const maturity_depth = (maturitySum / maturityMaxScore) * 100;
-  const antipattern_ratio = (antipatternCount / antipatternCriterionTotal) * 100;
-  const antipattern_burden = (antipatternSum / antipatternMaxScore) * 100;
+  const assessedMaturityCount = Math.max(maturityCriterionTotal - maturityVerificationUnresolved, 1);
+  const assessedAntipatternScoreCount = Math.max(antipatternCriterionTotal - antipatternVerificationUnresolved, 1);
+  const maturity_ratio = (maturityCount / assessedMaturityCount) * 100;
+  const maturity_depth = (maturitySum / (assessedMaturityCount * 3)) * 100;
+  const antipattern_ratio = (antipatternCount / assessedAntipatternScoreCount) * 100;
+  const antipattern_burden = (antipatternSum / (assessedAntipatternScoreCount * 3)) * 100;
   const antipattern_clearance = Math.round((testedAbsentCount / antipatternCriterionTotal) * 100);
   const antipattern_coverage = Math.round((assessedAntipatternCount / antipatternCriterionTotal) * 100);
   const antipattern_burden_confidence =
@@ -180,8 +194,8 @@ export const calculateMetrics = (logs: Phase1AuditLogs): Phase2Validation => {
       ? 'confirmed'
       : 'unknown';
 
-  const capability_attainment = clampPercent((capabilityPoints / maturityCriterionTotal) * 100);
-  const antipattern_control = clampPercent((antipatternControlPoints / antipatternCriterionTotal) * 100);
+  const capability_attainment = clampPercent((capabilityPoints / assessedMaturityCount) * 100);
+  const antipattern_control = clampPercent((antipatternControlPoints / assessedAntipatternScoreCount) * 100);
   const raw_finops_maturity_score = clampPercent((capability_attainment + antipattern_control) / 2);
   const finops_readiness = raw_finops_maturity_score;
 
@@ -215,10 +229,12 @@ export const calculateMetrics = (logs: Phase1AuditLogs): Phase2Validation => {
         maturity_partial: maturityPartial,
         maturity_low_or_absent: maturityLowOrAbsent,
         maturity_not_demonstrated: maturityNotDemonstrated,
+        maturity_verification_unresolved: maturityVerificationUnresolved,
         antipattern_tested_absent: antipatternTestedAbsent,
         antipattern_partial_control: antipatternPartialControl,
         antipattern_uncontrolled: antipatternUncontrolled,
         antipattern_not_assessed: antipatternNotAssessed,
+        antipattern_verification_unresolved: antipatternVerificationUnresolved,
       },
       antipattern_burden_confidence,
       delivery_integrity,
@@ -234,6 +250,7 @@ export const calculateMetrics = (logs: Phase1AuditLogs): Phase2Validation => {
     unknown_antipattern_absences: unknownAntipatternAbsences,
     silent_areas: silentAreas,
     score_evidence_gaps: scoreEvidenceGaps,
+    verification_unresolved: verificationUnresolved,
     category_scores: categoryScores,
     evidence_category_totals: evidenceCategoryTotals,
     crawl_walk_run

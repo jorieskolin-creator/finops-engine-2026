@@ -451,7 +451,7 @@ export const QualityGateBanner: React.FC<{ gate: QualityGateResult }> = ({ gate 
                     {evidenceAdjustments.slice(0, 8).map((a, i) => (
                       <li key={i} className="text-slate-300 pl-3 border-l-2 border-slate-600">
                         <span className="font-mono text-xs">{a.stream}.{a.id}</span>
-                        <span className="text-xs text-slate-400"> · {a.original_count}→{a.verified_count} · {a.status}{a.rescan_attempted ? ' · rescanned' : ''}</span>
+                        <span className="text-xs text-slate-400"> · {a.verification_unresolved ? `scanner candidate ${a.original_count} · excluded from score` : `${a.original_count}→${a.verified_count}`} · {a.status}{a.rescan_attempted ? ' · rescanned' : ''}</span>
                         {a.reason && <span className="block text-xs text-slate-500 mt-0.5">{a.reason}</span>}
                       </li>
                     ))}
@@ -541,7 +541,7 @@ export const AuditGrid: React.FC<AuditGridProps> = ({ title, data, isAntipattern
 
   const renderEvidenceCheckBadge = (item: AuditItem) => {
     if (!item.evidence_check_status) return null;
-    const score = item.original_count !== undefined && item.verified_count !== undefined
+    const score = item.original_count !== undefined && typeof item.verified_count === 'number'
       ? ` ${item.original_count}→${item.verified_count}`
       : '';
     return (
@@ -555,7 +555,7 @@ export const AuditGrid: React.FC<AuditGridProps> = ({ title, data, isAntipattern
   };
 
   const topOffenders = useMemo(() => {
-    const candidates = (Object.entries(data) as [string, AuditItem][]).filter(([, item]) => !item.is_silent);
+    const candidates = (Object.entries(data) as [string, AuditItem][]).filter(([, item]) => !item.is_silent && !item.verification_unresolved);
     if (isAntipattern) return candidates.filter(([, item]) => item.count > 0).sort((a, b) => b[1].count - a[1].count).slice(0, 3).map(([id, item]) => ({ id, ...item, title: metadataMap.get(id)?.title || "Anti-Pattern Detected" }));
     return candidates.filter(([, item]) => item.count < 3).sort((a, b) => a[1].count - b[1].count).slice(0, 3).map(([id, item]) => ({ id, ...item, title: metadataMap.get(id)?.title || "Maturity Gap" }));
   }, [data, isAntipattern, metadataMap]);

@@ -34,6 +34,9 @@ assert.deepEqual(filterOperationalMetadata('finding_provenance_adjusted', {
 assert.deepEqual(filterOperationalMetadata('targeted_rescan_unavailable', {
   batch: 'C', criteria_count: 5, error_code: 'DEPENDENCY_UNCERTAINTY', fallback: 'verified_downgrades', error: 'private source content',
 }), { batch: 'C', criteria_count: 5, error_code: 'DEPENDENCY_UNCERTAINTY', fallback: 'verified_downgrades' });
+assert.deepEqual(filterOperationalMetadata('evidence_check_unavailable', {
+  batch: 'C', attempts: 2, error_code: 'DEPENDENCY_UNCERTAINTY', valid_items: 8, expected_items: 10, source_text: 'private source content',
+}), { batch: 'C', attempts: 2, error_code: 'DEPENDENCY_UNCERTAINTY', valid_items: 8, expected_items: 10 });
 assert.equal(safeOperationalIdentifier('gpt-5.2/model:v1'), 'gpt-5.2/model:v1');
 assert.equal(safeOperationalIdentifier('private.pdf'), '?');
 assert.equal(safeOperationalIdentifier('private.pdf\nsource contents'), '?');

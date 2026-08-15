@@ -45,6 +45,10 @@ export const validatePhase1Output = (rawData: any): ValidationResult => {
     for (const [id, item] of Object.entries(logs[stream])) {
       const auditItem = item as any;
 
+      if (auditItem?.verification_unresolved === true && auditItem?.verified_count === null) {
+        continue;
+      }
+
       if (auditItem?.count === -1 && auditItem?.is_silent === true) {
         unavailableIds.push(id);
         continue;

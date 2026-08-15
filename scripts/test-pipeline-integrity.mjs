@@ -135,7 +135,17 @@ assert.throws(
   () => validatePreSynthesisIntegrity(evidenceSnapshot, knowledgeSnapshot, registry, { ...packets, A: { ...packets.A, text: `${packets.A.text} changed`, char_count: packets.A.char_count + 8 } }, knowledgeIndex, phase1),
   error => error instanceof PipelineIntegrityError && error.code === 'EVIDENCE_PACKET_CONTINUITY_FAILED',
 );
-const safelyDegradedVerification = { ...phase1, evidence_check: { ...phase1.evidence_check, failed: true, items: phase1.evidence_check.items.map((item, index) => index === 0 ? { ...item, verification_unresolved: true } : item) } };
+const safelyDegradedVerification = {
+  ...phase1,
+  phase_1_audit_logs: {
+    ...phase1.phase_1_audit_logs,
+    maturity: {
+      ...phase1.phase_1_audit_logs.maturity,
+      A1: { ...phase1.phase_1_audit_logs.maturity.A1, verification_unresolved: true, verified_count: null },
+    },
+  },
+  evidence_check: { ...phase1.evidence_check, failed: true, items: phase1.evidence_check.items.map((item, index) => index === 0 ? { ...item, verification_unresolved: true } : item) },
+};
 assert.doesNotThrow(
   () => validatePreSynthesisIntegrity(evidenceSnapshot, knowledgeSnapshot, registry, packets, knowledgeIndex, safelyDegradedVerification),
   'a complete conservative verifier fallback must reach the deterministic BLOCK quality gate',

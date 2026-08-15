@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
 import { ExecutionWorker,AttemptReconciler,OutboxPublisher } from '../lib/executionWorker.js';
-import { approveRequest,inspectOutput,POLICY_VERSION,STAGE_PACKET_REQUEST_VERSION } from '../lib/governance.js';
+import { approvedPacketHash,approveRequest,inspectOutput,POLICY_VERSION,STAGE_PACKET_REQUEST_VERSION } from '../lib/governance.js';
 import { providerHandler } from '../lib/providerGateway.js';
 import { issueCookie } from '../lib/auth.js';
 import { OUTPUT_CONTRACT_IDS } from '../lib/outputContracts.js';
@@ -31,6 +31,9 @@ for(const owners of [['one','one'],['one','two']]){const repo=new Repo(),redis=n
 {const repo=new Repo(),redis=new Redis();repo.a.created_at=new Date(Date.now()-61_000);let calls=0;await worker(repo,redis,async()=>{calls++;return{text:'ok',usage:{}};}).process('a');assert.equal(calls,1);assert.equal(repo.a.state,'succeeded');}
 // A genuinely stale queued attempt has not crossed the send boundary and may safely fall back.
 {const repo=new Repo(),redis=new Redis();repo.a.created_at=new Date(Date.now()-481_000);let calls=0;await worker(repo,redis,async()=>{calls++;}).process('a');assert.equal(calls,0);assert.equal(repo.a.state,'fallback_allowed');assert.equal(repo.a.outcome_code,'QUEUE_WAIT_EXCEEDED');assert.equal(redis.marker,null);}
+// Pre-send dependency and packet failures safely fall back; policy failures remain terminal.
+{const repo=new Repo(),redis=new Redis();redis.getActivePacket=async()=>null;await worker(repo,redis,async()=>{}).process('a');assert.equal(repo.a.state,'fallback_allowed');assert.equal(repo.a.outcome_code,'PACKET_UNAVAILABLE');assert.equal(redis.marker,null);}
+{const invalidPacket={...packet,settings:{...packet.settings,max_tokens:1}};invalidPacket.packet_hash=approvedPacketHash(invalidPacket);const repo=new Repo('queued',invalidPacket),redis=new Redis(invalidPacket);await worker(repo,redis,async()=>{}).process('a');assert.equal(repo.a.state,'cancelled');assert.equal(repo.a.outcome_code,'POLICY_VALIDATION_FAILED');assert.equal(redis.marker,null);}
 // Marker created by a crashed worker is ambiguous and never redispatched.
 {const repo=new Repo('dispatch_intent'),redis=new Redis();redis.marker='older';let calls=0;await worker(repo,redis,async()=>{calls++;}).process('a');assert.equal(calls,0);assert.equal(repo.a.state,'outcome_unknown');}
 // A pre-marker dispatch_intent redelivery is safe and sends exactly once.

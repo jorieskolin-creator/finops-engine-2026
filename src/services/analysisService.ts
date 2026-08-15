@@ -166,6 +166,10 @@ const validateAndSanitizeLogs = (rawData: any): Phase1AuditLogs => {
     }
     if (typeof item.original_count === 'number') safeItem.original_count = Math.min(Math.max(Math.round(item.original_count), 0), 3);
     if (typeof item.verified_count === 'number') safeItem.verified_count = Math.min(Math.max(Math.round(item.verified_count), 0), 3);
+    if (item.verification_unresolved === true && item.verified_count === null) {
+      safeItem.verification_unresolved = true;
+      safeItem.verified_count = null;
+    }
     if (typeof item.adjustment_reason === 'string') safeItem.adjustment_reason = item.adjustment_reason;
     if (typeof item.rescan_attempted === 'boolean') safeItem.rescan_attempted = item.rescan_attempted;
     if (isAntipattern && ['confirmed_present', 'partially_present', 'tested_absent', 'unknown_absent'].includes(item.antipattern_absence_status)) {
@@ -482,6 +486,7 @@ export const analyzeDocument = async (
     emitProgress({ stage: 'calculation', status: 'in_progress' });
     await new Promise(r => setTimeout(r, 600));
     const validationData = calculateMetrics(auditLogs);
+    const unresolvedDomainIds = new Set(validationData.verification_unresolved.map(item => item.charAt(1)));
     await checkpoint('phase2', 'accepted', { phase_2_validation: validationData });
     emitProgress({ stage: 'calculation', status: 'completed' });
 
@@ -598,7 +603,7 @@ ${weakDomainIds.join(', ') || 'None'}
 Do not prescribe remediation for these domains. Limit them to evidence-collection steps under Safe To Act On.
 
 CATEGORY BREAKDOWN:
-${Object.entries(validationData.category_scores).map(([cat, score]) => `  ${cat}: ${score}/15`).join('\n')}
+${Object.entries(validationData.category_scores).map(([cat, score]) => unresolvedDomainIds.has(cat) ? `  ${cat}: verification unavailable (no validated domain score)` : `  ${cat}: ${score}/15`).join('\n')}
 `;
 
     const compactLockedFindings = (strategy: any): string => JSON.stringify({
@@ -847,11 +852,12 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => `  ${cat}
         ...(validationData.metrics.readiness_cap_reason ? [validationData.metrics.readiness_cap_reason] : [])
       ],
       confirmed_strengths: Object.entries(validationData.category_scores)
-        .filter(([, score]) => score >= 10)
+        .filter(([cat, score]) => !unresolvedDomainIds.has(cat) && score >= 10)
         .map(([cat, score]) => `Domain ${cat} shows relatively strong maturity signal (${score}/15).`),
       confirmed_gaps: validationData.maturity_gaps.slice(0, 8),
       confirmed_antipatterns: validationData.antipattern_findings.slice(0, 8),
       silent_or_missing_evidence: [
+        ...validationData.verification_unresolved,
         ...validationData.silent_areas,
         ...validationData.unknown_antipattern_absences
       ].slice(0, 8)
@@ -864,7 +870,9 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => `  ${cat}
         ...validationData.antipattern_findings.slice(0, 3)
       ].slice(0, 5),
       domain_diagnosis: Object.fromEntries(
-        Object.entries(validationData.category_scores).map(([cat, score]) => [cat, `Maturity signal ${score}/15 in domain ${cat}.`])
+        Object.entries(validationData.category_scores).map(([cat, score]) => [cat, unresolvedDomainIds.has(cat)
+          ? `Verification was unavailable in domain ${cat}; scanner candidates were excluded and no validated domain score is reported.`
+          : `Maturity signal ${score}/15 in domain ${cat}.`])
       ),
       confidence: confidenceBracket === 'HIGH' ? 'high' : confidenceBracket === 'MEDIUM' ? 'medium' : 'low',
       confidence_rationale: bracketDetail

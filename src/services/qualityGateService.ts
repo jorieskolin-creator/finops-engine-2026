@@ -132,6 +132,7 @@ export const runQualityGate = (
   for (const stream of ['maturity', 'antipattern'] as const) {
     for (const [id, item] of Object.entries(phase1[stream])) {
       const a = item as AuditItem;
+      if (a.verification_unresolved) continue;
       const hasUsableEvidence = a.evidence_quotes.length > 0 || (a.evidence && a.evidence.length >= 20);
       if (a.count > 0 && !hasUsableEvidence) {
         blocking_reasons.push(`${stream}.${id}: scored ${a.count} but no traceable evidence captured.`);

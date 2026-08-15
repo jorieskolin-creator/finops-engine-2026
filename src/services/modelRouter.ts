@@ -170,7 +170,7 @@ export async function pollInternalResult(body: any, approval: any, cause: unknow
       if (res.status === 404) {
         if (firstMissingAt === null) firstMissingAt = now();
         if (now() - firstMissingAt > missingGraceMs) {
-          return null;
+          throw new StageExecutionError('NO_ATTEMPT_RESERVED', true);
         }
         await sleepFn(pollIntervalMs);
         continue;
@@ -199,7 +199,8 @@ export async function pollInternalResult(body: any, approval: any, cause: unknow
         return { text: output.text, usage: data.usage };
       }
       if (data?.status === 'fallback_allowed') throw new StageExecutionError(typeof data.outcome_code === 'string' ? data.outcome_code : 'FALLBACK_ALLOWED',true);
-      if (['outcome_unknown','cancelled','expired','result_unavailable'].includes(data?.status)) throw new StageExecutionError(String(data.status).toUpperCase());
+      if (data?.status === 'cancelled') throw new StageExecutionError(typeof data.outcome_code === 'string' ? data.outcome_code : 'CANCELLED');
+      if (['outcome_unknown','expired','result_unavailable'].includes(data?.status)) throw new StageExecutionError(String(data.status).toUpperCase());
     } catch (err: any) {
       if (err instanceof StageExecutionError) throw err;
       await sleepFn(pollIntervalMs);

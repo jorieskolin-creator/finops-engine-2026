@@ -330,7 +330,7 @@ const renderEvidenceCheckSummary = (result: DiagnosticResult): string => {
       <div class="gate-label">Adjusted criteria</div>
       ${ec.adjustments.slice(0, 12).map(a => `
         <div class="evidence-check-item">
-          <strong>${escapeHtml(a.stream)}.${escapeHtml(a.id)}</strong> · ${a.original_count}→${a.verified_count} · ${escapeHtml(a.status)}${a.rescan_attempted ? ' · rescanned' : ''}
+          <strong>${escapeHtml(a.stream)}.${escapeHtml(a.id)}</strong> · ${a.verification_unresolved ? `scanner candidate ${a.original_count} · excluded from score` : `${a.original_count}→${a.verified_count}`} · ${escapeHtml(a.status)}${a.rescan_attempted ? ' · rescanned' : ''}
           ${a.reason ? `<div class="gate-rationale">${escapeHtml(a.reason)}</div>` : ''}
         </div>
       `).join('')}
@@ -371,7 +371,7 @@ const renderForensicCriterion = (cat: { id: string; title: string; desc: string 
       ${item?.evidence_check_status ? `
       <div class="forensic-block">
         <span class="evidence-check-badge ${evidenceCheckClass(item.evidence_check_status)}">Evidence-check: ${escapeHtml(item.evidence_check_status)}</span>
-        ${item.original_count !== undefined && item.verified_count !== undefined ? `<div class="gate-rationale">score ${item.original_count}→${item.verified_count}${item.rescan_attempted ? ' · targeted rescan' : ''}</div>` : ''}
+        ${item.original_count !== undefined && typeof item.verified_count === 'number' ? `<div class="gate-rationale">score ${item.original_count}→${item.verified_count}${item.rescan_attempted ? ' · targeted rescan' : ''}</div>` : item.verification_unresolved ? `<div class="gate-rationale">scanner candidate ${item.original_count ?? item.count}/3 · verification unavailable · excluded from score</div>` : ''}
         ${item.adjustment_reason ? `<div class="gate-rationale">${escapeHtml(item.adjustment_reason)}</div>` : ''}
       </div>` : ''}
       ${item?.reasoning ? `

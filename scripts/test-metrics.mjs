@@ -141,6 +141,24 @@ const logs = (maturityFactory, antiFactory) => ({
 
 {
   const result = calculateMetrics(logs(
+    (_id, index) => index < 10
+      ? { ...item(3, true), original_count: 3, verified_count: null, verification_unresolved: true }
+      : item(3, true),
+    (_id, index) => index < 10
+      ? { ...anti(3, true, 'confirmed_present'), original_count: 3, verified_count: null, verification_unresolved: true }
+      : anti(0, false, 'tested_absent')
+  ));
+  assert.equal(result.metrics.capability_attainment, 100, 'unresolved scanner candidates must not depress or improve the verified capability score');
+  assert.equal(result.metrics.antipattern_control, 100, 'unresolved scanner candidates must be excluded from the anti-pattern score denominator');
+  assert.equal(result.metrics.score_gap_breakdown.maturity_verification_unresolved, 10);
+  assert.equal(result.metrics.score_gap_breakdown.antipattern_verification_unresolved, 10);
+  assert.equal(result.verification_unresolved.length, 20);
+  assert.equal(result.maturity_gaps.length, 0, 'unresolved candidates are not confirmed maturity gaps');
+  assert.equal(result.antipattern_findings.length, 0, 'unresolved candidates are not confirmed anti-pattern findings');
+}
+
+{
+  const result = calculateMetrics(logs(
     () => item(3, true),
     () => ({ ...anti(0, false, 'unknown_absent'), coverage_reason: 'Source did not cover this anti-pattern.' })
   ));

@@ -54,9 +54,10 @@ export interface AuditItem {
   category_footprint?: Partial<Record<EvidenceCategory, number>>;
   evidence_check_status?: EvidenceCheckStatus;
   original_count?: number;
-  verified_count?: number;
+  verified_count?: number | null;
   adjustment_reason?: string;
   rescan_attempted?: boolean;
+  verification_unresolved?: boolean;
   antipattern_absence_status?: AntiPatternAbsenceStatus;
   coverage_reason?: string;
 }
@@ -91,10 +92,12 @@ export interface Metrics {
     maturity_partial: number;
     maturity_low_or_absent: number;
     maturity_not_demonstrated: number;
+    maturity_verification_unresolved: number;
     antipattern_tested_absent: number;
     antipattern_partial_control: number;
     antipattern_uncontrolled: number;
     antipattern_not_assessed: number;
+    antipattern_verification_unresolved: number;
   };
   antipattern_burden_confidence?: 'confirmed' | 'unknown';
   delivery_integrity: number;
@@ -115,6 +118,7 @@ export interface Phase2Validation {
   unknown_antipattern_absences: string[];
   silent_areas: string[];
   score_evidence_gaps: string[];
+  verification_unresolved: string[];
   category_scores: Record<string, number>;
   evidence_category_totals?: Partial<Record<EvidenceCategory, number>>;
   crawl_walk_run: 'Insufficient evidence' | 'Crawl' | 'Walk' | 'Walk with significant friction' | 'Run';
@@ -151,6 +155,7 @@ export interface EvidenceCheckAdjustment {
   status: EvidenceCheckStatus;
   reason: string;
   rescan_attempted: boolean;
+  verification_unresolved?: boolean;
 }
 
 export interface EvidenceCheckResult {
@@ -1117,7 +1122,7 @@ export interface EvidencePathTrace {
   evidence_category?: EvidenceCategory;
   quote_snippet: string;
   original_count?: number;
-  verified_count?: number;
+  verified_count?: number | null;
   final_count: number;
   score_effect: string;
 }

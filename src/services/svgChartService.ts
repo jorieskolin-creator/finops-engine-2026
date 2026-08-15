@@ -62,6 +62,7 @@ const computeCategoryScores = (logs: Record<string, AuditItem>): Record<string, 
     Object.keys(BATCH_TITLES).map(batch => [batch, 0])
   ) as Record<string, number>;
   Object.entries(logs).forEach(([k, item]) => {
+    if (item.verification_unresolved) return;
     const c = k.charAt(0);
     if (scores[c] !== undefined && typeof item.count === 'number') {
       scores[c] += Math.max(item.count, 0);

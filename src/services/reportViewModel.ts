@@ -30,7 +30,7 @@ export interface ReportViewModel {
 }
 
 export const MATURITY_SCORE_METHOD_NOTE =
-  'The FinOps Maturity Score equally weights 30 capabilities and 30 anti-pattern controls. A verified 3/3 capability earns 1 point, 2/3 earns 0.5, and 1/3 or 0/3 earns zero. A tested-absent anti-pattern earns 1 point, one harmful subcriterion present earns 0.5, and two or three earn zero. Missing or unverified material always earns zero but is not proof that a capability is absent or an anti-pattern is present. All 60 criteria remain in the denominator. A BLOCKED assessment cannot report a score above 70%.';
+  'The FinOps Maturity Score equally weights capability attainment and anti-pattern control across criteria with completed verification. A verified 3/3 capability earns 1 point, 2/3 earns 0.5, and 1/3 or 0/3 earns zero. A tested-absent anti-pattern earns 1 point, one harmful subcriterion present earns 0.5, and two or three earn zero. Criteria whose verification did not complete are reported separately and excluded from the score denominator; they force a Quality Gate BLOCK rather than being treated as zero maturity. A BLOCKED assessment cannot report a score above 70%.';
 
 const percent = (numerator: number, denominator: number): number =>
   denominator > 0 ? Math.round((numerator / denominator) * 100) : 0;
@@ -45,10 +45,12 @@ export const buildReportViewModel = (result: DiagnosticResult): ReportViewModel 
     maturity_partial: 0,
     maturity_low_or_absent: 0,
     maturity_not_demonstrated: maturityTotal,
+    maturity_verification_unresolved: 0,
     antipattern_tested_absent: 0,
     antipattern_partial_control: 0,
     antipattern_uncontrolled: 0,
     antipattern_not_assessed: antiPatternTotal,
+    antipattern_verification_unresolved: 0,
   };
   const capabilityAttainment = metrics.capability_attainment ?? metrics.maturity_ratio ?? 0;
   const antipatternControl = metrics.antipattern_control ?? metrics.antipattern_clearance ?? 0;
@@ -70,6 +72,7 @@ export const buildReportViewModel = (result: DiagnosticResult): ReportViewModel 
 
   for (const criterion of FINOPS_ANTIPATTERNS) {
     const item = result.phase_1_audit_logs.antipattern[criterion.id];
+    if (unresolvedAntiPatternIds.has(criterion.id)) continue;
     const status = inferAntiPatternAbsenceStatus(item);
     if (status === 'confirmed_present') {
       confirmed++;
@@ -123,16 +126,16 @@ export const buildReportViewModel = (result: DiagnosticResult): ReportViewModel 
       {
         value: capabilityAttainment,
         label: 'Capability Attainment',
-        description: 'Evidence-sensitive capability score across all 30 criteria: 3/3 earns one point, 2/3 earns half, and lower or unverified results earn zero.',
-        denominator: `${scoreGapBreakdown.maturity_full} full · ${scoreGapBreakdown.maturity_partial} partial · ${scoreGapBreakdown.maturity_not_demonstrated} not demonstrated`,
+        description: 'Capability score across criteria with completed verification: 3/3 earns one point, 2/3 earns half, and lower verified results earn zero.',
+        denominator: `${scoreGapBreakdown.maturity_full} full · ${scoreGapBreakdown.maturity_partial} partial · ${scoreGapBreakdown.maturity_verification_unresolved} unresolved`,
         trend: 'positive',
         color: '#0891b2',
       },
       {
         value: antipatternControl,
         label: 'Anti-Pattern Control',
-        description: 'Evidence-sensitive control score: tested absence earns one point, one harmful subcriterion earns half, and unknown absence earns zero.',
-        denominator: `${scoreGapBreakdown.antipattern_tested_absent} tested absent · ${scoreGapBreakdown.antipattern_partial_control} partial · ${scoreGapBreakdown.antipattern_not_assessed} not assessed`,
+        description: 'Control score across criteria with completed verification: tested absence earns one point, one harmful subcriterion earns half, and unknown absence earns zero.',
+        denominator: `${scoreGapBreakdown.antipattern_tested_absent} tested absent · ${scoreGapBreakdown.antipattern_partial_control} partial · ${scoreGapBreakdown.antipattern_verification_unresolved} unresolved`,
         trend: 'positive',
         color: '#7c3aed',
       },

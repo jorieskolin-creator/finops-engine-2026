@@ -30,14 +30,14 @@ const clampScore = (value: unknown): number => {
 };
 
 const maturityItemAssessed = (item: AuditItem | undefined): boolean => {
-  if (!item || item.is_silent) return false;
+  if (!item || item.is_silent || item.verification_unresolved) return false;
   if ((item.evidence_quotes?.length ?? 0) > 0) return true;
   if (item.count > 0) return true;
   return item.evidence_check_status === 'supported' || item.evidence_check_status === 'weak';
 };
 
-const maturityTone = (percent: number, assessed: number): DomainSignalTone => {
-  if (assessed === 0) return 'grey';
+const maturityTone = (percent: number, assessed: number, total: number): DomainSignalTone => {
+  if (assessed === 0 || assessed / Math.max(total, 1) < 0.6) return 'grey';
   if (percent >= 70) return 'green';
   if (percent >= 40) return 'yellow';
   return 'red';
@@ -56,10 +56,10 @@ export const computeDomainSignalRows = (result: DiagnosticResult): DomainSignalR
     const antiPatternCriteria = MASTER_BINGO_FINOPS.antipattern.filter(item => item.batch === domain);
 
     const maturityItems = maturityCriteria.map(criteria => result.phase_1_audit_logs.maturity[criteria.id]);
-    const maturityScore = maturityItems.reduce((sum, item) => sum + clampScore(item?.count), 0);
     const maturityTotal = maturityCriteria.length;
     const maturityAssessed = maturityItems.filter(maturityItemAssessed).length;
-    const maturityPercent = maturityTotal > 0 ? Math.round((maturityScore / (maturityTotal * 3)) * 100) : 0;
+    const maturityScore = maturityItems.reduce((sum, item) => sum + (maturityItemAssessed(item) ? clampScore(item?.count) : 0), 0);
+    const maturityPercent = maturityAssessed > 0 ? Math.round((maturityScore / (maturityAssessed * 3)) * 100) : 0;
 
     let antiPatternFindingWeight = 0;
     let antiPatternFindings = 0;
@@ -68,7 +68,12 @@ export const computeDomainSignalRows = (result: DiagnosticResult): DomainSignalR
     let antiPatternNotAssessed = 0;
 
     for (const criteria of antiPatternCriteria) {
-      const status = inferAntiPatternAbsenceStatus(result.phase_1_audit_logs.antipattern[criteria.id]);
+      const item = result.phase_1_audit_logs.antipattern[criteria.id];
+      if (item?.verification_unresolved) {
+        antiPatternNotAssessed += 1;
+        continue;
+      }
+      const status = inferAntiPatternAbsenceStatus(item);
       if (status === 'confirmed_present') {
         antiPatternFindingWeight += 1;
         antiPatternFindings += 1;
@@ -96,7 +101,7 @@ export const computeDomainSignalRows = (result: DiagnosticResult): DomainSignalR
       title: BATCH_TITLES[domain] || domain,
       maturityPercent,
       antiPatternPercent,
-      maturityTone: maturityTone(maturityPercent, maturityAssessed),
+      maturityTone: maturityTone(maturityPercent, maturityAssessed, maturityTotal),
       antiPatternTone: antiPatternTone(antiPatternPercent, antiPatternNotAssessed, antiPatternTotal),
       maturityAssessed,
       maturityTotal,

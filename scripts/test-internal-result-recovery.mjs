@@ -17,6 +17,18 @@ const options=statuses=>{let now=1_000,index=0,calls=0;return{value:{fetchFn:asy
 {const o=options(['running','running','running','done']);const recovered=await pollInternalResult(body,approval,new DOMException('timeout','AbortError'),1_000,o.value);assert.equal(recovered.text,'safe');assert.equal(o.calls(),4,'running work must remain recoverable beyond the former short propagation window');}
 for(const [status,fallbackAllowed] of [['outcome_unknown',false],['fallback_allowed',true]]){const o=options([status]);await assert.rejects(()=>pollInternalResult(body,approval,new Error('stream'),1_000,o.value),error=>error instanceof StageExecutionError&&error.code===status.toUpperCase()&&error.fallbackAllowed===fallbackAllowed);assert.equal(o.calls(),1);}
 {const o=options(['running']);const result=await pollInternalResult(body,approval,new DOMException('timeout','AbortError'),1_000,o.value);assert.equal(result,null);assert.ok(o.calls()>=4);}
+{
+  let now=1_000;
+  const recovery={
+    fetchFn:async()=>({status:404,ok:false,json:async()=>({status:'missing'})}),
+    sleepFn:async ms=>{now+=ms;},now:()=>now,logFn:async()=>{},gatewayDeadlineMs:0,recoveryPropagationMs:20,pollIntervalMs:5,missingGraceMs:5,
+  };
+  await assert.rejects(
+    ()=>pollInternalResult(body,approval,new Error('gateway 500'),1_000,recovery),
+    error=>error instanceof StageExecutionError&&error.code==='NO_ATTEMPT_RESERVED'&&error.fallbackAllowed,
+    'a stably absent attempt is known to be pre-send and must allow the configured fallback',
+  );
+}
 
 {
   const originalFetch=globalThis.fetch;

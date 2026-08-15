@@ -28,6 +28,12 @@ export interface BatchAuditResult {
 const STREAMS: Stream[] = ['maturity', 'antipattern'];
 const STATUSES: EvidenceCheckStatus[] = ['supported', 'weak', 'unsupported', 'missing'];
 
+const evidenceCheckFailureCode = (error: any): string => {
+  if (typeof error?.code === 'string' && /^[A-Z][A-Z0-9_]{1,63}$/.test(error.code)) return error.code;
+  if (String(error?.message || '').includes('All models exhausted')) return 'MODELS_EXHAUSTED';
+  return 'EVIDENCE_CHECK_FAILED';
+};
+
 const parseAiResponse = (text: string): any => {
   if (!text) return {};
   const cleaned = text.replace(/```json/gi, '').replace(/```/g, '').trim();
@@ -349,7 +355,7 @@ export const buildUnavailableEvidenceCheck = (
       status: 'missing' as const,
       original_count: original,
       verified_count: 0,
-      rationale: 'Evidence verification was unavailable; this criterion was conservatively reduced to no verified finding.',
+      rationale: 'Evidence verification was unavailable; the scanner candidate is retained for traceability but excluded from validated scoring.',
       rescan_recommended: false,
       quote_supported: false,
       verification_unresolved: true,
@@ -376,8 +382,10 @@ export const runEvidenceCheck = async (
   const definitions = BATCH_DEFINITIONS[batchId];
   const expectedIds = idsForBatch(batchId);
   const expectedTotal = expectedIds.length * STREAMS.length;
+  let lastError: any;
 
-  try {
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    try {
     const referenceKbContext = await knowledgeBaseService.fetchReferenceKnowledgeBaseContext({
       batchId,
       maxDocChars: 1100,
@@ -410,7 +418,11 @@ export const runEvidenceCheck = async (
       byKey.set(`${stream}.${id}`, raw);
     }
     if (verifierItems.length === 0 || byKey.size !== expectedTotal) {
-      throw new Error(`Evidence verifier returned ${byKey.size}/${expectedTotal} valid unique item verdicts.`);
+      throw Object.assign(new Error('Evidence verifier output was incomplete.'), {
+        code: 'INVALID_VERIFIER_OUTPUT',
+        validItems: byKey.size,
+        expectedItems: expectedTotal,
+      });
     }
 
     const items: EvidenceCheckItem[] = [];
@@ -499,9 +511,28 @@ export const runEvidenceCheck = async (
       failed: adjudicated.failed,
       failure_reason: adjudicated.failure_reason,
     };
-  } catch (error: any) {
-    return buildUnavailableEvidenceCheck(batchId, batch, error?.message || String(error));
+    } catch (error: any) {
+      lastError = error;
+      if (attempt < 2) {
+        await serverLog(ctx.runId, 'warn', 'evidence_check_retry', {
+          batch: batchId,
+          attempt,
+          error_code: evidenceCheckFailureCode(error),
+          valid_items: error?.validItems,
+          expected_items: error?.expectedItems,
+        });
+      }
+    }
   }
+  const failureCode = evidenceCheckFailureCode(lastError);
+  await serverLog(ctx.runId, 'warn', 'evidence_check_unavailable', {
+    batch: batchId,
+    attempts: 2,
+    error_code: failureCode,
+    valid_items: lastError?.validItems,
+    expected_items: lastError?.expectedItems,
+  });
+  return buildUnavailableEvidenceCheck(batchId, batch, failureCode);
 };
 
 export const evidenceItemsNeedingRescan = (result: EvidenceCheckResult): EvidenceCheckItem[] => {
@@ -557,9 +588,32 @@ export const applyEvidenceCheckToBatch = (
   for (const item of result.items) {
     const streamBucket = (checked as any)[item.stream] || {};
     const existing = streamBucket[item.id] || {};
-    const verified = Math.min(item.original_count, item.verified_count);
     const key = `${item.stream}.${item.id}`;
     const reason = item.rationale || 'Evidence verifier adjusted this score.';
+    if (item.verification_unresolved) {
+      streamBucket[item.id] = {
+        ...existing,
+        evidence_check_status: item.status,
+        original_count: item.original_count,
+        verified_count: null,
+        adjustment_reason: reason,
+        rescan_attempted: false,
+        verification_unresolved: true,
+        reasoning: `Evidence verification was unavailable. The scanner candidate score (${item.original_count}) is retained for traceability but excluded from validated scoring.`,
+      };
+      adjustments.push({
+        stream: item.stream,
+        id: item.id,
+        original_count: item.original_count,
+        verified_count: 0,
+        status: item.status,
+        reason,
+        rescan_attempted: false,
+        verification_unresolved: true,
+      });
+      continue;
+    }
+    const verified = Math.min(item.original_count, item.verified_count);
     const antipatternAbsenceStatus = item.stream === 'antipattern'
       ? antiPatternStatusForItem(
           verified,
@@ -599,6 +653,7 @@ export const applyEvidenceCheckToBatch = (
       verified_count: finalCount,
       adjustment_reason: reason,
       rescan_attempted: rescannedKeys.has(key),
+      verification_unresolved: false,
       antipattern_absence_status: antipatternAbsenceStatus,
       coverage_reason: coverageReason,
       reasoning: shouldRewriteReasoning
@@ -644,7 +699,7 @@ export const summarizeEvidenceCheck = (
     weak_count: countBy('weak'),
     unsupported_count: countBy('unsupported'),
     missing_count: countBy('missing'),
-    downgraded_count: adjustments.filter(a => a.verified_count < a.original_count).length,
+    downgraded_count: adjustments.filter(a => !a.verification_unresolved && a.verified_count < a.original_count).length,
     rescan_count: adjustments.filter(a => a.rescan_attempted).length,
     items,
     adjustments
@@ -704,6 +759,7 @@ export const reconcileEvidenceProvenance = <T extends ProvenancePhase1Result>(
         removedQuoteCount += existing.evidence_quotes.length - validQuotes.length;
         adjustedCriteria.add(id);
         logs[stream][id] = { ...existing, evidence_quotes: validQuotes };
+        if (existing.verification_unresolved) continue;
         if (count === 0 || validQuotes.length > 0) continue;
 
         const key = `${stream}.${id}`;

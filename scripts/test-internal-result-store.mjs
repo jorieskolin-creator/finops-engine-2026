@@ -13,6 +13,7 @@ const response=()=>({status(n){this.statusCode=n;return this;},json(v){this.body
 const call=async(repository,redis={getResult:async()=>null})=>{const out=response();await modelResultHandler(repository,redis)({...req,headers:{cookie}},out);return out;};
 assert.equal((await call({getAttemptByInternalCallId:async()=>null})).statusCode,404);
 for(const state of ['queued','send_authorized']){const out=await call({getAttemptByInternalCallId:async()=>({...attempt,state})});assert.equal(out.body.status,state==='queued'?'queued':'running');}
+{const out=await call({getAttemptByInternalCallId:async()=>({...attempt,state:'cancelled',outcome_code:'POLICY_VALIDATION_FAILED'})});assert.equal(out.body.status,'cancelled');assert.equal(out.body.outcome_code,'POLICY_VALIDATION_FAILED');}
 const missing=await call({getAttemptByInternalCallId:async()=>({...attempt,state:'succeeded'})});assert.equal(missing.body.status,'result_unavailable');
 const invalid=await call({getAttemptByInternalCallId:async()=>({...attempt,state:'succeeded'})},{getResult:async()=>'{"output":{}}'});assert.equal(invalid.statusCode,503);assert.equal(invalid.body.status,'result_unavailable');
 const governed=inspectOutput('governed result',{packet_id:attempt.packet_id,packet_hash:attempt.packet_hash,run_id:attempt.run_id,provider:attempt.provider,model:attempt.model,stage:attempt.stage});
