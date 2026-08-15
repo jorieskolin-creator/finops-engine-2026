@@ -378,11 +378,17 @@ export const validatePreSynthesisIntegrity = (
   const evidence = phase1.evidence_check;
   const decisionKeys = new Set(evidence.items.map(item => `${item.stream}:${item.id}`));
   const expectedDecisionKeys = new Set([...expectedIds].flatMap(id => [`maturity:${id}`, `antipattern:${id}`]));
-  if (evidence.failed
-    || evidence.items.length !== expectedDecisionKeys.size
+  const unsafeUnresolved = evidence.items.some(item => {
+    if (!item.adjudication_unresolved && !item.verification_unresolved) return false;
+    const auditItem = phase1.phase_1_audit_logs[item.stream][item.id] as { count?: unknown } | undefined;
+    return item.verified_count !== 0
+      || (item.status !== 'missing' && item.status !== 'unsupported')
+      || auditItem?.count !== 0;
+  });
+  if (evidence.items.length !== expectedDecisionKeys.size
     || decisionKeys.size !== expectedDecisionKeys.size
     || [...decisionKeys].some(key => !expectedDecisionKeys.has(key))
-    || evidence.items.some(item => item.adjudication_unresolved || item.verification_unresolved)) {
+    || unsafeUnresolved) {
     throw new PipelineIntegrityError('EVIDENCE_VERIFICATION_FAILED', 'pre_synthesis');
   }
 };

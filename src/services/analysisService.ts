@@ -488,7 +488,9 @@ export const analyzeDocument = async (
     // LOW   → findings (no roadmap, no case studies)
     // MEDIUM → cautious (per-phase confidence + assumptions, hedged verbs)
     // HIGH  → directive (current behavior — full tactics, case studies)
-    const confidenceBracket = bracketFromValidation(validationData);
+    const confidenceBracket = aggregatedRawData.evidence_check.failed
+      ? 'LOW'
+      : bracketFromValidation(validationData);
     const bracketDetail = explainBracket(confidenceBracket, {
       evidence_density: validationData.metrics.evidence_density,
       delivery_integrity: validationData.metrics.delivery_integrity,

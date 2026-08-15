@@ -135,9 +135,15 @@ assert.throws(
   () => validatePreSynthesisIntegrity(evidenceSnapshot, knowledgeSnapshot, registry, { ...packets, A: { ...packets.A, text: `${packets.A.text} changed`, char_count: packets.A.char_count + 8 } }, knowledgeIndex, phase1),
   error => error instanceof PipelineIntegrityError && error.code === 'EVIDENCE_PACKET_CONTINUITY_FAILED',
 );
+const safelyDegradedVerification = { ...phase1, evidence_check: { ...phase1.evidence_check, failed: true, items: phase1.evidence_check.items.map((item, index) => index === 0 ? { ...item, verification_unresolved: true } : item) } };
+assert.doesNotThrow(
+  () => validatePreSynthesisIntegrity(evidenceSnapshot, knowledgeSnapshot, registry, packets, knowledgeIndex, safelyDegradedVerification),
+  'a complete conservative verifier fallback must reach the deterministic BLOCK quality gate',
+);
 assert.throws(
-  () => validatePreSynthesisIntegrity(evidenceSnapshot, knowledgeSnapshot, registry, packets, knowledgeIndex, { ...phase1, evidence_check: { ...phase1.evidence_check, items: phase1.evidence_check.items.map((item, index) => index === 0 ? { ...item, verification_unresolved: true } : item) } }),
+  () => validatePreSynthesisIntegrity(evidenceSnapshot, knowledgeSnapshot, registry, packets, knowledgeIndex, { ...phase1, evidence_check: { ...phase1.evidence_check, items: phase1.evidence_check.items.map((item, index) => index === 0 ? { ...item, status: 'supported', verified_count: 1, verification_unresolved: true } : item) } }),
   error => error instanceof PipelineIntegrityError && error.code === 'EVIDENCE_VERIFICATION_FAILED',
+  'an unresolved positive verifier decision must remain fatal',
 );
 assert.throws(
   () => validatePreSynthesisIntegrity(evidenceSnapshot, knowledgeSnapshot, { ...registry, chunk_count: 2 }, packets, knowledgeIndex, phase1),

@@ -29,7 +29,7 @@ checkSource = checkSource
 } from './antiPatternSemantics';`, "const antiPatternStatusDescription = () => ''; const normalizeAntiPatternAbsenceStatus = value => value; const resolveAntiPatternAbsenceStatus = input => input.explicitStatus || 'unknown_absent';");
 await writeFile(join(dir, 'evidenceCheckService.mjs'), transpile(checkSource), 'utf8');
 
-const { reconcileEvidenceProvenance } = await import(`file://${join(dir, 'evidenceCheckService.mjs')}`);
+const { buildUnavailableEvidenceCheck, reconcileEvidenceProvenance } = await import(`file://${join(dir, 'evidenceCheckService.mjs')}`);
 const ids = ['A', 'B', 'C', 'D', 'E', 'F'].flatMap(domain => [1, 2, 3, 4, 5].map(index => `${domain}${index}`));
 const emptyLogs = () => Object.fromEntries(ids.map(id => [id, { count: 0, evidence_quotes: [] }]));
 const evidenceItems = ids.flatMap(id => ['maturity', 'antipattern'].map(stream => ({
@@ -62,6 +62,16 @@ const phase1 = {
   },
   failed_batches: [], models_used: [], targeted_rescan_models_used: [], evidence_check_models_used: [], evidence_adjudication_models_used: [],
 };
+
+const unavailable = buildUnavailableEvidenceCheck('C', {
+  maturity: { C1: { count: 3 } },
+  antipattern: { C2: { count: 2 } },
+}, 'verifier unavailable');
+assert.equal(unavailable.failed, true);
+assert.equal(unavailable.items.length, 10, 'fallback must preserve the complete evidence decision contract');
+assert.ok(unavailable.items.every(item => item.verified_count === 0 && item.status === 'missing' && item.verification_unresolved));
+assert.equal(unavailable.items.find(item => item.stream === 'maturity' && item.id === 'C1').original_count, 3);
+assert.equal(unavailable.items.find(item => item.stream === 'antipattern' && item.id === 'C2').antipattern_absence_status, 'unknown_absent');
 
 const reconciled = reconcileEvidenceProvenance(phase1, { chunks: [chunk] }, packets);
 assert.deepEqual(reconciled.adjustedCriteria, ['C1', 'C2', 'C3']);

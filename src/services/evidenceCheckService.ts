@@ -335,6 +335,37 @@ const applyAntiPatternAdjudication = async (
   }
 };
 
+export const buildUnavailableEvidenceCheck = (
+  batchId: string,
+  batch: BatchAuditResult,
+  failureReason: string,
+): EvidenceCheckResult => {
+  const expectedIds = idsForBatch(batchId);
+  const items: EvidenceCheckItem[] = STREAMS.flatMap(stream => expectedIds.map(id => {
+    const original = clampScore((batch as any)[stream]?.[id]?.count);
+    return {
+      stream,
+      id,
+      status: 'missing' as const,
+      original_count: original,
+      verified_count: 0,
+      rationale: 'Evidence verification was unavailable; this criterion was conservatively reduced to no verified finding.',
+      rescan_recommended: false,
+      quote_supported: false,
+      verification_unresolved: true,
+      ...(stream === 'antipattern' ? {
+        antipattern_absence_status: 'unknown_absent' as const,
+        coverage_reason: 'Verification was unavailable, so neither anti-pattern presence nor tested absence can be claimed.',
+      } : {}),
+    };
+  }));
+  return {
+    ...summarizeEvidenceCheck(batchId, items, []),
+    failed: true,
+    failure_reason: failureReason,
+  };
+};
+
 export const runEvidenceCheck = async (
   batchId: string,
   batch: BatchAuditResult,
@@ -469,20 +500,7 @@ export const runEvidenceCheck = async (
       failure_reason: adjudicated.failure_reason,
     };
   } catch (error: any) {
-    return {
-      batch_id: batchId,
-      total_items: expectedTotal,
-      supported_count: 0,
-      weak_count: 0,
-      unsupported_count: 0,
-      missing_count: expectedTotal,
-      downgraded_count: 0,
-      rescan_count: 0,
-      items: [],
-      adjustments: [],
-      failed: true,
-      failure_reason: error?.message || String(error)
-    };
+    return buildUnavailableEvidenceCheck(batchId, batch, error?.message || String(error));
   }
 };
 
