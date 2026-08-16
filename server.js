@@ -24,7 +24,11 @@ let infrastructure;
 try { resolveModelRouting(process.env); }
 catch { console.error('[server] STARTUP_FAILED code=MODEL_ROUTING_CONFIGURATION_INVALID'); process.exit(1); }
 try { infrastructure=await initializeInfrastructure(); }
-catch { console.error('[server] STARTUP_FAILED code=INFRASTRUCTURE_UNAVAILABLE'); process.exit(1); }
+catch(error) {
+  const code=safeErrorCode(error);
+  console.error(`[server] STARTUP_FAILED code=${code==='INTERNAL_ERROR'?'INFRASTRUCTURE_UNAVAILABLE':code}`);
+  process.exit(1);
+}
 const app = express();
 const publisher=new OutboxPublisher(infrastructure);const worker=new ExecutionWorker(infrastructure);const reconciler=new AttemptReconciler(infrastructure);const cleanup=new CleanupWorker(infrastructure);publisher.start();worker.start();reconciler.start();cleanup.start();
 app.get('/livez',(_req,res)=>res.status(200).json({status:'live'}));
