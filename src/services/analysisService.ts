@@ -468,18 +468,6 @@ export const analyzeDocument = async (
         removed_quotes: provenanceReconciliation.removedQuoteCount,
       });
     }
-    serverLog(runId, 'info', 'stage_complete', {
-      stage: 'forensic_audit',
-      model: aggregatedRawData.models_used.join(',') || actuals.forensic_audit,
-      targeted_rescan_model: aggregatedRawData.targeted_rescan_models_used.join(',') || 'n/a',
-      evidence_check_model: aggregatedRawData.evidence_check_models_used.join(',') || actuals.evidence_check,
-      evidence_adjudication_model: aggregatedRawData.evidence_adjudication_models_used.join(',') || 'n/a',
-      duration_ms: Date.now() - phase1Started,
-      failed_batches: aggregatedRawData.failed_batches.join(',') || 'none',
-      evidence_downgrades: aggregatedRawData.evidence_check.downgraded_count,
-      evidence_rescans: aggregatedRawData.evidence_check.rescan_count,
-    });
-
     validatePreSynthesisIntegrity(
       evidenceIntegrity,
       knowledgeIntegrity,
@@ -510,6 +498,11 @@ export const analyzeDocument = async (
       phase_1_audit_logs: auditLogs,
       evidence_check: aggregatedRawData.evidence_check,
       validation: phase1Validation,
+    });
+    serverLog(runId, 'info', 'stage_complete', {
+      stage: 'forensic_audit',
+      model: aggregatedRawData.models_used.join(',') || actuals.forensic_audit,
+      duration_ms: Date.now() - phase1Started,
     });
 
     const phase1Status = aggregatedRawData.evidence_check.failed || !phase1Validation.valid ? 'completed_with_warnings' : 'completed';

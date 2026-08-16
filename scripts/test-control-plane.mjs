@@ -32,6 +32,7 @@ const plane=new RedisExecutionPlane(redis);assert.equal(await plane.ready(),true
 assert.deepEqual(redisCalls[0].fields,{attempt_id:'opaque-attempt'});assert.doesNotMatch(JSON.stringify(redisCalls[0]),new RegExp(CANARIES.join('|')));
 assert.equal(safeErrorCode(new Error(CANARIES[0])),'INTERNAL_ERROR');
 assert.equal(safeErrorCode({code:'SCHEMA_INCOMPATIBLE'}),'SCHEMA_INCOMPATIBLE');
+assert.equal(safeErrorCode({code:'DATABASE_OPERATION_FAILED'}),'DATABASE_OPERATION_FAILED');
 await assert.rejects(
   ()=>initializeInfrastructure({}, {
     pool:{async query(sql){if(sql.startsWith('SELECT 1'))return{rows:[{ready:1}]};if(sql.startsWith('SELECT COALESCE'))return{rows:[{version:CONTROL_PLANE_SCHEMA_VERSION-1}]};return{rows:[]};},async end(){}},
@@ -49,5 +50,7 @@ const lineageMigration=await readFile(new URL('../migrations/007_stage_execution
 const bodyMigration=await readFile(new URL('../migrations/008_authoritative_packet_bodies.sql',import.meta.url),'utf8');assert.match(bodyMigration,/governed_packet_bodies/);assert.match(bodyMigration,/canonical_body bytea NOT NULL/);assert.match(bodyMigration,/octet_length\(canonical_body\)/);assert.match(bodyMigration,/ON DELETE CASCADE/);assert.doesNotMatch(bodyMigration,/\b(JSONB|prompt|output|message|details)\b/i);
 const repositorySource=await readFile(new URL('../lib/controlPlaneRepository.js',import.meta.url),'utf8');assert.match(repositorySource,/state='approved'/);assert.doesNotMatch(repositorySource,/state IN \('approved','claimed'\)/);
 assert.match(repositorySource,/DELETE FROM governed_packet_bodies/,'terminal cleanup must erase packet content before retaining metadata');
+assert.match(repositorySource,/\$12::bytea AS canonical_body/,'packet-body parameters must have one explicit PostgreSQL type');
+assert.match(repositorySource,/DATABASE_OPERATION_FAILED/,'packet persistence failures must expose a safe database error code');
 assert.doesNotMatch(repositorySource,/outcome_unknown:\[[^\]]*fallback_allowed/,'post-send ambiguity must never become fallback');
 console.log('control-plane tests passed');
