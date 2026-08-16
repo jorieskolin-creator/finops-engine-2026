@@ -73,6 +73,19 @@ const shadowDerived = {
   },
   locator: { sheet: 'Costs', range: 'A1:B4', header_row: 1 }, eligibility: { state: 'SHADOW_ONLY', reasons: ['REGISTRY_SHADOW_ONLY'] }, unit_fingerprint: '12345678', report_eligible: false, raw_value_exposure: false
 };
+const approvedDerived = {
+  ...shadowDerived,
+  mode: 'authoritative',
+  derivation: { ...shadowDerived.derivation, analyzer_version: '1.3.0' },
+  result: {
+    ...shadowDerived.result,
+    cost_basis: { state: 'VALID', column_index: 1, currencies: ['USD'], excluded_row_count: 0 },
+    reconciliation: { state: 'PASSED' }
+  },
+  summary_lines: ['owner row coverage: 50%; valid=1/2; invalid placeholders=0; state=FIELD_PRESENT_PARTIAL.'],
+  eligibility: { state: 'ELIGIBLE', reasons: [] },
+  report_eligible: true
+};
 const privacyDecision = {
   schema_version: 'evidence_privacy_decision_v1', policy_version: 'deterministic_evidence_privacy_v1', decision: 'PASS_WITH_REDACTIONS',
   scanned_source_count: 2, scanned_text_unit_count: 2, scanned_table_cell_count: 4, redaction_count: 1,
@@ -128,6 +141,15 @@ assert.match(packet.text, /Workbook images from 1 source\(s\) remain uninspected
 assert.match(packet.text, /No report-eligible deterministic analytical evidence is approved/);
 assert.match(packet.text, /<CUSTOMER_EVIDENCE>[\s\S]*owner allocation evidence/);
 assert.doesNotThrow(() => assertEvidenceLaneStagePacket(packet));
+
+const approvedPacket = buildEvidenceLaneStagePackets({
+  source_packets: { A: sourcePacket }, source_packet_hashes: sourcePacketHashes,
+  derived_evidence: [approvedDerived], privacy_decision: privacyDecision, acquisition_readiness: readiness
+}).A;
+assert.equal(approvedPacket.derived_evidence.length, 1, 'approved full-population evidence must reach model context');
+assert.match(approvedPacket.text, /owner row coverage: 50%/);
+assert.doesNotMatch(approvedPacket.text, /calculated_total|declared_total|difference|\b150\b/, 'model-visible projection must omit absolute monetary values');
+assert.doesNotThrow(() => assertEvidenceLaneStagePacket(approvedPacket));
 assert.throws(() => assertEvidenceLaneStagePacket({ ...packet, text: `${packet.text} tampered` }), /INTEGRITY_FAILED/);
 assert.throws(() => assertEvidenceLaneStagePacket({
   ...packet,
@@ -167,7 +189,7 @@ assert.throws(() => buildEvidenceLaneStagePackets({
 }), /RAW_IMAGE_PAYLOAD_NOT_PERMITTED/);
 assert.throws(() => buildEvidenceLaneStagePackets({
   source_packets: { A: sourcePacket }, source_packet_hashes: sourcePacketHashes,
-  derived_evidence: [{ ...shadowDerived, result: { ...shadowDerived.result, reconciliation: { state: 'FAILED', calculated_total: 150, declared_total: 200, difference: -50 } } }],
+  derived_evidence: [{ ...approvedDerived, result: { ...approvedDerived.result, reconciliation: { state: 'FAILED' } } }],
   privacy_decision: privacyDecision, acquisition_readiness: readiness
 }), /DERIVED_EVIDENCE_RECONCILIATION_FAILED/);
 

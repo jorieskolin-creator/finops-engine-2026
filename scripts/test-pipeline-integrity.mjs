@@ -19,7 +19,7 @@ const BATCH_IDS = ['A', 'B', 'C', 'D', 'E', 'F'];
 const BATCH_DEFINITIONS = Object.fromEntries(BATCH_IDS.map(domain => [domain, { title: domain, maturity: { one: true }, antipattern: { one: true } }]));
 const buildShadowKnowledgePacket = () => ({ readiness: 'NOT_READY' });
 `)
-  .replace("import { isEvidenceQuoteBoundToChunk } from './evidenceSupport';", "import { isEvidenceQuoteBoundToChunk } from './evidenceSupport.mjs';")
+  .replace("import { isEvidenceQuoteBoundToChunk, isEvidenceQuoteBoundToDerivedEvidence } from './evidenceSupport';", "import { isEvidenceQuoteBoundToChunk, isEvidenceQuoteBoundToDerivedEvidence } from './evidenceSupport.mjs';")
   .replace("import { hashString } from './runTraceService';", `
 const hashString = value => {
   let hash = 0x811c9dc5;

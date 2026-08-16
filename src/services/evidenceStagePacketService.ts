@@ -26,6 +26,23 @@ const FORBIDDEN_USES = [
 const domainForEvidence = (evidence: DerivedAnalyticalEvidence): string | undefined =>
   evidence.targets.map(target => target.criterion_id.charAt(0)).find(Boolean);
 
+const modelSafeDerivedEvidence = (items: DerivedAnalyticalEvidence[]): string => JSON.stringify(items.map(item => ({
+  schema_version: item.schema_version,
+  evidence_id: item.evidence_id,
+  source_id: item.source_id,
+  targets: item.targets,
+  derivation: item.derivation,
+  population: {
+    source_row_count: item.result.source_row_count,
+    analyzed_row_count: item.result.analyzed_row_count,
+    eligible_row_count: item.result.eligible_row_count,
+    row_scope: item.result.row_scope,
+  },
+  summary_lines: item.summary_lines,
+  locator: item.locator,
+  unit_fingerprint: item.unit_fingerprint,
+}))).replace(/[<>&]/g, value => value === '<' ? '\\u003c' : value === '>' ? '\\u003e' : '\\u0026');
+
 const hashable = (packet: Omit<EvidenceLaneStagePacket, 'integrity_hash' | 'text'>): string =>
   JSON.stringify(packet);
 
@@ -62,7 +79,7 @@ ${JSON.stringify(packet.evidence)}
 ${JSON.stringify(packet.sanitized_visual_evidence)}
 </SANITIZED_VISUAL_EVIDENCE_MANIFEST>
 <DERIVED_EVIDENCE count="${packet.derived_evidence.length}">
-${packet.derived_evidence.length > 0 ? JSON.stringify(packet.derived_evidence) : 'No report-eligible deterministic analytical evidence is approved for this domain.'}
+${packet.derived_evidence.length > 0 ? modelSafeDerivedEvidence(packet.derived_evidence) : 'No report-eligible deterministic analytical evidence is approved for this domain.'}
 </DERIVED_EVIDENCE>
 <CUSTOMER_EVIDENCE>
 ${sourceText}

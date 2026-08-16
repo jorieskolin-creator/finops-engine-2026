@@ -23,7 +23,8 @@ export interface EvidenceQuote {
   source_document?: string;
   section?: string;
   category?: EvidenceCategory;
-  evidence_source?: 'text' | 'image';
+  evidence_source?: 'text' | 'image' | 'derived';
+  derived_evidence_id?: string;
   page_number?: number;
   source_id?: string;
   page_id?: string;
@@ -425,7 +426,7 @@ export interface ShadowTelemetryPersistence {
   schema_version: 'shadow_telemetry_v1';
   retrieval_policy_version: 'bounded_retrieval_policy_v1';
   derived_evidence_schema_version: 'derived_analytical_evidence_v1';
-  analyzer_version: 'tagging_allocation_v1@1.2.0';
+  analyzer_version: 'tagging_allocation_v1@1.3.0';
   scale_registry_version: 'data_signal_registry_v1';
   retrieval_domain_count: number;
   retrieval_triggered_domain_count: number;
@@ -914,7 +915,7 @@ export interface TableInspectionTrace {
 export interface DataSignalCoverageReport {
   schema_version: 'data_signal_coverage_v1';
   registry_version: 'data_signal_registry_v1';
-  mode: 'shadow';
+  mode: 'active';
   total_object_count: 60;
   analyzer_available_count: number;
   unsupported_count: number;
@@ -922,7 +923,7 @@ export interface DataSignalCoverageReport {
     domain_id: string;
     stream: 'maturity' | 'antipattern';
     criterion_id: string;
-    status: 'SHADOW_ANALYZER_AVAILABLE' | 'NO_AUTHORITATIVE_ANALYZER_SEMANTICS';
+    status: 'AUTHORITATIVE_ANALYZER_AVAILABLE' | 'NO_AUTHORITATIVE_ANALYZER_SEMANTICS';
     analyzer_ids: string[];
   }>;
 }
@@ -961,12 +962,12 @@ export interface DataSignalRegistryEntry {
 
 export interface EvidenceAnalysisRegistryEntry {
   readonly analyzer_id: 'tagging_allocation_v1';
-  readonly analyzer_version: '1.2.0';
+  readonly analyzer_version: '1.3.0';
   readonly registry_version: 'evidence_analysis_registry_v1';
   readonly approval_status: 'SHADOW_ONLY' | 'APPROVED';
   readonly approved_for_model_packet: boolean;
   readonly accepted_source_kinds: readonly ['csv', 'tsv', 'xlsx'];
-  readonly targets: ReadonlyArray<{ readonly stream: 'maturity' | 'antipattern'; readonly criterion_id: 'A1' }>;
+  readonly targets: ReadonlyArray<{ readonly stream: 'maturity' | 'antipattern'; readonly criterion_id: string }>;
   readonly calculations: ReadonlyArray<{
     readonly calculation_id: string;
     readonly formula: string;
@@ -982,10 +983,10 @@ export interface DerivedAnalyticalEvidence {
   evidence_id: string;
   evidence_type: 'deterministic_analytical';
   source_id: string;
-  targets: Array<{ stream: 'maturity' | 'antipattern'; criterion_id: 'A1' }>;
+  targets: Array<{ stream: 'maturity' | 'antipattern'; criterion_id: string }>;
   derivation: {
     analyzer_id: 'tagging_allocation_v1';
-    analyzer_version: '1.2.0';
+    analyzer_version: '1.3.0';
     registry_version: 'evidence_analysis_registry_v1';
     method: 'tagging_allocation_coverage_analysis';
     calculation_ids: string[];
@@ -1013,18 +1014,11 @@ export interface DerivedAnalyticalEvidence {
       valid_row_count: number;
       invalid_placeholder_count: number;
       row_coverage_percent: number | null;
-      eligible_cost: number | null;
-      valid_cost: number | null;
-      uncovered_cost: number | null;
       cost_coverage_percent: number | null;
+      unallocated_cost_percent: number | null;
       distinct_valid_value_count: number | null;
       valid_value_cardinality_percent: number | null;
       conflicting_assignment_count: number | null;
-      top_uncovered_contributors: Array<{
-        row_number: number;
-        cost: number;
-        eligible_cost_percent: number;
-      }>;
     }>;
     cost_basis: {
       state: 'NOT_PRESENT' | 'VALID' | 'AMBIGUOUS_CURRENCY' | 'INVALID_VALUES';
@@ -1035,11 +1029,9 @@ export interface DerivedAnalyticalEvidence {
     };
     reconciliation: {
       state: 'NOT_AVAILABLE' | 'PASSED' | 'FAILED' | 'AMBIGUOUS';
-      calculated_total: number | null;
-      declared_total: number | null;
-      difference: number | null;
     };
   };
+  summary_lines: string[];
   locator: { sheet?: string; range?: string; header_row?: number };
   eligibility: {
     state: 'SHADOW_ONLY' | 'INELIGIBLE' | 'ELIGIBLE';

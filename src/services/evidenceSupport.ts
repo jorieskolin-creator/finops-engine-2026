@@ -5,6 +5,7 @@ import type {
   EvidenceQuote,
   SourceChunk,
   SourcePacketManifestItem,
+  DerivedAnalyticalEvidence,
 } from '../types';
 
 const EVIDENCE_CHECK_STATUSES: EvidenceCheckStatus[] = ['supported', 'weak', 'unsupported', 'missing'];
@@ -35,6 +36,27 @@ export const isEvidenceQuoteBoundToChunk = (
   && quote.row_number === manifestItem.row_number
   && normalizeEvidenceText(quote.quote).length >= 4
   && normalizeEvidenceText(chunk.text).includes(normalizeEvidenceText(quote.quote))
+);
+
+export const isEvidenceQuoteBoundToDerivedEvidence = (
+  quote: Partial<EvidenceQuote>,
+  evidence: DerivedAnalyticalEvidence | undefined,
+  stream: 'maturity' | 'antipattern',
+  criterionId: string,
+): boolean => Boolean(
+  quote.evidence_source === 'derived'
+  && quote.derived_evidence_id
+  && quote.source_id
+  && typeof quote.quote === 'string'
+  && evidence
+  && evidence.mode === 'authoritative'
+  && evidence.report_eligible
+  && evidence.eligibility.state === 'ELIGIBLE'
+  && quote.derived_evidence_id === evidence.evidence_id
+  && quote.source_id === evidence.source_id
+  && evidence.targets.some(target => target.stream === stream && target.criterion_id === criterionId)
+  && normalizeEvidenceText(quote.quote).length >= 4
+  && evidence.summary_lines.some(line => normalizeEvidenceText(line) === normalizeEvidenceText(quote.quote!))
 );
 
 export const isValidEvidenceVerifierItem = (input: {

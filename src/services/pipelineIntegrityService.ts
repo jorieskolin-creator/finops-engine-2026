@@ -4,13 +4,15 @@ import type {
   RoutedSourcePacket,
   SourceRecord,
   SourceRegistry,
+  DerivedAnalyticalEvidence,
+  EvidenceQuote,
 } from '../types';
 import {
   BATCH_DEFINITIONS,
   BATCH_IDS,
   buildShadowKnowledgePacket,
 } from '../knowledge_base';
-import { isEvidenceQuoteBoundToChunk } from './evidenceSupport';
+import { isEvidenceQuoteBoundToChunk, isEvidenceQuoteBoundToDerivedEvidence } from './evidenceSupport';
 import { hashString } from './runTraceService';
 
 export type IntegrityGate = 'acquisition' | 'knowledge' | 'pre_synthesis';
@@ -320,6 +322,7 @@ export const validatePreSynthesisIntegrity = (
   packets: Record<string, RoutedSourcePacket>,
   knowledgeIndex: RemoteKnowledgeBaseIndex,
   phase1: Phase1IntegrityInput,
+  derivedEvidence: DerivedAnalyticalEvidence[] = [],
 ): void => {
   validateEvidenceContinuity(evidenceSnapshot, registry, packets);
   const currentKnowledgeMode = remoteKnowledgeReady(knowledgeIndex) ? 'remote_blob' : 'built_in';
@@ -335,6 +338,7 @@ export const validatePreSynthesisIntegrity = (
   }
 
   const expectedIds = new Set(BATCH_IDS.flatMap(domain => Array.from({ length: 5 }, (_, index) => `${domain}${index + 1}`)));
+  const derivedById = new Map(derivedEvidence.map(item => [item.evidence_id, item]));
   for (const stream of ['maturity', 'antipattern'] as const) {
     const deliveredIds = Object.keys(phase1.phase_1_audit_logs[stream]);
     if (deliveredIds.length !== expectedIds.size
@@ -360,12 +364,18 @@ export const validatePreSynthesisIntegrity = (
         const item = phase1.phase_1_audit_logs[stream][`${domain}${index}`] as {
           count?: number;
           verification_unresolved?: boolean;
-          evidence_quotes?: Array<{ quote?: string; chunk_id?: string; source_id?: string; page_id?: string; page_number?: number; sheet_name?: string; row_number?: number }>;
+          evidence_quotes?: Array<Partial<EvidenceQuote>>;
         } | undefined;
         if (!item?.verification_unresolved && (item?.count || 0) > 0 && (item?.evidence_quotes?.length || 0) === 0) {
           throw new PipelineIntegrityError('FINDING_PROVENANCE_INVALID', 'pre_synthesis', [domain]);
         }
         for (const quote of item?.evidence_quotes || []) {
+          if (quote.evidence_source === 'derived') {
+            if (!isEvidenceQuoteBoundToDerivedEvidence(quote, derivedById.get(quote.derived_evidence_id || ''), stream, `${domain}${index}`)) {
+              throw new PipelineIntegrityError('FINDING_PROVENANCE_INVALID', 'pre_synthesis', [domain]);
+            }
+            continue;
+          }
           const located = quote.chunk_id ? manifest.get(quote.chunk_id) : undefined;
           const chunk = registry.chunks.find(candidate => candidate.chunk_id === quote.chunk_id);
           if (!isEvidenceQuoteBoundToChunk(quote, located, chunk)) {

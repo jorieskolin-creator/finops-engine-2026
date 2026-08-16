@@ -9,9 +9,10 @@ import {
   AntiPatternAbsenceStatus,
   RoutedSourcePacket,
   SourceRegistry,
+  DerivedAnalyticalEvidence,
 } from '../types';
 import { runStage, RunContext, serverLog } from './modelRouter';
-import { isEvidenceQuoteBoundToChunk, isValidEvidenceVerifierItem, verifyTextEvidenceSupport } from './evidenceSupport';
+import { isEvidenceQuoteBoundToChunk, isEvidenceQuoteBoundToDerivedEvidence, isValidEvidenceVerifierItem, verifyTextEvidenceSupport } from './evidenceSupport';
 import {
   antiPatternStatusDescription,
   normalizeAntiPatternAbsenceStatus,
@@ -139,6 +140,7 @@ ${summarizeBatch(batch)}
 - "unsupported": the finding/score is not supported by the source.
 - "missing": the scanner scored >0 but did not provide usable traceable evidence, or the evidence cannot be located.
 - For text evidence, quoted text must be a real substring or clearly faithful excerpt from the source.
+- For deterministic derived evidence, require evidence_source="derived", a known derived_evidence_id, the correct source_id and an exact summary line targeted to this criterion. Never require a chunk_id for derived evidence and never recalculate its values.
 - When the source contains <CHUNK ...> markers, verify against the exact chunk text. Use chunk IDs/source IDs/page markers in your rationale when they clarify support or absence coverage.
 - If the packet says coverage is weak or broad-source fallback was used, do not treat missing packet evidence as positive absence. Mark maturity as missing/silent or anti-pattern absence as unknown unless an exact chunk supports the conclusion.
 - For image evidence, the description must be something visible in the attached image content.
@@ -730,12 +732,14 @@ export const reconcileEvidenceProvenance = <T extends ProvenancePhase1Result>(
   phase1: T,
   registry: SourceRegistry,
   packets: Record<string, RoutedSourcePacket>,
+  derivedEvidence: DerivedAnalyticalEvidence[] = [],
 ): { result: T; adjustedCriteria: string[]; removedQuoteCount: number } => {
   const logs = {
     maturity: { ...phase1.phase_1_audit_logs.maturity },
     antipattern: { ...phase1.phase_1_audit_logs.antipattern },
   };
   const chunks = new Map(registry.chunks.map(chunk => [chunk.chunk_id, chunk]));
+  const derivedById = new Map(derivedEvidence.map(item => [item.evidence_id, item]));
   const evidenceItems = phase1.evidence_check.items.map(item => ({ ...item }));
   const evidenceItemsByKey = new Map(evidenceItems.map(item => [`${item.stream}.${item.id}`, item]));
   const adjustmentsByKey = new Map(phase1.evidence_check.adjustments.map(item => [`${item.stream}.${item.id}`, { ...item }]));
@@ -750,6 +754,9 @@ export const reconcileEvidenceProvenance = <T extends ProvenancePhase1Result>(
         const existing = logs[stream][id];
         if (!existing || !Array.isArray(existing.evidence_quotes)) continue;
         const validQuotes = existing.evidence_quotes.filter((quote: any) => {
+          if (quote?.evidence_source === 'derived') {
+            return isEvidenceQuoteBoundToDerivedEvidence(quote, derivedById.get(quote.derived_evidence_id), stream, id);
+          }
           const located = typeof quote?.chunk_id === 'string' ? manifest.get(quote.chunk_id) : undefined;
           return isEvidenceQuoteBoundToChunk(quote || {}, located, located ? chunks.get(located.chunk_id) : undefined);
         });

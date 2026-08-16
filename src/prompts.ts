@@ -26,9 +26,10 @@ You must evaluate **ALL 3 criteria** for every item to determine the final score
 *   **Financial Sensitivity:** Do NOT extract or repeat specific dollar amounts, account numbers, or pricing terms from the document.
 
 ### EVIDENCE QUOTES (CRITICAL)
-For EVERY item with score > 0, you MUST include at least one direct quote from the source document as evidence.
-Wrap evidence in the "evidence_quotes" array with the actual text from the document.
-Every evidence quote MUST copy its "source_id" and "chunk_id" from the enclosing <CHUNK> marker. Also copy every locator present on that marker: "page_number"/"page_id" for PDF pages and "sheet_name"/"row_number" for table evidence. Never cite text outside the cited chunk.
+For EVERY item with score > 0, you MUST include at least one direct source-text quote, visible-image description, or approved deterministic summary line as evidence.
+Wrap each citation in the "evidence_quotes" array.
+Every source-text quote MUST copy its "source_id" and "chunk_id" from the enclosing <CHUNK> marker. Also copy every locator present on that marker: "page_number"/"page_id" for PDF pages and "sheet_name"/"row_number" for table evidence. Never cite text outside the cited chunk.
+For approved deterministic evidence inside <DERIVED_EVIDENCE>, set evidence_source to "derived", copy source_id and derived_evidence_id, and quote one exact summary_lines entry. Do not add chunk_id. Use a derived observation only for its declared target criterion, never recalculate it, and never infer policy, enforcement, culture, intent, or remediation from table population metrics alone.
 
 ### IMAGE / VISUAL EVIDENCE
 Some of the source material may be provided as IMAGES (pages from a PDF, screenshots of dashboards, architecture diagrams, organization charts). Treat the visible content of those images as evidence on equal footing with text.
@@ -101,7 +102,7 @@ For the 5 criteria in Stream A (${columnId}1-${columnId}5) AND the 5 criteria in
     "${columnId}1": {
       "count": 0,
       "evidence": "Summary of evidence...",
-      "evidence_quotes": [{ "quote": "Direct text from document OR short description of what is visible in an image", "section": "Section name if identifiable", "category": "Policy | Process | Operational | Automation | Accountability | Financial-Integration | Cultural", "evidence_source": "text | image", "source_id": "src-001", "chunk_id": "src-001-p003-c001", "page_number": 3 }],
+      "evidence_quotes": [{ "quote": "Direct text from the cited source chunk", "section": "Section name if identifiable", "category": "Policy | Process | Operational | Automation | Accountability | Financial-Integration | Cultural", "evidence_source": "text", "source_id": "src-001", "chunk_id": "src-001-p003-c001", "page_number": 3 }],
       "reasoning": "Crit 1: Found. Crit 2: Not found. Crit 3: Not found. Total: 1."
     },
     ...
@@ -163,7 +164,7 @@ For ONLY the listed criteria, re-evaluate all 3 sub-criteria and return correcte
 Rules:
 1. If evidence is not directly present in the source, lower the Count.
 2. For Count > 0, include at least one direct text quote or visible-image description in evidence_quotes.
-3. Every quote must include source_id, chunk_id, and every page/sheet/row locator shown by its enclosing CHUNK marker. Never cite text outside that chunk.
+3. Source-text quotes must include source_id, chunk_id, and every page/sheet/row locator shown by the enclosing CHUNK. Derived quotes must instead include evidence_source="derived", source_id, derived_evidence_id, and an exact summary_lines entry from approved <DERIVED_EVIDENCE>. Never cite content outside the referenced evidence unit.
 4. For anti-pattern Count = 0, distinguish verified absence from unknown absence in the evidence/reasoning text. Verified absence requires relevant source coverage; silence or irrelevant source material is not positive evidence.
 5. Do not return criteria that were not listed in <target_criteria>.
 
@@ -173,7 +174,7 @@ Required JSON shape:
     "${columnId}1": {
       "count": 0,
       "evidence": "Corrected summary of evidence...",
-      "evidence_quotes": [{ "quote": "Direct text from document OR visible image description", "section": "Section name if identifiable", "category": "Policy | Process | Operational | Automation | Accountability | Financial-Integration | Cultural", "evidence_source": "text | image", "source_id": "src-001", "chunk_id": "src-001-p003-c001", "page_number": 3 }],
+      "evidence_quotes": [{ "quote": "Direct text from the cited source chunk", "section": "Section name if identifiable", "category": "Policy | Process | Operational | Automation | Accountability | Financial-Integration | Cultural", "evidence_source": "text", "source_id": "src-001", "chunk_id": "src-001-p003-c001", "page_number": 3 }],
       "reasoning": "Crit 1: Found/Not found. Crit 2: Found/Not found. Crit 3: Found/Not found. Total: N."
     }
   },

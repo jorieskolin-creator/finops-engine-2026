@@ -185,7 +185,8 @@ const validateAndSanitizeLogs = (rawData: any): Phase1AuditLogs => {
           source_document: typeof q.source_document === 'string' ? q.source_document : undefined,
           section: typeof q.section === 'string' ? q.section : undefined,
           category: EVIDENCE_CATEGORIES.includes(q.category) ? q.category as EvidenceCategory : undefined,
-          evidence_source: q.evidence_source === 'image' ? 'image' : 'text',
+          evidence_source: q.evidence_source === 'image' ? 'image' : q.evidence_source === 'derived' ? 'derived' : 'text',
+          derived_evidence_id: typeof q.derived_evidence_id === 'string' ? q.derived_evidence_id : undefined,
           page_number: typeof q.page_number === 'number' && q.page_number > 0 ? q.page_number : undefined,
           source_id: typeof q.source_id === 'string' ? q.source_id : undefined,
           page_id: typeof q.page_id === 'string' ? q.page_id : undefined,
@@ -427,7 +428,7 @@ export const analyzeDocument = async (
       actuals.evidence_adjudication = aggregatedRawData.evidence_adjudication_models_used.join(',');
     }
     validateEvidenceContinuity(evidenceIntegrity, sourceRegistry, sourcePackets);
-    const provenanceReconciliation = reconcileEvidenceProvenance(aggregatedRawData, sourceRegistry, sourcePackets);
+    const provenanceReconciliation = reconcileEvidenceProvenance(aggregatedRawData, sourceRegistry, sourcePackets, derivedAnalyticalEvidence);
     aggregatedRawData = provenanceReconciliation.result;
     if (provenanceReconciliation.adjustedCriteria.length > 0) {
       serverLog(runId, 'warn', 'finding_provenance_adjusted', {
@@ -455,6 +456,7 @@ export const analyzeDocument = async (
       sourcePackets,
       referenceKbIndex,
       aggregatedRawData,
+      derivedAnalyticalEvidence,
     );
     serverLog(runId, 'info', 'pipeline_integrity_passed', {
       gate: 'pre_synthesis',

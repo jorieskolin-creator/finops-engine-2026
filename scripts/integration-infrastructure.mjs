@@ -133,7 +133,7 @@ try {
     unresolved_provenance_count: 0,
   }, {
     schema_version: 'shadow_telemetry_v1', retrieval_policy_version: 'bounded_retrieval_policy_v1',
-    derived_evidence_schema_version: 'derived_analytical_evidence_v1', analyzer_version: 'tagging_allocation_v1@1.2.0',
+    derived_evidence_schema_version: 'derived_analytical_evidence_v1', analyzer_version: 'tagging_allocation_v1@1.3.0',
     scale_registry_version: 'data_signal_registry_v1', retrieval_domain_count: 6,
     retrieval_triggered_domain_count: 0, retrieval_pass_1_count: 0, retrieval_pass_2_count: 0,
     retrieval_selected_candidate_count: 0, retrieval_average_gain_points: 0, retrieval_max_gain_points: 0,

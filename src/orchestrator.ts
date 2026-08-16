@@ -55,7 +55,8 @@ const runSingleBatch = async (
   images: ImageInput[],
   ctx: RunContext,
   userPromptOverride?: string,
-  stage: StageId = 'forensic_audit'
+  stage: StageId = 'forensic_audit',
+  expectedIds?: { maturity: string[]; antipattern: string[] },
 ): Promise<BatchAuditResult & { model_used?: string }> => {
   const definitions = BATCH_DEFINITIONS[batchId];
   const systemInstruction = generateBatchSystemInstruction(batchId, definitions.title);
@@ -83,6 +84,28 @@ ${text}
   }, ctx);
 
   const parsed = parseAiResponse(response.text);
+  const expected = expectedIds || {
+    maturity: Array.from({ length: 5 }, (_, index) => `${batchId}${index + 1}`),
+    antipattern: Array.from({ length: 5 }, (_, index) => `${batchId}${index + 1}`),
+  };
+  for (const stream of ['maturity', 'antipattern'] as const) {
+    const bucket = parsed?.[stream];
+    const keys = bucket && typeof bucket === 'object' && !Array.isArray(bucket) ? Object.keys(bucket).sort() : [];
+    const wanted = [...expected[stream]].sort();
+    if (keys.length !== wanted.length || keys.some((key, index) => key !== wanted[index])) throw new Error('INVALID_BATCH_OUTPUT_IDS');
+    for (const id of keys) {
+      const item = bucket[id];
+      if (!item || !Number.isInteger(item.count) || item.count < 0 || item.count > 3
+        || typeof item.evidence !== 'string' || typeof item.reasoning !== 'string'
+        || !Array.isArray(item.evidence_quotes)) throw new Error('INVALID_BATCH_OUTPUT_SCHEMA');
+      if (item.count > 0 && item.evidence_quotes.length === 0) throw new Error('INVALID_BATCH_OUTPUT_PROVENANCE');
+      if (item.evidence_quotes.some((quote: any) => !quote || typeof quote.quote !== 'string'
+        || typeof quote.source_id !== 'string'
+        || (quote.evidence_source === 'derived'
+          ? typeof quote.derived_evidence_id !== 'string' || quote.chunk_id !== undefined
+          : typeof quote.chunk_id !== 'string'))) throw new Error('INVALID_BATCH_OUTPUT_PROVENANCE');
+    }
+  }
   return { ...parsed, model_used: response.modelUsed.id };
 };
 
@@ -112,6 +135,9 @@ const batchFailureCode = (error: unknown): string => {
   if (message.includes('All models exhausted')) return 'MODELS_EXHAUSTED';
   if (message.includes('not valid JSON')) return 'INVALID_MODEL_OUTPUT';
   if (message.includes('empty result')) return 'EMPTY_MODEL_OUTPUT';
+  if (message.includes('INVALID_BATCH_OUTPUT_IDS')) return 'INVALID_BATCH_OUTPUT_IDS';
+  if (message.includes('INVALID_BATCH_OUTPUT_SCHEMA')) return 'INVALID_BATCH_OUTPUT_SCHEMA';
+  if (message.includes('INVALID_BATCH_OUTPUT_PROVENANCE')) return 'INVALID_BATCH_OUTPUT_PROVENANCE';
   return 'BATCH_PROCESSING_FAILED';
 };
 
@@ -163,7 +189,15 @@ const runTargetedRescan = async (
     antipatternIds,
     feedbackForRescan(items)
   );
-  return runSingleBatch(batchId, text, images, ctx, prompt, 'targeted_rescan');
+  let lastError: unknown;
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    try {
+      return await runSingleBatch(batchId, text, images, ctx, prompt, 'targeted_rescan', { maturity: maturityIds, antipattern: antipatternIds });
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  throw lastError;
 };
 
 export const runPhase1Audit = async (
