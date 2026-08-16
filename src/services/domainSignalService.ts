@@ -9,6 +9,9 @@ export interface DomainSignalRow {
   title: string;
   maturityPercent: number;
   antiPatternPercent: number;
+  maturityAvailable: boolean;
+  antiPatternAvailable: boolean;
+  verificationUnresolved: boolean;
   maturityTone: DomainSignalTone;
   antiPatternTone: DomainSignalTone;
   maturityAssessed: number;
@@ -56,8 +59,11 @@ export const computeDomainSignalRows = (result: DiagnosticResult): DomainSignalR
     const antiPatternCriteria = MASTER_BINGO_FINOPS.antipattern.filter(item => item.batch === domain);
 
     const maturityItems = maturityCriteria.map(criteria => result.phase_1_audit_logs.maturity[criteria.id]);
+    const verificationUnresolved = maturityItems.some(item => item?.verification_unresolved)
+      || antiPatternCriteria.some(criteria => result.phase_1_audit_logs.antipattern[criteria.id]?.verification_unresolved);
     const maturityTotal = maturityCriteria.length;
     const maturityAssessed = maturityItems.filter(maturityItemAssessed).length;
+    const maturityAvailable = maturityAssessed > 0;
     const maturityScore = maturityItems.reduce((sum, item) => sum + (maturityItemAssessed(item) ? clampScore(item?.count) : 0), 0);
     const maturityPercent = maturityAssessed > 0 ? Math.round((maturityScore / (maturityAssessed * 3)) * 100) : 0;
 
@@ -88,6 +94,7 @@ export const computeDomainSignalRows = (result: DiagnosticResult): DomainSignalR
     }
 
     const antiPatternTotal = antiPatternCriteria.length;
+    const antiPatternAvailable = antiPatternNotAssessed < antiPatternTotal;
     const antiPatternPercent = antiPatternTotal > 0
       ? Math.round((antiPatternFindingWeight / antiPatternTotal) * 100)
       : 0;
@@ -101,6 +108,9 @@ export const computeDomainSignalRows = (result: DiagnosticResult): DomainSignalR
       title: BATCH_TITLES[domain] || domain,
       maturityPercent,
       antiPatternPercent,
+      maturityAvailable,
+      antiPatternAvailable,
+      verificationUnresolved,
       maturityTone: maturityTone(maturityPercent, maturityAssessed, maturityTotal),
       antiPatternTone: antiPatternTone(antiPatternPercent, antiPatternNotAssessed, antiPatternTotal),
       maturityAssessed,
@@ -111,8 +121,10 @@ export const computeDomainSignalRows = (result: DiagnosticResult): DomainSignalR
       antiPatternTestedAbsent,
       antiPatternNotAssessed,
       evidencePercent,
-      coverageNote: notAssessedShare >= 0.4
-        ? 'Anti-pattern absence is not fully assessable from source coverage.'
+      coverageNote: verificationUnresolved
+        ? 'Required verification was unresolved; no validated domain signal is available.'
+        : !maturityAvailable || notAssessedShare >= 0.4
+          ? 'Anti-pattern absence is not fully assessable from source coverage.'
         : undefined
     };
   })

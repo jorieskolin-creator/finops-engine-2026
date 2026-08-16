@@ -99,6 +99,16 @@ assert.ok(largeParsed.tables[0].sampled_row_numbers.includes(182), 'XLSX numeric
 assert.ok(largeParsed.tables[0].sampled_row_numbers.includes(201), 'XLSX last-row boundary must be represented');
 assert.match(largeParsed.warnings.join(' '), /deterministic bounded sample of 150 rows/);
 
+const longCellWorkbook = XLSX.utils.book_new();
+const longXlsxValue = `first line\n${'long evidence '.repeat(300)}\nlast line`;
+XLSX.utils.book_append_sheet(longCellWorkbook, XLSX.utils.aoa_to_sheet([['Owner', 'Evidence'], ['Alice', longXlsxValue]]), 'Long Evidence');
+const longCellBytes = new Uint8Array(XLSX.write(longCellWorkbook, { type: 'buffer', bookType: 'xlsx' }));
+const longCellParsed = await parseXlsxBytes(longCellBytes);
+assert.equal(longCellParsed.tables[0].analysis_rows[0][1], longXlsxValue.replace(/\s+/g, ' ').trim());
+assert.equal(longCellParsed.tables[0].analysis_complete, true);
+assert.equal(longCellParsed.tables[0].truncated, false, 'segmentation alone must not degrade extraction completeness');
+assert.match(longCellParsed.warnings.join(' '), /continuation segments/);
+
 const uncachedFormulaWorkbook = XLSX.utils.book_new();
 const uncachedFormulaSheet = XLSX.utils.aoa_to_sheet([['Owner', 'Calculated Spend'], ['Alice', null]]);
 uncachedFormulaSheet.B2 = { t: 'n', f: '100+50' };

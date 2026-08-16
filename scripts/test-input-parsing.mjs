@@ -73,13 +73,17 @@ assert.equal(inspection.columns[0].blank_rate_percent, 66.67);
 assert.deepEqual(inspection.columns[1].detected_currencies, ['EUR', 'USD']);
 assert.doesNotMatch(profiledCsv.text, /deterministic_table_inspection|duplicate_row_rate/, 'unapproved inspection metrics must remain local and outside model context');
 
-const clippedCsv = renderDelimitedTableForAnalysis(`service,description\ncompute,${'x'.repeat(300)}`, {
+const longMultilineCsvValue = `first line ${'x'.repeat(300)} second line ${'y'.repeat(300)}`;
+const clippedCsv = renderDelimitedTableForAnalysis(`service,description\ncompute,"${longMultilineCsvValue.replace(' second line ', '\nsecond line ')}"`, {
   fileName: 'long-cell.csv',
   delimiter: ',',
 });
 assert.equal(clippedCsv.clippedCellCount, 1);
 assert.ok(clippedCsv.cellCharacterCoverageRatio < 1);
-assert.match(clippedCsv.warnings.join(' '), /cell\(s\).*truncated/);
+assert.match(clippedCsv.warnings.join(' '), /cell\(s\).*continuation segments/);
+assert.equal(clippedCsv.structuredTable.analysis_complete, true);
+assert.equal(clippedCsv.structuredTable.truncated, false, 'segmentation alone must not degrade extraction completeness');
+assert.equal(clippedCsv.structuredTable.analysis_rows[0][1], longMultilineCsvValue);
 
 assert.throws(()=>renderDelimitedTableForAnalysis(`${Array.from({length:201},(_,i)=>`column_${i}`).join(',')}\n${Array.from({length:201},()=>1).join(',')}`, { fileName:'wide.csv', delimiter:',' }),/DELIMITED_TABLE_COLUMN_LIMIT_EXCEEDED/);
 const manyRowsCsv = renderDelimitedTableForAnalysis(`owner\n${Array.from({length:10000},(_,i)=>`owner-${i}`).join('\n')}`, { fileName:'many.csv', delimiter:',' });

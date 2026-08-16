@@ -118,20 +118,18 @@ export const buildAcquisitionQualitySnapshot = (input: {
     ((EXPECTED_KB_DOCUMENT_COUNT - Math.min(EXPECTED_KB_DOCUMENT_COUNT, missingDocumentCount))
       / EXPECTED_KB_DOCUMENT_COUNT) * 100
   );
-  const shadowPackets = Object.values(input.knowledgeBase.shadow_packets || {});
   const knowledgeBlockingReasons = [
     ...(input.knowledgeBase.source !== 'remote_blob' ? [`KB source is ${input.knowledgeBase.source}, not remote_blob.`] : []),
     ...(input.knowledgeBase.failure_count > 0 ? [`KB delivery reported ${input.knowledgeBase.failure_count} failure(s).`] : []),
     ...(missingDocumentCount > 0 ? [`KB is missing ${missingDocumentCount} of ${EXPECTED_KB_DOCUMENT_COUNT} expected documents.`] : []),
     ...((delivery?.unexpected_document_count || 0) > 0 ? [`KB has ${delivery!.unexpected_document_count} unexpected document(s).`] : []),
     ...((delivery?.duplicate_document_count || 0) > 0 ? [`KB has ${delivery!.duplicate_document_count} duplicate document ID(s).`] : []),
-    ...(!delivery?.shadow_ready ? ['KB delivery readiness is NOT_READY.'] : []),
-    ...(shadowPackets.length === 0 ? ['No stage Knowledge Packet readiness diagnostics were produced.'] : []),
-    ...shadowPackets
-      .filter(packet => packet.readiness !== 'READY')
-      .map(packet => `Knowledge Packet ${packet.domain_id || 'all'}:${packet.stage} is NOT_READY.`)
   ];
   const knowledgeReady = knowledgeBlockingReasons.length === 0;
+
+  // Future stage-packet contract diagnostics remain in knowledgeBase telemetry.
+  // They do not describe availability of the current operational KB and cannot
+  // block acquisition readiness, scoring, or gates.
 
   const weakPacketDomains = Object.entries(input.sourceRegistry.packets)
     .filter(([, packet]) => packet.weak_coverage)

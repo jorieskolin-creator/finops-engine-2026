@@ -176,6 +176,32 @@ export interface EvidenceCheckResult {
   failure_reason?: string;
 }
 
+export interface SemanticGapRetrievalPassTrace {
+  domain_id: string;
+  pass: 1 | 2;
+  trigger_status: 'weak';
+  criterion_ids: string[];
+  strategy: 'verifier_derived_semantic_expansion';
+  seen_terms_before: string[];
+  proposed_terms: string[];
+  matched_candidate_count: number;
+  selected_chunk_ids: string[];
+  packet_hash_before: string;
+  packet_hash_after: string;
+  evidence_status_before: Record<string, EvidenceCheckStatus>;
+  evidence_status_after: Record<string, EvidenceCheckStatus>;
+  stop_reason: 'NEW_EVIDENCE_SELECTED' | 'NO_NEW_TERMS' | 'NO_NEW_CANDIDATES' | 'PACKET_LIMIT_REACHED' | 'MAX_PASSES_REACHED';
+}
+
+export interface SemanticGapRetrievalTrace {
+  schema_version: 'semantic_gap_retrieval_trace_v1';
+  policy_version: 'weak_evidence_semantic_retrieval_v1';
+  mode: 'active';
+  scoring_authority: false;
+  max_passes: 2;
+  passes: SemanticGapRetrievalPassTrace[];
+}
+
 export type PipelineProgressStage =
   | 'extraction'
   | 'packetization'
@@ -523,7 +549,7 @@ export interface StructuredTableData {
   source_range?: string;
   header_row_number?: number;
   headers: string[];
-  /** Bounded, cell-clipped rows eligible for model context. */
+  /** Bounded preview rows; complete long-cell values are emitted as source-registry continuation chunks. */
   rows: string[][];
   /** Complete normalized population retained only for local deterministic analysis and privacy scanning. */
   analysis_rows?: string[][];
@@ -687,6 +713,10 @@ export interface SourceChunk {
   page_number?: number;
   sheet_name?: string;
   row_number?: number;
+  column_number?: number;
+  column_name?: string;
+  segment_number?: number;
+  segment_count?: number;
   visual_unit_id?: string;
   bounding_box?: { x0: number; y0: number; x1: number; y1: number };
   ocr_confidence?: number;
@@ -743,6 +773,10 @@ export interface SourcePacketManifestItem {
   page_number?: number;
   sheet_name?: string;
   row_number?: number;
+  column_number?: number;
+  column_name?: string;
+  segment_number?: number;
+  segment_count?: number;
   visual_unit_id?: string;
   bounding_box?: { x0: number; y0: number; x1: number; y1: number };
   ocr_confidence?: number;
@@ -882,6 +916,7 @@ export interface RunTrace {
   table_inspections?: TableInspectionTrace[];
   derived_analytical_evidence?: DerivedAnalyticalEvidence[];
   data_signal_coverage?: DataSignalCoverageReport;
+  semantic_gap_retrieval?: SemanticGapRetrievalTrace;
   bounded_retrieval?: BoundedRetrievalTrace;
   dlp: {
     scanned_chunk_count: number;

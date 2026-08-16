@@ -63,6 +63,12 @@ const CONTRADICTION_TERMS = [
   'contradiction', 'conflict', 'inconsistent', 'unclear', 'exception', 'override', 'manual override'
 ];
 
+export const routingTermsForDomain = (domainId: string): string[] => [
+  ...(DOMAIN_TERMS[domainId] || []),
+  ...GAP_TERMS,
+  ...CONTRADICTION_TERMS
+];
+
 const validNativeCharts = (charts: NonNullable<SourceRecord['structured_table']>['native_charts']): boolean => {
   if (charts === undefined) return true;
   if (!Array.isArray(charts) || charts.length > 50) return false;
@@ -524,6 +530,12 @@ export const buildSourceRegistry = (records: SourceRecord[]): SourceRegistry => 
             text: row.text,
             sheet_name: table.sheet_name,
             row_number: row.rowNumber,
+            column_number: row.columnNumber,
+            column_name: row.columnName,
+            segment_number: row.segmentNumber,
+            segment_count: row.segmentCount,
+            char_start: row.charStart,
+            char_end: row.charEnd,
             routing: routeChunk(row.text)
           });
         }
@@ -549,6 +561,12 @@ export const buildSourceRegistry = (records: SourceRecord[]): SourceRegistry => 
           type: 'table_row',
           text: row.text,
           row_number: row.rowNumber,
+          column_number: row.columnNumber,
+          column_name: row.columnName,
+          segment_number: row.segmentNumber,
+          segment_count: row.segmentCount,
+          char_start: row.charStart,
+          char_end: row.charEnd,
           routing: routeChunk(row.text)
         });
       }
@@ -666,6 +684,11 @@ const renderChunk = (chunk: SourceChunk, relevance: SourceRelevanceTier): string
     chunk.page_number ? `page="${chunk.page_number}"` : '',
     chunk.sheet_name ? `sheet="${escapeXml(chunk.sheet_name)}"` : '',
     chunk.row_number ? `row="${chunk.row_number}"` : '',
+    chunk.column_number ? `column="${chunk.column_number}"` : '',
+    chunk.column_name ? `column_name="${escapeXml(chunk.column_name)}"` : '',
+    chunk.segment_number ? `segment="${chunk.segment_number}/${chunk.segment_count}"` : '',
+    chunk.char_start !== undefined ? `char_start="${chunk.char_start}"` : '',
+    chunk.char_end !== undefined ? `char_end="${chunk.char_end}"` : '',
     chunk.visual_unit_id ? `visual_unit_id="${escapeXml(chunk.visual_unit_id)}"` : '',
     chunk.bounding_box ? `region="${chunk.bounding_box.x0},${chunk.bounding_box.y0},${chunk.bounding_box.x1},${chunk.bounding_box.y1}"` : '',
     chunk.ocr_confidence !== undefined ? `ocr_confidence="${chunk.ocr_confidence}"` : '',
@@ -689,6 +712,10 @@ const manifestFor = (chunk: SourceChunk, relevance: SourceRelevanceTier): Source
   page_number: chunk.page_number,
   sheet_name: chunk.sheet_name,
   row_number: chunk.row_number,
+  column_number: chunk.column_number,
+  column_name: chunk.column_name,
+  segment_number: chunk.segment_number,
+  segment_count: chunk.segment_count,
   visual_unit_id: chunk.visual_unit_id,
   bounding_box: chunk.bounding_box,
   ocr_confidence: chunk.ocr_confidence,
@@ -703,7 +730,8 @@ const manifestFor = (chunk: SourceChunk, relevance: SourceRelevanceTier): Source
   routed_domains: routedDomains(chunk)
 });
 
-const MAX_STRUCTURED_ROW_CHARS = 8000;
+const INLINE_CELL_CHARS = 240;
+const STRUCTURED_CELL_SEGMENT_CHARS = 2200;
 const structuredTableProfile = (table: NonNullable<SourceRecord['structured_table']>, format: 'CSV' | 'TSV' | 'XLSX'): string => [
   `Format: ${format}`,
   table.sheet_name ? `Sheet: ${table.sheet_name}` : 'Source table: browser-local tabular evidence',
@@ -714,17 +742,31 @@ const structuredTableProfile = (table: NonNullable<SourceRecord['structured_tabl
   'Complete evidence rows are routed as separate row-addressable chunks; this profile contains no row values.'
 ].join('\n');
 
-const structuredTableRows = (table: NonNullable<SourceRecord['structured_table']>): Array<{ text: string; rowNumber: number }> => {
+const structuredTableRows = (table: NonNullable<SourceRecord['structured_table']>): Array<{ text: string; rowNumber: number; columnNumber?: number; columnName?: string; segmentNumber?: number; segmentCount?: number; charStart?: number; charEnd?: number }> => {
   const rows = table.analysis_rows || table.rows;
   const rowNumbers = table.analysis_row_numbers || table.sampled_row_numbers || rows.map((_, index) => index + 2);
-  return rows.map((row, index) => {
-    const rendered = row.map((value, column) => `${table.headers[column] || `Column ${column + 1}`}: ${value}`).join(' | ');
-    return {
-      rowNumber: rowNumbers[index],
-      text: rendered.length > MAX_STRUCTURED_ROW_CHARS
-        ? `${rendered.slice(0, MAX_STRUCTURED_ROW_CHARS)}\n[ROW_CONTEXT_TRUNCATED original_chars=${rendered.length}]`
-        : rendered
-    };
+  return rows.flatMap((row, index) => {
+    const rowNumber = rowNumbers[index];
+    const longColumns = row.flatMap((value, column) => value.length > INLINE_CELL_CHARS ? [column] : []);
+    if (longColumns.length === 0) {
+      return [{ rowNumber, text: row.map((value, column) => `${table.headers[column] || `Column ${column + 1}`}: ${value}`).join(' | ') }];
+    }
+    const preview = row.map((value, column) => {
+      const name = table.headers[column] || `Column ${column + 1}`;
+      return value.length > INLINE_CELL_CHARS ? `${name}: [CONTINUED_IN_${Math.ceil(value.length / STRUCTURED_CELL_SEGMENT_CHARS)}_SEGMENTS]` : `${name}: ${value}`;
+    }).join(' | ');
+    const segments = longColumns.flatMap(column => {
+      const value = row[column];
+      const segmentCount = Math.ceil(value.length / STRUCTURED_CELL_SEGMENT_CHARS);
+      const columnNumber = table.source_column_numbers?.[column] || column + 1;
+      const columnName = table.headers[column] || `Column ${columnNumber}`;
+      return Array.from({ length: segmentCount }, (_, segmentIndex) => {
+        const charStart = segmentIndex * STRUCTURED_CELL_SEGMENT_CHARS;
+        const charEnd = Math.min(value.length, charStart + STRUCTURED_CELL_SEGMENT_CHARS);
+        return { rowNumber, columnNumber, columnName, segmentNumber: segmentIndex + 1, segmentCount, charStart, charEnd, text: value.slice(charStart, charEnd) };
+      });
+    });
+    return [{ rowNumber, text: preview }, ...segments];
   });
 };
 

@@ -103,6 +103,22 @@ assert.equal(snapshot.readiness.knowledge_packet, 'READY');
 assert.equal(snapshot.readiness.acquisition, 'NOT_READY');
 assert.equal(snapshot.security.status, 'WARN');
 assert.doesNotMatch(JSON.stringify(snapshot), /sensitive owner mapping detail|allocation process|missing mapping signal/);
+
+const futureContractNotReady = buildAcquisitionQualitySnapshot({
+  logs,
+  phase2: { metrics: { evidence_density: 100 } },
+  sourceRegistry: { ...sourceRegistry, extraction: { ...extraction, blocking_reasons: [] } },
+  knowledgeBase: {
+    ...knowledgeBase,
+    delivery: { ...delivery, shadow_ready: false },
+    shadow_packets: { 'A:forensic_audit': { ...knowledgeBase.shadow_packets['A:forensic_audit'], readiness: 'NOT_READY', missing_requirement_count: 1 } }
+  },
+  runTrace
+});
+assert.equal(futureContractNotReady.knowledge.ready, true, 'future packet diagnostics must not claim the operational remote KB is unavailable');
+assert.equal(futureContractNotReady.readiness.knowledge_packet, 'READY');
+assert.equal(futureContractNotReady.readiness.acquisition, 'READY', 'future packet diagnostics must not block current acquisition readiness');
+assert.equal(futureContractNotReady.knowledge.blocking_reasons.length, 0);
 const persisted = acquisitionQualityPersistence(snapshot, sourceRegistry);
 assert.deepEqual(Object.keys(persisted).sort(), [
   'acquisition_status', 'evidence_coverage', 'evidence_density', 'evidence_packet_status',

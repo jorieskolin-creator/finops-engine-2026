@@ -9,7 +9,7 @@ export interface ParsedDelimitedTable {
   /** Complete normalized row population for local deterministic processing. */
   analysisRows: string[][];
   analysisRowNumbers: number[];
-  /** Bounded and clipped rows eligible for model context. */
+  /** Bounded preview rows; long values are segmented by the source registry. */
   rows: string[][];
   sampledRowNumbers: number[];
   sampledRowReasons: string[][];
@@ -352,7 +352,7 @@ export const parseDelimitedTable = (raw: string, delimiter: DelimitedTableDelimi
   if (rowCount > MAX_RENDERED_ROWS) {
     warnings.push(`Table has ${rowCount} data rows; a deterministic bounded sample of ${MAX_RENDERED_ROWS} rows was included for model context.`);
   }
-  if (clippedCellCount > 0) warnings.push(`${clippedCellCount} table cell(s) exceeded the per-cell context limit and were truncated.`);
+  if (clippedCellCount > 0) warnings.push(`${clippedCellCount} table cell(s) exceeded the inline preview limit; complete values will be emitted as traceable continuation segments for model context.`);
 
   return {
     delimiter,
@@ -438,7 +438,7 @@ export const renderDelimitedTableForAnalysis = (
       deterministic_inspection: buildDeterministicTableInspection(table.headers, table.analysisRows),
       total_row_count: table.rowCount,
       analysis_complete: table.analysisRows.length === table.rowCount,
-      truncated: table.rowCount > table.rows.length || table.clippedCellCount > 0
+      truncated: table.rowCount > table.rows.length
     }
   };
 };

@@ -10,7 +10,6 @@ import type {
 import {
   BATCH_DEFINITIONS,
   BATCH_IDS,
-  buildShadowKnowledgePacket,
 } from '../knowledge_base';
 import { isEvidenceQuoteBoundToChunk, isEvidenceQuoteBoundToDerivedEvidence } from './evidenceSupport';
 import { hashString } from './runTraceService';
@@ -168,11 +167,7 @@ const builtInKnowledgeHash = (): string => hashString(JSON.stringify(
 const remoteKnowledgeReady = (index: RemoteKnowledgeBaseIndex): boolean =>
   index.status.source === 'remote_blob'
   && index.status.failure_count === 0
-  && index.status.delivery?.shadow_ready !== false
-  && BATCH_IDS.every(domain => (
-    buildShadowKnowledgePacket(index, { batchId: domain, stage: 'forensic_audit' }).readiness === 'READY'
-    && buildShadowKnowledgePacket(index, { batchId: domain, stage: 'evidence_check' }).readiness === 'READY'
-  ));
+  && index.status.document_count > 0;
 
 const hasCompleteDelimitedPopulation = (source: SourceRecord): boolean => {
   if (source.kind !== 'csv' && source.kind !== 'tsv') return true;
@@ -255,6 +250,10 @@ export const validateEvidenceAcquisition = (
         || chunk.page_number !== item.page_number
         || chunk.sheet_name !== item.sheet_name
         || chunk.row_number !== item.row_number
+        || chunk.column_number !== item.column_number
+        || chunk.column_name !== item.column_name
+        || chunk.segment_number !== item.segment_number
+        || chunk.segment_count !== item.segment_count
         || chunk.visual_unit_id !== item.visual_unit_id
         || JSON.stringify(chunk.bounding_box) !== JSON.stringify(item.bounding_box)
         || chunk.ocr_confidence !== item.ocr_confidence

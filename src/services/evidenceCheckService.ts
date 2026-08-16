@@ -539,9 +539,8 @@ export const runEvidenceCheck = async (
 
 export const evidenceItemsNeedingRescan = (result: EvidenceCheckResult): EvidenceCheckItem[] => {
   return result.items.filter(item =>
-    item.original_count > 0 &&
-    item.rescan_recommended &&
-    item.verified_count < item.original_count
+    item.status === 'weak' &&
+    item.rescan_recommended === true
   );
 };
 

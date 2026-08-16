@@ -42,6 +42,7 @@ import { acquisitionQualityPersistence, buildAcquisitionQualitySnapshot, shadowT
 import { analyzeStructuredSources, buildDataSignalCoverageReport } from "./structuredDataAnalysisService";
 import { buildEvidenceLaneStagePackets } from "./evidenceStagePacketService";
 import { applyBoundedRetrieval } from "./boundedRetrievalService";
+import { expandWeakEvidencePacket } from "./semanticGapRetrievalService";
 import { sanitizeEvidenceSources } from "./deterministicPrivacyService";
 import { scrubDiagnosticResultForPrivacy } from "./privacyService";
 import { parseGovernedJsonObject, validateFindingsModePayload } from "./jsonResponseService";
@@ -364,6 +365,36 @@ export const analyzeDocument = async (
       privacy_decision: privacy.decision,
       acquisition_readiness: sourceRegistryStatus.acquisition_readiness
     });
+    const semanticPackets = { ...sourcePackets };
+    const expandWeakEvidence = (input: Parameters<NonNullable<import('../orchestrator').Phase1SourcePackets['expandWeakEvidence']>>[0]) => {
+      const expanded = expandWeakEvidencePacket({
+        registry: sourceRegistry,
+        packet: semanticPackets[input.batchId],
+        items: input.items,
+        pass: input.pass,
+        seenTerms: input.seenTerms
+      });
+      semanticPackets[input.batchId] = expanded.packet;
+      const snapshot = { ...sourcePackets, [input.batchId]: expanded.packet };
+      const integrity = validateEvidenceAcquisition(acquiredSources, sourceRegistry, snapshot);
+      const status = sourceRegistryRuntimeStatus(sourceRegistry, snapshot, 0, dlpScan, privacy.decision, integrity);
+      const rebuilt = buildEvidenceLaneStagePackets({
+        source_packets: snapshot,
+        source_packet_hashes: integrity.packet_hashes,
+        derived_evidence: derivedAnalyticalEvidence,
+        acquisition_limitations: sourceRegistry.acquisition_limitations,
+        privacy_decision: privacy.decision,
+        acquisition_readiness: status.acquisition_readiness
+      })[input.batchId];
+      return {
+        packet: rebuilt,
+        trace: {
+          ...expanded.trace,
+          packet_hash_before: input.packet.integrity_hash,
+          packet_hash_after: rebuilt.integrity_hash
+        }
+      };
+    };
     serverLog(runId, 'info', 'pipeline_integrity_passed', {
       gate: 'acquisition',
       sources: sourceRegistry.source_count,
@@ -404,7 +435,7 @@ export const analyzeDocument = async (
     });
     const knowledgeWarnings = referenceKbIndex.status.failure_count > 0
       || referenceKbIndex.status.source !== 'remote_blob'
-      || referenceKbIndex.status.delivery?.shadow_ready === false;
+      || referenceKbIndex.status.document_count === 0;
     emitProgress({ stage: 'knowledge', status: knowledgeWarnings ? 'completed_with_warnings' : 'completed' });
 
     console.log(`[FinOps] [${runId}] Running Phase 1 Parallel Audit (${Object.keys(BATCH_DEFINITIONS).length} batches)...`);
@@ -414,7 +445,7 @@ export const analyzeDocument = async (
     let aggregatedRawData = await runPhase1Audit(text, images, (completed, total, batchId) => {
       emitProgress({ stage: 'analysis', status: 'in_progress', completed, total, domain_id: batchId });
       emitProgress({ stage: 'evidence', status: 'in_progress', completed, total, domain_id: batchId });
-    }, { runId }, { packets: evidenceStagePackets });
+    }, { runId }, { packets: evidenceStagePackets, expandWeakEvidence });
     if (aggregatedRawData.models_used.length > 0) {
       actuals.forensic_audit = aggregatedRawData.models_used.join(',');
     }
@@ -489,6 +520,7 @@ export const analyzeDocument = async (
     await new Promise(r => setTimeout(r, 600));
     const validationData = calculateMetrics(auditLogs);
     const unresolvedDomainIds = new Set(validationData.verification_unresolved.map(item => item.charAt(1)));
+    const overallScoreAvailable = validationData.verification_unresolved.length === 0;
     await checkpoint('phase2', 'accepted', { phase_2_validation: validationData });
     emitProgress({ stage: 'calculation', status: 'completed' });
 
@@ -579,7 +611,7 @@ ${tacticsContext}`;
     const handoffSummary = `
 FINOPS DIAGNOSTIC REPORT SUMMARY (Computed by System):
 -------------------------------------------------------
-FinOps Maturity Score: ${Math.round(validationData.metrics.finops_readiness)}/100
+FinOps Maturity Score: ${overallScoreAvailable ? `${Math.round(validationData.metrics.finops_readiness)}/100` : 'UNAVAILABLE — required criterion verification is unresolved'}
 Capability Attainment: ${Math.round(validationData.metrics.capability_attainment)}%
 Anti-Pattern Control: ${Math.round(validationData.metrics.antipattern_control)}%
 Maturity Classification: ${validationData.crawl_walk_run}
@@ -596,6 +628,9 @@ Verified Anti-Pattern Absences: ${validationData.verified_antipattern_absences.l
 Unknown / Not-Assessable Anti-Pattern Absences: ${validationData.unknown_antipattern_absences.length}
 Maturity Gaps: ${validationData.maturity_gaps.length}
 Silent Areas: ${validationData.silent_areas.length}
+
+UNRESOLVED REQUIRED VERIFICATION:
+${validationData.verification_unresolved.join('\n') || 'None'}
 
 SCORE EVIDENCE GAPS (zero score contribution; not proof a capability is absent):
 ${validationData.score_evidence_gaps.join('\n') || 'None'}
@@ -839,10 +874,14 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => unresolve
     };
 
     const buildFallbackEvidenceSummary = () => ({
-      headline: `${validationData.crawl_walk_run} FinOps maturity with a ${Math.round(validationData.metrics.finops_readiness)}/100 evidence-sensitive score`,
+      headline: overallScoreAvailable
+        ? `${validationData.crawl_walk_run} FinOps maturity with a ${Math.round(validationData.metrics.finops_readiness)}/100 evidence-sensitive score`
+        : 'Overall FinOps maturity score unavailable because required verification is unresolved',
       maturity_classification: validationData.crawl_walk_run,
       key_metrics: [
-        `FinOps Maturity Score: ${Math.round(validationData.metrics.finops_readiness)}/100`,
+        overallScoreAvailable
+          ? `FinOps Maturity Score: ${Math.round(validationData.metrics.finops_readiness)}/100`
+          : 'FinOps Maturity Score: unavailable — required verification is unresolved',
         `Capability attainment: ${Math.round(validationData.metrics.capability_attainment)}%`,
         `Anti-pattern control: ${Math.round(validationData.metrics.antipattern_control)}%`,
         `Maturity depth: ${Math.round(validationData.metrics.maturity_depth)}%`,
@@ -930,7 +969,9 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => unresolve
           planning_decision: buildFallbackPlanningDecision(),
           visual_scorecard: {
             headline: 'Insufficient Evidence — Findings Only',
-            maturity_score: `${Math.round(validationData.metrics.finops_readiness)}/100 evidence-sensitive maturity`,
+            maturity_score: overallScoreAvailable
+              ? `${Math.round(validationData.metrics.finops_readiness)}/100 evidence-sensitive maturity`
+              : 'Unavailable — required verification is unresolved',
             burden_score: `${Math.round(validationData.metrics.antipattern_burden)}% anti-pattern burden`,
           },
           remediation_roadmap: [],
@@ -1210,13 +1251,19 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => unresolve
     }
     if (strategyData?.phase_3_strategy?.visual_scorecard) {
       strategyData.phase_3_strategy.visual_scorecard.maturity_score =
-        `${Math.round(validationData.metrics.finops_readiness)}/100 evidence-sensitive maturity`;
+        overallScoreAvailable
+          ? `${Math.round(validationData.metrics.finops_readiness)}/100 evidence-sensitive maturity`
+          : 'Unavailable — required verification is unresolved';
     }
     if (qualityGate.decision === 'BLOCK' && strategyData?.phase_3_strategy?.evidence_summary) {
       const summary = strategyData.phase_3_strategy.evidence_summary;
-      summary.headline = `BLOCKED assessment · FinOps Maturity Score ${Math.round(validationData.metrics.finops_readiness)}/100`;
+      summary.headline = overallScoreAvailable
+        ? `BLOCKED assessment · FinOps Maturity Score ${Math.round(validationData.metrics.finops_readiness)}/100`
+        : 'BLOCKED assessment · Overall FinOps Maturity Score unavailable because required verification is unresolved';
       summary.key_metrics = [
-        `FinOps Maturity Score: ${Math.round(validationData.metrics.finops_readiness)}/100`,
+        overallScoreAvailable
+          ? `FinOps Maturity Score: ${Math.round(validationData.metrics.finops_readiness)}/100`
+          : 'FinOps Maturity Score: unavailable — required verification is unresolved',
         `Capability attainment: ${Math.round(validationData.metrics.capability_attainment)}%`,
         `Anti-pattern control: ${Math.round(validationData.metrics.antipattern_control)}%`,
         ...(validationData.metrics.quality_gate_score_cap_reason ? [validationData.metrics.quality_gate_score_cap_reason] : []),
@@ -1313,7 +1360,8 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => unresolve
       derivedAnalyticalEvidence,
       tableInspections,
       dataSignalCoverage,
-      boundedRetrieval
+      boundedRetrieval,
+      semanticGapRetrieval: aggregatedRawData.semantic_gap_retrieval
     });
     finalResult.meta.run_trace = runTrace;
     finalResult.meta.run_trace_summary = summarizeRunTrace(runTrace);

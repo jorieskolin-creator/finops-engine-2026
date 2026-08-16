@@ -202,7 +202,7 @@ const DomainSignalOverview: React.FC<{ result: DiagnosticResult }> = ({ result }
                   <span className={`h-3 w-3 rounded-full ${toneDotClass[row.maturityTone]}`}></span>
                   <span className="text-xs font-bold uppercase tracking-wider text-slate-500">Maturity signal</span>
                 </div>
-                <p className={`mt-2 text-3xl font-bold ${toneTextClass[row.maturityTone]}`}>{row.maturityPercent}%</p>
+                <p className={`mt-2 text-3xl font-bold ${toneTextClass[row.maturityTone]}`}>{row.maturityAvailable ? `${row.maturityPercent}%` : row.verificationUnresolved ? 'Unresolved' : 'Not assessed'}</p>
                 <p className="text-xs text-slate-500 mt-1">{row.maturityAssessed}/{row.maturityTotal} criteria assessed</p>
               </div>
               <div className="rounded-lg bg-slate-50 border border-slate-200 p-3">
@@ -210,7 +210,7 @@ const DomainSignalOverview: React.FC<{ result: DiagnosticResult }> = ({ result }
                   <span className={`h-3 w-3 rounded-full ${toneDotClass[row.antiPatternTone]}`}></span>
                   <span className="text-xs font-bold uppercase tracking-wider text-slate-500">Anti-pattern finding rate</span>
                 </div>
-                <p className={`mt-2 text-3xl font-bold ${toneTextClass[row.antiPatternTone]}`}>{row.antiPatternPercent}%</p>
+                <p className={`mt-2 text-3xl font-bold ${toneTextClass[row.antiPatternTone]}`}>{row.antiPatternAvailable ? `${row.antiPatternPercent}%` : row.verificationUnresolved ? 'Unresolved' : 'Not assessed'}</p>
                 <p className="text-xs text-slate-500 mt-1">
                   {row.antiPatternFindings} finding{row.antiPatternFindings === 1 ? '' : 's'}, {row.antiPatternPartialFindings} partial, {row.antiPatternNotAssessed} not assessed
                 </p>
@@ -753,7 +753,7 @@ export const ReportView: React.FC<ReportViewProps> = ({ result, onBack, onDownlo
                 <div>
                   <p className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-2">Domain diagnosis</p>
                   <ul className="space-y-1.5">
-                    {computeDomainSignalRows(result).map(row => <li key={row.domain} className="text-sm text-slate-700"><span className="font-bold">{row.domain} · {row.title}:</span> Evidence {row.evidencePercent}%; maturity {row.maturityPercent}%; anti-pattern finding rate {row.antiPatternPercent}%.</li>)}
+                    {computeDomainSignalRows(result).map(row => <li key={row.domain} className="text-sm text-slate-700"><span className="font-bold">{row.domain} · {row.title}:</span> Evidence {row.evidencePercent}%; maturity {row.maturityAvailable ? `${row.maturityPercent}%` : 'unresolved'}; anti-pattern finding rate {row.antiPatternAvailable ? `${row.antiPatternPercent}%` : 'unresolved'}.</li>)}
                   </ul>
                 </div>
               </div>

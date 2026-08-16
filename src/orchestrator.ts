@@ -3,7 +3,7 @@ import { generateBatchSystemInstruction, generateBatchUserPrompt, generateTarget
 import { BATCH_DEFINITIONS, BATCH_IDS, knowledgeBaseService } from './knowledge_base';
 import { runStage, serverLog, RunContext, StageExecutionError } from './services/modelRouter';
 import { StageId } from './models';
-import { EvidenceCheckItem, EvidenceCheckResult, EvidenceLaneStagePacket, ImageInput } from './types';
+import { EvidenceCheckItem, EvidenceCheckResult, EvidenceLaneStagePacket, ImageInput, SemanticGapRetrievalPassTrace, SemanticGapRetrievalTrace } from './types';
 import { assertEvidenceLaneStagePacket } from './services/evidenceStagePacketService';
 import {
   applyEvidenceCheckToBatch,
@@ -34,6 +34,16 @@ const parseAiResponse = (text: string): any => {
 
 export interface Phase1SourcePackets {
   packets: Record<string, EvidenceLaneStagePacket>;
+  expandWeakEvidence?: (input: {
+    batchId: string;
+    items: EvidenceCheckItem[];
+    pass: 1 | 2;
+    seenTerms: Set<string>;
+    packet: EvidenceLaneStagePacket;
+  }) => {
+    packet: EvidenceLaneStagePacket;
+    trace: Omit<SemanticGapRetrievalPassTrace, 'evidence_status_after'>;
+  };
 }
 
 export interface Phase1Result {
@@ -47,6 +57,7 @@ export interface Phase1Result {
   targeted_rescan_models_used: string[];
   evidence_check_models_used: string[];
   evidence_adjudication_models_used: string[];
+  semantic_gap_retrieval: SemanticGapRetrievalTrace;
 }
 
 const runSingleBatch = async (
@@ -218,6 +229,14 @@ export const runPhase1Audit = async (
     targeted_rescan_models_used: [],
     evidence_check_models_used: [],
     evidence_adjudication_models_used: [],
+    semantic_gap_retrieval: {
+      schema_version: 'semantic_gap_retrieval_trace_v1',
+      policy_version: 'weak_evidence_semantic_retrieval_v1',
+      mode: 'active',
+      scoring_authority: false,
+      max_passes: 2,
+      passes: []
+    },
   };
 
   let completedCount = 0;
@@ -255,44 +274,85 @@ export const runPhase1Audit = async (
         let evidenceCheck = await runEvidenceCheck(batchId, batchResult, packetInput.text, packetInput.images, ctx);
         if (evidenceCheck.model_used) evidenceModelsSeen.add(evidenceCheck.model_used);
         if (evidenceCheck.adjudication_model_used) evidenceAdjudicationModelsSeen.add(evidenceCheck.adjudication_model_used);
-        const needsRescan = evidenceItemsNeedingRescan(evidenceCheck);
         const rescannedKeys = new Set<string>();
         const preRescanCounts = new Map<string, number>();
-
-        if (!evidenceCheck.failed && needsRescan.length > 0) {
+        const seenTerms = new Set<string>();
+        let currentPacket = packetInput.packet;
+        for (let pass = 1 as 1 | 2; pass <= 2; pass = (pass + 1) as 1 | 2) {
+          const needsRescan = evidenceItemsNeedingRescan(evidenceCheck);
+          if (evidenceCheck.failed || needsRescan.length === 0 || !sourcePackets?.expandWeakEvidence) break;
+          const expansion = sourcePackets.expandWeakEvidence({ batchId, items: needsRescan, pass, seenTerms, packet: currentPacket });
+          const trace = expansion.trace;
+          if (trace.selected_chunk_ids.length === 0) {
+            aggregated.semantic_gap_retrieval.passes.push({
+              ...trace,
+              evidence_status_after: { ...trace.evidence_status_before }
+            });
+            break;
+          }
+          currentPacket = expansion.packet;
           serverLog(ctx.runId, 'warn', 'evidence_check_targeted_rescan', {
             batch: batchId,
             criteria_count: needsRescan.length,
+            semantic_pass: pass,
+            new_chunks: trace.selected_chunk_ids.length,
           });
           try {
-            const rescanResult = await runTargetedRescan(batchId, packetInput.text, packetInput.images, ctx, needsRescan);
+            const rescanResult = await runTargetedRescan(batchId, currentPacket.text, currentPacket.images, ctx, needsRescan);
             if (rescanResult.model_used) {
               targetedRescanModelsSeen.add(rescanResult.model_used);
               serverLog(ctx.runId, 'info', 'targeted_rescan_model_used', {
                 batch: batchId,
                 model: rescanResult.model_used,
                 criteria_count: needsRescan.length,
+                semantic_pass: pass,
               });
             }
             const rescannedBatchResult = mergeBatchResult(batchResult, rescanResult) as BatchAuditResult & { model_used?: string };
-            const rescannedEvidenceCheck = await runEvidenceCheck(batchId, rescannedBatchResult, packetInput.text, packetInput.images, ctx);
+            const rescannedEvidenceCheck = await runEvidenceCheck(batchId, rescannedBatchResult, currentPacket.text, currentPacket.images, ctx);
+            if (rescannedEvidenceCheck.failed) {
+              aggregated.semantic_gap_retrieval.passes.push({
+                ...trace,
+                evidence_status_after: { ...trace.evidence_status_before }
+              });
+              serverLog(ctx.runId, 'warn', 'targeted_rescan_verification_unavailable', {
+                batch: batchId,
+                criteria_count: needsRescan.length,
+                semantic_pass: pass,
+                error_code: rescannedEvidenceCheck.failure_reason || 'EVIDENCE_CHECK_FAILED',
+                fallback: 'previous_verified_result',
+              });
+              break;
+            }
             batchResult = rescannedBatchResult;
             evidenceCheck = rescannedEvidenceCheck;
             needsRescan.forEach(i => {
               const key = `${i.stream}.${i.id}`;
               rescannedKeys.add(key);
-              preRescanCounts.set(key, i.original_count);
+              if (!preRescanCounts.has(key)) preRescanCounts.set(key, i.original_count);
             });
-
+            aggregated.semantic_gap_retrieval.passes.push({
+              ...trace,
+              evidence_status_after: Object.fromEntries(needsRescan.map(item => {
+                const key = `${item.stream}.${item.id}`;
+                return [key, evidenceCheck.items.find(candidate => `${candidate.stream}.${candidate.id}` === key)?.status || item.status];
+              }))
+            });
             if (evidenceCheck.model_used) evidenceModelsSeen.add(evidenceCheck.model_used);
             if (evidenceCheck.adjudication_model_used) evidenceAdjudicationModelsSeen.add(evidenceCheck.adjudication_model_used);
           } catch (error) {
+            aggregated.semantic_gap_retrieval.passes.push({
+              ...trace,
+              evidence_status_after: { ...trace.evidence_status_before }
+            });
             serverLog(ctx.runId, 'warn', 'targeted_rescan_unavailable', {
               batch: batchId,
               criteria_count: needsRescan.length,
+              semantic_pass: pass,
               error_code: batchFailureCode(error),
               fallback: 'verified_downgrades',
             });
+            break;
           }
         }
 

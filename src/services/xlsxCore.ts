@@ -274,6 +274,8 @@ export const parseXlsxBytes = async (bytes: Uint8Array, sourceHash?: string): Pr
       sourceHash: sourceHash ? `${sourceHash}:${detail.sheetIndex}` : undefined
     });
     if (dataRows.length > sample.rows.length) warnings.push(`Workbook sheet ${detail.sheetIndex + 1} has ${dataRows.length} data rows; a deterministic bounded sample of ${sample.rows.length} rows was included for model context.`);
+    const segmentedCellCount = sample.rows.reduce((count, row) => count + row.filter(value => value.length > MAX_CELL_CHARS).length, 0);
+    if (segmentedCellCount > 0) warnings.push(`Workbook sheet ${detail.sheetIndex + 1} has ${segmentedCellCount} cell(s) exceeding the inline preview limit; complete values will be emitted as traceable continuation segments for model context.`);
     if (formulaCellCount > 0) warnings.push(`Workbook sheet ${detail.sheetIndex + 1} contains ${formulaCellCount} formula cell(s); cached values were recorded and formulas were not executed.`);
     const withheldRowCount = sourceDataRows.length - dataRows.length;
     const hiddenColumnCount = columnCount - visibleColumnOffsets.length;
@@ -318,7 +320,7 @@ export const parseXlsxBytes = async (bytes: Uint8Array, sourceHash?: string): Pr
       merged_ranges: detail.sheet['!merges']?.map(merge => XLSX.utils.encode_range(merge)) || [],
       native_charts: nativeCharts,
       unsupported_objects: archive.unsupportedObjects,
-      truncated: dataRows.length > sample.rows.length || sample.rows.some(row => row.some(value => value.length > MAX_CELL_CHARS))
+      truncated: dataRows.length > sample.rows.length
     });
   }
   if (!tables.some(table => table.model_eligible)) throw new Error('XLSX_NO_VISIBLE_NONEMPTY_SHEET');

@@ -544,12 +544,13 @@ export const knowledgeBaseService = {
       + ` coverage=${shadowPacket.coverage_issues.length}`
       + ` oversized=${shadowPacket.oversized_sections.length} page_limited=${shadowPacket.page_limit_documents.length}`
     );
+    // Shadow packet readiness describes the future stage-packet contract only.
+    // It must never replace a healthy operational remote KB at runtime.
     if (index.status.source !== 'remote_blob'
       || index.status.failure_count > 0
-      || index.status.delivery?.shadow_ready === false
-      || shadowPacket.readiness !== 'READY') {
+      || index.status.document_count === 0) {
       return `<REFERENCE_KNOWLEDGE_BASE status="fallback">
-The remote reference packet was unavailable or did not pass deterministic validation. Use the built-in criteria and tactics only.
+The remote reference Knowledge Base was unavailable or could not be parsed. Use the built-in criteria and tactics only.
 </REFERENCE_KNOWLEDGE_BASE>`;
     }
     return formatRemoteKbContext(index, options);

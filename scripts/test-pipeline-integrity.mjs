@@ -117,6 +117,16 @@ assert.doesNotThrow(
 const knowledgeIndex = { status: { source: 'built_in', document_count: 0, failure_count: 1 }, documents: [], failures: [] };
 const knowledgeSnapshot = validateKnowledgeAcquisition(knowledgeIndex);
 assert.equal(knowledgeSnapshot.mode, 'built_in', 'valid built-in fallback must pass when remote KB is unavailable');
+const healthyRemoteWithFutureContractNotReady = {
+  status: {
+    source: 'remote_blob', document_count: 60, failure_count: 0,
+    delivery: { shadow_ready: false },
+    shadow_packets: { 'A:forensic_audit': { readiness: 'NOT_READY' } },
+  },
+  documents: [], failures: [],
+};
+const remoteSnapshot = validateKnowledgeAcquisition(healthyRemoteWithFutureContractNotReady);
+assert.equal(remoteSnapshot.mode, 'remote_blob', 'future packet readiness telemetry must not select built-in fallback');
 
 const ids = ['A', 'B', 'C', 'D', 'E', 'F'].flatMap(domain => [1, 2, 3, 4, 5].map(index => `${domain}${index}`));
 const logs = Object.fromEntries(ids.map(id => [id, { count: 0, evidence_quotes: [] }]));

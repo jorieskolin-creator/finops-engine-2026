@@ -547,7 +547,7 @@ const renderCanonicalDomainDiagnosis = (result: DiagnosticResult): string =>
   computeDomainSignalRows(result).map(row => `
     <li>
       <strong>${escapeHtml(row.domain)} · ${escapeHtml(row.title)}:</strong>
-      Evidence coverage ${row.evidencePercent}%; observed maturity ${row.maturityPercent}%; anti-pattern finding rate ${row.antiPatternPercent}%.
+      Evidence coverage ${row.evidencePercent}%; observed maturity ${row.maturityAvailable ? `${row.maturityPercent}%` : 'unresolved'}; anti-pattern finding rate ${row.antiPatternAvailable ? `${row.antiPatternPercent}%` : 'unresolved'}.
       ${row.antiPatternNotAssessed > 0 ? `${row.antiPatternNotAssessed} anti-pattern criterion${row.antiPatternNotAssessed === 1 ? ' was' : ' were'} not assessed.` : ''}
     </li>`).join('');
 
@@ -752,12 +752,12 @@ const renderDomainSignalOverview = (result: DiagnosticResult): string => {
             </div>
             <div class="domain-signal-metric">
               <div class="signal-label"><i class="${signalToneClass(row.maturityTone)}"></i><span>Maturity signal</span></div>
-              <strong class="${signalToneClass(row.maturityTone)}">${row.maturityPercent}%</strong>
+              <strong class="${signalToneClass(row.maturityTone)}">${row.maturityAvailable ? `${row.maturityPercent}%` : row.verificationUnresolved ? 'Unresolved' : 'Not assessed'}</strong>
               <p>${row.maturityAssessed}/${row.maturityTotal} criteria assessed</p>
             </div>
             <div class="domain-signal-metric">
               <div class="signal-label"><i class="${signalToneClass(row.antiPatternTone)}"></i><span>Anti-pattern finding rate</span></div>
-              <strong class="${signalToneClass(row.antiPatternTone)}">${row.antiPatternPercent}%</strong>
+              <strong class="${signalToneClass(row.antiPatternTone)}">${row.antiPatternAvailable ? `${row.antiPatternPercent}%` : row.verificationUnresolved ? 'Unresolved' : 'Not assessed'}</strong>
               <p>${row.antiPatternFindings} finding${row.antiPatternFindings === 1 ? '' : 's'}, ${row.antiPatternPartialFindings} partial, ${row.antiPatternNotAssessed} not assessed</p>
             </div>
           </div>

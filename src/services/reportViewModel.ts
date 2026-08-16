@@ -52,6 +52,8 @@ export const buildReportViewModel = (result: DiagnosticResult): ReportViewModel 
     antipattern_not_assessed: antiPatternTotal,
     antipattern_verification_unresolved: 0,
   };
+  const overallScoreAvailable = scoreGapBreakdown.maturity_verification_unresolved === 0
+    && scoreGapBreakdown.antipattern_verification_unresolved === 0;
   const capabilityAttainment = metrics.capability_attainment ?? metrics.maturity_ratio ?? 0;
   const antipatternControl = metrics.antipattern_control ?? metrics.antipattern_clearance ?? 0;
   const rawMaturityScore = metrics.raw_finops_maturity_score ?? metrics.finops_readiness ?? 0;
@@ -139,7 +141,7 @@ export const buildReportViewModel = (result: DiagnosticResult): ReportViewModel 
         trend: 'positive',
         color: '#7c3aed',
       },
-      {
+      ...(overallScoreAvailable ? [{
         value: metrics.finops_readiness,
         label: 'FinOps Maturity Score',
         description: metrics.quality_gate_score_cap_reason
@@ -149,7 +151,7 @@ export const buildReportViewModel = (result: DiagnosticResult): ReportViewModel 
           : `${Math.round(capabilityAttainment)} capability · ${Math.round(antipatternControl)} anti-pattern control`,
         trend: 'positive',
         color: '#059669',
-      },
+      } as ReportMetricCard] : []),
     ],
     antipatternDisposition: {
       confirmed,
