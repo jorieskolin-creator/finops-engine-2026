@@ -50,6 +50,8 @@ export interface AuditItem {
   status: "OK" | "Partial" | "NOK";
   evidence: string;
   evidence_quotes: EvidenceQuote[];
+  assessment_status?: CriterionAssessmentStatus;
+  question_results?: CriterionQuestionResult[];
   reasoning?: string;
   is_silent?: boolean;
   category_footprint?: Partial<Record<EvidenceCategory, number>>;
@@ -100,6 +102,8 @@ export interface Metrics {
     antipattern_not_assessed: number;
     antipattern_verification_unresolved: number;
   };
+  assessed_zero_count?: number;
+  assessed_zero_ratio?: number;
   antipattern_burden_confidence?: 'confirmed' | 'unknown';
   delivery_integrity: number;
   evidence_density: number;
@@ -133,10 +137,15 @@ export type AntiPatternAbsenceStatus =
 
 export type EvidenceCheckStatus = 'supported' | 'weak' | 'unsupported' | 'missing';
 
+export type CriterionAssessmentStatus = 'assessed' | 'not_assessed';
+
+export type CriterionQuestionResult = 'supported' | 'not_supported' | 'unknown';
+
 export interface EvidenceCheckItem {
   stream: 'maturity' | 'antipattern';
   id: string;
   status: EvidenceCheckStatus;
+  assessment_status?: CriterionAssessmentStatus;
   original_count: number;
   verified_count: number;
   rationale: string;
@@ -1141,6 +1150,7 @@ export interface EvidencePathTrace {
   stream: 'maturity' | 'antipattern';
   criterion_id: string;
   evidence_check_status?: EvidenceCheckStatus;
+  assessment_status?: CriterionAssessmentStatus;
   antipattern_absence_status?: AntiPatternAbsenceStatus;
   source_id?: string;
   page_id?: string;
@@ -1162,6 +1172,7 @@ export interface ScorePathTrace {
   final_count: number | null;
   status: AuditItem['status'] | 'verification_unresolved';
   evidence_check_status?: EvidenceCheckStatus;
+  assessment_status?: CriterionAssessmentStatus;
   antipattern_absence_status?: AntiPatternAbsenceStatus;
   has_quote_backed_coverage: boolean;
   metric_effect: string;
@@ -1363,6 +1374,7 @@ export interface QualityGateLlmExplanation {
   blocking_details: QualityGateExplanationItem[];
   warning_details: QualityGateExplanationItem[];
   model_used?: string;
+  fallback_used?: boolean;
   failed?: boolean;
   failure_reason?: string;
 }
@@ -1375,6 +1387,7 @@ export interface QualityGateResult {
   thresholds: {
     evidence_density_block: number;
     evidence_density_warn: number;
+    assessed_zero_ratio_block: number;
     silent_areas_warn: number;
     unsupported_claims_block: number;
   };

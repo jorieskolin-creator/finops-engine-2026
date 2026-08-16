@@ -58,6 +58,7 @@ const verifierItem = {
   stream: 'antipattern',
   id: 'A1',
   status: 'supported',
+  assessment_status: 'assessed',
   original_count: 0,
   verified_count: 0,
   rationale: 'Relevant coverage was reviewed.',
@@ -70,5 +71,20 @@ assert.equal(isValidEvidenceVerifierItem({ raw: verifierItem, stream: 'antipatte
 assert.equal(isValidEvidenceVerifierItem({ raw: { ...verifierItem, verified_count: 0.5 }, stream: 'antipattern', scannerCount: 0, duplicate: false }), false, 'fractional verifier scores must fail');
 assert.equal(isValidEvidenceVerifierItem({ raw: { ...verifierItem, original_count: 1 }, stream: 'antipattern', scannerCount: 1, duplicate: false }), false, 'tested absence must contradict no prior scanner signal');
 assert.equal(isValidEvidenceVerifierItem({ raw: { ...verifierItem, coverage_reason: '' }, stream: 'antipattern', scannerCount: 0, duplicate: false }), false, 'absence verdicts require explicit coverage rationale');
+
+assert.equal(
+  verifyTextEvidenceSupport({
+    count: 0,
+    assessment_status: 'assessed',
+    evidence_quotes: [{ quote: 'Tagged cost allocation is used in showback reports.', evidence_source: 'text' }]
+  }, sourceText),
+  'supported',
+  'an assessed 0/3 must retain and validate criterion-relevant evidence'
+);
+assert.equal(
+  verifyTextEvidenceSupport({ count: 0, assessment_status: 'not_assessed', evidence_quotes: [] }, sourceText),
+  'weak',
+  'an unknown item should remain eligible for semantic rescan'
+);
 
 console.log('evidence-check unit tests passed');

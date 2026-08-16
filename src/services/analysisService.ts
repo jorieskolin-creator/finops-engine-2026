@@ -162,6 +162,14 @@ const validateAndSanitizeLogs = (rawData: any): Phase1AuditLogs => {
 
     if (typeof item.evidence === 'string' && item.evidence.length > 5) safeItem.evidence = item.evidence;
     if (typeof item.reasoning === 'string') safeItem.reasoning = item.reasoning;
+    if (item.assessment_status === 'assessed' || item.assessment_status === 'not_assessed') {
+      safeItem.assessment_status = item.assessment_status;
+    }
+    if (Array.isArray(item.question_results)
+      && item.question_results.length === 3
+      && item.question_results.every((result: unknown) => ['supported', 'not_supported', 'unknown'].includes(String(result)))) {
+      safeItem.question_results = [...item.question_results];
+    }
     if (['supported', 'weak', 'unsupported', 'missing'].includes(item.evidence_check_status)) {
       safeItem.evidence_check_status = item.evidence_check_status;
     }
@@ -204,6 +212,12 @@ const validateAndSanitizeLogs = (rawData: any): Phase1AuditLogs => {
       }
       if (Object.keys(footprint).length > 0) safeItem.category_footprint = footprint;
     }
+    safeItem.assessment_status = safeItem.assessment_status
+      || (safeItem.evidence_quotes.length > 0 ? 'assessed' : 'not_assessed');
+    safeItem.question_results = safeItem.question_results
+      || (safeItem.assessment_status === 'not_assessed'
+        ? ['unknown', 'unknown', 'unknown']
+        : Array.from({ length: 3 }, (_, index) => index < safeItem.count ? 'supported' as const : 'unknown' as const));
 
     return safeItem;
   };
@@ -530,12 +544,14 @@ export const analyzeDocument = async (
       evidence_density: validationData.metrics.evidence_density,
       delivery_integrity: validationData.metrics.delivery_integrity,
       silent_areas_count: validationData.silent_areas.length,
+      assessed_zero_ratio: validationData.metrics.assessed_zero_ratio,
     });
     console.log(`[FinOps] [${runId}] Synthesis confidence: ${bracketDetail}`);
     serverLog(runId, 'info', 'synthesis_confidence', {
       bracket: confidenceBracket,
       evidence_density: Math.round(validationData.metrics.evidence_density),
       delivery_integrity: Math.round(validationData.metrics.delivery_integrity),
+      assessed_zero_ratio: Math.round(validationData.metrics.assessed_zero_ratio || 0),
       silent_areas: validationData.silent_areas.length,
     });
 
@@ -615,6 +631,7 @@ Anti-Pattern Clearance: ${Math.round(validationData.metrics.antipattern_clearanc
 Anti-Pattern Coverage: ${Math.round(validationData.metrics.antipattern_coverage)}%
 Delivery Integrity: ${validationData.metrics.delivery_integrity}% (criteria the audit returned data for)
 Evidence Density: ${validationData.metrics.evidence_density}% (criteria with verified source coverage, including quote-backed gaps)
+Assessed 0/3 Concentration: ${validationData.metrics.assessed_zero_ratio || 0}% (${validationData.metrics.assessed_zero_count || 0} assessed criteria)
 ${validationData.metrics.readiness_cap_reason ? `Readiness Cap: ${validationData.metrics.readiness_cap_reason}` : ''}
 Anti-Pattern Findings: ${validationData.antipattern_findings.length}
 Verified Anti-Pattern Absences: ${validationData.verified_antipattern_absences.length}
@@ -1217,11 +1234,13 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => unresolve
       const qgExplainStarted = Date.now();
       const explanation = await runQualityGateExplanation(qualityGate, text, { runId });
       qualityGate.llm_explanation = explanation;
-      serverLog(runId, explanation.failed ? 'warn' : 'info', 'qg_explanation', {
+      serverLog(runId, explanation.failed || explanation.fallback_used ? 'warn' : 'info', 'qg_explanation', {
         decision: qualityGate.decision,
         model: explanation.model_used || 'n/a',
         duration_ms: Date.now() - qgExplainStarted,
-        ok: !explanation.failed,
+        ok: !explanation.failed && !explanation.fallback_used,
+        fallback_used: explanation.fallback_used === true,
+        ...(explanation.fallback_used ? { error_code: 'QUALITY_GATE_EXPLANATION_FALLBACK' } : {}),
         ...(explanation.failed ? { error_code: 'QUALITY_GATE_EXPLANATION_FAILED' } : {}),
       });
     }

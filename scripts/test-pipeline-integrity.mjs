@@ -129,12 +129,22 @@ const remoteSnapshot = validateKnowledgeAcquisition(healthyRemoteWithFutureContr
 assert.equal(remoteSnapshot.mode, 'remote_blob', 'future packet readiness telemetry must not select built-in fallback');
 
 const ids = ['A', 'B', 'C', 'D', 'E', 'F'].flatMap(domain => [1, 2, 3, 4, 5].map(index => `${domain}${index}`));
-const logs = Object.fromEntries(ids.map(id => [id, { count: 0, evidence_quotes: [] }]));
+const logs = Object.fromEntries(ids.map(id => [id, {
+  count: 0,
+  assessment_status: 'not_assessed',
+  question_results: ['unknown', 'unknown', 'unknown'],
+  evidence_quotes: [],
+}]));
 const items = ids.flatMap(id => ['maturity', 'antipattern'].map(stream => ({ stream, id, status: 'missing', original_count: 0, verified_count: 0, rationale: 'No evidence in valid packet.' })));
 const phase1 = {
   phase_1_audit_logs: { maturity: { ...logs }, antipattern: { ...logs } },
   evidence_check: { total_items: 60, supported_count: 0, weak_count: 0, unsupported_count: 0, missing_count: 60, downgraded_count: 0, rescan_count: 0, items, adjustments: [] },
   failed_batches: [],
+};
+const assessedOneOfThree = {
+  count: 1,
+  assessment_status: 'assessed',
+  question_results: ['supported', 'not_supported', 'not_supported'],
 };
 assert.doesNotThrow(() => validatePreSynthesisIntegrity(evidenceSnapshot, knowledgeSnapshot, registry, packets, knowledgeIndex, phase1), 'valid source silence must reach synthesis');
 assert.throws(
@@ -191,7 +201,7 @@ const validLocatedPhase1 = {
   ...phase1,
   phase_1_audit_logs: {
     ...phase1.phase_1_audit_logs,
-    maturity: { ...phase1.phase_1_audit_logs.maturity, A1: { count: 1, evidence_quotes: [{ quote: chunk.text, chunk_id: chunk.chunk_id, source_id: chunk.source_id }] } },
+    maturity: { ...phase1.phase_1_audit_logs.maturity, A1: { ...assessedOneOfThree, evidence_quotes: [{ quote: chunk.text, chunk_id: chunk.chunk_id, source_id: chunk.source_id }] } },
   },
 };
 assert.doesNotThrow(
@@ -202,7 +212,7 @@ const missingProvenancePhase1 = {
   ...phase1,
   phase_1_audit_logs: {
     ...phase1.phase_1_audit_logs,
-    maturity: { ...phase1.phase_1_audit_logs.maturity, A1: { count: 1, evidence_quotes: [{ quote: chunk.text }] } },
+    maturity: { ...phase1.phase_1_audit_logs.maturity, A1: { ...assessedOneOfThree, evidence_quotes: [{ quote: chunk.text }] } },
   },
 };
 assert.throws(
@@ -214,7 +224,7 @@ const forgedQuotePhase1 = {
   ...phase1,
   phase_1_audit_logs: {
     ...phase1.phase_1_audit_logs,
-    maturity: { ...phase1.phase_1_audit_logs.maturity, A1: { count: 1, evidence_quotes: [{ quote: 'A fabricated claim', chunk_id: chunk.chunk_id, source_id: chunk.source_id }] } },
+    maturity: { ...phase1.phase_1_audit_logs.maturity, A1: { ...assessedOneOfThree, evidence_quotes: [{ quote: 'A fabricated claim', chunk_id: chunk.chunk_id, source_id: chunk.source_id }] } },
   },
 };
 assert.throws(
@@ -226,7 +236,7 @@ const invalidLocatorPhase1 = {
   ...phase1,
   phase_1_audit_logs: {
     ...phase1.phase_1_audit_logs,
-    maturity: { ...phase1.phase_1_audit_logs.maturity, A1: { count: 1, evidence_quotes: [{ quote: chunk.text, chunk_id: 'missing-chunk', source_id: 'src-001' }] } },
+    maturity: { ...phase1.phase_1_audit_logs.maturity, A1: { ...assessedOneOfThree, evidence_quotes: [{ quote: chunk.text, chunk_id: 'missing-chunk', source_id: 'src-001' }] } },
   },
 };
 assert.throws(
@@ -238,7 +248,7 @@ const mismatchedSheetPhase1 = {
   ...phase1,
   phase_1_audit_logs: {
     ...phase1.phase_1_audit_logs,
-    maturity: { ...phase1.phase_1_audit_logs.maturity, A1: { count: 1, evidence_quotes: [{ quote: chunk.text, chunk_id: chunk.chunk_id, source_id: chunk.source_id, sheet_name: 'Wrong Sheet' }] } },
+    maturity: { ...phase1.phase_1_audit_logs.maturity, A1: { ...assessedOneOfThree, evidence_quotes: [{ quote: chunk.text, chunk_id: chunk.chunk_id, source_id: chunk.source_id, sheet_name: 'Wrong Sheet' }] } },
   },
 };
 assert.throws(

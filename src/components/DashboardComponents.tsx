@@ -520,7 +520,7 @@ export const AuditGrid: React.FC<AuditGridProps> = ({ title, data, isAntipattern
 
   const getStatusLabelColor = (item: AuditItem, isAnti: boolean) => {
     const s = (item.status || "NOK").toUpperCase();
-    if (item.is_silent) return "bg-slate-800 text-slate-500 border border-slate-700";
+    if (item.assessment_status === 'not_assessed' || item.is_silent) return "bg-slate-800 text-slate-500 border border-slate-700";
     if (isAnti) {
       const antiStatus = inferAntiPatternAbsenceStatus(item);
       if (antiStatus === 'confirmed_present') return "bg-rose-950/40 text-rose-400 border border-rose-900";
@@ -541,8 +541,10 @@ export const AuditGrid: React.FC<AuditGridProps> = ({ title, data, isAntipattern
 
   const renderEvidenceCheckBadge = (item: AuditItem) => {
     if (!item.evidence_check_status) return null;
-    const score = item.original_count !== undefined && typeof item.verified_count === 'number'
-      ? ` ${item.original_count}→${item.verified_count}`
+    const score = item.assessment_status === 'not_assessed'
+      ? ' UNKNOWN'
+      : item.original_count !== undefined && typeof item.verified_count === 'number'
+      ? ` ${item.original_count}/3→${item.verified_count}/3`
       : '';
     return (
       <span
@@ -586,7 +588,7 @@ export const AuditGrid: React.FC<AuditGridProps> = ({ title, data, isAntipattern
               <div className="flex items-center gap-3 mb-2">
                 <span className={`text-xs font-mono font-bold ${isAntipattern ? 'text-rose-400' : 'text-emerald-400'}`}>{item.id}</span>
                 <h5 className="text-sm font-bold text-slate-200">{item.title}</h5>
-                <span className={`ml-auto text-[10px] font-bold px-2 py-0.5 rounded uppercase ${isAntipattern ? 'bg-rose-900/50 text-rose-300' : 'bg-slate-800 text-slate-400'}`}>{isAntipattern ? antiPatternStatusLabel(item) : item.status}</span>
+                <span className={`ml-auto text-[10px] font-bold px-2 py-0.5 rounded uppercase ${isAntipattern ? 'bg-rose-900/50 text-rose-300' : 'bg-slate-800 text-slate-400'}`}>{item.assessment_status === 'not_assessed' ? 'Not Assessed' : isAntipattern ? antiPatternStatusLabel(item) : `${item.count}/3`}</span>
               </div>
               {renderEvidenceCheckBadge(item)}
               <p className="text-xs text-slate-300 leading-relaxed italic mb-3">"{item.reasoning}"</p>
@@ -624,7 +626,7 @@ export const AuditGrid: React.FC<AuditGridProps> = ({ title, data, isAntipattern
                 <div className="flex justify-between items-start mb-2">
                   <span className="font-mono text-xs font-bold opacity-50">{key}</span>
                   <div className="flex flex-col items-end gap-1">
-                    {(!item.is_silent || isAntipattern) && <span className={`text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md ${labelColor}`}>{isAntipattern ? antiPatternStatusLabel(item) : item.status}</span>}
+                    <span className={`text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md ${labelColor}`}>{item.assessment_status === 'not_assessed' ? 'Not Assessed' : isAntipattern ? antiPatternStatusLabel(item) : `${item.count}/3`}</span>
                     {renderEvidenceCheckBadge(item)}
                   </div>
                 </div>

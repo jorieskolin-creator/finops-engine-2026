@@ -68,6 +68,7 @@ export const isValidEvidenceVerifierItem = (input: {
   const { raw, stream, scannerCount, duplicate } = input;
   if (!raw || typeof raw !== 'object' || duplicate) return false;
   if (!EVIDENCE_CHECK_STATUSES.includes(raw.status)) return false;
+  if (raw.assessment_status !== 'assessed' && raw.assessment_status !== 'not_assessed') return false;
   if (!Number.isInteger(raw.original_count) || raw.original_count !== scannerCount) return false;
   if (!Number.isInteger(raw.verified_count) || raw.verified_count < 0 || raw.verified_count > scannerCount) return false;
   if (typeof raw.rationale !== 'string' || raw.rationale.trim().length === 0) return false;
@@ -86,7 +87,7 @@ export const isValidEvidenceVerifierItem = (input: {
 
 export const verifyTextEvidenceSupport = (item: Partial<AuditItem> | undefined, sourceText: string): EvidenceCheckStatus => {
   const count = clampScore(item?.count);
-  if (count === 0) return 'supported';
+  if (item?.assessment_status === 'not_assessed') return 'weak';
 
   const quotes = Array.isArray(item?.evidence_quotes) ? item.evidence_quotes : [];
   const textQuotes = quotes.filter(q => q && q.evidence_source !== 'image' && typeof q.quote === 'string' && q.quote.trim().length > 0);

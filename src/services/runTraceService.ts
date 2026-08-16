@@ -126,6 +126,7 @@ const sourceManifest = (registry: SourceRegistry): SourceManifestTrace[] => {
 
 const evidencePathEffect = (stream: 'maturity' | 'antipattern', item: AuditItem): string => {
   if (item.verification_unresolved) return 'scanner_candidate_excluded_because_verification_was_unavailable';
+  if (item.assessment_status === 'not_assessed') return 'unknown_not_assessed_adds_zero';
   if (stream === 'maturity') {
     if (item.count === 3) return 'verified_full_capability_adds_one_maturity_point';
     if (item.count === 2) return 'verified_partial_capability_adds_half_maturity_point';
@@ -149,6 +150,7 @@ const evidencePathsFor = (
     stream,
     criterion_id: criterionId,
     evidence_check_status: item.evidence_check_status,
+    assessment_status: item.assessment_status,
     antipattern_absence_status: stream === 'antipattern' && !item.verification_unresolved ? inferAntiPatternAbsenceStatus(item) : undefined,
     source_id: quote.source_id,
     page_id: quote.page_id,
@@ -174,8 +176,11 @@ const scorePathsFor = (
   final_count: item.verification_unresolved ? null : item.count,
   status: item.verification_unresolved ? 'verification_unresolved' : item.status,
   evidence_check_status: item.evidence_check_status,
+  assessment_status: item.assessment_status,
   antipattern_absence_status: stream === 'antipattern' && !item.verification_unresolved ? inferAntiPatternAbsenceStatus(item) : undefined,
-  has_quote_backed_coverage: !item.verification_unresolved && (item.evidence_quotes || []).length > 0,
+  has_quote_backed_coverage: !item.verification_unresolved
+    && item.assessment_status !== 'not_assessed'
+    && (item.evidence_quotes || []).length > 0,
   metric_effect: evidencePathEffect(stream, item)
 }));
 

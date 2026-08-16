@@ -5,12 +5,14 @@ import { runStage, RunContext } from './modelRouter';
 
 export const EVIDENCE_DENSITY_BLOCK = 30;
 export const EVIDENCE_DENSITY_WARN = 60;
+export const ASSESSED_ZERO_RATIO_BLOCK = 70;
 export const SILENT_AREAS_WARN = 15;
 export const UNSUPPORTED_CLAIMS_BLOCK = 3;
 
 const THRESHOLDS = {
   evidence_density_block: EVIDENCE_DENSITY_BLOCK,
   evidence_density_warn: EVIDENCE_DENSITY_WARN,
+  assessed_zero_ratio_block: ASSESSED_ZERO_RATIO_BLOCK,
   silent_areas_warn: SILENT_AREAS_WARN,
   unsupported_claims_block: UNSUPPORTED_CLAIMS_BLOCK
 };
@@ -126,6 +128,11 @@ export const runQualityGate = (
   if (phase2.metrics.evidence_density < EVIDENCE_DENSITY_BLOCK) {
     blocking_reasons.push(
       `Evidence density ${phase2.metrics.evidence_density}% < ${EVIDENCE_DENSITY_BLOCK}% floor.`
+    );
+  }
+  if ((phase2.metrics.assessed_zero_ratio ?? 0) >= ASSESSED_ZERO_RATIO_BLOCK) {
+    blocking_reasons.push(
+      `Assessed zero-result concentration ${Math.round(phase2.metrics.assessed_zero_ratio || 0)}% >= ${ASSESSED_ZERO_RATIO_BLOCK}% integrity limit. The material may describe genuinely low maturity, but it is too dominated by 0/3 results for a directive roadmap without validating the source scope and question alignment.`
     );
   }
 
@@ -290,6 +297,7 @@ Rules:
 - Echo each reason VERBATIM in the matching "reason" field. Do not paraphrase or merge.
 - "quote" must be a literal substring of the source document; omit it if no relevant evidence exists. Never invent quotes.
 - Keep "explanation" terse. No marketing language, no apologies, no recommendations to "consider X".
+- Each explanation must be one sentence and no more than 45 words. The summary must be no more than 75 words. Do not add fields beyond the requested schema.
 - For WARN decisions, make the summary calm and non-alarming. Prefer: "Strategy hygiene notes were retained for traceability; they do not invalidate the score." Do not tell the reader to manually map unassigned actions to tactics.
 - If a reason is purely structural (e.g. "scored 4 but no evidence captured"), omit "quote" and explain what the audit was unable to ground.
 - Output JSON only. No prose before or after.`;
@@ -299,8 +307,8 @@ export const runQualityGateExplanation = async (
   sourceDocument: string,
   ctx: RunContext
 ): Promise<QualityGateLlmExplanation> => {
-  const sourceExcerpt = sourceDocument.length > 50000
-    ? sourceDocument.substring(0, 50000) + '\n\n[...truncated]'
+  const sourceExcerpt = sourceDocument.length > 12000
+    ? sourceDocument.substring(0, 12000) + '\n\n[...truncated]'
     : sourceDocument;
 
   const userText = [
@@ -350,11 +358,17 @@ export const runQualityGateExplanation = async (
       model_used: resp.modelUsed.id,
     };
   } catch (e: any) {
+    const deterministicExplanation = (reason: string) => ({
+      reason,
+      explanation: 'The deterministic quality gate reported this condition; the assessment remains subject to the stated gate decision until the condition is resolved.'
+    });
     return {
-      summary: '',
-      blocking_details: [],
-      warning_details: [],
-      failed: true,
+      summary: gate.decision === 'BLOCK'
+        ? 'The deterministic quality gate blocked an actionable roadmap. Resolve or validate the listed conditions before relying on strategic recommendations.'
+        : 'The deterministic quality gate completed with warnings. The score remains available, but the listed limitations must be retained with the assessment.',
+      blocking_details: gate.blocking_reasons.map(deterministicExplanation),
+      warning_details: gate.warnings.map(deterministicExplanation),
+      fallback_used: true,
       failure_reason: e?.message || String(e),
     };
   }

@@ -58,20 +58,25 @@ export const validatePhase1Output = (rawData: any): ValidationResult => {
         errors.push(`${stream}.${id}: Invalid score ${auditItem?.count} (must be integer ${scoreMin}-${scoreMax})`);
       }
 
+      const questionResults = Array.isArray(auditItem?.question_results) ? auditItem.question_results : [];
+      const supportedQuestions = questionResults.filter((result: unknown) => result === 'supported').length;
+      if (auditItem?.assessment_status !== 'assessed' && auditItem?.assessment_status !== 'not_assessed') {
+        errors.push(`${stream}.${id}: Missing criterion assessment status`);
+      } else if (questionResults.length !== 3
+        || questionResults.some((result: unknown) => !['supported', 'not_supported', 'unknown'].includes(String(result)))) {
+        errors.push(`${stream}.${id}: Invalid question-level results`);
+      } else if (auditItem.assessment_status === 'not_assessed'
+        && (auditItem.count !== 0 || questionResults.some((result: unknown) => result !== 'unknown'))) {
+        errors.push(`${stream}.${id}: Not-assessed item cannot have a numerical finding`);
+      } else if (auditItem.assessment_status === 'assessed' && supportedQuestions !== auditItem.count) {
+        errors.push(`${stream}.${id}: Score ${auditItem.count} does not equal supported question count ${supportedQuestions}`);
+      }
+
       if (auditItem?.count > 0) {
         const evidence = auditItem?.evidence || '';
         const quotes = auditItem?.evidence_quotes || [];
         if (evidence.length < evidenceMinLen && quotes.length === 0) {
           warnings.push(`${stream}.${id}: Score ${auditItem.count} but insufficient evidence`);
-        }
-      }
-
-      if (auditItem?.count === 0
-        && auditItem?.evidence_check_status !== 'weak'
-        && !(stream === 'antipattern' && ['tested_absent', 'unknown_absent'].includes(auditItem?.antipattern_absence_status))) {
-        const evidence = (auditItem?.evidence || '').toLowerCase();
-        if (!silenceKeywords.some(kw => evidence.includes(kw)) && evidence.length > silenceMaxLenBeforeWarn) {
-          warnings.push(`${stream}.${id}: Score 0 but evidence does not indicate silence`);
         }
       }
 

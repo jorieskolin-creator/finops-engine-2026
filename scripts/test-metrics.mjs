@@ -41,6 +41,10 @@ const item = (count, withEvidence = false) => ({
   status: count === 3 ? 'OK' : count === 0 ? 'NOK' : 'Partial',
   evidence: withEvidence ? 'Validated source evidence for this criterion.' : 'Document is silent.',
   evidence_quotes: withEvidence ? [{ quote: 'Validated source evidence', category: 'Operational', evidence_source: 'text' }] : [],
+  assessment_status: withEvidence ? 'assessed' : 'not_assessed',
+  question_results: withEvidence
+    ? Array.from({ length: 3 }, (_, index) => index < count ? 'supported' : 'not_supported')
+    : ['unknown', 'unknown', 'unknown'],
   reasoning: withEvidence ? 'Evidence found.' : 'Not found.',
   is_silent: count === 0
 });
@@ -50,6 +54,10 @@ const anti = (count, withEvidence = false, absenceStatus = undefined) => ({
   status: count === 0 ? 'OK' : count === 3 ? 'NOK' : 'Partial',
   evidence: withEvidence ? 'Confirmed anti-pattern evidence.' : 'No confirmed anti-pattern evidence.',
   evidence_quotes: withEvidence ? [{ quote: 'Confirmed anti-pattern evidence', category: 'Operational', evidence_source: 'text' }] : [],
+  assessment_status: withEvidence || absenceStatus === 'tested_absent' ? 'assessed' : 'not_assessed',
+  question_results: withEvidence
+    ? Array.from({ length: 3 }, (_, index) => index < count ? 'supported' : 'not_supported')
+    : ['unknown', 'unknown', 'unknown'],
   reasoning: withEvidence ? 'Evidence found.' : 'Not found.',
   is_silent: count === 0 && absenceStatus !== 'tested_absent',
   antipattern_absence_status: absenceStatus,
@@ -124,6 +132,8 @@ const logs = (maturityFactory, antiFactory) => ({
   ));
   assert.equal(result.metrics.evidence_density, 50, 'quote-backed maturity gaps should count as verified source coverage');
   assert.equal(result.metrics.maturity_depth, 0, 'gap evidence must not improve maturity score');
+  assert.equal(result.metrics.assessed_zero_count, 30, 'assessed 0/3 criteria must be retained as assessed evidence');
+  assert.equal(result.metrics.assessed_zero_ratio, 100, 'zero-result concentration must be observable independently of evidence density');
   assert.equal(result.maturity_gaps.length, 30);
   assert.equal(result.silent_areas.length, 0, 'quote-backed maturity gaps should not be treated as silent');
   assert.match(result.maturity_gaps[0], /Confirmed gap/, 'quote-backed maturity gaps should be labelled as confirmed gaps');
@@ -135,6 +145,7 @@ const logs = (maturityFactory, antiFactory) => ({
     () => anti(0, false)
   ));
   assert.equal(result.metrics.evidence_density, 0, 'silent maturity gaps should not count as source coverage');
+  assert.equal(result.metrics.assessed_zero_count, 0, 'unknown criteria must not be misclassified as assessed zeroes');
   assert.equal(result.silent_areas.length, 30, 'silent maturity gaps should remain silent areas');
   assert.match(result.maturity_gaps[0], /Not demonstrated by supplied material/, 'silent maturity gaps should remain evidence gaps, not confirmed capability absences');
 }
@@ -176,8 +187,8 @@ const logs = (maturityFactory, antiFactory) => ({
         : anti(0, false, 'unknown_absent')
   ));
   assert.equal(Math.round(result.metrics.capability_attainment * 10) / 10, 56.7);
-  assert.equal(Math.round(result.metrics.antipattern_control * 10) / 10, 78.3);
-  assert.equal(result.metrics.finops_readiness, 67.5, 'supplied production distribution should score 67.5%');
+  assert.equal(Math.round(result.metrics.antipattern_control * 10) / 10, 88);
+  assert.equal(Math.round(result.metrics.finops_readiness * 10) / 10, 72.3, 'unknown items must be excluded and harmful partial findings must add no control points');
   assert.equal(result.metrics.score_gap_breakdown.maturity_not_demonstrated, 0);
   assert.equal(result.metrics.score_gap_breakdown.antipattern_not_assessed, 5);
   assert.equal(result.score_evidence_gaps.length, 5, 'unknown anti-pattern absence should remain an evidence discussion');

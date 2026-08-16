@@ -10,6 +10,7 @@ import {
   RoutedSourcePacket,
   SourceRegistry,
   DerivedAnalyticalEvidence,
+  CriterionQuestionResult,
 } from '../types';
 import { runStage, RunContext, serverLog } from './modelRouter';
 import { isEvidenceQuoteBoundToChunk, isEvidenceQuoteBoundToDerivedEvidence, isValidEvidenceVerifierItem, verifyTextEvidenceSupport } from './evidenceSupport';
@@ -139,6 +140,8 @@ ${summarizeBatch(batch)}
 - "weak": the source has some related evidence, but the score is too strong or the quote is vague.
 - "unsupported": the finding/score is not supported by the source.
 - "missing": the scanner scored >0 but did not provide usable traceable evidence, or the evidence cannot be located.
+- assessment_status must be "assessed" only when criterion-relevant customer evidence is present. Use "not_assessed" for silence or irrelevant material, regardless of packet size.
+- An assessed 0/3 is valid when relevant evidence was evaluated but supports none of the three questions. It is not missing evidence and its source-bound quotes must be retained.
 - For text evidence, quoted text must be a real substring or clearly faithful excerpt from the source.
 - For deterministic derived evidence, require evidence_source="derived", a known derived_evidence_id, the correct source_id and an exact summary line targeted to this criterion. Never require a chunk_id for derived evidence and never recalculate its values.
 - When the source contains <CHUNK ...> markers, verify against the exact chunk text. Use chunk IDs/source IDs/page markers in your rationale when they clarify support or absence coverage.
@@ -165,6 +168,7 @@ Return STRICT JSON:
       "stream": "maturity | antipattern",
       "id": "${batchId}1",
       "status": "supported | weak | unsupported | missing",
+      "assessment_status": "assessed | not_assessed",
       "original_count": 2,
       "verified_count": 1,
       "rationale": "Short explanation of what the raw material does or does not support.",
@@ -492,10 +496,15 @@ export const runEvidenceCheck = async (
           stream,
           id,
           status,
+          assessment_status: scannerItem?.assessment_status === 'assessed' && localStatus === 'supported'
+            ? 'assessed'
+            : 'not_assessed',
           original_count: original,
           verified_count,
           rationale,
-          rescan_recommended: Boolean(raw?.rescan_recommended) || (original > verified_count),
+          rescan_recommended: Boolean(raw?.rescan_recommended)
+            || (original > verified_count)
+            || scannerItem?.assessment_status === 'not_assessed',
           quote_supported: localStatus === 'supported'
             ? (typeof raw?.quote_supported === 'boolean' ? raw.quote_supported : status === 'supported')
             : false,
@@ -539,7 +548,7 @@ export const runEvidenceCheck = async (
 
 export const evidenceItemsNeedingRescan = (result: EvidenceCheckResult): EvidenceCheckItem[] => {
   return result.items.filter(item =>
-    item.status === 'weak' &&
+    (item.status === 'weak' || item.assessment_status === 'not_assessed') &&
     item.rescan_recommended === true
   );
 };
@@ -635,20 +644,33 @@ export const applyEvidenceCheckToBatch = (
       || downgraded
       || item.status !== 'supported'
       || rescannedKeys.has(key);
+    let remainingSupported = finalCount;
+    const finalQuestionResults = item.assessment_status === 'assessed'
+      ? (existing.question_results || []).map((result: CriterionQuestionResult) => {
+          if (result !== 'supported') return result;
+          if (remainingSupported > 0) {
+            remainingSupported--;
+            return result;
+          }
+          return 'unknown' as const;
+        })
+      : ['unknown', 'unknown', 'unknown'] as const;
 
     streamBucket[item.id] = {
       ...existing,
       count: finalCount,
       status: statusForScore(item.stream, finalCount),
+      assessment_status: item.assessment_status || existing.assessment_status || 'not_assessed',
+      question_results: finalQuestionResults,
       evidence: downgraded && finalCount === 0
         ? `Evidence-check downgraded this finding: ${reason}`
         : existing.evidence,
-      evidence_quotes: finalCount === 0 && antipatternAbsenceStatus !== 'tested_absent'
-        ? []
-        : (existing.evidence_quotes || []),
+      evidence_quotes: item.assessment_status === 'assessed' || antipatternAbsenceStatus === 'tested_absent'
+        ? (existing.evidence_quotes || [])
+        : [],
       is_silent: item.stream === 'antipattern'
         ? antipatternAbsenceStatus === 'unknown_absent'
-        : existing.is_silent,
+        : item.assessment_status !== 'assessed',
       evidence_check_status: item.status,
       original_count: item.original_count,
       verified_count: finalCount,
@@ -766,7 +788,21 @@ export const reconcileEvidenceProvenance = <T extends ProvenancePhase1Result>(
         adjustedCriteria.add(id);
         logs[stream][id] = { ...existing, evidence_quotes: validQuotes };
         if (existing.verification_unresolved) continue;
-        if (count === 0 || validQuotes.length > 0) continue;
+        if (validQuotes.length > 0) continue;
+
+        if (count === 0) {
+          logs[stream][id] = {
+            ...logs[stream][id],
+            assessment_status: 'not_assessed',
+            question_results: ['unknown', 'unknown', 'unknown'],
+            is_silent: true,
+            ...(stream === 'antipattern' ? {
+              antipattern_absence_status: 'unknown_absent',
+              coverage_reason: 'No source-bound criterion evidence remained, so the anti-pattern was not assessed.',
+            } : {}),
+          };
+          continue;
+        }
 
         const key = `${stream}.${id}`;
         const verdict = evidenceItemsByKey.get(key);
@@ -778,6 +814,8 @@ export const reconcileEvidenceProvenance = <T extends ProvenancePhase1Result>(
           status: stream === 'antipattern' ? 'OK' : 'NOK',
           evidence: reason,
           evidence_quotes: [],
+          assessment_status: 'not_assessed',
+          question_results: ['unknown', 'unknown', 'unknown'],
           is_silent: true,
           evidence_check_status: 'unsupported',
           original_count: originalCount,

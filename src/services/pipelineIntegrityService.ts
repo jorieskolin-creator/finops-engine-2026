@@ -346,11 +346,24 @@ export const validatePreSynthesisIntegrity = (
     }
     if (Object.values(phase1.phase_1_audit_logs[stream]).some(item => {
       if (!item || typeof item !== 'object') return true;
-      const candidate = item as { count?: unknown; evidence_quotes?: unknown };
+      const candidate = item as {
+        count?: unknown;
+        evidence_quotes?: unknown;
+        assessment_status?: unknown;
+        question_results?: unknown;
+      };
+      const questionResults = Array.isArray(candidate.question_results) ? candidate.question_results : [];
+      const supportedQuestions = questionResults.filter(result => result === 'supported').length;
       return !Number.isInteger(candidate.count)
         || (candidate.count as number) < 0
         || (candidate.count as number) > 3
-        || !Array.isArray(candidate.evidence_quotes);
+        || !Array.isArray(candidate.evidence_quotes)
+        || (candidate.assessment_status !== 'assessed' && candidate.assessment_status !== 'not_assessed')
+        || questionResults.length !== 3
+        || questionResults.some(result => !['supported', 'not_supported', 'unknown'].includes(String(result)))
+        || (candidate.assessment_status === 'assessed' && supportedQuestions !== candidate.count)
+        || (candidate.assessment_status === 'not_assessed'
+          && (candidate.count !== 0 || questionResults.some(result => result !== 'unknown')));
     })) {
       throw new PipelineIntegrityError('ANALYSIS_OUTPUT_INCOMPLETE', 'pre_synthesis');
     }
@@ -364,8 +377,12 @@ export const validatePreSynthesisIntegrity = (
           count?: number;
           verification_unresolved?: boolean;
           evidence_quotes?: Array<Partial<EvidenceQuote>>;
+          assessment_status?: 'assessed' | 'not_assessed';
         } | undefined;
         if (!item?.verification_unresolved && (item?.count || 0) > 0 && (item?.evidence_quotes?.length || 0) === 0) {
+          throw new PipelineIntegrityError('FINDING_PROVENANCE_INVALID', 'pre_synthesis', [domain]);
+        }
+        if (!item?.verification_unresolved && item?.assessment_status === 'assessed' && (item.evidence_quotes?.length || 0) === 0) {
           throw new PipelineIntegrityError('FINDING_PROVENANCE_INVALID', 'pre_synthesis', [domain]);
         }
         for (const quote of item?.evidence_quotes || []) {

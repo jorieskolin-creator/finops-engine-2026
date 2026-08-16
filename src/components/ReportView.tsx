@@ -387,8 +387,8 @@ const ForensicCriterion: React.FC<{
         <span className="font-mono text-xs text-slate-400">{catalog.id}</span>
         <h4 className="font-bold text-slate-900 leading-snug">{catalog.title}</h4>
       </div>
-      <span className={`px-2 py-1 rounded text-xs font-bold uppercase tracking-wider shrink-0 ${item?.verification_unresolved ? 'bg-slate-100 text-slate-600' : stream === 'antipattern' ? antiPatternBadgeClass(item) : statusBadgeClass(item?.status ?? '')}`}>
-        {item?.verification_unresolved ? 'Unverified candidate' : stream === 'antipattern' ? antiPatternStatusLabel(item) : (item?.status ?? 'No Data')}
+      <span className={`px-2 py-1 rounded text-xs font-bold uppercase tracking-wider shrink-0 ${item?.verification_unresolved || item?.assessment_status === 'not_assessed' ? 'bg-slate-100 text-slate-600' : stream === 'antipattern' ? antiPatternBadgeClass(item) : statusBadgeClass(item?.status ?? '')}`}>
+        {item?.verification_unresolved ? 'Unverified candidate' : item?.assessment_status === 'not_assessed' ? 'Not Assessed' : stream === 'antipattern' ? antiPatternStatusLabel(item) : `${item?.count ?? 0}/3`}
       </span>
     </div>
     {stream === 'antipattern' && item?.coverage_reason && (
@@ -399,9 +399,13 @@ const ForensicCriterion: React.FC<{
         <span className={`px-2 py-1 rounded text-xs font-bold uppercase tracking-wider ${evidenceCheckBadgeClass(item.evidence_check_status)}`}>
           Evidence-check: {item.evidence_check_status}
         </span>
-        {item.original_count !== undefined && typeof item.verified_count === 'number' && (
+        {item.assessment_status === 'not_assessed' ? (
           <span className="text-xs font-mono text-slate-500">
-            score {item.original_count}→{item.verified_count}{item.rescan_attempted ? ' · targeted rescan' : ''}
+            UNKNOWN{item.rescan_attempted ? ' · targeted rescan attempted' : ''}
+          </span>
+        ) : item.original_count !== undefined && typeof item.verified_count === 'number' && (
+          <span className="text-xs font-mono text-slate-500">
+            score {item.original_count}/3→{item.verified_count}/3{item.rescan_attempted ? ' · targeted rescan' : ''}
           </span>
         )}
         {item.adjustment_reason && <p className="basis-full text-xs text-slate-500">{item.adjustment_reason}</p>}

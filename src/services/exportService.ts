@@ -364,14 +364,14 @@ const renderForensicCriterion = (cat: { id: string; title: string; desc: string 
           <span class="forensic-id">${escapeHtml(cat.id)}</span>
           <h4>${escapeHtml(cat.title)}</h4>
         </div>
-        <span class="badge ${stream === 'antipattern' ? antiPatternBadgeClass(item) : statusBadgeClass(item?.status ?? '')}">${escapeHtml(stream === 'antipattern' ? antiPatternStatusLabel(item) : (item?.status ?? 'No Data'))}</span>
+        <span class="badge ${item?.assessment_status === 'not_assessed' ? statusBadgeClass('') : stream === 'antipattern' ? antiPatternBadgeClass(item) : statusBadgeClass(item?.status ?? '')}">${escapeHtml(item?.assessment_status === 'not_assessed' ? 'Not Assessed' : stream === 'antipattern' ? antiPatternStatusLabel(item) : `${item?.count ?? 0}/3`)}</span>
       </div>
       <p class="forensic-desc">${escapeHtml(cat.desc)}</p>
       ${stream === 'antipattern' && item?.coverage_reason ? `<div class="gate-rationale">${escapeHtml(item.coverage_reason)}</div>` : ''}
       ${item?.evidence_check_status ? `
       <div class="forensic-block">
         <span class="evidence-check-badge ${evidenceCheckClass(item.evidence_check_status)}">Evidence-check: ${escapeHtml(item.evidence_check_status)}</span>
-        ${item.original_count !== undefined && typeof item.verified_count === 'number' ? `<div class="gate-rationale">score ${item.original_count}→${item.verified_count}${item.rescan_attempted ? ' · targeted rescan' : ''}</div>` : item.verification_unresolved ? `<div class="gate-rationale">scanner candidate ${item.original_count ?? item.count}/3 · verification unavailable · excluded from score</div>` : ''}
+        ${item.assessment_status === 'not_assessed' ? `<div class="gate-rationale">UNKNOWN · no criterion-relevant evidence available for scoring${item.rescan_attempted ? ' · targeted rescan attempted' : ''}</div>` : item.original_count !== undefined && typeof item.verified_count === 'number' ? `<div class="gate-rationale">score ${item.original_count}/3→${item.verified_count}/3${item.rescan_attempted ? ' · targeted rescan' : ''}</div>` : item.verification_unresolved ? `<div class="gate-rationale">scanner candidate ${item.original_count ?? item.count}/3 · verification unavailable · excluded from score</div>` : ''}
         ${item.adjustment_reason ? `<div class="gate-rationale">${escapeHtml(item.adjustment_reason)}</div>` : ''}
       </div>` : ''}
       ${item?.reasoning ? `

@@ -12,21 +12,23 @@ EACH definition contains **3 Specific Sub-Criteria** (numbered 1, 2, 3).
 You must evaluate **ALL 3 criteria** for every item to determine the final score (Count).
 
 **SCORING RULES (The Count):**
-*   **0:** None of the 3 sub-criteria are met. (Silent/Absent).
-*   **1:** 1 of 3 sub-criteria is met (or vague/aspirational language used).
+*   **UNKNOWN / NOT ASSESSED:** The packet contains no customer evidence relevant enough to evaluate this item. Represent this as assessment_status="not_assessed", Count 0, and three "unknown" question results. Count 0 is only an internal placeholder and is not a score.
+*   **0:** Relevant customer evidence was assessed, but none of the 3 sub-criteria are met.
+*   **1:** Exactly 1 of 3 sub-criteria is met.
 *   **2:** 2 of 3 sub-criteria are met (operational evidence).
 *   **3:** All 3 sub-criteria are met (embedded/enforced practice).
 
 **IMPORTANT LOGIC:**
-*   **Silence is Data:** If the text does NOT mention cost allocation, then for that Maturity item, the Count is **0**. Do not hallucinate a score.
-*   **Plans ≠ Practice:** "We plan to implement tagging" = Score 1 maximum.
-*   **Tool ≠ Usage:** "We use AWS Cost Explorer" without usage evidence = Score 1.
+*   **Silence is UNKNOWN:** If the customer evidence does not cover the item, it is NOT ASSESSED. Never convert silence or irrelevant packet content into 0/3.
+*   **Relevant Negative Evidence Can Support 0/3:** Direct evidence of missing, incomplete, local-only, planned-only, or non-operational practice can make the item assessable while supporting none of its questions.
+*   **Plans ≠ Practice:** A plan supports a question only when that exact question asks about a plan. Otherwise it is relevant evidence of non-attainment, not a point.
+*   **Tool ≠ Usage:** Tool availability does not support an operating-practice question without evidence of the required usage.
 *   **Maturity Stream:** High score (3) means the capability is mature and embedded. Low score (0) means it is missing.
 *   **Anti-Pattern Stream:** High score (3) means the harmful pattern is deeply present (BAD). Low score (0) means no harmful-pattern evidence was found. Treat that as GOOD only when the source material has relevant coverage that would reveal the anti-pattern if present; otherwise it is UNKNOWN/NOT ASSESSED.
 *   **Financial Sensitivity:** Do NOT extract or repeat specific dollar amounts, account numbers, or pricing terms from the document.
 
 ### EVIDENCE QUOTES (CRITICAL)
-For EVERY item with score > 0, you MUST include at least one direct source-text quote, visible-image description, or approved deterministic summary line as evidence.
+For EVERY assessed item, including an assessed score of 0, you MUST include at least one criterion-relevant direct source-text quote, visible-image description, or approved deterministic summary line as evidence. A not-assessed item has no evidence quotes.
 Wrap each citation in the "evidence_quotes" array.
 Every source-text quote MUST copy its "source_id" and "chunk_id" from the enclosing <CHUNK> marker. Also copy every locator present on that marker: "page_number"/"page_id" for PDF pages and "sheet_name"/"row_number" for table evidence. Never cite text outside the cited chunk.
 For approved deterministic evidence inside <DERIVED_EVIDENCE>, set evidence_source to "derived", copy source_id and derived_evidence_id, and quote one exact summary_lines entry. Do not add chunk_id. Use a derived observation only for its declared target criterion, never recalculate it, and never infer policy, enforcement, culture, intent, or remediation from table population metrics alone.
@@ -91,16 +93,19 @@ For the 5 criteria in Stream A (${columnId}1-${columnId}5) AND the 5 criteria in
 
 **FOR EACH ITEM:**
 1. Read the 3 specific sub-criteria in the definition.
-2. Check the text for evidence of each.
-3. Sum the matches to get the **Count (0-3)**.
-4. If Count > 0, extract at least one direct quote as evidence.
-5. Every quote must include source_id, chunk_id, and all page/sheet/row locators shown by its enclosing CHUNK marker.
+2. Decide whether the packet contains customer evidence relevant enough to assess this item.
+3. Return one question_results entry for each sub-criterion: supported, not_supported, or unknown.
+4. Sum only the supported entries to get the **Count (0-3)**.
+5. If assessment_status is assessed, extract at least one criterion-relevant quote even when Count is 0. If no relevant quote exists, return not_assessed.
+6. Every quote must include source_id, chunk_id, and all page/sheet/row locators shown by its enclosing CHUNK marker.
 
 **REQUIRED OUTPUT STRUCTURE (JSON Only):**
 {
   "maturity": {
     "${columnId}1": {
       "count": 0,
+      "assessment_status": "assessed | not_assessed",
+      "question_results": ["not_supported", "not_supported", "unknown"],
       "evidence": "Summary of evidence...",
       "evidence_quotes": [{ "quote": "Direct text from the cited source chunk", "section": "Section name if identifiable", "category": "Policy | Process | Operational | Automation | Accountability | Financial-Integration | Cultural", "evidence_source": "text", "source_id": "src-001", "chunk_id": "src-001-p003-c001", "page_number": 3 }],
       "reasoning": "Crit 1: Found. Crit 2: Not found. Crit 3: Not found. Total: 1."
@@ -110,6 +115,8 @@ For the 5 criteria in Stream A (${columnId}1-${columnId}5) AND the 5 criteria in
   "antipattern": {
     "${columnId}1": {
       "count": 0,
+      "assessment_status": "not_assessed",
+      "question_results": ["unknown", "unknown", "unknown"],
       "evidence": "Document silent on this anti-pattern.",
       "evidence_quotes": [],
       "reasoning": "Crit 1: Not found. Crit 2: Not found. Crit 3: Not found. Total: 0."
@@ -163,16 +170,19 @@ For ONLY the listed criteria, re-evaluate all 3 sub-criteria and return correcte
 
 Rules:
 1. If evidence is not directly present in the source, lower the Count.
-2. For Count > 0, include at least one direct text quote or visible-image description in evidence_quotes.
-3. Source-text quotes must include source_id, chunk_id, and every page/sheet/row locator shown by the enclosing CHUNK. Derived quotes must instead include evidence_source="derived", source_id, derived_evidence_id, and an exact summary_lines entry from approved <DERIVED_EVIDENCE>. Never cite content outside the referenced evidence unit.
-4. For anti-pattern Count = 0, distinguish verified absence from unknown absence in the evidence/reasoning text. Verified absence requires relevant source coverage; silence or irrelevant source material is not positive evidence.
-5. Do not return criteria that were not listed in <target_criteria>.
+2. Recompute question_results and set Count to exactly the number of supported entries.
+3. For every assessed result, including 0/3, include at least one criterion-relevant direct quote or visible-image description. If there is no relevant evidence, return assessment_status="not_assessed", Count 0, three unknown question results, and no quotes.
+4. Source-text quotes must include source_id, chunk_id, and every page/sheet/row locator shown by the enclosing CHUNK. Derived quotes must instead include evidence_source="derived", source_id, derived_evidence_id, and an exact summary_lines entry from approved <DERIVED_EVIDENCE>. Never cite content outside the referenced evidence unit.
+5. For anti-pattern Count = 0, distinguish verified absence from unknown absence in the evidence/reasoning text. Verified absence requires relevant source coverage; silence or irrelevant source material is not positive evidence.
+6. Do not return criteria that were not listed in <target_criteria>.
 
 Required JSON shape:
 {
   "maturity": {
     "${columnId}1": {
       "count": 0,
+      "assessment_status": "assessed | not_assessed",
+      "question_results": ["not_supported", "not_supported", "unknown"],
       "evidence": "Corrected summary of evidence...",
       "evidence_quotes": [{ "quote": "Direct text from the cited source chunk", "section": "Section name if identifiable", "category": "Policy | Process | Operational | Automation | Accountability | Financial-Integration | Cultural", "evidence_source": "text", "source_id": "src-001", "chunk_id": "src-001-p003-c001", "page_number": 3 }],
       "reasoning": "Crit 1: Found/Not found. Crit 2: Found/Not found. Crit 3: Found/Not found. Total: N."
@@ -181,6 +191,8 @@ Required JSON shape:
   "antipattern": {
     "${columnId}1": {
       "count": 0,
+      "assessment_status": "assessed | not_assessed",
+      "question_results": ["unknown", "unknown", "unknown"],
       "evidence": "Corrected summary of evidence...",
       "evidence_quotes": [],
       "reasoning": "Crit 1: Found/Not found. Crit 2: Found/Not found. Crit 3: Found/Not found. Total: N."

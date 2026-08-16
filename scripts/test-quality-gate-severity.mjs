@@ -65,6 +65,25 @@ const evidenceCheckOk = {
 };
 
 {
+  const gate = runQualityGate(
+    phase1,
+    { ...phase2, metrics: { ...phase2.metrics, assessed_zero_ratio: 70 } },
+    validationOk,
+    validationOk,
+    evidenceCheckOk,
+    {
+      attempts: 1,
+      total_claims: 0,
+      supported_count: 0,
+      unsupported_claims: [],
+      failed: false
+    }
+  );
+  assert.equal(gate.decision, 'BLOCK', 'excessive assessed 0/3 concentration must block roadmap actionability');
+  assert.ok(gate.blocking_reasons.some(reason => reason.includes('0/3 results')));
+}
+
+{
   const phase1Unavailable = {
     valid: false,
     errors: ['maturity: Analysis unavailable for criteria IDs: F1, F2, F3, F4, F5'],
