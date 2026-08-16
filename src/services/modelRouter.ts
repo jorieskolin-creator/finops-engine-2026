@@ -24,6 +24,7 @@ export interface NormalizedPrompt {
 
 export interface RunContext {
   runId: string;
+  stageExecutionId?: string;
 }
 
 const REQUEST_TIMEOUT_MS = 595_000;
@@ -90,14 +91,14 @@ async function governedCall(profile: ModelProfile, prompt: NormalizedPrompt, sta
   if (profile.maxTokens !== undefined) settings.max_tokens = profile.maxTokens;
   if (profile.openaiReasoning) settings.reasoning_effort = profile.openaiReasoning.effort;
   if (profile.anthropicThinking) settings.thinking_budget_tokens = profile.anthropicThinking.budget_tokens;
-  const approval = await fetch('/api/governed-packet', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ schema_version:REQUEST_SCHEMA, policy_version:POLICY, run_id:ctx.runId, stage, provider:profile.provider, model:profile.id, destination:`${profile.provider}:external_model`, system_instruction:prompt.systemInstruction || '', parts:[{type:'text',text:prompt.userText}], settings, ...(prompt.outputContract ? { output_contract: prompt.outputContract } : {}) }) });
+  const approval = await fetch('/api/governed-packet', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ schema_version:REQUEST_SCHEMA, policy_version:POLICY, run_id:ctx.runId, stage, ...(ctx.stageExecutionId ? { stage_execution_id: ctx.stageExecutionId } : {}), provider:profile.provider, model:profile.id, destination:`${profile.provider}:external_model`, system_instruction:prompt.systemInstruction || '', parts:[{type:'text',text:prompt.userText}], settings, ...(prompt.outputContract ? { output_contract: prompt.outputContract } : {}) }) });
   if (!approval.ok) {
     const failure = await approval.json().catch(() => null);
     throw new StageExecutionError(typeof failure?.error === 'string' ? failure.error : 'STAGE_PACKET_REJECTED');
   }
   const packet = await approval.json();
   if (packet.classification_method !== 'deterministic_pattern_screen_v1' || packet.approval_basis !== 'policy_approved_after_pattern_screening' || packet.run_id !== ctx.runId || packet.stage !== stage || packet.provider !== profile.provider || packet.model !== profile.id || packet.output_contract !== prompt.outputContract) throw new StageExecutionError('INVALID_PACKET_APPROVAL');
-  const body = { packet_id:packet.packet_id, packet_hash:packet.packet_hash, schema_version:APPROVED_SCHEMA, policy_version:POLICY, run_id:ctx.runId, stage, internal_pipeline_call:true, internal_call_id:newInternalCallId() };
+  const body = { packet_id:packet.packet_id, packet_hash:packet.packet_hash, schema_version:APPROVED_SCHEMA, policy_version:POLICY, run_id:ctx.runId, stage, internal_pipeline_call:true, internal_call_id:newInternalCallId(), ...(ctx.stageExecutionId ? { stage_execution_id: ctx.stageExecutionId } : {}) };
   return postWithTimeout(`/api/${profile.provider}-generate`, body, packet);
 }
 
@@ -326,9 +327,10 @@ export async function runStage(stage: StageId, prompt: NormalizedPrompt, ctx: Ru
   const promptHash = hashString(`${stage}\n${prompt.outputContract || 'unstructured'}\n${prompt.systemInstruction || ''}\n${prompt.userText}`);
   const contextPacketHash = hashString(prompt.userText);
   const fallbackChain = chain.map(profile => profile.id);
+  const executionContext = { ...ctx, stageExecutionId: newInternalCallId() };
   for (const profile of chain) {
     try {
-      const result = await callModel(profile, prompt, stage, ctx);
+      const result = await callModel(profile, prompt, stage, executionContext);
       const providerUsage = tokenUsageFromProvider(result.usage);
       recordStageTrace(ctx.runId, {
         stage_id: stage,

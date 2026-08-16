@@ -4,6 +4,20 @@ import { expandDomainPacket, routingTermsForDomain } from './sourceRegistryServi
 
 const MAX_SELECTIONS_PER_PASS = 8;
 const MAX_TERMS_PER_PASS = 24;
+const FINOPS_ALIASES: Record<string, string[]> = {
+  autoscaling: ['auto scaling', 'automatic scaling', 'automaattinen skaalaus'],
+  rightsizing: ['right sizing', 'resource sizing', 'resurssien mitoitus'],
+  allocation: ['cost allocation', 'kustannusten kohdistus', 'kohdistaminen'],
+  tagging: ['resource tags', 'tag policy', 'tunnisteet', 'tagit'],
+  budget: ['budjetti', 'budget variance', 'budjettipoikkeama'],
+  forecast: ['forecasting', 'ennuste', 'ennustaminen'],
+  anomaly: ['anomaly detection', 'poikkeama', 'poikkeamien tunnistus'],
+  commitment: ['reserved instance', 'savings plan', 'sitoumus', 'varaus'],
+  showback: ['chargeback', 'cost transparency', 'kustannusnakymä'],
+  utilization: ['usage efficiency', 'kayttoaste', 'kapasiteetin kaytto'],
+  ownership: ['cost owner', 'accountability', 'kustannusvastuu', 'omistajuus'],
+  unit: ['unit economics', 'unit cost', 'yksikkokustannus', 'yksikkotalous'],
+};
 const STOP_WORDS = new Set([
   'about','after','again','against','also','and','are','because','been','before','being','but','cannot','could','does','each','evidence','from','have','into','more','most','not','only','other','over','same','scanner','score','source','status','than','that','the','their','them','then','there','these','they','this','those','through','under','using','verifier','very','was','were','what','when','where','which','while','with','without','would',
   'että','joka','kanssa','kun','mutta','myös','ole','ovat','sen','sitä','tai','tämä'
@@ -22,13 +36,15 @@ const meaningful = (token: string): boolean =>
   token.length >= 4 && !STOP_WORDS.has(token) && !/^\d+$/.test(token);
 
 const semanticTerms = (items: EvidenceCheckItem[], seenTerms: Set<string>): string[] => {
-  const weighted = new Map<string, number>();
+  const weighted = [new Map<string, number>(), new Map<string, number>(), new Map<string, number>()];
+  const aliases = new Map<string, number>();
   const add = (term: string, weight: number) => {
     const normalized = normalize(term);
     if (!normalized || seenTerms.has(normalized)) return;
     const tokens = normalized.split(' ');
     if (tokens.some(token => !meaningful(token))) return;
-    weighted.set(normalized, Math.max(weighted.get(normalized) || 0, weight));
+    const bucket = weighted[Math.min(tokens.length, 3) - 1];
+    bucket.set(normalized, Math.max(bucket.get(normalized) || 0, weight));
   };
   const addContext = (value: string, baseWeight: number) => {
     const tokens = normalize(value).split(' ').filter(meaningful);
@@ -43,11 +59,31 @@ const semanticTerms = (items: EvidenceCheckItem[], seenTerms: Set<string>): stri
     const criterion = MASTER_BINGO_FINOPS[item.stream].find(candidate => candidate.id === item.id);
     if (criterion) addContext(`${criterion.title} ${criterion.desc}`, 1);
     addContext(`${item.rationale} ${item.coverage_reason || ''}`, 4);
+    const context = normalize(`${criterion?.title || ''} ${criterion?.desc || ''} ${item.rationale} ${item.coverage_reason || ''}`);
+    for (const [concept, values] of Object.entries(FINOPS_ALIASES)) {
+      if (!context.includes(concept)) continue;
+      for (const value of values) {
+        const term = normalize(value);
+        if (!seenTerms.has(term)) aliases.set(term, 8);
+      }
+    }
   }
-  return [...weighted.entries()]
-    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
-    .slice(0, MAX_TERMS_PER_PASS)
-    .map(([term]) => term);
+  const ranked = (terms: Map<string, number>, limit: number) => [...terms.entries()]
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).slice(0, limit).map(([term]) => term);
+  const balanced = [
+    ...ranked(aliases, 6),
+    ...ranked(weighted[0], 8),
+    ...ranked(weighted[1], 7),
+    ...ranked(weighted[2], 3),
+  ];
+  if (balanced.length < MAX_TERMS_PER_PASS) {
+    const selected = new Set(balanced);
+    for (const term of weighted.flatMap(bucket => ranked(bucket, MAX_TERMS_PER_PASS))) {
+      if (!selected.has(term)) balanced.push(term);
+      if (balanced.length === MAX_TERMS_PER_PASS) break;
+    }
+  }
+  return balanced.slice(0, MAX_TERMS_PER_PASS);
 };
 
 const matchScore = (chunk: SourceChunk, terms: string[]): number => {
@@ -68,7 +104,7 @@ export const expandWeakEvidencePacket = (input: {
   seenTerms: Set<string>;
 }): {
   packet: RoutedSourcePacket;
-  trace: Omit<SemanticGapRetrievalPassTrace, 'packet_hash_before' | 'packet_hash_after' | 'evidence_status_after'>;
+  trace: Omit<SemanticGapRetrievalPassTrace, 'packet_hash_before' | 'packet_hash_after' | 'evidence_status_after' | 'verdict_change'>;
 } => {
   const weakItems = input.items.filter(item => item.status === 'weak' && item.rescan_recommended === true);
   const domainTerms = routingTermsForDomain(input.packet.domain_id).map(normalize);
@@ -106,6 +142,7 @@ export const expandWeakEvidencePacket = (input: {
       strategy: 'verifier_derived_semantic_expansion',
       seen_terms_before: seenTermsBefore,
       proposed_terms: proposedTerms,
+      new_term_count: proposedTerms.length,
       matched_candidate_count: candidates.length,
       selected_chunk_ids: expanded.selected_chunk_ids,
       evidence_status_before: Object.fromEntries(weakItems.map(item => [`${item.stream}.${item.id}`, item.status])),

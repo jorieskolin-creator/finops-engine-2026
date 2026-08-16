@@ -160,7 +160,7 @@ const evidencePathsFor = (
     quote_snippet: safeSnippet(quote.quote, 500),
     original_count: item.original_count,
     verified_count: item.verified_count,
-    final_count: item.count,
+    final_count: item.verification_unresolved ? null : item.count,
     score_effect: evidencePathEffect(stream, item)
   }))
 );
@@ -171,8 +171,8 @@ const scorePathsFor = (
 ): ScorePathTrace[] => Object.entries(logs).map(([criterionId, item]) => ({
   stream,
   criterion_id: criterionId,
-  final_count: item.count,
-  status: item.status,
+  final_count: item.verification_unresolved ? null : item.count,
+  status: item.verification_unresolved ? 'verification_unresolved' : item.status,
   evidence_check_status: item.evidence_check_status,
   antipattern_absence_status: stream === 'antipattern' && !item.verification_unresolved ? inferAntiPatternAbsenceStatus(item) : undefined,
   has_quote_backed_coverage: !item.verification_unresolved && (item.evidence_quotes || []).length > 0,

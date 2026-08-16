@@ -184,12 +184,14 @@ export interface SemanticGapRetrievalPassTrace {
   strategy: 'verifier_derived_semantic_expansion';
   seen_terms_before: string[];
   proposed_terms: string[];
+  new_term_count: number;
   matched_candidate_count: number;
   selected_chunk_ids: string[];
   packet_hash_before: string;
   packet_hash_after: string;
   evidence_status_before: Record<string, EvidenceCheckStatus>;
   evidence_status_after: Record<string, EvidenceCheckStatus>;
+  verdict_change: 'improved' | 'unchanged' | 'regressed' | 'verification_unavailable';
   stop_reason: 'NEW_EVIDENCE_SELECTED' | 'NO_NEW_TERMS' | 'NO_NEW_CANDIDATES' | 'PACKET_LIMIT_REACHED' | 'MAX_PASSES_REACHED';
 }
 
@@ -1150,15 +1152,15 @@ export interface EvidencePathTrace {
   quote_snippet: string;
   original_count?: number;
   verified_count?: number | null;
-  final_count: number;
+  final_count: number | null;
   score_effect: string;
 }
 
 export interface ScorePathTrace {
   stream: 'maturity' | 'antipattern';
   criterion_id: string;
-  final_count: number;
-  status: AuditItem['status'];
+  final_count: number | null;
+  status: AuditItem['status'] | 'verification_unresolved';
   evidence_check_status?: EvidenceCheckStatus;
   antipattern_absence_status?: AntiPatternAbsenceStatus;
   has_quote_backed_coverage: boolean;

@@ -322,17 +322,31 @@ export const runQualityGateExplanation = async (
     if (!match) throw new Error('QG explanation: response had no JSON');
     const parsed = JSON.parse(match[0]);
 
-    const sanitizeItem = (raw: any) => ({
-      reason: typeof raw?.reason === 'string' ? raw.reason : '',
-      explanation: typeof raw?.explanation === 'string' ? raw.explanation : '',
-      quote: typeof raw?.quote === 'string' && raw.quote.length > 0 ? raw.quote : undefined,
-      source_location: typeof raw?.source_location === 'string' ? raw.source_location : undefined,
-    });
+    const deterministicExplanation = (reason: string) =>
+      `The deterministic quality gate reported this condition. The assessment remains subject to the stated gate decision until the condition is resolved.`;
+    const sanitizeItems = (rawItems: unknown, reasons: string[]) => {
+      const byReason = new Map((Array.isArray(rawItems) ? rawItems : [])
+        .filter((raw: any) => reasons.includes(raw?.reason))
+        .map((raw: any) => [raw.reason, raw]));
+      return reasons.map(reason => {
+        const raw: any = byReason.get(reason);
+        const quote = typeof raw?.quote === 'string' && raw.quote.length > 0 && sourceDocument.includes(raw.quote)
+          ? raw.quote
+          : undefined;
+        return {
+          reason,
+          explanation: quote && typeof raw?.explanation === 'string' && raw.explanation.trim()
+            ? raw.explanation
+            : deterministicExplanation(reason),
+          ...(quote ? { quote, source_location: typeof raw?.source_location === 'string' ? raw.source_location : 'source document' } : {}),
+        };
+      });
+    };
 
     return {
       summary: typeof parsed.summary === 'string' ? parsed.summary : '',
-      blocking_details: Array.isArray(parsed.blocking_details) ? parsed.blocking_details.map(sanitizeItem) : [],
-      warning_details: Array.isArray(parsed.warning_details) ? parsed.warning_details.map(sanitizeItem) : [],
+      blocking_details: sanitizeItems(parsed.blocking_details, gate.blocking_reasons),
+      warning_details: sanitizeItems(parsed.warning_details, gate.warnings),
       model_used: resp.modelUsed.id,
     };
   } catch (e: any) {

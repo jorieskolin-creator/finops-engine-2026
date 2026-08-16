@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
-import { approvedPacketHash,approveRequest,authorizeDestination,inspectOutput,validateGovernedOutput,POLICY_VERSION,STAGE_PACKET_REQUEST_VERSION } from '../lib/governance.js';
+import { approvedPacketHash,approveRequest,authorizeDestination,evaluatePacketBinding,inspectOutput,packetRuntimeDiagnostics,validateGovernedOutput,POLICY_VERSION,STAGE_PACKET_REQUEST_VERSION } from '../lib/governance.js';
 import { OUTPUT_CONTRACT_IDS } from '../lib/outputContracts.js';
 import { governedPacketHandler } from '../api/governed-packet.js';
 import { issueCookie } from '../lib/auth.js';
@@ -19,6 +19,14 @@ for(const text of ['{"password":"hunter2"}','Format: CSV\nHeaders: contract valu
 assert.throws(()=>approveRequest({...request,system_instruction:'password=',parts:[{type:'text',text:'hunter2'}]}),/SECRET_MATERIAL_REJECTED/);
 assert.throws(()=>approveRequest({...request,parts:[{type:'text',text:'data:image/png;base64,AAAA'}]}),/IMAGE_PAYLOAD_DISABLED/);
 const packet=approveRequest(request,1000);const output=inspectOutput('Email a@b.com 😀 𝄞',packet,2000);assert.equal(output.text,'Email [REDACTED_EMAIL] 😀 𝄞');assert.equal(validateGovernedOutput(output,{source_packet_id:packet.packet_id}),output);
+const expectedBinding={packetId:packet.packet_id,packetHash:packet.packet_hash,runId:packet.run_id,provider:packet.provider,model:packet.model,stage:packet.stage};
+assert.equal(evaluatePacketBinding(packet,expectedBinding).code,null);
+assert.equal(evaluatePacketBinding({...packet,packet_id:'different'},expectedBinding).code,'PACKET_ID_MISMATCH');
+assert.equal(evaluatePacketBinding({...packet,packet_hash:'0'.repeat(64)},expectedBinding).code,'PACKET_HASH_METADATA_MISMATCH');
+assert.equal(evaluatePacketBinding({...packet,system_instruction:'mutated'},expectedBinding).code,'PACKET_CONTENT_HASH_MISMATCH');
+assert.equal(evaluatePacketBinding({...packet,hash_policy_version:'approved_packet_hash_v1'},expectedBinding).code,'PACKET_CONTENT_HASH_MISMATCH','hash-policy version skew must be detected as content skew');
+for(const [field,expectedField,code,value] of [['run_id','runId','PACKET_RUN_MISMATCH','other-run'],['provider','provider','PACKET_PROVIDER_MISMATCH','qwen'],['model','model','PACKET_MODEL_MISMATCH','other-model'],['stage','stage','PACKET_STAGE_MISMATCH','fact_check']]){const changed={...packet,[field]:value};changed.packet_hash=approvedPacketHash(changed);assert.equal(evaluatePacketBinding(changed,{...expectedBinding,packetHash:changed.packet_hash,[expectedField]:expectedBinding[expectedField]}).code,code);}
+const diagnostics=packetRuntimeDiagnostics(packet,JSON.stringify(packet));assert.equal(diagnostics.declared_packet_hash,packet.packet_hash);assert.equal(diagnostics.recomputed_content_hash,packet.packet_hash);assert.equal(typeof diagnostics.serialized_bytes,'number');assert.doesNotMatch(JSON.stringify(diagnostics),/monthly invoice review|EDP pricing|billing account governance/);
 for(const mutate of [o=>({...o,text:'changed'}),o=>({...o,source_packet_hash:'0'.repeat(64)}),o=>({...o,schema_version:'old'})])assert.throws(()=>validateGovernedOutput(mutate(output),{source_packet_hash:packet.packet_hash}),/INVALID_GOVERNED_OUTPUT/);
 for(const text of ['password=[REDACTED:password]','data:image/png;base64,AAAA','contract value: $250000','invoice number: INV-99887','bad\uD800',''])assert.throws(()=>inspectOutput(text,packet),/OUTPUT_INSPECTION_REJECTED/);
 assert.throws(()=>authorizeDestination('forensic_audit','anthropic','claude-opus-5',{}),/INVALID_MODEL_SETTINGS/);

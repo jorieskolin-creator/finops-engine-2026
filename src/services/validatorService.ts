@@ -66,7 +66,9 @@ export const validatePhase1Output = (rawData: any): ValidationResult => {
         }
       }
 
-      if (auditItem?.count === 0 && !(stream === 'antipattern' && ['tested_absent', 'unknown_absent'].includes(auditItem?.antipattern_absence_status))) {
+      if (auditItem?.count === 0
+        && auditItem?.evidence_check_status !== 'weak'
+        && !(stream === 'antipattern' && ['tested_absent', 'unknown_absent'].includes(auditItem?.antipattern_absence_status))) {
         const evidence = (auditItem?.evidence || '').toLowerCase();
         if (!silenceKeywords.some(kw => evidence.includes(kw)) && evidence.length > silenceMaxLenBeforeWarn) {
           warnings.push(`${stream}.${id}: Score 0 but evidence does not indicate silence`);

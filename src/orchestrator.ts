@@ -42,7 +42,7 @@ export interface Phase1SourcePackets {
     packet: EvidenceLaneStagePacket;
   }) => {
     packet: EvidenceLaneStagePacket;
-    trace: Omit<SemanticGapRetrievalPassTrace, 'evidence_status_after'>;
+    trace: Omit<SemanticGapRetrievalPassTrace, 'evidence_status_after' | 'verdict_change'>;
   };
 }
 
@@ -286,7 +286,8 @@ export const runPhase1Audit = async (
           if (trace.selected_chunk_ids.length === 0) {
             aggregated.semantic_gap_retrieval.passes.push({
               ...trace,
-              evidence_status_after: { ...trace.evidence_status_before }
+              evidence_status_after: { ...trace.evidence_status_before },
+              verdict_change: 'unchanged'
             });
             break;
           }
@@ -313,7 +314,8 @@ export const runPhase1Audit = async (
             if (rescannedEvidenceCheck.failed) {
               aggregated.semantic_gap_retrieval.passes.push({
                 ...trace,
-                evidence_status_after: { ...trace.evidence_status_before }
+                evidence_status_after: { ...trace.evidence_status_before },
+                verdict_change: 'verification_unavailable'
               });
               serverLog(ctx.runId, 'warn', 'targeted_rescan_verification_unavailable', {
                 batch: batchId,
@@ -331,19 +333,26 @@ export const runPhase1Audit = async (
               rescannedKeys.add(key);
               if (!preRescanCounts.has(key)) preRescanCounts.set(key, i.original_count);
             });
+            const evidenceStatusAfter = Object.fromEntries(needsRescan.map(item => {
+              const key = `${item.stream}.${item.id}`;
+              return [key, evidenceCheck.items.find(candidate => `${candidate.stream}.${candidate.id}` === key)?.status || item.status];
+            }));
+            const statusRank = { missing: 0, unsupported: 1, weak: 2, supported: 3 } as const;
+            const statusDeltas = Object.entries(trace.evidence_status_before).map(([key, before]) =>
+              statusRank[evidenceStatusAfter[key]] - statusRank[before]);
             aggregated.semantic_gap_retrieval.passes.push({
               ...trace,
-              evidence_status_after: Object.fromEntries(needsRescan.map(item => {
-                const key = `${item.stream}.${item.id}`;
-                return [key, evidenceCheck.items.find(candidate => `${candidate.stream}.${candidate.id}` === key)?.status || item.status];
-              }))
+              evidence_status_after: evidenceStatusAfter,
+              verdict_change: statusDeltas.some(delta => delta > 0) ? 'improved'
+                : statusDeltas.some(delta => delta < 0) ? 'regressed' : 'unchanged'
             });
             if (evidenceCheck.model_used) evidenceModelsSeen.add(evidenceCheck.model_used);
             if (evidenceCheck.adjudication_model_used) evidenceAdjudicationModelsSeen.add(evidenceCheck.adjudication_model_used);
           } catch (error) {
             aggregated.semantic_gap_retrieval.passes.push({
               ...trace,
-              evidence_status_after: { ...trace.evidence_status_before }
+              evidence_status_after: { ...trace.evidence_status_before },
+              verdict_change: 'verification_unavailable'
             });
             serverLog(ctx.runId, 'warn', 'targeted_rescan_unavailable', {
               batch: batchId,
