@@ -43,7 +43,7 @@ export interface RoadmapFactCheckInputs extends FactCheckInputs {
   lockedFindingsText: string;
 }
 
-const MAX_SOURCE_CHARS = 40000;
+const MAX_SOURCE_CHARS = 100000;
 
 const compactEvidence = (phase1: Phase1AuditLogs): string => {
   const lines: string[] = [];
@@ -103,6 +103,7 @@ const compactMetrics = (phase2: Phase2Validation): string => {
     `antipattern_control=${Math.round(m.antipattern_control)}%`,
     `maturity_depth=${Math.round(m.maturity_depth)}%`,
     `antipattern_burden=${Math.round(m.antipattern_burden)}%`,
+    `antipattern_burden_confidence=${m.antipattern_burden_confidence || 'unknown'}`,
     `antipattern_clearance=${Math.round(m.antipattern_clearance)}%`,
     `antipattern_coverage=${Math.round(m.antipattern_coverage)}%`,
     `maturity_ratio=${Math.round(m.maturity_ratio)}%`,
@@ -116,7 +117,10 @@ const compactMetrics = (phase2: Phase2Validation): string => {
     `antipattern_findings_count=${phase2.antipattern_findings.length}`,
     `verified_antipattern_absences_count=${phase2.verified_antipattern_absences.length}`,
     `unknown_antipattern_absences_count=${phase2.unknown_antipattern_absences.length}`,
-  ].join(', ') + (categoryScoreLines ? `\n\nCATEGORY SCORES (these are the X/15 numbers the strategy may legitimately quote):\n${categoryScoreLines}` : '');
+  ].join(', ')
+    + (categoryScoreLines ? `\n\nCATEGORY SCORES (these are the X/15 numbers the strategy may legitimately quote):\n${categoryScoreLines}` : '')
+    + (phase2.verification_unresolved.length > 0 ? `\n\nVERIFICATION UNRESOLVED:\n${phase2.verification_unresolved.join('\n')}` : '')
+    + (phase2.score_evidence_gaps.length > 0 ? `\n\nDETERMINISTIC SCORE/EVIDENCE GAPS:\n${phase2.score_evidence_gaps.map(value => value.substring(0, 800)).join('\n')}` : '');
 };
 
 export const buildFactCheckPrompt = (inputs: FactCheckInputs): string => `

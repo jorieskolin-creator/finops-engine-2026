@@ -105,6 +105,15 @@ assert.equal(semicolonCsv.structuredTable.delimiter, ';');
 assert.equal(semicolonCsv.structuredTable.parser_version, 'delimited_parser_v3');
 assert.deepEqual(semicolonCsv.structuredTable.headers, ['question', 'answer', 'notes']);
 assert.deepEqual(semicolonCsv.structuredTable.analysis_rows, [['What is tracked?', 'Cost and ownership', 'Contains, commas']]);
+const preambleCsv = renderDelimitedTableForAnalysis('Assessment export;;\nGenerated 2026-08-15;;\n;;\nMetadata;;\nQuestion;Answer;Notes\nQ1;"Line one\nline two";Owner assigned\nQ2;No;', {
+  fileName: 'messy-responses.csv',
+  delimiter: 'auto',
+});
+assert.equal(preambleCsv.structuredTable.header_row_number, 5, 'a sparse preamble must not be mistaken for the table header');
+assert.deepEqual(preambleCsv.structuredTable.headers, ['Question', 'Answer', 'Notes']);
+assert.deepEqual(preambleCsv.structuredTable.analysis_row_numbers, [6, 8], 'row locators must retain physical lines, including quoted multiline cells');
+assert.deepEqual(preambleCsv.structuredTable.analysis_rows[0], ['Q1', 'Line one line two', 'Owner assigned']);
+assert.match(preambleCsv.warnings.join(' '), /header.*preamble row\(s\)/i);
 assert.throws(
   () => renderDelimitedTableForAnalysis('single column\nvalue', { fileName: 'ambiguous.csv', delimiter: 'auto' }),
   /DELIMITED_TABLE_DELIMITER_UNDETECTED/

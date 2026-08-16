@@ -5,8 +5,10 @@ export type DelimitedTableDelimiter = ',' | ';' | '\t';
 export interface ParsedDelimitedTable {
   delimiter: DelimitedTableDelimiter;
   headers: string[];
+  headerRowNumber?: number;
   /** Complete normalized row population for local deterministic processing. */
   analysisRows: string[][];
+  analysisRowNumbers: number[];
   /** Bounded and clipped rows eligible for model context. */
   rows: string[][];
   sampledRowNumbers: number[];
@@ -213,6 +215,33 @@ export const selectDeterministicTableSample = (input: {
 
 const normalizeAnalysisCell = (value: string): string => value.replace(/\s+/g, ' ').trim();
 
+const probableHeaderIndex = (rows: Array<{ cells: string[]; rowNumber: number }>): number => {
+  if (rows.length < 2) return 0;
+  const width = Math.max(...rows.slice(0, 10).map(row => row.cells.length));
+  if (width < 2) return 0;
+  const score = (cells: string[]): number => {
+    const normalized = cells.map(normalizeAnalysisCell);
+    const populated = normalized.filter(Boolean);
+    if (populated.length === 0) return 0;
+    const density = populated.length / width;
+    const shortTextShare = populated.filter(value => value.length <= 80 && !/^[-+]?\d+(?:\.\d+)?$/.test(value)).length / populated.length;
+    const labelSignal = populated.some(value => /^(?:id|name|date|question|answer|owner|team|service|cost|amount|description)$/i.test(value));
+    return density * 5 + shortTextShare * 2 + (labelSignal ? 2 : 0);
+  };
+  const firstScore = score(rows[0].cells);
+  let bestIndex = 0;
+  let bestScore = firstScore;
+  for (let index = 1; index < Math.min(rows.length, 10); index++) {
+    const candidateScore = score(rows[index].cells);
+    if (candidateScore > bestScore) {
+      bestScore = candidateScore;
+      bestIndex = index;
+    }
+  }
+  const firstDensity = rows[0].cells.filter(cell => cell.trim()).length / width;
+  return bestIndex > 0 && firstDensity < 0.5 && bestScore >= firstScore + 3 ? bestIndex : 0;
+};
+
 const normalizeCell = (value: string): { value: string; originalLength: number; retainedLength: number } => {
   const normalized = normalizeAnalysisCell(value);
   return {
@@ -224,21 +253,17 @@ const normalizeCell = (value: string): { value: string; originalLength: number; 
 
 export const parseDelimitedTable = (raw: string, delimiter: DelimitedTableDelimiter, sourceHash?: string): ParsedDelimitedTable => {
   raw = raw.replace(/^\uFEFF/, '');
-  let headerRow: string[] | undefined;
-  const analysisRows: string[][] = [];
-  let rowCount = 0;
+  const parsedRows: Array<{ cells: string[]; rowNumber: number }> = [];
+  let physicalLineNumber = 1;
+  let rowStartLineNumber = 1;
   let current = '';
   let row: string[] = [];
   let inQuotes = false;
   let quotedCellClosed = false;
   const commitRow = (): void => {
     if (!row.some(cell => cell.trim().length > 0)) return;
-    if (!headerRow) headerRow = row;
-    else {
-      rowCount++;
-      if (rowCount > MAX_ANALYSIS_ROWS) throw new Error('DELIMITED_TABLE_ROW_LIMIT_EXCEEDED');
-      analysisRows.push(row.map(normalizeAnalysisCell));
-    }
+    if (parsedRows.length >= MAX_ANALYSIS_ROWS + 1) throw new Error('DELIMITED_TABLE_ROW_LIMIT_EXCEEDED');
+    parsedRows.push({ cells: row.map(normalizeAnalysisCell), rowNumber: rowStartLineNumber });
   };
 
   for (let i = 0; i < raw.length; i++) {
@@ -275,6 +300,15 @@ export const parseDelimitedTable = (raw: string, delimiter: DelimitedTableDelimi
       row = [];
       current = '';
       quotedCellClosed = false;
+      physicalLineNumber++;
+      rowStartLineNumber = physicalLineNumber;
+      continue;
+    }
+
+    if ((char === '\n' || char === '\r') && inQuotes) {
+      if (char === '\r' && next === '\n') i++;
+      current += '\n';
+      physicalLineNumber++;
       continue;
     }
 
@@ -286,6 +320,14 @@ export const parseDelimitedTable = (raw: string, delimiter: DelimitedTableDelimi
   row.push(current);
   commitRow();
 
+  const headerIndex = probableHeaderIndex(parsedRows);
+  const headerRecord = parsedRows[headerIndex];
+  const dataRecords = parsedRows.slice(headerIndex + 1);
+  const headerRow = headerRecord?.cells;
+  const analysisRows = dataRecords.map(record => record.cells);
+  const analysisRowNumbers = dataRecords.map(record => record.rowNumber);
+  const rowCount = analysisRows.length;
+
   if ((headerRow?.length || 0) > MAX_COLUMNS || analysisRows.some(rowValue => rowValue.length > MAX_COLUMNS)) {
     throw new Error('DELIMITED_TABLE_COLUMN_LIMIT_EXCEEDED');
   }
@@ -295,7 +337,7 @@ export const parseDelimitedTable = (raw: string, delimiter: DelimitedTableDelimi
   const sample = selectDeterministicTableSample({
     headers: analysisHeaders,
     rows: analysisRows,
-    rowNumbers: analysisRows.map((_, index) => index + 2),
+    rowNumbers: analysisRowNumbers,
     sourceHash
   });
   const renderedRows = sample.rows.map(cells => cells.map(normalizeCell));
@@ -304,6 +346,9 @@ export const parseDelimitedTable = (raw: string, delimiter: DelimitedTableDelimi
   const retainedCharacters = renderedCells.reduce((sum, cell) => sum + cell.retainedLength, 0);
   const clippedCellCount = renderedCells.filter(cell => cell.retainedLength < cell.originalLength).length;
   const warnings: string[] = [];
+  if (headerRecord && headerIndex > 0) {
+    warnings.push(`Probable header detected on physical row ${headerRecord.rowNumber}; ${headerIndex} non-empty preamble row(s) were excluded from tabular evidence rows.`);
+  }
   if (rowCount > MAX_RENDERED_ROWS) {
     warnings.push(`Table has ${rowCount} data rows; a deterministic bounded sample of ${MAX_RENDERED_ROWS} rows was included for model context.`);
   }
@@ -312,7 +357,9 @@ export const parseDelimitedTable = (raw: string, delimiter: DelimitedTableDelimi
   return {
     delimiter,
     headers: headerCells.map(cell => cell.value),
+    headerRowNumber: headerRecord?.rowNumber,
     analysisRows,
+    analysisRowNumbers,
     rows: renderedRows.map(cells => cells.map(cell => cell.value)),
     sampledRowNumbers: sample.rowNumbers,
     sampledRowReasons: sample.reasons,
@@ -379,10 +426,11 @@ export const renderDelimitedTableForAnalysis = (
       schema_version: 'structured_table_v1',
       delimiter,
       parser_version: 'delimited_parser_v3',
+      header_row_number: table.headerRowNumber,
       headers: table.headers,
       rows: table.rows,
       analysis_rows: table.analysisRows,
-      analysis_row_numbers: table.analysisRows.map((_, index) => index + 2),
+      analysis_row_numbers: table.analysisRowNumbers,
       sampled_row_numbers: table.sampledRowNumbers,
       sampled_row_reasons: table.sampledRowReasons,
       sample_strategy_version: TABLE_SAMPLE_STRATEGY_VERSION,

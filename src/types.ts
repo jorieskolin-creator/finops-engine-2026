@@ -933,7 +933,7 @@ export type RetrievalStopReason = 'SUFFICIENT_BASELINE' | 'MINIMUM_GAIN_NOT_MET'
 export interface BoundedRetrievalTrace {
   schema_version: 'bounded_retrieval_trace_v1';
   policy_version: 'bounded_retrieval_policy_v1';
-  mode: 'shadow';
+  mode: 'active';
   max_passes: 2;
   minimum_gain_points: 5;
   domains: Array<{

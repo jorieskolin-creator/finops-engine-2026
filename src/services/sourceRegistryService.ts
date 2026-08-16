@@ -15,7 +15,6 @@ import type {
   EvidencePrivacyDecision,
   VisualEvidenceUnit
 } from '../types';
-import { renderStructuredTableContext } from './tableService';
 
 const TARGET_PACKET_CHARS = 35000;
 const HARD_PACKET_CHARS = 45000;
@@ -506,7 +505,7 @@ export const buildSourceRegistry = (records: SourceRecord[]): SourceRegistry => 
     let chunkIndex = 0;
     if (doc.kind === 'xlsx' && doc.structured_tables) {
       for (const table of doc.structured_tables.filter(item => item.model_eligible)) {
-        const context = renderStructuredTableContext(table, 'XLSX');
+        const context = structuredTableProfile(table, 'XLSX');
         chunks.push({
           chunk_id: chunkIdFor(sourceId, chunkIndex++),
           source_id: sourceId,
@@ -517,7 +516,7 @@ export const buildSourceRegistry = (records: SourceRecord[]): SourceRegistry => 
           char_end: context.length,
           routing: routeChunk(context)
         });
-        for (const row of tableRowChunks(context)) {
+        for (const row of structuredTableRows(table)) {
           chunks.push({
             chunk_id: chunkIdFor(sourceId, chunkIndex++),
             source_id: sourceId,
@@ -528,6 +527,30 @@ export const buildSourceRegistry = (records: SourceRecord[]): SourceRegistry => 
             routing: routeChunk(row.text)
           });
         }
+      }
+      return;
+    }
+    if ((doc.kind === 'csv' || doc.kind === 'tsv') && doc.structured_table) {
+      const table = doc.structured_table;
+      const context = structuredTableProfile(table, doc.kind === 'tsv' ? 'TSV' : 'CSV');
+      chunks.push({
+        chunk_id: chunkIdFor(sourceId, chunkIndex++),
+        source_id: sourceId,
+        type: 'table_profile',
+        text: context,
+        char_start: 0,
+        char_end: context.length,
+        routing: routeChunk(context)
+      });
+      for (const row of structuredTableRows(table)) {
+        chunks.push({
+          chunk_id: chunkIdFor(sourceId, chunkIndex++),
+          source_id: sourceId,
+          type: 'table_row',
+          text: row.text,
+          row_number: row.rowNumber,
+          routing: routeChunk(row.text)
+        });
       }
       return;
     }
@@ -680,6 +703,31 @@ const manifestFor = (chunk: SourceChunk, relevance: SourceRelevanceTier): Source
   routed_domains: routedDomains(chunk)
 });
 
+const MAX_STRUCTURED_ROW_CHARS = 8000;
+const structuredTableProfile = (table: NonNullable<SourceRecord['structured_table']>, format: 'CSV' | 'TSV' | 'XLSX'): string => [
+  `Format: ${format}`,
+  table.sheet_name ? `Sheet: ${table.sheet_name}` : 'Source table: browser-local tabular evidence',
+  `Header row: ${table.header_row_number || 'not recorded'}`,
+  `Rows: ${table.total_row_count}`,
+  `Columns: ${table.headers.length}`,
+  `Headers: ${table.headers.join(' | ')}`,
+  'Complete evidence rows are routed as separate row-addressable chunks; this profile contains no row values.'
+].join('\n');
+
+const structuredTableRows = (table: NonNullable<SourceRecord['structured_table']>): Array<{ text: string; rowNumber: number }> => {
+  const rows = table.analysis_rows || table.rows;
+  const rowNumbers = table.analysis_row_numbers || table.sampled_row_numbers || rows.map((_, index) => index + 2);
+  return rows.map((row, index) => {
+    const rendered = row.map((value, column) => `${table.headers[column] || `Column ${column + 1}`}: ${value}`).join(' | ');
+    return {
+      rowNumber: rowNumbers[index],
+      text: rendered.length > MAX_STRUCTURED_ROW_CHARS
+        ? `${rendered.slice(0, MAX_STRUCTURED_ROW_CHARS)}\n[ROW_CONTEXT_TRUNCATED original_chars=${rendered.length}]`
+        : rendered
+    };
+  });
+};
+
 export const rankedDomainCandidates = (registry: SourceRegistry, domainId: string) => registry.chunks
     .map(chunk => ({ chunk, tier: tierForDomain(chunk, domainId), score: scoreForDomain(chunk, domainId) }))
     .filter(item => item.tier === 'high' || item.tier === 'medium' || hasGapOrContradictionSignal(item.chunk))
@@ -688,23 +736,14 @@ export const rankedDomainCandidates = (registry: SourceRegistry, domainId: strin
       return tierWeight(b.tier) - tierWeight(a.tier) || b.score - a.score || a.chunk.chunk_id.localeCompare(b.chunk.chunk_id);
     });
 
-export const buildDomainPacket = (registry: SourceRegistry, domainId: string): RoutedSourcePacket => {
+const assembleDomainPacket = (
+  domainId: string,
+  included: Array<{ chunk: SourceChunk; tier: SourceRelevanceTier }>,
+  totalCandidateChunks: number
+): RoutedSourcePacket => {
   const title = BATCH_TITLES[domainId] || domainId;
-  const candidates = rankedDomainCandidates(registry, domainId);
-
-  const included: Array<{ chunk: SourceChunk; tier: SourceRelevanceTier }> = [];
-  let chars = 0;
-  for (const item of candidates) {
-    const nextLen = item.chunk.text.length + 260;
-    const target = included.length < 3 ? HARD_PACKET_CHARS : TARGET_PACKET_CHARS;
-    if (chars + nextLen > target) continue;
-    included.push({ chunk: item.chunk, tier: item.tier });
-    chars += nextLen;
-    if (chars >= TARGET_PACKET_CHARS) break;
-  }
-
   const imageChunks = included.filter(item => item.chunk.image).map(item => item.chunk.image!) as ImageInput[];
-  const omittedRelevantChunks = Math.max(0, candidates.length - included.length);
+  const omittedRelevantChunks = Math.max(0, totalCandidateChunks - included.length);
   const weakCoverage = included.length < 2
     || included.every(item => item.tier !== 'high')
     || omittedRelevantChunks > 0;
@@ -712,7 +751,7 @@ export const buildDomainPacket = (registry: SourceRegistry, domainId: string): R
     weakCoverage
       ? `Packet ${domainId} has incomplete deterministic coverage; no broad-source fallback is permitted.`
       : `Packet ${domainId} includes high/medium relevance source chunks for ${title}.`,
-    `Candidate chunks: ${candidates.length}; included chunks: ${included.length}; omitted relevant chunks: ${omittedRelevantChunks}.`
+    `Candidate chunks: ${totalCandidateChunks}; included chunks: ${included.length}; omitted relevant chunks: ${omittedRelevantChunks}.`
   ];
 
   const manifest = included.map(item => manifestFor(item.chunk, item.tier));
@@ -748,10 +787,55 @@ ${body}
     images: imageChunks,
     manifest,
     included_chunk_count: included.length,
-    total_candidate_chunks: candidates.length,
+    total_candidate_chunks: totalCandidateChunks,
     weak_coverage: weakCoverage,
     coverage_notes: coverageNotes,
     char_count: text.length
+  };
+};
+
+export const buildDomainPacket = (registry: SourceRegistry, domainId: string): RoutedSourcePacket => {
+  const candidates = rankedDomainCandidates(registry, domainId);
+  const included: Array<{ chunk: SourceChunk; tier: SourceRelevanceTier }> = [];
+  let chars = 0;
+  for (const item of candidates) {
+    const nextLen = item.chunk.text.length + 260;
+    const target = included.length < 3 ? HARD_PACKET_CHARS : TARGET_PACKET_CHARS;
+    if (chars + nextLen > target) continue;
+    included.push({ chunk: item.chunk, tier: item.tier });
+    chars += nextLen;
+    if (chars >= TARGET_PACKET_CHARS) break;
+  }
+  return assembleDomainPacket(domainId, included, candidates.length);
+};
+
+export const expandDomainPacket = (
+  registry: SourceRegistry,
+  packet: RoutedSourcePacket,
+  requestedChunkIds: string[]
+): { packet: RoutedSourcePacket; selected_chunk_ids: string[] } => {
+  const selectedIds = new Set(packet.manifest.map(item => item.chunk_id));
+  const included = packet.manifest.flatMap(item => {
+    const chunk = registry.chunks.find(candidate => candidate.chunk_id === item.chunk_id);
+    return chunk ? [{ chunk, tier: item.relevance }] : [];
+  });
+  let chars = included.reduce((sum, item) => sum + item.chunk.text.length + 260, 0);
+  const selected: string[] = [];
+  for (const chunkId of requestedChunkIds) {
+    if (selectedIds.has(chunkId)) continue;
+    const chunk = registry.chunks.find(candidate => candidate.chunk_id === chunkId);
+    if (!chunk) continue;
+    const nextLen = chunk.text.length + 260;
+    if (chars + nextLen > HARD_PACKET_CHARS) continue;
+    const tier = tierForDomain(chunk, packet.domain_id);
+    included.push({ chunk, tier });
+    selectedIds.add(chunkId);
+    selected.push(chunkId);
+    chars += nextLen;
+  }
+  return {
+    packet: assembleDomainPacket(packet.domain_id, included, Math.max(packet.total_candidate_chunks, included.length)),
+    selected_chunk_ids: selected
   };
 };
 
@@ -761,7 +845,18 @@ export const buildDomainPackets = (registry: SourceRegistry): Record<string, Rou
 
 export const renderPseudonymousSourceContext = (registry: SourceRegistry, maxChars = 45000): string => {
   const rendered: string[]=[]; let chars=0;
-  for(const chunk of registry.chunks){const value=renderChunk(chunk,'unknown');if(chars+value.length>maxChars)break;rendered.push(value);chars+=value.length;}
+  const bySource = new Map<string, SourceChunk[]>();
+  for (const chunk of registry.chunks) bySource.set(chunk.source_id, [...(bySource.get(chunk.source_id) || []), chunk]);
+  const sources = [...bySource.values()];
+  for (let index = 0; sources.some(chunks => index < chunks.length); index++) {
+    for (const chunks of sources) {
+      const chunk = chunks[index];
+      if (!chunk) continue;
+      const value=renderChunk(chunk,'unknown');
+      if(chars+value.length>maxChars)continue;
+      rendered.push(value);chars+=value.length;
+    }
+  }
   return `<FULL_SOURCE_CONTEXT source_count="${registry.source_count}" chunk_count="${registry.chunk_count}">\n${rendered.join('\n\n')}\n</FULL_SOURCE_CONTEXT>`;
 };
 

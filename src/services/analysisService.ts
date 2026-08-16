@@ -41,7 +41,7 @@ import { buildRunTrace, clearStageTraces, consumeStageTraces, summarizeRunTrace 
 import { acquisitionQualityPersistence, buildAcquisitionQualitySnapshot, shadowTelemetryPersistence } from "./acquisitionQualityService";
 import { analyzeStructuredSources, buildDataSignalCoverageReport } from "./structuredDataAnalysisService";
 import { buildEvidenceLaneStagePackets } from "./evidenceStagePacketService";
-import { buildBoundedRetrievalTrace } from "./boundedRetrievalService";
+import { applyBoundedRetrieval } from "./boundedRetrievalService";
 import { sanitizeEvidenceSources } from "./deterministicPrivacyService";
 import { scrubDiagnosticResultForPrivacy } from "./privacyService";
 import { parseGovernedJsonObject, validateFindingsModePayload } from "./jsonResponseService";
@@ -297,12 +297,12 @@ export const analyzeDocument = async (
         }] : [])
     );
     const dataSignalCoverage = buildDataSignalCoverageReport();
-    const text = renderPseudonymousSourceContext(sourceRegistry, 50000);
-    const sourcePackets = buildDomainPackets(sourceRegistry);
+    const text = renderPseudonymousSourceContext(sourceRegistry, 120000);
+    const baselineSourcePackets = buildDomainPackets(sourceRegistry);
+    const { packets: sourcePackets, trace: boundedRetrieval } = applyBoundedRetrieval(sourceRegistry, baselineSourcePackets);
     const weakDomainIds = Object.entries(sourcePackets)
       .filter(([, packet]) => packet.weak_coverage)
       .map(([domain]) => domain);
-    const boundedRetrieval = buildBoundedRetrievalTrace(sourceRegistry, sourcePackets);
     const dlpScan = scanRegistryDlp(sourceRegistry);
     const packetWarnings = Object.values(sourcePackets).filter(packet => packet.weak_coverage).length;
     emitProgress({ stage: 'packetization', status: packetWarnings > 0 ? 'completed_with_warnings' : 'completed' });
