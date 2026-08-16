@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
-import { approvedPacketHash,approveRequest,authorizeDestination,evaluatePacketBinding,inspectOutput,packetRuntimeDiagnostics,validateGovernedOutput,POLICY_VERSION,STAGE_PACKET_REQUEST_VERSION } from '../lib/governance.js';
+import { approvedPacketBytes,approvedPacketHash,approveRequest,approveRequestArtifact,authorizeDestination,evaluatePacketBinding,inspectOutput,packetRuntimeDiagnostics,parseApprovedPacketBody,validateGovernedOutput,POLICY_VERSION,STAGE_PACKET_REQUEST_VERSION } from '../lib/governance.js';
 import { OUTPUT_CONTRACT_IDS } from '../lib/outputContracts.js';
 import { governedPacketHandler } from '../api/governed-packet.js';
 import { issueCookie } from '../lib/auth.js';
@@ -10,6 +10,11 @@ const undefinedOptionals=approveRequest({...request,settings:{...request.setting
 const persistedUndefinedOptionals=JSON.parse(JSON.stringify(undefinedOptionals));
 assert.deepEqual(undefinedOptionals,persistedUndefinedOptionals,'approved packet must already equal its JSON-persisted representation');
 assert.equal(approvedPacketHash(persistedUndefinedOptionals),undefinedOptionals.packet_hash,'packet hash must survive a JSON round trip');
+const artifact=approveRequestArtifact(request,1000);
+assert.ok(Buffer.isBuffer(artifact.canonicalBody));
+assert.equal(approvedPacketHash(artifact.packet),artifact.packet.packet_hash);
+assert.deepEqual(parseApprovedPacketBody(artifact.canonicalBody,artifact.packet.packet_hash),artifact.packet,'the authoritative bytes must reconstruct the approved packet');
+assert.throws(()=>parseApprovedPacketBody(Buffer.from('{"corrupt":true}'),artifact.packet.packet_hash),error=>error.code==='PACKET_CONTENT_HASH_MISMATCH','stored bytes must be hashed before parsing');
 const nestedShapes={...undefinedOptionals,packet_hash:undefined,output_contract:{schema:{optional:undefined,settings:[undefined,{limit:undefined},null]}}};
 nestedShapes.packet_hash=approvedPacketHash(nestedShapes);
 assert.equal(approvedPacketHash(JSON.parse(JSON.stringify(nestedShapes))),nestedShapes.packet_hash,'generic nested JSON-safe output contract shapes must hash consistently');
@@ -26,7 +31,7 @@ assert.equal(evaluatePacketBinding({...packet,packet_hash:'0'.repeat(64)},expect
 assert.equal(evaluatePacketBinding({...packet,system_instruction:'mutated'},expectedBinding).code,'PACKET_CONTENT_HASH_MISMATCH');
 assert.equal(evaluatePacketBinding({...packet,hash_policy_version:'approved_packet_hash_v1'},expectedBinding).code,'PACKET_CONTENT_HASH_MISMATCH','hash-policy version skew must be detected as content skew');
 for(const [field,expectedField,code,value] of [['run_id','runId','PACKET_RUN_MISMATCH','other-run'],['provider','provider','PACKET_PROVIDER_MISMATCH','qwen'],['model','model','PACKET_MODEL_MISMATCH','other-model'],['stage','stage','PACKET_STAGE_MISMATCH','fact_check']]){const changed={...packet,[field]:value};changed.packet_hash=approvedPacketHash(changed);assert.equal(evaluatePacketBinding(changed,{...expectedBinding,packetHash:changed.packet_hash,[expectedField]:expectedBinding[expectedField]}).code,code);}
-const diagnostics=packetRuntimeDiagnostics(packet,JSON.stringify(packet));assert.equal(diagnostics.declared_packet_hash,packet.packet_hash);assert.equal(diagnostics.recomputed_content_hash,packet.packet_hash);assert.equal(typeof diagnostics.serialized_bytes,'number');assert.doesNotMatch(JSON.stringify(diagnostics),/monthly invoice review|EDP pricing|billing account governance/);
+const diagnostics=packetRuntimeDiagnostics(packet,approvedPacketBytes(packet));assert.equal(diagnostics.declared_packet_hash,packet.packet_hash);assert.equal(diagnostics.recomputed_content_hash,packet.packet_hash);assert.equal(typeof diagnostics.serialized_bytes,'number');assert.doesNotMatch(JSON.stringify(diagnostics),/monthly invoice review|EDP pricing|billing account governance/);
 for(const mutate of [o=>({...o,text:'changed'}),o=>({...o,source_packet_hash:'0'.repeat(64)}),o=>({...o,schema_version:'old'})])assert.throws(()=>validateGovernedOutput(mutate(output),{source_packet_hash:packet.packet_hash}),/INVALID_GOVERNED_OUTPUT/);
 for(const text of ['password=[REDACTED:password]','data:image/png;base64,AAAA','contract value: $250000','invoice number: INV-99887','bad\uD800',''])assert.throws(()=>inspectOutput(text,packet),/OUTPUT_INSPECTION_REJECTED/);
 assert.throws(()=>authorizeDestination('forensic_audit','anthropic','claude-opus-5',{}),/INVALID_MODEL_SETTINGS/);
@@ -38,12 +43,12 @@ const synthesisRequest={...request,stage:'synthesis',output_contract:OUTPUT_CONT
 assert.equal(approveRequest(synthesisRequest).output_contract,OUTPUT_CONTRACT_IDS.evidenceSynthesis);
 assert.throws(()=>approveRequest({...synthesisRequest,stage:'roadmap_synthesis'}),/OUTPUT_CONTRACT_NOT_AUTHORIZED/);
 assert.throws(()=>approveRequest({...synthesisRequest,output_contract:'client_schema'}),/OUTPUT_CONTRACT_NOT_AUTHORIZED/);
-const repository={getRun:async()=>({state:'active',effective_expires_at:new Date(Date.now()+60_000),absolute_deadline_at:new Date(Date.now()+60_000)}),commitPacket:async()=>true};
-const redis={stagePacket:async()=>1,activatePacket:async()=>1};
+let committedBody;const repository={getRun:async()=>({state:'active',effective_expires_at:new Date(Date.now()+60_000),absolute_deadline_at:new Date(Date.now()+60_000)}),commitPacket:async value=>{committedBody=value.canonicalBody;return true;}};
 process.env.SECRET_KEY='test-secret-key-that-is-long-enough-123';
 const req={method:'POST',headers:{cookie:issueCookie().split(';')[0]},body:synthesisRequest};
 const res={status(code){this.statusCode=code;return this;},json(body){this.body=body;return this;}};
-await governedPacketHandler(repository,redis)(req,res);
+await governedPacketHandler(repository)(req,res);
 assert.equal(res.statusCode,201);
+assert.ok(Buffer.isBuffer(committedBody),'approval must atomically commit canonical bytes to PostgreSQL');
 assert.equal(res.body.output_contract,OUTPUT_CONTRACT_IDS.evidenceSynthesis,'approval response must preserve the hash-bound output contract');
 console.log('governance behavioral tests passed');

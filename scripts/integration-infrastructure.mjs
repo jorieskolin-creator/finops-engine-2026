@@ -4,6 +4,7 @@ import { initializeInfrastructure } from '../lib/infrastructure.js';
 import { RunLifecycleService } from '../lib/runLifecycleService.js';
 import {
   approveRequest,
+  approvedPacketBytes,
   inspectOutput,
   POLICY_VERSION,
   STAGE_PACKET_REQUEST_VERSION,
@@ -34,14 +35,7 @@ const makePacket = run => approveRequest({
 });
 
 const persistPacket = async (run, packet) => {
-  const raw = JSON.stringify(packet);
-  assert.equal(await redis.stagePacket({
-    runId: run.run_id,
-    packetId: packet.packet_id,
-    body: raw,
-    deadline: run.absolute_deadline_at,
-    ttlMs: LIFETIMES_MS.packet,
-  }), 1);
+  const canonicalBody = approvedPacketBytes(packet);
   assert.ok(await repository.commitPacket({
     packetId: packet.packet_id,
     runId: run.run_id,
@@ -54,20 +48,16 @@ const persistPacket = async (run, packet) => {
     stage: packet.stage,
     partCount: packet.parts.length,
     charCount: packet.system_instruction.length + packet.parts[0].text.length,
+    canonicalBody,
   }));
-  assert.equal(await redis.activatePacket({
-    runId: run.run_id,
-    packetId: packet.packet_id,
-    deadline: run.absolute_deadline_at,
-    ttlMs: LIFETIMES_MS.packet,
-  }), 1);
-  return raw;
+  assert.deepEqual((await repository.getPacketBody(packet.packet_id)).canonical_body,canonicalBody);
+  return canonicalBody;
 };
 
 try {
   const run = await repository.createRun();
   const packet = makePacket(run);
-  const raw = await persistPacket(run, packet);
+  await persistPacket(run, packet);
   const internalCallId = crypto.randomUUID();
   const binding = {
     packetId: packet.packet_id,
@@ -98,8 +88,6 @@ try {
   assert.equal(await redis.authorizeSend({
     runId: run.run_id,
     attemptId: attempt.attempt_id,
-    packetId: packet.packet_id,
-    packetBody: raw,
     token: leased.lease_token,
     deadline: run.absolute_deadline_at,
     ttlMs: LIFETIMES_MS.packet,
@@ -144,13 +132,13 @@ try {
     scale_analyzer_available_count: 2, scale_unsupported_count: 58,
   });
   assert.equal(completed.cleanup_status, 'verified');
-  assert.equal(await redis.getActivePacket(run.run_id, packet.packet_id), null);
+  assert.equal(await repository.getPacketBody(packet.packet_id), null);
   assert.equal(await redis.getResult(run.run_id, attempt.attempt_id), null);
 
   // Terminalizing between the Redis fence and PostgreSQL CAS must prohibit send.
   const stoppedRun = await repository.createRun();
   const stoppedPacket = makePacket(stoppedRun);
-  const stoppedRaw = await persistPacket(stoppedRun, stoppedPacket);
+  await persistPacket(stoppedRun, stoppedPacket);
   const stoppedAttempt = await repository.claimPacketAndReserve({
     packetId: stoppedPacket.packet_id,
     packetHash: stoppedPacket.packet_hash,
@@ -167,8 +155,6 @@ try {
   assert.equal(await redis.authorizeSend({
     runId: stoppedRun.run_id,
     attemptId: stoppedAttempt.attempt_id,
-    packetId: stoppedPacket.packet_id,
-    packetBody: stoppedRaw,
     token: stoppedLease.lease_token,
     deadline: stoppedRun.absolute_deadline_at,
     ttlMs: LIFETIMES_MS.packet,

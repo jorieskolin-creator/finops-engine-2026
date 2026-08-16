@@ -207,7 +207,7 @@ const PrivacyProtocolCard = () => (
       ))}
     </div>
     <p className="mt-5 text-center text-[11px] leading-relaxed text-slate-400 max-w-4xl mx-auto">
-      Files, full tables, images and sparse PDF pages are processed locally. Images and sparse pages use local OCR; OCR does not interpret graph structure or other non-text visual semantics, which remain explicitly withheld. Deterministic privacy controls scan and redact acquired content before governed packets are assembled. The first generative-model call occurs only after that boundary passes. Provider retention depends on the configured account terms. Accepted, privacy-inspected analysis checkpoints may remain temporarily in Redis for interruption recovery. They are deleted after the browser acknowledges final report delivery, on explicit deletion, or at expiry; PostgreSQL stores metadata and hashes only.
+      Files, full tables, images and sparse PDF pages are processed locally. Images and sparse pages use local OCR; OCR does not interpret graph structure or other non-text visual semantics, which remain explicitly withheld. Deterministic privacy controls scan and redact acquired content before governed packets are assembled. The first generative-model call occurs only after that boundary passes. Provider retention depends on the configured account terms. Canonical governed packet bodies remain temporarily in PostgreSQL, while accepted analysis checkpoints may remain temporarily in Redis for interruption recovery. Packet bodies and Redis transient content are deleted after the browser acknowledges final report delivery, on explicit deletion, or at expiry; content-free PostgreSQL metadata and hashes remain for audit retention.
     </p>
   </div>
 );

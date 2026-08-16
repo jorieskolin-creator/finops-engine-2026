@@ -26,8 +26,11 @@ collapsed into a generic “packet” or “attempt” in persisted contracts:
 `stage_executions` is the parent of existing `model_attempts`. Each browser
 `runStage` call creates one stage execution ID and reuses it across fallbacks.
 The accepted attempt is recorded only after the durable attempt reaches
-`succeeded`. Governed packet content remains transient in Redis; PostgreSQL
-continues to store metadata and hashes only.
+`succeeded`. PostgreSQL stores each governed packet's immutable canonical
+`BYTEA` body alongside its content-free metadata. Redis stores coordination
+state only: attempt notifications, leases, send-authorization markers,
+tombstones, checkpoints, and governed results. Terminal cleanup deletes packet
+bodies while retaining content-free metadata and hashes for audit.
 
 Checkpoint lineage columns are initially nullable so existing checkpoint
 producers remain compatible. New context-revision producers should populate
@@ -43,8 +46,9 @@ as they are moved to the server-side orchestration boundary.
    compatibility with an older replica; a later migration may enforce this
    after the rollout window.
 3. A stage execution has at most one accepted attempt.
-4. Packet identity, metadata hash, locally recomputed content hash, run,
-   provider, model, and stage are independently validated before external send.
+4. Packet identity, metadata hash, SHA-256 over the exact PostgreSQL canonical
+   bytes, run, provider, model, and stage are independently validated before
+   external send. Packet bytes are canonicalized once at approval.
 5. Any packet-binding mismatch remains fail-closed and is never eligible for
    provider fallback.
 6. Neither semantic retrieval nor stage lineage has scoring authority.
