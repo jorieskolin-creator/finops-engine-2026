@@ -63,7 +63,7 @@ const collectPotentialNames = (text: string): string[] => {
   const found = new Set<string>();
   const add = (value?: string) => {
     const normalized = normalizeSpaces(value || '');
-    if (!normalized || isSafeNameCandidate(normalized)) return;
+    if (!normalized || !/^[A-ZÅÄÖ]/.test(normalized) || isSafeNameCandidate(normalized)) return;
     found.add(normalized);
   };
   for (const match of text.matchAll(PERSON_CONTEXT_RE)) add(match[1]);
@@ -99,7 +99,7 @@ export const scrubGeneratedText = (
   const potentialNames = collectPotentialNames(text);
   if (options.redactPersonNames) {
     for (const name of potentialNames) {
-      replace(new RegExp(`\\b${escapeRegExp(name)}\\b`, 'g'), '[PERSON_NAME_REDACTED]');
+      replace(new RegExp(`\\b${escapeRegExp(name)}\\b`, 'g'), 'Respondent');
     }
   }
 

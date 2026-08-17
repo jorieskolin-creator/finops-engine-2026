@@ -29,9 +29,6 @@ export interface ReportViewModel {
   };
 }
 
-export const MATURITY_SCORE_METHOD_NOTE =
-  'The FinOps Maturity Score equally weights Evidence-Based Capability and Anti-Pattern Control. Capability questions contribute linearly from 0/3 to 3/3. Anti-Pattern Control is the inverse of verified harmful-pattern burden from 0/3 to 3/3. Unknown and not-assessed criteria are excluded and reported separately. Criteria whose verification did not complete are reported separately and excluded from the score denominator. A BLOCKED assessment cannot report a score above 70%.';
-
 const percent = (numerator: number, denominator: number): number =>
   denominator > 0 ? Math.round((numerator / denominator) * 100) : 0;
 

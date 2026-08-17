@@ -13,7 +13,7 @@ import { antiPatternStatusLabel, inferAntiPatternAbsenceStatus } from './antiPat
 import { displayQualityGateDiagnostic, isReportableSourceCoverageGap, splitQualityGateDiagnostics } from './reportDiagnosticsService';
 import { serializeDiagnosticResultForHtml } from './reportImportService';
 import { computeDomainSignalRows, DomainSignalTone } from './domainSignalService';
-import { buildReportViewModel, MATURITY_SCORE_METHOD_NOTE } from './reportViewModel';
+import { buildReportViewModel } from './reportViewModel';
 import { stripSourceFilenameMetadata } from './privacyService';
 
 const BATCHES = Object.keys(BATCH_TITLES);
@@ -836,7 +836,6 @@ export const generateSummaryReportHtml = (unsafeResult: DiagnosticResult): strin
     .gauge-grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 1.25rem; align-items: stretch; }
     .gauge-grid > .gauge-large { grid-column: span 1; }
     .gauge-denominator { color: #334155; font-size: 0.76rem; font-weight: 700; margin-top: 8px; }
-    .metric-method-note { margin: 14px 0 0; padding: 14px 16px; background: #f1f5f9; border-left: 4px solid #059669; border-radius: 10px; color: #475569; font-size: 0.86rem; }
     .chart-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 18px; }
     .chart-desc { color: #64748b; font-size: 0.88rem; margin: 0 0 12px; }
     .two-col { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 18px; }
@@ -971,7 +970,6 @@ export const generateSummaryReportHtml = (unsafeResult: DiagnosticResult): strin
       <div class="gauge-grid">
         ${gauges.map(g => svgGaugeCard(g)).join('')}
       </div>
-      <p class="metric-method-note"><strong>How the maturity score is measured:</strong> ${escapeHtml(MATURITY_SCORE_METHOD_NOTE)}</p>
     </section>
 
     ${renderDomainSignalOverview(result)}
@@ -1037,7 +1035,6 @@ export const generateReportHtml = (unsafeResult: DiagnosticResult): string => {
     .gauge-grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 1.25rem; margin: 1.5rem 0 2rem; align-items: stretch; }
     .gauge-grid > .gauge-large { grid-column: span 1; }
     .gauge-denominator { color: #334155; font-size: 0.76rem; font-weight: 700; margin-top: 0.5rem; }
-    .metric-method-note { margin: 0 0 2rem; padding: 0.9rem 1rem; background: #f1f5f9; border-left: 4px solid #059669; border-radius: 0.65rem; color: #475569; font-size: 0.85rem; }
     .actionability { display: grid; grid-template-columns: minmax(160px, 0.35fr) 1fr; gap: 1rem 1.5rem; align-items: center; background: #fff; border: 1px solid #e2e8f0; border-left: 5px solid #94a3b8; border-radius: 1rem; padding: 1.4rem; margin: 1.5rem 0 2rem; }
     .actionability-go { border-left-color: #10b981; }
     .actionability-warn { border-left-color: #f59e0b; }
@@ -1233,8 +1230,6 @@ export const generateReportHtml = (unsafeResult: DiagnosticResult): string => {
   <div class="gauge-grid">
     ${gauges.map(g => svgGaugeCard(g)).join('')}
   </div>
-  <p class="metric-method-note"><strong>How the maturity score is measured:</strong> ${escapeHtml(MATURITY_SCORE_METHOD_NOTE)}</p>
-
   ${renderDomainSignalOverview(result)}
   ${renderAssessmentHeatmapSummary(result)}
   ${renderScoreEvidenceGaps(result)}

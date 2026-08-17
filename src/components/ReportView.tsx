@@ -13,7 +13,7 @@ import {
 import { antiPatternStatusLabel, inferAntiPatternAbsenceStatus } from '../services/antiPatternSemantics';
 import { displayQualityGateDiagnostic, isReportableSourceCoverageGap, splitQualityGateDiagnostics } from '../services/reportDiagnosticsService';
 import { computeDomainSignalRows, DomainSignalTone } from '../services/domainSignalService';
-import { buildReportViewModel, MATURITY_SCORE_METHOD_NOTE } from '../services/reportViewModel';
+import { buildReportViewModel } from '../services/reportViewModel';
 
 const InlineSvg: React.FC<{ html: string; className?: string }> = ({ html, className }) => (
   <div className={className} dangerouslySetInnerHTML={{ __html: html }} />
@@ -650,9 +650,6 @@ export const ReportView: React.FC<ReportViewProps> = ({ result, onBack, onDownlo
               />
             ))}
           </div>
-          <p className="mt-4 p-4 bg-slate-100 border-l-4 border-emerald-600 rounded-lg text-sm text-slate-600">
-            <strong className="text-slate-800">How the maturity score is measured:</strong> {MATURITY_SCORE_METHOD_NOTE}
-          </p>
           {(result.phase_2_validation.score_evidence_gaps?.length ?? 0) > 0 && (
             <div className="mt-4 p-4 bg-amber-50 border border-amber-200 rounded-lg text-sm text-slate-700">
               <strong className="text-slate-900">Evidence needed to interpret maturity</strong>

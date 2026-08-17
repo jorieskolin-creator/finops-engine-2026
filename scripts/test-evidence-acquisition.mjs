@@ -85,6 +85,52 @@ assert.equal(contactPrivacy.sources[0].pages[0].text, 'Owner [EMAIL_REDACTED] us
 assert.throws(() => assertDeterministicEgressText(['owner alice@example.com']), /DETERMINISTIC_EGRESS_SCAN_FAILED/);
 assert.doesNotThrow(() => assertDeterministicEgressText([contactPrivacy.sources[0].pages[0].text]));
 
+const respondentPrivacy = sanitizeEvidenceSources([{
+  schema_version: 'source_record_v1', source_id: 'src-respondents', source_name: 'answers.csv', kind: 'csv',
+  text: 'Question,Toni,Jaakko,Esa Hakanen / Controller,Tietoallas (Niilo & Markku)\nTagging?,Manual,Partial,Unknown,Documented',
+  structured_table: {
+    schema_version: 'structured_table_v1',
+    headers: ['Question', 'Toni', 'Jaakko', 'Esa Hakanen / Controller', 'Tietoallas (Niilo & Markku)'],
+    rows: [['Tagging?', 'Manual', 'Partial', 'Unknown', 'Documented']],
+    analysis_rows: [['Tagging?', 'Manual', 'Partial', 'Unknown', 'Documented']],
+    total_row_count: 1, analysis_complete: true, truncated: false,
+  },
+}]);
+const respondentJson = JSON.stringify(respondentPrivacy.sources[0]);
+assert.equal(respondentPrivacy.decision.decision, 'PASS_WITH_REDACTIONS');
+assert.ok(respondentPrivacy.decision.findings.some(finding => finding.kind === 'person_name'));
+assert.doesNotMatch(respondentJson, /Toni|Jaakko|Esa Hakanen|Niilo|Markku/, 'respondent names must be removed before packetization');
+assert.match(respondentJson, /Respondent 1/);
+assert.deepEqual(
+  respondentPrivacy.sources[0].structured_table.headers,
+  ['Question', 'Respondent 1', 'Respondent 2', 'Respondent 3 / Controller', 'Tietoallas (Respondent 4 & Respondent 5)'],
+  'respondent labels should remain stable in source-column order'
+);
+assert.match(respondentJson, /Controller/, 'non-person role context should remain available for analysis');
+assert.match(respondentJson, /Tietoallas/, 'team context should remain available for analysis');
+
+const ordinaryHeadersPrivacy = sanitizeEvidenceSources([{
+  schema_version: 'source_record_v1', source_id: 'src-costs', source_name: 'costs.csv', kind: 'csv',
+  text: 'Region,Service,Cost\nWest,Compute,12',
+  structured_table: {
+    schema_version: 'structured_table_v1', headers: ['Region', 'Service', 'Cost'],
+    rows: [['West', 'Compute', '12']], analysis_rows: [['West', 'Compute', '12']],
+    total_row_count: 1, analysis_complete: true, truncated: false,
+  },
+}]);
+assert.deepEqual(ordinaryHeadersPrivacy.sources[0].structured_table.headers, ['Region', 'Service', 'Cost'], 'ordinary business headers must not be treated as people');
+
+const rolePrivacy = sanitizeEvidenceSources([{
+  schema_version: 'source_record_v1', source_id: 'src-roles', source_name: 'roles.csv', kind: 'csv',
+  text: 'Service Owner / Controller,Platform Team\nAssigned,Active',
+  structured_table: {
+    schema_version: 'structured_table_v1', headers: ['Service Owner / Controller', 'Platform Team'],
+    rows: [['Assigned', 'Active']], analysis_rows: [['Assigned', 'Active']],
+    total_row_count: 1, analysis_complete: true, truncated: false,
+  },
+}]);
+assert.deepEqual(rolePrivacy.sources[0].structured_table.headers, ['Service Owner / Controller', 'Platform Team'], 'role and team headers must remain intact');
+
 const contactTable = renderDelimitedTableForAnalysis('owner\nalice@example.com\nbob@example.com', { fileName: 'contacts.csv', delimiter: ',' });
 const contactTablePrivacy = sanitizeEvidenceSources([{ schema_version: 'source_record_v1', source_id: 'src-contacts', source_name: 'contacts.csv', kind: 'csv', text: contactTable.text, structured_table: contactTable.structuredTable }]);
 assert.equal(contactTable.structuredTable.deterministic_inspection.columns[0].distinct_value_count, 2);

@@ -683,6 +683,7 @@ export interface VisualEvidenceUnit {
 }
 
 export type EvidencePrivacyFindingKind =
+  | 'person_name'
   | 'email'
   | 'phone'
   | 'ip'

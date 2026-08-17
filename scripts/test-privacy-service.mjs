@@ -26,11 +26,17 @@ const {
 {
   const text = 'Prepared by Toni Eskolin, contact toni@example.com, +358 40 123 4567, 10.1.2.3, sk-testtokenabcdefghijklmnopqrstuvwxyz.';
   const scrubbed = scrubGeneratedText(text, { redactPersonNames: true });
-  assert.match(scrubbed.text, /\[PERSON_NAME_REDACTED\]/);
+  assert.match(scrubbed.text, /Respondent/);
   assert.match(scrubbed.text, /\[EMAIL_REDACTED\]/);
   assert.match(scrubbed.text, /\[PHONE_REDACTED\]/);
   assert.match(scrubbed.text, /\[IP_REDACTED\]/);
   assert.match(scrubbed.text, /\[TOKEN_REDACTED\]/);
+}
+
+{
+  const text = 'Each reviewed item has an owner and a documented exception.';
+  const scrubbed = scrubGeneratedText(text, { redactPersonNames: true });
+  assert.equal(scrubbed.text, text, 'ordinary text following a person-context term must not be mistaken for a name');
 }
 
 {
@@ -87,9 +93,9 @@ const scrubbed = scrubDiagnosticResultForPrivacy(result, {
 });
 
 assert.notEqual(scrubbed.result.phase_3_strategy.executive_summary, result.phase_3_strategy.executive_summary);
-assert.match(scrubbed.result.phase_3_strategy.executive_summary, /\[PERSON_NAME_REDACTED\]/);
+assert.match(scrubbed.result.phase_3_strategy.executive_summary, /Respondent/);
 assert.match(scrubbed.result.phase_3_strategy.executive_summary, /\[ORGANIZATION_REDACTED\]/);
-assert.match(scrubbed.result.quality_gate.warnings[0], /\[PERSON_NAME_REDACTED\]/);
+assert.match(scrubbed.result.quality_gate.warnings[0], /Respondent/);
 assert.doesNotMatch(JSON.stringify(scrubbed.result), /Jane Doe - Acme Strategy\.pdf/, 'legacy filename metadata must be removed rather than heuristically redacted');
 assert.equal(Object.hasOwn(scrubbed.result.meta.run_trace.input_manifest[0], 'source_name'), false);
 assert.equal(Object.hasOwn(scrubbed.result.meta.run_trace.evidence_paths[0], 'source_document'), false);

@@ -96,7 +96,7 @@ assert.match(masterDataExportSource, /<h2>Evidence-Backed Findings<\/h2>[\s\S]*r
 assert.doesNotMatch(exportSource, /<h2>Executive Summary<\/h2>/, 'HTML exports should not render the legacy Executive Summary');
 assert.doesNotMatch(exportSource, /Evidence summary for the/, 'HTML exports should not render repetitive persona summaries');
 assert.match(exportSource, /Candidate inclusion measures/, 'Master Data should distinguish retrieval candidate inclusion from evidence sufficiency');
-assert.match(exportSource, /How the maturity score is measured/, 'HTML exports should explain the conservative full-framework maturity score');
+assert.doesNotMatch(exportSource, /How the maturity score is measured/, 'HTML exports should rely on the concise explanation attached to each gauge');
 assert.match(exportSource, /Assessment BLOCKED/, 'HTML exports should show blocked actionability ahead of maturity classification');
 assert.equal((exportSource.match(/grid-template-columns: repeat\(5, minmax\(0, 1fr\)\)/g) || []).length, 2, 'both HTML reports should keep all five gauges on one desktop row');
 assert.doesNotMatch(exportSource, /Anti-pattern disposition|renderAntiPatternDisposition/, 'HTML reports should omit the redundant anti-pattern disposition card');
@@ -119,8 +119,6 @@ assert.match(reportViewModelSource, /label: 'FinOps Maturity Score'/, 'report ga
 assert.match(reportViewModelSource, /label: 'Evidence-Based Capability'/, 'report gauges should label the evidence-based capability dimension explicitly');
 assert.match(reportViewModelSource, /Inverse of verified harmful-pattern burden/, 'anti-pattern gauge should explain its high-is-good inversion');
 assert.doesNotMatch(reportViewModelSource, /label: 'Observed Friction'/, 'Observed Friction should no longer occupy a primary report gauge');
-assert.match(reportViewModelSource, /Criteria whose verification did not complete are reported separately and excluded from the score denominator/, 'score methodology should distinguish unresolved verification from capability absence');
-assert.match(reportViewModelSource, /A BLOCKED assessment cannot report a score above 70%/, 'score methodology should disclose the Quality Gate cap');
 
 const gaugeComponentSource = await readFile(new URL('../src/components/DashboardComponents.tsx', import.meta.url), 'utf8');
 const svgGaugeSource = await readFile(new URL('../src/services/svgChartService.ts', import.meta.url), 'utf8');
