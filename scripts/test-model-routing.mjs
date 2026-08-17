@@ -15,13 +15,13 @@ const env = {
   REASONER_PROVIDER: 'OPENAI',
   REASONER_MODEL: 'gpt-5.6-sol',
   REASONER_FALLBACK_PROVIDER: 'XAI',
-  REASONER_FALLBACK_MODEL: 'grok-4.5',
+  REASONER_FALLBACK_MODEL: 'grok-4.6',
   WORKHORSE_PROVIDER: 'ANTHROPIC',
   WORKHORSE_MODEL: 'claude-sonnet-5',
   WORKHORSE_FALLBACK_PROVIDER: 'XAI',
-  WORKHORSE_FALLBACK_MODEL: 'grok-4.5',
+  WORKHORSE_FALLBACK_MODEL: 'grok-4.6',
   QUALITY_CHECKER_PROVIDER: 'XAI',
-  QUALITY_CHECKER_MODEL: 'grok-4.5',
+  QUALITY_CHECKER_MODEL: 'grok-4.6',
   QUALITY_CHECKER_FALLBACK_PROVIDER: 'ANTHROPIC',
   QUALITY_CHECKER_FALLBACK_MODEL: 'claude-sonnet-5',
 };
@@ -60,14 +60,14 @@ assert.equal(STAGE_ROLES.fact_check_high, 'QUALITY_CHECKER');
 assert.equal(STAGE_ROLES.quality_gate, 'WORKHORSE', 'the model only explains the deterministic gate');
 assert.deepEqual(config.routes.synthesis.map(value => `${value.provider}:${value.id}`), [
   'anthropic:claude-sonnet-5',
-  'xai:grok-4.5',
+  'xai:grok-4.6',
 ]);
 assert.deepEqual(config.routes.evidence_adjudication.map(value => `${value.provider}:${value.id}`), [
   'openai:gpt-5.6-sol',
-  'xai:grok-4.5',
+  'xai:grok-4.6',
 ]);
 assert.deepEqual(config.routes.fact_check.map(value => `${value.provider}:${value.id}`), [
-  'xai:grok-4.5',
+  'xai:grok-4.6',
   'anthropic:claude-sonnet-5',
 ]);
 assert.deepEqual(config.routes.evidence_adjudication[0].reasoningEffort, 'high');

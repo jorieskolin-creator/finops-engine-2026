@@ -30,9 +30,9 @@ Model profiles, AI-role assignments, and fallback chains are centralized in the 
 | Task/role | Configured primary → fallback |
 |-----------|-------------------------------|
 | Acquisition and DLP | Deterministic local processing; no model call |
-| `REASONER` | OpenAI GPT-5.6 Sol → xAI Grok 4.5 |
-| `WORKHORSE` | Anthropic Claude Sonnet 5 → xAI Grok 4.5 |
-| `QUALITY_CHECKER` | xAI Grok 4.5 → Anthropic Claude Sonnet 5 |
+| `REASONER` | OpenAI GPT-5.6 Sol → xAI Grok 4.6 |
+| `WORKHORSE` | Anthropic Claude Sonnet 5 → xAI Grok 4.6 |
+| `QUALITY_CHECKER` | xAI Grok 4.6 → Anthropic Claude Sonnet 5 |
 | Deterministic Quality Gate | Authoritative code path; no model decision |
 
 All twelve role-routing variables are required as one complete policy. The configured model must match the code-authorized model for its provider. Partial policies, legacy provider-level variables, unknown providers, unsupported models, and identical primary/fallback profiles fail closed. Provider fallback is allowed only for the existing explicit safe-failure outcomes; post-send uncertainty never becomes fallback.

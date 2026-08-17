@@ -4,7 +4,7 @@ import { OUTPUT_CONTRACT_IDS } from '../lib/outputContracts.js';
 
 const packet = {
   provider: 'xai',
-  model: 'grok-4.5',
+  model: 'grok-4.6',
   system_instruction: 'Return valid JSON only.',
   parts: [{ type: 'text', text: 'Return {"ok":true}.' }],
   settings: { max_tokens: 16384, reasoning_effort: 'medium' },
@@ -31,7 +31,7 @@ const result = await invokeProvider(packet, {
 
 assert.equal(request.url, 'https://api.x.ai/v1/chat/completions');
 assert.equal(request.options.headers.Authorization, 'Bearer test-key-not-a-real-secret');
-assert.equal(request.body.model, 'grok-4.5');
+assert.equal(request.body.model, 'grok-4.6');
 assert.equal(request.body.max_completion_tokens, 16384);
 assert.equal(request.body.reasoning_effort, 'medium');
 assert.deepEqual(request.body.response_format, { type: 'json_object' });
@@ -88,7 +88,7 @@ for (const provider of ['openai', 'anthropic', 'xai']) {
     ...packet,
     stage: 'synthesis',
     provider,
-    model: provider === 'openai' ? 'gpt-5.6-sol' : provider === 'xai' ? 'grok-4.5' : 'claude-sonnet-5',
+    model: provider === 'openai' ? 'gpt-5.6-sol' : provider === 'xai' ? 'grok-4.6' : 'claude-sonnet-5',
     output_contract: OUTPUT_CONTRACT_IDS.evidenceSynthesis,
     settings: { max_tokens: 8192 },
   };

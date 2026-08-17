@@ -35,9 +35,9 @@ const diagnostics=packetRuntimeDiagnostics(packet,approvedPacketBytes(packet));a
 for(const mutate of [o=>({...o,text:'changed'}),o=>({...o,source_packet_hash:'0'.repeat(64)}),o=>({...o,schema_version:'old'})])assert.throws(()=>validateGovernedOutput(mutate(output),{source_packet_hash:packet.packet_hash}),/INVALID_GOVERNED_OUTPUT/);
 for(const text of ['password=[REDACTED:password]','data:image/png;base64,AAAA','contract value: $250000','invoice number: INV-99887','bad\uD800',''])assert.throws(()=>inspectOutput(text,packet),/OUTPUT_INSPECTION_REJECTED/);
 assert.throws(()=>authorizeDestination('forensic_audit','anthropic','claude-sonnet-5',{max_tokens:1}),/INVALID_MODEL_SETTINGS/);
-const xaiRequest={...request,provider:'xai',model:'grok-4.5',destination:'xai:external_model',system_instruction:'Return JSON only',settings:{max_tokens:16384,reasoning_effort:'medium'}};
+const xaiRequest={...request,provider:'xai',model:'grok-4.6',destination:'xai:external_model',system_instruction:'Return JSON only',settings:{max_tokens:16384,reasoning_effort:'medium'}};
 assert.equal(approveRequest(xaiRequest).provider,'xai');
-assert.throws(()=>authorizeDestination('forensic_audit','xai','grok-4.5',{max_tokens:4096,reasoning_effort:'medium'}),/INVALID_MODEL_SETTINGS/);
+assert.throws(()=>authorizeDestination('forensic_audit','xai','grok-4.6',{max_tokens:4096,reasoning_effort:'medium'}),/INVALID_MODEL_SETTINGS/);
 const synthesisRequest={...request,stage:'synthesis',output_contract:OUTPUT_CONTRACT_IDS.evidenceSynthesis};
 assert.equal(approveRequest(synthesisRequest).output_contract,OUTPUT_CONTRACT_IDS.evidenceSynthesis);
 assert.throws(()=>approveRequest({...synthesisRequest,stage:'roadmap_synthesis',settings:{max_tokens:32768}}),/OUTPUT_CONTRACT_NOT_AUTHORIZED/);
@@ -45,9 +45,9 @@ assert.throws(()=>approveRequest({...synthesisRequest,output_contract:'client_sc
 let committedBody;const repository={getRun:async()=>({state:'active',effective_expires_at:new Date(Date.now()+60_000),absolute_deadline_at:new Date(Date.now()+60_000)}),commitPacket:async value=>{committedBody=value.canonicalBody;return true;}};
 process.env.SECRET_KEY='test-secret-key-that-is-long-enough-123';
 Object.assign(process.env,{
-  REASONER_PROVIDER:'OPENAI',REASONER_MODEL:'gpt-5.6-sol',REASONER_FALLBACK_PROVIDER:'XAI',REASONER_FALLBACK_MODEL:'grok-4.5',
-  WORKHORSE_PROVIDER:'ANTHROPIC',WORKHORSE_MODEL:'claude-sonnet-5',WORKHORSE_FALLBACK_PROVIDER:'XAI',WORKHORSE_FALLBACK_MODEL:'grok-4.5',
-  QUALITY_CHECKER_PROVIDER:'XAI',QUALITY_CHECKER_MODEL:'grok-4.5',QUALITY_CHECKER_FALLBACK_PROVIDER:'ANTHROPIC',QUALITY_CHECKER_FALLBACK_MODEL:'claude-sonnet-5'
+  REASONER_PROVIDER:'OPENAI',REASONER_MODEL:'gpt-5.6-sol',REASONER_FALLBACK_PROVIDER:'XAI',REASONER_FALLBACK_MODEL:'grok-4.6',
+  WORKHORSE_PROVIDER:'ANTHROPIC',WORKHORSE_MODEL:'claude-sonnet-5',WORKHORSE_FALLBACK_PROVIDER:'XAI',WORKHORSE_FALLBACK_MODEL:'grok-4.6',
+  QUALITY_CHECKER_PROVIDER:'XAI',QUALITY_CHECKER_MODEL:'grok-4.6',QUALITY_CHECKER_FALLBACK_PROVIDER:'ANTHROPIC',QUALITY_CHECKER_FALLBACK_MODEL:'claude-sonnet-5'
 });
 const req={method:'POST',headers:{cookie:issueCookie().split(';')[0]},body:synthesisRequest};
 const res={status(code){this.statusCode=code;return this;},json(body){this.body=body;return this;}};
