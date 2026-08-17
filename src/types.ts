@@ -351,8 +351,12 @@ export interface AnalysisMeta {
   evidence_privacy?: EvidencePrivacyDecision;
   model_mode?: string;
   model_routing_policy_version?: string;
-  primary_model_provider?: 'ANTHROPIC' | 'OPENAI' | 'QWEN' | null;
-  fallback_model_provider?: 'ANTHROPIC' | 'OPENAI' | 'QWEN' | 'NONE' | null;
+  model_roles?: Record<'REASONER' | 'WORKHORSE' | 'QUALITY_CHECKER', {
+    primary_provider: 'ANTHROPIC' | 'OPENAI' | 'XAI';
+    primary_model: string;
+    fallback_provider: 'ANTHROPIC' | 'OPENAI' | 'XAI';
+    fallback_model: string;
+  }>;
   model_config: {
     forensic_audit: string;
     targeted_rescan?: string;
@@ -1133,6 +1137,7 @@ export interface ContextPacketTrace {
 
 export interface StageTrace {
   stage_id: string;
+  ai_role?: 'REASONER' | 'WORKHORSE' | 'QUALITY_CHECKER';
   provider?: string;
   model?: string;
   fallback_chain: string[];

@@ -4,9 +4,9 @@ import { approvedPacketBytes,approvedPacketHash,approveRequest,approveRequestArt
 import { OUTPUT_CONTRACT_IDS } from '../lib/outputContracts.js';
 import { governedPacketHandler } from '../api/governed-packet.js';
 import { issueCookie } from '../lib/auth.js';
-const request={schema_version:STAGE_PACKET_REQUEST_VERSION,policy_version:POLICY_VERSION,run_id:'run-1',stage:'forensic_audit',provider:'openai',model:'gpt-5.6-sol',destination:'openai:external_model',system_instruction:'Review safely',parts:[{type:'text',text:'monthly invoice review, EDP pricing policy, billing account governance'}],settings:{max_tokens:32768,reasoning_effort:'high'}};
+const request={schema_version:STAGE_PACKET_REQUEST_VERSION,policy_version:POLICY_VERSION,run_id:'run-1',stage:'forensic_audit',provider:'anthropic',model:'claude-sonnet-5',destination:'anthropic:external_model',system_instruction:'Review safely',parts:[{type:'text',text:'monthly invoice review, EDP pricing policy, billing account governance'}],settings:{max_tokens:16384}};
 assert.equal(approveRequest(request).approval_basis,'policy_approved_after_pattern_screening');
-const undefinedOptionals=approveRequest({...request,settings:{...request.settings,thinking_budget_tokens:undefined},output_contract:undefined},1000);
+const undefinedOptionals=approveRequest({...request,settings:{...request.settings,reasoning_effort:undefined},output_contract:undefined},1000);
 const persistedUndefinedOptionals=JSON.parse(JSON.stringify(undefinedOptionals));
 assert.deepEqual(undefinedOptionals,persistedUndefinedOptionals,'approved packet must already equal its JSON-persisted representation');
 assert.equal(approvedPacketHash(persistedUndefinedOptionals),undefinedOptionals.packet_hash,'packet hash must survive a JSON round trip');
@@ -30,21 +30,25 @@ assert.equal(evaluatePacketBinding({...packet,packet_id:'different'},expectedBin
 assert.equal(evaluatePacketBinding({...packet,packet_hash:'0'.repeat(64)},expectedBinding).code,'PACKET_HASH_METADATA_MISMATCH');
 assert.equal(evaluatePacketBinding({...packet,system_instruction:'mutated'},expectedBinding).code,'PACKET_CONTENT_HASH_MISMATCH');
 assert.equal(evaluatePacketBinding({...packet,hash_policy_version:'approved_packet_hash_v1'},expectedBinding).code,'PACKET_CONTENT_HASH_MISMATCH','hash-policy version skew must be detected as content skew');
-for(const [field,expectedField,code,value] of [['run_id','runId','PACKET_RUN_MISMATCH','other-run'],['provider','provider','PACKET_PROVIDER_MISMATCH','qwen'],['model','model','PACKET_MODEL_MISMATCH','other-model'],['stage','stage','PACKET_STAGE_MISMATCH','fact_check']]){const changed={...packet,[field]:value};changed.packet_hash=approvedPacketHash(changed);assert.equal(evaluatePacketBinding(changed,{...expectedBinding,packetHash:changed.packet_hash,[expectedField]:expectedBinding[expectedField]}).code,code);}
+for(const [field,expectedField,code,value] of [['run_id','runId','PACKET_RUN_MISMATCH','other-run'],['provider','provider','PACKET_PROVIDER_MISMATCH','xai'],['model','model','PACKET_MODEL_MISMATCH','other-model'],['stage','stage','PACKET_STAGE_MISMATCH','fact_check']]){const changed={...packet,[field]:value};changed.packet_hash=approvedPacketHash(changed);assert.equal(evaluatePacketBinding(changed,{...expectedBinding,packetHash:changed.packet_hash,[expectedField]:expectedBinding[expectedField]}).code,code);}
 const diagnostics=packetRuntimeDiagnostics(packet,approvedPacketBytes(packet));assert.equal(diagnostics.declared_packet_hash,packet.packet_hash);assert.equal(diagnostics.recomputed_content_hash,packet.packet_hash);assert.equal(typeof diagnostics.serialized_bytes,'number');assert.doesNotMatch(JSON.stringify(diagnostics),/monthly invoice review|EDP pricing|billing account governance/);
 for(const mutate of [o=>({...o,text:'changed'}),o=>({...o,source_packet_hash:'0'.repeat(64)}),o=>({...o,schema_version:'old'})])assert.throws(()=>validateGovernedOutput(mutate(output),{source_packet_hash:packet.packet_hash}),/INVALID_GOVERNED_OUTPUT/);
 for(const text of ['password=[REDACTED:password]','data:image/png;base64,AAAA','contract value: $250000','invoice number: INV-99887','bad\uD800',''])assert.throws(()=>inspectOutput(text,packet),/OUTPUT_INSPECTION_REJECTED/);
-assert.throws(()=>authorizeDestination('forensic_audit','anthropic','claude-opus-5',{}),/INVALID_MODEL_SETTINGS/);
-const qwenRequest={...request,provider:'qwen',model:'qwen3.8-max',destination:'qwen:external_model',system_instruction:'Return JSON only',settings:{}};
-assert.equal(approveRequest(qwenRequest).provider,'qwen');
-assert.throws(()=>approveRequest({...qwenRequest,system_instruction:'Return one object'}),/QWEN_JSON_PROMPT_REQUIRED/);
-assert.throws(()=>authorizeDestination('forensic_audit','qwen','qwen3.8-max',{max_tokens:4096}),/INVALID_MODEL_SETTINGS/);
+assert.throws(()=>authorizeDestination('forensic_audit','anthropic','claude-sonnet-5',{max_tokens:1}),/INVALID_MODEL_SETTINGS/);
+const xaiRequest={...request,provider:'xai',model:'grok-4.5',destination:'xai:external_model',system_instruction:'Return JSON only',settings:{max_tokens:16384,reasoning_effort:'medium'}};
+assert.equal(approveRequest(xaiRequest).provider,'xai');
+assert.throws(()=>authorizeDestination('forensic_audit','xai','grok-4.5',{max_tokens:4096,reasoning_effort:'medium'}),/INVALID_MODEL_SETTINGS/);
 const synthesisRequest={...request,stage:'synthesis',output_contract:OUTPUT_CONTRACT_IDS.evidenceSynthesis};
 assert.equal(approveRequest(synthesisRequest).output_contract,OUTPUT_CONTRACT_IDS.evidenceSynthesis);
-assert.throws(()=>approveRequest({...synthesisRequest,stage:'roadmap_synthesis'}),/OUTPUT_CONTRACT_NOT_AUTHORIZED/);
+assert.throws(()=>approveRequest({...synthesisRequest,stage:'roadmap_synthesis',settings:{max_tokens:32768}}),/OUTPUT_CONTRACT_NOT_AUTHORIZED/);
 assert.throws(()=>approveRequest({...synthesisRequest,output_contract:'client_schema'}),/OUTPUT_CONTRACT_NOT_AUTHORIZED/);
 let committedBody;const repository={getRun:async()=>({state:'active',effective_expires_at:new Date(Date.now()+60_000),absolute_deadline_at:new Date(Date.now()+60_000)}),commitPacket:async value=>{committedBody=value.canonicalBody;return true;}};
 process.env.SECRET_KEY='test-secret-key-that-is-long-enough-123';
+Object.assign(process.env,{
+  REASONER_PROVIDER:'OPENAI',REASONER_MODEL:'gpt-5.6-sol',REASONER_FALLBACK_PROVIDER:'XAI',REASONER_FALLBACK_MODEL:'grok-4.5',
+  WORKHORSE_PROVIDER:'ANTHROPIC',WORKHORSE_MODEL:'claude-sonnet-5',WORKHORSE_FALLBACK_PROVIDER:'XAI',WORKHORSE_FALLBACK_MODEL:'grok-4.5',
+  QUALITY_CHECKER_PROVIDER:'XAI',QUALITY_CHECKER_MODEL:'grok-4.5',QUALITY_CHECKER_FALLBACK_PROVIDER:'ANTHROPIC',QUALITY_CHECKER_FALLBACK_MODEL:'claude-sonnet-5'
+});
 const req={method:'POST',headers:{cookie:issueCookie().split(';')[0]},body:synthesisRequest};
 const res={status(code){this.statusCode=code;return this;},json(body){this.body=body;return this;}};
 await governedPacketHandler(repository)(req,res);

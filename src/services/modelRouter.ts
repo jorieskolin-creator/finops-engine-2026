@@ -10,7 +10,7 @@
 // can emit correlated structured logs visible in Railway.
 
 import { ImageInput } from '../types';
-import { ModelProfile, ModelRoutingConfig, Provider, StageId } from '../models';
+import { AiRole, ModelProfile, ModelRoutingConfig, Provider, StageId } from '../models';
 import { estimateTokens, hashString, recordStageTrace } from './runTraceService';
 // @ts-expect-error Pure JS policy is also consumed by the serverless API.
 import { filterOperationalMetadata } from '../../lib/operationalLogPolicy.js';
@@ -20,6 +20,8 @@ export interface NormalizedPrompt {
   systemInstruction?: string;
   images?: ImageInput[];
   outputContract?: string;
+  /** Provider-neutral semantic validation applied before an attempt succeeds. */
+  validateOutput?: (text: string) => void;
 }
 
 export interface RunContext {
@@ -37,7 +39,13 @@ const INTERNAL_RESULT_MISSING_GRACE_MS = 10_000;
 export class StageExecutionError extends Error { constructor(public code:string,public fallbackAllowed=false){super(code);} }
 
 const STAGES: StageId[] = ['forensic_audit','targeted_rescan','evidence_check','evidence_adjudication','synthesis','roadmap_synthesis','synthesis_escalation','fact_check','fact_check_high','quality_gate'];
-const PROVIDERS = new Set<Provider>(['anthropic', 'openai', 'qwen']);
+const ROLES = new Set<AiRole>(['REASONER', 'WORKHORSE', 'QUALITY_CHECKER']);
+const PROVIDERS = new Set<Provider>(['anthropic', 'openai', 'xai']);
+const ROLE_INSTRUCTIONS: Record<AiRole, string> = {
+  WORKHORSE: 'AI ROLE: WORKHORSE. Perform only the bounded semantic task supplied. Use only the supplied evidence and reference universe, make no unsupported inference, and follow the exact output contract. Do not derive values that the prompt identifies as deterministic.',
+  REASONER: 'AI ROLE: REASONER. Resolve only the supplied ambiguity or multi-factor decision. Weigh the competing supplied evidence and knowledge constraints, respect prohibited inferences, evaluate supplied decision alternatives when present, and provide a source-grounded rationale. Do not invent evidence or deterministic state.',
+  QUALITY_CHECKER: 'AI ROLE: QUALITY_CHECKER. Independently verify the generated result; do not assume it is correct. Evaluate it only against the supplied authoritative evidence, knowledge rules, and approved reference data. Identify defects only when supported by that material. Do not invent missing evidence or requirements, and do not rewrite the assessment unless explicitly requested.',
+};
 let routingConfigPromise: Promise<ModelRoutingConfig> | undefined;
 
 const validProfile = (value: any): value is ModelProfile => Boolean(
@@ -45,16 +53,28 @@ const validProfile = (value: any): value is ModelProfile => Boolean(
   && typeof value.id === 'string' && /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(value.id)
   && PROVIDERS.has(value.provider)
   && (value.maxTokens === undefined || (Number.isInteger(value.maxTokens) && value.maxTokens > 0))
-  && (value.openaiReasoning === undefined || ['none','low','medium','high','xhigh'].includes(value.openaiReasoning?.effort))
-  && (value.anthropicThinking === undefined || (value.anthropicThinking?.type === 'enabled' && Number.isInteger(value.anthropicThinking?.budget_tokens) && value.anthropicThinking.budget_tokens > 0))
+  && (value.reasoningEffort === undefined || ['none','low','medium','high','xhigh'].includes(value.reasoningEffort))
 );
 
 const validRoutingConfig = (value: any): value is ModelRoutingConfig => Boolean(
-  value && value.schema_version === 'model_routing_config_v1'
+  value && value.schema_version === 'model_routing_config_v2'
   && typeof value.policy_version === 'string'
-  && (value.mode === 'legacy' || value.mode === 'provider_policy')
+  && value.mode === 'role_policy'
   && typeof value.label === 'string' && /^[a-z_]{1,64}$/.test(value.label)
-  && STAGES.every(stage => Array.isArray(value.routes?.[stage]) && value.routes[stage].length > 0 && value.routes[stage].every(validProfile))
+  && STAGES.every(stage => ROLES.has(value.stage_roles?.[stage]))
+  && [...ROLES].every(role => value.roles?.[role]?.role === role
+    && Array.isArray(value.roles[role].profiles)
+    && value.roles[role].profiles.length === 2
+    && value.roles[role].profiles.every(validProfile)
+    && value.roles[role].primary_provider === value.roles[role].profiles[0].provider.toUpperCase()
+    && value.roles[role].fallback_provider === value.roles[role].profiles[1].provider.toUpperCase())
+  && STAGES.every(stage => Array.isArray(value.routes?.[stage])
+    && value.routes[stage].length === 2
+    && value.routes[stage].every(validProfile)
+    && value.routes[stage].every((profile: ModelProfile, index: number) => {
+      const roleProfile = value.roles[value.stage_roles[stage]].profiles[index];
+      return profile.id === roleProfile.id && profile.provider === roleProfile.provider;
+    }))
 );
 
 export function getModelRoutingConfig(): Promise<ModelRoutingConfig> {
@@ -89,8 +109,7 @@ async function governedCall(profile: ModelProfile, prompt: NormalizedPrompt, sta
   if (prompt.images?.length) throw new Error('IMAGE_PAYLOAD_DISABLED: external image processing is disabled until local OCR/redaction exists');
   const settings: any = {};
   if (profile.maxTokens !== undefined) settings.max_tokens = profile.maxTokens;
-  if (profile.openaiReasoning) settings.reasoning_effort = profile.openaiReasoning.effort;
-  if (profile.anthropicThinking) settings.thinking_budget_tokens = profile.anthropicThinking.budget_tokens;
+  if (profile.reasoningEffort) settings.reasoning_effort = profile.reasoningEffort;
   const approval = await fetch('/api/governed-packet', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ schema_version:REQUEST_SCHEMA, policy_version:POLICY, run_id:ctx.runId, stage, ...(ctx.stageExecutionId ? { stage_execution_id: ctx.stageExecutionId } : {}), provider:profile.provider, model:profile.id, destination:`${profile.provider}:external_model`, system_instruction:prompt.systemInstruction || '', parts:[{type:'text',text:prompt.userText}], settings, ...(prompt.outputContract ? { output_contract: prompt.outputContract } : {}) }) });
   if (!approval.ok) {
     const failure = await approval.json().catch(() => null);
@@ -297,7 +316,7 @@ async function postWithTimeout(url: string, body: any, approval: any): Promise<{
 }
 
 export async function callModel(profile: ModelProfile, prompt: NormalizedPrompt, stage: StageId, ctx: RunContext): Promise<{ text: string; usage?: any }> {
-  if (profile.provider === 'anthropic' || profile.provider === 'openai' || profile.provider === 'qwen') return governedCall(profile, prompt, stage, ctx);
+  if (profile.provider === 'anthropic' || profile.provider === 'openai' || profile.provider === 'xai') return governedCall(profile, prompt, stage, ctx);
   throw new Error(`Unknown provider: ${(profile as any).provider}`);
 }
 
@@ -319,21 +338,40 @@ const tokenUsageFromProvider = (usage: any) => ({
 
 export async function runStage(stage: StageId, prompt: NormalizedPrompt, ctx: RunContext): Promise<RunStageResult> {
   if (prompt.images?.length) throw new Error('IMAGE_PAYLOAD_DISABLED: external image processing is disabled until local OCR/redaction exists');
-  const chain = (await getModelRoutingConfig()).routes[stage];
+  const routing = await getModelRoutingConfig();
+  const role = routing.stage_roles[stage];
+  const chain = routing.routes[stage];
+  const rolePrompt: NormalizedPrompt = {
+    ...prompt,
+    systemInstruction: [ROLE_INSTRUCTIONS[role], prompt.systemInstruction].filter(Boolean).join('\n\n'),
+  };
   const failures: Array<{ profile: ModelProfile; error: string }> = [];
   const stageStarted = Date.now();
   const startedAt = new Date(stageStarted).toISOString();
-  const inputChars = (prompt.systemInstruction || '').length + prompt.userText.length;
-  const promptHash = hashString(`${stage}\n${prompt.outputContract || 'unstructured'}\n${prompt.systemInstruction || ''}\n${prompt.userText}`);
-  const contextPacketHash = hashString(prompt.userText);
+  const inputChars = (rolePrompt.systemInstruction || '').length + rolePrompt.userText.length;
+  const promptHash = hashString(`${stage}\n${role}\n${rolePrompt.outputContract || 'unstructured'}\n${rolePrompt.systemInstruction || ''}\n${rolePrompt.userText}`);
+  const contextPacketHash = hashString(rolePrompt.userText);
   const fallbackChain = chain.map(profile => profile.id);
   const executionContext = { ...ctx, stageExecutionId: newInternalCallId() };
   for (const profile of chain) {
     try {
-      const result = await callModel(profile, prompt, stage, executionContext);
+      const result = await callModel(profile, rolePrompt, stage, executionContext);
+      if (rolePrompt.validateOutput) {
+        try {
+          rolePrompt.validateOutput(result.text);
+        } catch (validationError: any) {
+          // The provider completed, so trying the fallback cannot duplicate an
+          // uncertain dispatch. Both attempts use this same validation contract.
+          const code = typeof validationError?.code === 'string' && /^[A-Z][A-Z0-9_]{1,63}$/.test(validationError.code)
+            ? validationError.code
+            : 'INVALID_SEMANTIC_OUTPUT';
+          throw new StageExecutionError(code, true);
+        }
+      }
       const providerUsage = tokenUsageFromProvider(result.usage);
       recordStageTrace(ctx.runId, {
         stage_id: stage,
+        ai_role: role,
         provider: profile.provider,
         model: profile.id,
         fallback_chain: fallbackChain,
@@ -357,6 +395,7 @@ export async function runStage(stage: StageId, prompt: NormalizedPrompt, ctx: Ru
       if (failures.length > 0) {
         await serverLog(ctx.runId, 'warn', 'stage_fallback_used', {
           stage,
+          ai_role: role,
           succeeded_with: profile.id,
           provider: profile.provider,
           failed_models: failures.map((f) => f.profile.id).join(','),
@@ -375,6 +414,7 @@ export async function runStage(stage: StageId, prompt: NormalizedPrompt, ctx: Ru
   const summary = failures.map((f) => `${f.profile.id}: ${f.error}`).join(' | ');
   recordStageTrace(ctx.runId, {
     stage_id: stage,
+    ai_role: role,
     fallback_chain: fallbackChain,
     attempt_count: failures.length,
     prompt_hash: promptHash,
@@ -389,7 +429,7 @@ export async function runStage(stage: StageId, prompt: NormalizedPrompt, ctx: Ru
     completed_at: new Date().toISOString()
   });
   await serverLog(ctx.runId, 'error', 'stage_exhausted', { stage, attempt_count: failures.length, error_code: 'models_exhausted' });
-  if (prompt.outputContract && failures.some(f => f.error === 'invalid_output_contract')) {
+  if (rolePrompt.outputContract && failures.some(f => f.error === 'invalid_output_contract')) {
     throw new StageExecutionError('SYNTHESIS_OUTPUT_INVALID');
   }
   throw new Error(`All models exhausted for stage '${stage}'. ${summary}`);

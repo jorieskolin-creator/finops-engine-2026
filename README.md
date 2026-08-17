@@ -1,6 +1,6 @@
 # FinOps Engine
 
-Evidence-gated FinOps Maturity Assessment prototype. The React, TypeScript, and Vite client parses source documents in the browser and orchestrates a multi-stage assessment through authenticated OpenAI, Anthropic, and Qwen proxy endpoints under `api/`.
+Evidence-gated FinOps Maturity Assessment prototype. The React, TypeScript, and Vite client parses source documents in the browser and orchestrates a multi-stage assessment through authenticated OpenAI, Anthropic, and xAI proxy endpoints under `api/`.
 
 The repository is currently intended for solution development, structural validation, and accuracy/reproducibility testing. It is not yet a production-ready multi-user service.
 
@@ -13,7 +13,7 @@ npm ci
 cp .env.example .env.local
 ```
 
-Set `SECRET_KEY` and the keys required by your selected routing mode: `OPENAI_API_KEY` (or `GPT_API_KEY`), `ANTHROPIC_API_KEY`, and/or `QWEN_API_KEY`. Provider keys remain server-side and are never included in the Vite client bundle.
+Set `SECRET_KEY`, `OPENAI_API_KEY` (or `GPT_API_KEY`), `ANTHROPIC_API_KEY`, and `XAI_API_KEY`. Provider keys remain server-side and are never included in the Vite client bundle.
 
 For the simplest full-stack development environment, use Vercel's local runtime, which loads `.env.local` and serves Vite together with the API handlers:
 
@@ -25,20 +25,17 @@ For UI-only work, run `npm run dev`. The UI will load, but assessments cannot co
 
 ## Active model architecture
 
-Model profiles, stage assignments, and fallback chains are centralized in the server-owned `lib/modelRoutingPolicy.js`. The active providers are OpenAI, Anthropic, and Qwen; Gemini is not part of the current runtime. The browser obtains the effective content-free route from `/api/model-routing`, while governed-packet approval independently enforces the same Railway policy.
+Model profiles, AI-role assignments, and fallback chains are centralized in the server-owned `lib/modelRoutingPolicy.js`. The active providers are OpenAI, Anthropic, and xAI. Every existing model stage maps to exactly one of `REASONER`, `WORKHORSE`, or `QUALITY_CHECKER`; roles select their configured primary and fallback without changing pipeline stages. The browser obtains the effective content-free route from `/api/model-routing`, while governed-packet approval independently enforces the same Railway policy.
 
-| Stage group | Normal primary provider/profile |
-|-------------|---------------------------------|
+| Task/role | Configured primary → fallback |
+|-----------|-------------------------------|
 | Acquisition and DLP | Deterministic local processing; no model call |
-| Forensic audit | Anthropic Claude Sonnet 5 |
-| Targeted rescan | Anthropic Claude Opus 5 |
-| Evidence check and adjudication | OpenAI GPT-5.6 Sol, high reasoning |
-| Evidence synthesis | Anthropic Claude Sonnet 5 |
-| Roadmap synthesis | Anthropic Claude Opus 5 |
-| Fact check | OpenAI GPT-5.6 Sol, high reasoning |
-| Quality-gate explanation | OpenAI GPT-5.4 Mini, medium reasoning |
+| `REASONER` | OpenAI GPT-5.6 Sol → xAI Grok 4.5 |
+| `WORKHORSE` | Anthropic Claude Sonnet 5 → xAI Grok 4.5 |
+| `QUALITY_CHECKER` | xAI Grok 4.5 → Anthropic Claude Sonnet 5 |
+| Deterministic Quality Gate | Authoritative code path; no model decision |
 
-When provider variables are absent, the established mixed-provider routing above remains active. Set `PRIMARY_MODEL_PROVIDER` and `FALLBACK_MODEL_PROVIDER` to choose providers for all model stages; code-owned stage profiles still select the exact model and reasoning settings. OpenAI uses GPT-5.4 Mini for the lighter quality-gate explanation and GPT-5.6 Sol with high reasoning for deeper stages. Anthropic uses Sonnet 5 and Opus 5 by stage; Haiku 4.5 remains Anthropic's latest Haiku but is not needed now that acquisition and DLP are deterministic. Qwen uses Qwen3.8-Max in non-thinking JSON mode. Fallback `NONE` disables automatic provider fallback. Post-send uncertainty never becomes fallback.
+All twelve role-routing variables are required as one complete policy. The configured model must match the code-authorized model for its provider. Partial policies, legacy provider-level variables, unknown providers, unsupported models, and identical primary/fallback profiles fail closed. Provider fallback is allowed only for the existing explicit safe-failure outcomes; post-send uncertainty never becomes fallback.
 
 ## Environment variables
 
@@ -47,9 +44,10 @@ When provider variables are absent, the established mixed-provider routing above
 | `SECRET_KEY` | Yes | Shared assessment password and HMAC key for session cookies. Use at least 32 random characters. Rotation invalidates active sessions. |
 | `OPENAI_API_KEY` or `GPT_API_KEY` | Yes for OpenAI stages | Server-side OpenAI credential. `GPT_API_KEY` takes precedence when both are set. |
 | `ANTHROPIC_API_KEY` | Yes for Anthropic stages | Server-side Anthropic credential. |
-| `QWEN_API_KEY` | Yes for Qwen stages | Server-side Qwen Cloud credential used with the international OpenAI-compatible endpoint. |
-| `PRIMARY_MODEL_PROVIDER` | No | Server-side primary provider: `ANTHROPIC`, `OPENAI`, or `QWEN`. Omit to preserve established mixed routing. |
-| `FALLBACK_MODEL_PROVIDER` | No | Server-side fallback provider: `ANTHROPIC`, `OPENAI`, `QWEN`, or `NONE`. Requires a primary; defaults to `NONE` when a primary is configured. |
+| `XAI_API_KEY` | Yes | Server-side xAI credential used by the governed Grok adapter. |
+| `REASONER_*` | Yes | Primary and fallback provider/model for difficult semantic adjudication and complex sequencing. |
+| `WORKHORSE_*` | Yes | Primary and fallback provider/model for normal bounded production analysis. |
+| `QUALITY_CHECKER_*` | Yes | Primary and fallback provider/model for independent semantic verification. |
 | `DATABASE_URL` | Yes for the Node server | PostgreSQL control-plane connection. Startup fails closed if unavailable or unmigrated. |
 | `REDIS_URL` | Yes for the Node server | Redis execution-plane connection. Startup fails closed if unavailable. |
 | `VITE_FINOPS_TACTICS_URL` | No | Public remote tactics database URL exposed to the browser. |
@@ -72,7 +70,7 @@ The UI is public, but assessment and supporting API operations require an HMAC-s
 | `/api/governed-packet` | POST | Authenticated approval of versioned, sanitized text-only stage packets. |
 | `/api/openai-generate` | POST | Packet-ID-only governed OpenAI dispatch. |
 | `/api/anthropic-generate` | POST | Packet-ID-only governed Anthropic dispatch. |
-| `/api/qwen-generate` | POST | Packet-ID-only governed Qwen dispatch. |
+| `/api/xai-generate` | POST | Packet-ID-only governed xAI dispatch. |
 
 Milestone C uses structured source/page records and blocks image processing until local OCR/redaction is available. Approval is deterministic pattern-based risk reduction, not proof that arbitrary source content is public. PostgreSQL stores canonical governed packet bytes for dispatch plus content-free control metadata. Redis holds coordination state, checkpoints, and governed results. Packet bodies and Redis transient content are deleted after acknowledged delivery, terminal failure/deletion, or expiry and never survive the immutable 24-hour run deadline.
 | `/api/model-result` | POST | Recover a completed governed result from Redis. |
@@ -87,7 +85,7 @@ The authentication implementation lives in `lib/auth.js`. The current shared-pas
 The current implementation provides the following controls and limitations:
 
 - Source files are parsed in the browser; the original files are not uploaded as files by this application.
-- Only browser-extracted text is sent through the server proxies to the configured OpenAI, Anthropic, and Qwen services. Direct images are rejected, PDF pages are not rasterized, and scanned/visual-only pages are not processed because local OCR is unavailable. Provider-side storage and retention depend on the configured provider account and contract terms.
+- Only browser-extracted text is sent through the server proxies to the configured OpenAI, Anthropic, and xAI services. Direct images are rejected, PDF pages are not rasterized, and scanned/visual-only pages are not processed because local OCR is unavailable. Provider-side storage and retention depend on the configured provider account and contract terms.
 - A deterministic pattern scan blocks recognized high-risk secret and contextual financial-value patterns before the main assessment. A model-assisted review checks distributed text samples. This is policy approval and risk reduction, not proof of public classification or comprehensive PII/data-classification prevention; source material must be reviewed before upload.
 - The completed report, including report-visible evidence, is stored in browser `sessionStorage` for crash recovery until the tab/session data is cleared.
 - Canonical governed packet bodies are retained temporarily as PostgreSQL `BYTEA`; governed model output may remain in Redis for up to 30 minutes for recovery. Completion, failure, expiry, and user deletion synchronously tombstone Redis coordination state and delete PostgreSQL packet bodies; retryable cleanup is resumed by the worker. Content-free operational metadata expires after 90 days.

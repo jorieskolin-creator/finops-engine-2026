@@ -238,7 +238,7 @@ const validateAndSanitizeLogs = (rawData: any): Phase1AuditLogs => {
 };
 
 export interface AnalyzeOptions {
-  // User-controlled override: forces synthesis_escalation (Opus 4.7) even when
+  // User-controlled override: forces the REASONER synthesis route even when
   // auto-rules wouldn't fire. Use for high-stakes / board-level assessments.
   deepMode?: boolean;
   onRunStarted?: (runId: string) => void;
@@ -561,7 +561,7 @@ export const analyzeDocument = async (
     });
 
     // Synthesis escalation decision (rules + user override).
-    // Rules are conservative: only escalate to Opus 4.7 when the org is messy
+    // Rules are conservative: only escalate to REASONER when the org is messy
     // enough that a deeper roadmap is worth the cost premium.
     const autoEscalate =
       (validationData.crawl_walk_run === 'Crawl' && validationData.antipattern_findings.length >= 5)
@@ -839,6 +839,10 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => unresolve
         const summaryResp = await runStage(stage, {
           userText: summaryPrompt,
           images,
+          validateOutput: value => {
+            const checked = parseFactCheckResponse(value, attemptNumber, SUMMARY_FACT_CHECK_CONTRACT);
+            if (checked.failed) throw Object.assign(new Error(checked.failure_reason), { code: 'INVALID_FACT_CHECK_OUTPUT' });
+          },
         }, { runId });
         actuals[stage] = summaryResp.modelUsed.id;
         serverLog(runId, 'info', 'stage_complete', {
@@ -865,6 +869,10 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => unresolve
         const roadmapResp = await runStage(stage, {
           userText: roadmapPrompt,
           images,
+          validateOutput: value => {
+            const checked = parseFactCheckResponse(value, attemptNumber, ROADMAP_FACT_CHECK_CONTRACT);
+            if (checked.failed) throw Object.assign(new Error(checked.failure_reason), { code: 'INVALID_FACT_CHECK_OUTPUT' });
+          },
         }, { runId });
         actuals[stage] = roadmapResp.modelUsed.id;
         serverLog(runId, 'info', 'stage_complete', {
@@ -1338,8 +1346,12 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => unresolve
         evidence_privacy: privacy.decision,
         model_mode: modelRoutingMode,
         model_routing_policy_version: modelRouting.policy_version,
-        primary_model_provider: modelRouting.primary_provider,
-        fallback_model_provider: modelRouting.fallback_provider,
+        model_roles: Object.fromEntries(Object.entries(modelRouting.roles).map(([role, config]) => [role, {
+          primary_provider: config.primary_provider,
+          primary_model: config.profiles[0].id,
+          fallback_provider: config.fallback_provider,
+          fallback_model: config.profiles[1].id,
+        }])) as DiagnosticResult['meta']['model_roles'],
         model_config: {
           forensic_audit: actuals.forensic_audit,
           targeted_rescan: actuals.targeted_rescan,

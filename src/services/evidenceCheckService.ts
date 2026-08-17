@@ -96,6 +96,38 @@ const flattenVerifierItems = (parsed: any): any[] => {
   return [];
 };
 
+const validatedVerifierItems = (
+  value: string,
+  batch: BatchAuditResult,
+  expectedIds: string[],
+): Map<string, any> => {
+  const byKey = new Map<string, any>();
+  const verifierItems = flattenVerifierItems(parseAiResponse(value));
+  for (const raw of verifierItems) {
+    if (!raw || typeof raw !== 'object') continue;
+    const stream = raw.stream === 'antipattern' ? 'antipattern' : raw.stream === 'maturity' ? 'maturity' : null;
+    const id = typeof raw.id === 'string' ? raw.id : '';
+    const scannerCount = stream && expectedIds.includes(id)
+      ? clampScore((batch as any)[stream]?.[id]?.count)
+      : -1;
+    if (stream && expectedIds.includes(id) && isValidEvidenceVerifierItem({
+      raw,
+      stream,
+      scannerCount,
+      duplicate: byKey.has(`${stream}.${id}`),
+    })) byKey.set(`${stream}.${id}`, raw);
+  }
+  const expectedTotal = expectedIds.length * STREAMS.length;
+  if (verifierItems.length === 0 || byKey.size !== expectedTotal) {
+    throw Object.assign(new Error('Evidence verifier output was incomplete.'), {
+      code: 'INVALID_VERIFIER_OUTPUT',
+      validItems: byKey.size,
+      expectedItems: expectedTotal,
+    });
+  }
+  return byKey;
+};
+
 const summarizeBatch = (batch: BatchAuditResult): string => JSON.stringify({
   maturity: batch.maturity || {},
   antipattern: batch.antipattern || {}
@@ -387,7 +419,6 @@ export const runEvidenceCheck = async (
 ): Promise<EvidenceCheckResult> => {
   const definitions = BATCH_DEFINITIONS[batchId];
   const expectedIds = idsForBatch(batchId);
-  const expectedTotal = expectedIds.length * STREAMS.length;
   let lastError: any;
 
   for (let attempt = 1; attempt <= 2; attempt++) {
@@ -400,36 +431,9 @@ export const runEvidenceCheck = async (
     const resp = await runStage('evidence_check', {
       userText: buildEvidenceCheckPrompt(batchId, definitions, batch, text, referenceKbContext),
       images,
+      validateOutput: value => { validatedVerifierItems(value, batch, expectedIds); },
     }, ctx);
-    const parsed = parseAiResponse(resp.text);
-    const byKey = new Map<string, any>();
-    const verifierItems = flattenVerifierItems(parsed);
-    for (const raw of verifierItems) {
-      if (!raw || typeof raw !== 'object') continue;
-      const stream = raw.stream === 'antipattern' ? 'antipattern' : raw.stream === 'maturity' ? 'maturity' : null;
-      const id = typeof raw.id === 'string' ? raw.id : '';
-      const scannerCount = stream && expectedIds.includes(id)
-        ? clampScore((batch as any)[stream]?.[id]?.count)
-        : -1;
-      if (
-        !stream
-        || !expectedIds.includes(id)
-        || !isValidEvidenceVerifierItem({
-          raw,
-          stream,
-          scannerCount,
-          duplicate: byKey.has(`${stream}.${id}`)
-        })
-      ) continue;
-      byKey.set(`${stream}.${id}`, raw);
-    }
-    if (verifierItems.length === 0 || byKey.size !== expectedTotal) {
-      throw Object.assign(new Error('Evidence verifier output was incomplete.'), {
-        code: 'INVALID_VERIFIER_OUTPUT',
-        validItems: byKey.size,
-        expectedItems: expectedTotal,
-      });
-    }
+    const byKey = validatedVerifierItems(resp.text, batch, expectedIds);
 
     const items: EvidenceCheckItem[] = [];
     for (const stream of STREAMS) {

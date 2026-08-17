@@ -68,7 +68,7 @@ assert.doesNotMatch(logged[0], /private source content|private\.pdf|private mode
 assert.match(logged[1], /outcome_code=INCOMPLETE_RESPONSE/);
 assert.match(logged[1], /termination_reason=MAX_OUTPUT_TOKENS/);
 
-for (const file of ['../api/openai-generate.js', '../api/anthropic-generate.js', '../api/qwen-generate.js']) {
+for (const file of ['../api/openai-generate.js', '../api/anthropic-generate.js', '../api/xai-generate.js']) {
   const source = await readFile(new URL(file, import.meta.url), 'utf8');
   assert.doesNotMatch(source, /errorText\.substring|errorText\.replace/);
   assert.doesNotMatch(source, /msg=\\?"\$\{msg/);

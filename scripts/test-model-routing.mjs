@@ -2,80 +2,90 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { authorizeConfiguredDestination, authorizeDestination } from '../lib/governance.js';
 import {
+  AI_ROLES,
   MODEL_ROUTING_POLICY_VERSION,
   MODEL_STAGES,
+  STAGE_ROLES,
   ModelRoutingConfigurationError,
   resolveModelRouting,
   settingsForProfile,
 } from '../lib/modelRoutingPolicy.js';
 
-const validateRoute = config => {
-  assert.equal(config.policy_version, MODEL_ROUTING_POLICY_VERSION);
-  for (const stage of MODEL_STAGES) {
-    assert.ok(config.routes[stage].length > 0, `${stage} must have a route`);
-    for (const candidate of config.routes[stage]) {
-      authorizeDestination(stage, candidate.provider, candidate.id, settingsForProfile(candidate));
-    }
-  }
+const env = {
+  REASONER_PROVIDER: 'OPENAI',
+  REASONER_MODEL: 'gpt-5.6-sol',
+  REASONER_FALLBACK_PROVIDER: 'XAI',
+  REASONER_FALLBACK_MODEL: 'grok-4.5',
+  WORKHORSE_PROVIDER: 'ANTHROPIC',
+  WORKHORSE_MODEL: 'claude-sonnet-5',
+  WORKHORSE_FALLBACK_PROVIDER: 'XAI',
+  WORKHORSE_FALLBACK_MODEL: 'grok-4.5',
+  QUALITY_CHECKER_PROVIDER: 'XAI',
+  QUALITY_CHECKER_MODEL: 'grok-4.5',
+  QUALITY_CHECKER_FALLBACK_PROVIDER: 'ANTHROPIC',
+  QUALITY_CHECKER_FALLBACK_MODEL: 'claude-sonnet-5',
 };
 
-const legacy = resolveModelRouting({});
-validateRoute(legacy);
-assert.equal(legacy.mode, 'legacy');
-assert.equal(legacy.label, 'legacy');
-assert.deepEqual(legacy.routes.forensic_audit.map(profile => profile.id), ['claude-sonnet-5', 'gpt-5.6-sol', 'claude-opus-5']);
-assert.deepEqual(legacy.routes.targeted_rescan.map(profile => profile.id), ['claude-opus-5', 'gpt-5.6-sol', 'claude-sonnet-5']);
-assert.deepEqual(legacy.routes.fact_check_high[0].openaiReasoning, { effort: 'high' });
+const config = resolveModelRouting(env);
+assert.equal(config.policy_version, MODEL_ROUTING_POLICY_VERSION);
+assert.equal(config.schema_version, 'model_routing_config_v2');
+assert.equal(config.mode, 'role_policy');
+assert.equal(config.label, 'ai_role_policy');
+assert.deepEqual(config.stage_roles, STAGE_ROLES);
+assert.deepEqual(Object.keys(config.roles).sort(), [...AI_ROLES].sort());
 
-const qwenOpenAI = resolveModelRouting({ PRIMARY_MODEL_PROVIDER: 'qwen', FALLBACK_MODEL_PROVIDER: 'openai' });
-validateRoute(qwenOpenAI);
-assert.equal(qwenOpenAI.mode, 'provider_policy');
-assert.equal(qwenOpenAI.label, 'qwen_openai');
-assert.equal(qwenOpenAI.primary_provider, 'QWEN');
-assert.equal(qwenOpenAI.fallback_provider, 'OPENAI');
 for (const stage of MODEL_STAGES) {
-  const chain = qwenOpenAI.routes[stage];
-  assert.equal(chain[0].provider, 'qwen');
-  assert.equal(chain[0].id, 'qwen3.8-max');
-  assert.equal(chain[0].maxTokens, undefined);
-  assert.equal(chain[1].provider, 'openai');
+  const role = STAGE_ROLES[stage];
+  const chain = config.routes[stage];
+  assert.ok(role, `${stage} must have exactly one role`);
+  assert.equal(chain.length, 2, `${stage} must have primary and fallback`);
+  assert.deepEqual(chain, config.roles[role].profiles, `${stage} must use its role route`);
+  assert.notDeepEqual(chain[0], chain[1], `${stage} primary and fallback must differ`);
+  for (const candidate of chain) {
+    authorizeDestination(stage, candidate.provider, candidate.id, settingsForProfile(candidate));
+    assert.doesNotThrow(() => authorizeConfiguredDestination(
+      stage, candidate.provider, candidate.id, settingsForProfile(candidate), env,
+    ));
+  }
 }
-assert.equal(qwenOpenAI.routes.quality_gate[1].id, 'gpt-5.4-mini');
-assert.equal(qwenOpenAI.routes.forensic_audit[1].id, 'gpt-5.6-sol');
-assert.deepEqual(qwenOpenAI.routes.targeted_rescan[1].openaiReasoning, { effort: 'high' });
-assert.equal(qwenOpenAI.routes.targeted_rescan[1].maxTokens, 32768);
 
-const openAIAnthropic = resolveModelRouting({ PRIMARY_MODEL_PROVIDER: 'OPENAI', FALLBACK_MODEL_PROVIDER: 'ANTHROPIC' });
-validateRoute(openAIAnthropic);
-assert.equal(openAIAnthropic.routes.forensic_audit[0].id, 'gpt-5.6-sol');
-assert.equal(openAIAnthropic.routes.forensic_audit[1].id, 'claude-sonnet-5');
-assert.equal(openAIAnthropic.routes.forensic_audit[1].maxTokens, 16384);
-assert.equal(openAIAnthropic.routes.roadmap_synthesis[1].id, 'claude-opus-5');
-assert.equal(openAIAnthropic.routes.roadmap_synthesis[1].maxTokens, 16384);
+assert.equal(STAGE_ROLES.evidence_adjudication, 'REASONER');
+assert.equal(STAGE_ROLES.synthesis_escalation, 'REASONER');
+assert.equal(STAGE_ROLES.roadmap_synthesis, 'REASONER');
+assert.equal(STAGE_ROLES.forensic_audit, 'WORKHORSE');
+assert.equal(STAGE_ROLES.targeted_rescan, 'WORKHORSE');
+assert.equal(STAGE_ROLES.evidence_check, 'QUALITY_CHECKER');
+assert.equal(STAGE_ROLES.fact_check, 'QUALITY_CHECKER');
+assert.equal(STAGE_ROLES.fact_check_high, 'QUALITY_CHECKER');
+assert.equal(STAGE_ROLES.quality_gate, 'WORKHORSE', 'the model only explains the deterministic gate');
+assert.deepEqual(config.routes.synthesis.map(value => `${value.provider}:${value.id}`), [
+  'anthropic:claude-sonnet-5',
+  'xai:grok-4.5',
+]);
+assert.deepEqual(config.routes.evidence_adjudication.map(value => `${value.provider}:${value.id}`), [
+  'openai:gpt-5.6-sol',
+  'xai:grok-4.5',
+]);
+assert.deepEqual(config.routes.fact_check.map(value => `${value.provider}:${value.id}`), [
+  'xai:grok-4.5',
+  'anthropic:claude-sonnet-5',
+]);
+assert.deepEqual(config.routes.evidence_adjudication[0].reasoningEffort, 'high');
+assert.deepEqual(config.routes.fact_check[0].reasoningEffort, 'medium');
 
-const strictQwen = resolveModelRouting({ PRIMARY_MODEL_PROVIDER: 'QWEN', FALLBACK_MODEL_PROVIDER: 'NONE' });
-validateRoute(strictQwen);
-for (const stage of MODEL_STAGES) assert.equal(strictQwen.routes[stage].length, 1);
-
-const duplicateProvider = resolveModelRouting({ PRIMARY_MODEL_PROVIDER: 'OPENAI', FALLBACK_MODEL_PROVIDER: 'OPENAI' });
-for (const stage of MODEL_STAGES) assert.equal(duplicateProvider.routes[stage].length, 1);
-
-for (const env of [
-  { FALLBACK_MODEL_PROVIDER: 'QWEN' },
-  { PRIMARY_MODEL_PROVIDER: 'GEMINI' },
-  { PRIMARY_MODEL_PROVIDER: 'QWEN', FALLBACK_MODEL_PROVIDER: 'GEMINI' },
+for (const invalid of [
+  {},
+  { ...env, REASONER_MODEL: '' },
+  { ...env, REASONER_PROVIDER: 'OTHER' },
+  { ...env, REASONER_MODEL: 'unapproved-model' },
+  { ...env, REASONER_FALLBACK_PROVIDER: 'OPENAI', REASONER_FALLBACK_MODEL: 'gpt-5.6-sol' },
+  { ...env, PRIMARY_MODEL_PROVIDER: 'OPENAI' },
 ]) {
-  assert.throws(() => resolveModelRouting(env), ModelRoutingConfigurationError);
+  assert.throws(() => resolveModelRouting(invalid), ModelRoutingConfigurationError);
 }
 
-const qwenAudit = qwenOpenAI.routes.forensic_audit[0];
-assert.doesNotThrow(() => authorizeConfiguredDestination(
-  'forensic_audit', qwenAudit.provider, qwenAudit.id, settingsForProfile(qwenAudit),
-  { PRIMARY_MODEL_PROVIDER: 'QWEN', FALLBACK_MODEL_PROVIDER: 'OPENAI' },
-));
 assert.throws(() => authorizeConfiguredDestination(
-  'forensic_audit', 'anthropic', 'claude-sonnet-5', { max_tokens: 8192 },
-  { PRIMARY_MODEL_PROVIDER: 'QWEN', FALLBACK_MODEL_PROVIDER: 'OPENAI' },
+  'forensic_audit', 'openai', 'gpt-5.6-sol', { max_tokens: 16384, reasoning_effort: 'medium' }, env,
 ), /DESTINATION_NOT_CONFIGURED/);
 
 const modelContracts = await readFile(new URL('../src/models.ts', import.meta.url), 'utf8');
@@ -85,23 +95,18 @@ const orchestrator = await readFile(new URL('../src/orchestrator.ts', import.met
 const server = await readFile(new URL('../server.js', import.meta.url), 'utf8');
 assert.doesNotMatch(modelContracts, /cheap_test|VITE_FINOPS_MODEL_MODE|URLSearchParams/);
 assert.match(router, /fetch\('\/api\/model-routing'/);
+assert.match(router, /ROLE_INSTRUCTIONS/);
 assert.match(router, /await getModelRoutingConfig\(\)/);
 assert.doesNotMatch(analysis, /runStage\(['"]preflight['"]/);
 assert.match(analysis, /sanitizeEvidenceSources\(sources\)/);
-assert.ok(
-  analysis.indexOf('sanitizeEvidenceSources(sources)') < analysis.indexOf('runPhase1Audit('),
-  'deterministic acquisition must precede the first generative Phase 1 call',
-);
-assert.ok(
-  analysis.indexOf('buildEvidenceLaneStagePackets({') < analysis.indexOf('runPhase1Audit('),
-  'the role-separated Evidence-lane stage packet must be assembled before Phase 1',
-);
+assert.ok(analysis.indexOf('sanitizeEvidenceSources(sources)') < analysis.indexOf('runPhase1Audit('));
+assert.ok(analysis.indexOf('buildEvidenceLaneStagePackets({') < analysis.indexOf('runPhase1Audit('));
 assert.match(orchestrator, /<KNOWLEDGE_CONTEXT source_role="GOVERNED_KNOWLEDGE">/);
 assert.match(orchestrator, /<EVIDENCE_CONTEXT source_role="CUSTOMER_EVIDENCE">/);
 assert.match(orchestrator, /assertEvidenceLaneStagePacket\(packet\)/);
 assert.doesNotMatch(modelContracts, /\| 'preflight'/);
 assert.match(analysis, /model_mode: modelRoutingMode/);
-assert.match(analysis, /evidence_density < EVIDENCE_DENSITY_BLOCK[\s\S]*?reason_code: 'EVIDENCE_DENSITY_BELOW_FLOOR'/, 'sub-floor evidence must use deterministic findings instead of generative synthesis');
+assert.match(analysis, /evidence_density < EVIDENCE_DENSITY_BLOCK[\s\S]*?reason_code: 'EVIDENCE_DENSITY_BELOW_FLOOR'/);
 assert.match(server, /resolveModelRouting\(process\.env\)/);
 
-console.log('model routing policy tests passed');
+console.log('AI role routing policy tests passed');

@@ -1,22 +1,14 @@
-// Public model-routing contracts. Exact model IDs, stage assignments and
+// Public model-routing contracts. Exact model IDs, role assignments and
 // provider policy are server-owned in lib/modelRoutingPolicy.js.
 
-export type Provider = 'anthropic' | 'openai' | 'qwen';
-
-export interface AnthropicThinkingConfig {
-  type: 'enabled';
-  budget_tokens: number;
-}
-
-export interface OpenAIReasoningConfig {
-  effort: 'none' | 'low' | 'medium' | 'high' | 'xhigh';
-}
+export type Provider = 'anthropic' | 'openai' | 'xai';
+export type AiRole = 'REASONER' | 'WORKHORSE' | 'QUALITY_CHECKER';
+export type ReasoningEffort = 'none' | 'low' | 'medium' | 'high' | 'xhigh';
 
 export interface ModelProfile {
   id: string;
   provider: Provider;
-  anthropicThinking?: AnthropicThinkingConfig;
-  openaiReasoning?: OpenAIReasoningConfig;
+  reasoningEffort?: ReasoningEffort;
   maxTokens?: number;
 }
 
@@ -33,11 +25,16 @@ export type StageId =
   | 'quality_gate';
 
 export interface ModelRoutingConfig {
-  schema_version: 'model_routing_config_v1';
+  schema_version: 'model_routing_config_v2';
   policy_version: string;
-  mode: 'legacy' | 'provider_policy';
+  mode: 'role_policy';
   label: string;
-  primary_provider: 'ANTHROPIC' | 'OPENAI' | 'QWEN' | null;
-  fallback_provider: 'ANTHROPIC' | 'OPENAI' | 'QWEN' | 'NONE' | null;
+  stage_roles: Record<StageId, AiRole>;
+  roles: Record<AiRole, {
+    role: AiRole;
+    primary_provider: 'ANTHROPIC' | 'OPENAI' | 'XAI';
+    fallback_provider: 'ANTHROPIC' | 'OPENAI' | 'XAI';
+    profiles: ModelProfile[];
+  }>;
   routes: Record<StageId, ModelProfile[]>;
 }
