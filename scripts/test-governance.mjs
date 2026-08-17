@@ -45,6 +45,7 @@ assert.throws(()=>approveRequest({...synthesisRequest,output_contract:'client_sc
 let committedBody;const repository={getRun:async()=>({state:'active',effective_expires_at:new Date(Date.now()+60_000),absolute_deadline_at:new Date(Date.now()+60_000)}),commitPacket:async value=>{committedBody=value.canonicalBody;return true;}};
 process.env.SECRET_KEY='test-secret-key-that-is-long-enough-123';
 Object.assign(process.env,{
+  OPENAI_API_KEY:'test-openai-key',ANTHROPIC_API_KEY:'test-anthropic-key',XAI_API_KEY:'test-xai-key',
   REASONER_PROVIDER:'OPENAI',REASONER_MODEL:'gpt-5.6-sol',REASONER_FALLBACK_PROVIDER:'XAI',REASONER_FALLBACK_MODEL:'grok-4.6',
   WORKHORSE_PROVIDER:'ANTHROPIC',WORKHORSE_MODEL:'claude-sonnet-5',WORKHORSE_FALLBACK_PROVIDER:'XAI',WORKHORSE_FALLBACK_MODEL:'grok-4.6',
   QUALITY_CHECKER_PROVIDER:'XAI',QUALITY_CHECKER_MODEL:'grok-4.6',QUALITY_CHECKER_FALLBACK_PROVIDER:'ANTHROPIC',QUALITY_CHECKER_FALLBACK_MODEL:'claude-sonnet-5'

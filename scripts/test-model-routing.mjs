@@ -12,6 +12,9 @@ import {
 } from '../lib/modelRoutingPolicy.js';
 
 const env = {
+  OPENAI_API_KEY: 'test-openai-key',
+  ANTHROPIC_API_KEY: 'test-anthropic-key',
+  XAI_API_KEY: 'test-xai-key',
   REASONER_PROVIDER: 'OPENAI',
   REASONER_MODEL: 'gpt-5.6-sol',
   REASONER_FALLBACK_PROVIDER: 'XAI',
@@ -80,6 +83,7 @@ for (const invalid of [
   { ...env, REASONER_MODEL: 'unapproved-model' },
   { ...env, REASONER_FALLBACK_PROVIDER: 'OPENAI', REASONER_FALLBACK_MODEL: 'gpt-5.6-sol' },
   { ...env, PRIMARY_MODEL_PROVIDER: 'OPENAI' },
+  { ...env, XAI_API_KEY: '' },
 ]) {
   assert.throws(() => resolveModelRouting(invalid), ModelRoutingConfigurationError);
 }

@@ -7,6 +7,9 @@ import { join } from 'node:path';
 import { resolveModelRouting } from '../lib/modelRoutingPolicy.js';
 
 const env = {
+  OPENAI_API_KEY: 'test-openai-key',
+  ANTHROPIC_API_KEY: 'test-anthropic-key',
+  XAI_API_KEY: 'test-xai-key',
   REASONER_PROVIDER: 'OPENAI', REASONER_MODEL: 'gpt-5.6-sol',
   REASONER_FALLBACK_PROVIDER: 'XAI', REASONER_FALLBACK_MODEL: 'grok-4.6',
   WORKHORSE_PROVIDER: 'ANTHROPIC', WORKHORSE_MODEL: 'claude-sonnet-5',

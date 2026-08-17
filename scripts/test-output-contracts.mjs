@@ -37,6 +37,37 @@ assert.equal(contract.name, OUTPUT_CONTRACT_IDS.evidenceSynthesis);
 assert.equal(contract.schema.additionalProperties, false);
 assert.deepEqual(contract.schema.required, ['phase_3_strategy']);
 
+const factCheck = {
+  claims: [{
+    claim: 'Evidence density is 92%.',
+    classification: 'supported_by_audit',
+    rationale: 'The value is present in Phase 2 metrics.',
+    source_location: 'diagnosis',
+    failure_type: 'not_applicable',
+    severity: 'SUPPORTED',
+    missing_material: '',
+  }],
+};
+assert.deepEqual(
+  validateOutputContractText(OUTPUT_CONTRACT_IDS.summaryFactCheck, JSON.stringify(factCheck)),
+  factCheck,
+);
+assert.throws(
+  () => validateOutputContractText(OUTPUT_CONTRACT_IDS.summaryFactCheck, JSON.stringify({ claims: [] })),
+  /INVALID_OUTPUT_CONTRACT/,
+);
+assert.throws(
+  () => authorizeOutputContract('synthesis', OUTPUT_CONTRACT_IDS.summaryFactCheck),
+  /INVALID_OUTPUT_CONTRACT/,
+);
+const anthropicFactCheck = structuredOutputForPacket({
+  stage: 'fact_check',
+  provider: 'anthropic',
+  output_contract: OUTPUT_CONTRACT_IDS.summaryFactCheck,
+});
+assert.equal('maxItems' in anthropicFactCheck.schema.properties.claims, false);
+assert.equal(anthropicFactCheck.schema.properties.claims.minItems, 1);
+
 const diagnostics = outputContractDiagnostics(`${evidenceText}\n{"other":true}`, { code: 'INVALID_OUTPUT_CONTRACT' });
 assert.equal(diagnostics.output_chars > evidenceText.length, true);
 assert.equal(diagnostics.balanced_object_count, 2);

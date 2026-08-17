@@ -398,6 +398,7 @@ Your job: verify ONLY the evidence summaries and diagnosis. The tactics database
 - If the underlying source fact is real but the output assigns the wrong category/domain/anti-pattern label, classify unsupported with severity "WARN_MISCLASSIFIED_BUT_REAL" rather than a blocking fact.
 - Maximum 15 claims per pass — focus on consequential claims.
 - For every unsupported claim, emit failure_type, severity, and missing_material.
+- For supported claims, emit severity "SUPPORTED", failure_type "not_applicable", and an empty missing_material string.
 - Output JSON ONLY, no prose.
 </rules>
 
@@ -409,7 +410,7 @@ Your job: verify ONLY the evidence summaries and diagnosis. The tactics database
       "classification": "supported_by_source | supported_by_audit | unsupported",
       "rationale": "one short sentence",
       "source_location": "finops_lead | cfo | engineering_lead | diagnosis",
-      "failure_type": "fabricated_number | unverifiable_entity | unsupported_org_claim | out_of_scope | other (REQUIRED when unsupported)",
+      "failure_type": "fabricated_number | unverifiable_entity | unsupported_org_claim | out_of_scope | other | not_applicable",
       "severity": "BLOCKING_UNSUPPORTED_FACT | WARN_MISCLASSIFIED_BUT_REAL | WARN_TACTIC_HYGIENE | SUPPORTED",
       "missing_material": "what evidence would make this claim supportable (REQUIRED when unsupported)"
     }
@@ -460,6 +461,7 @@ ROADMAP GROUNDING:
 - WHY and WHAT may summarize context and intended change, but they may not invent new current-state claims, unsupported financial impacts, or claim that a gap is fully closed unless LOCKED_FINDINGS provide acceptance criteria proving closure.
 - Maximum 15 claims per pass — focus on consequential grounding errors.
 - For every unsupported claim, emit failure_type, severity, and missing_material.
+- For supported claims, emit severity "SUPPORTED", failure_type "not_applicable", and an empty missing_material string.
 - Output JSON ONLY, no prose.
 </rules>
 
@@ -471,7 +473,7 @@ ROADMAP GROUNDING:
       "classification": "supported_by_source | supported_by_audit | supported_by_tactics_db | unsupported",
       "rationale": "one short sentence",
       "source_location": "planning_decision | roadmap",
-      "failure_type": "fabricated_number | unverifiable_entity | unsupported_org_claim | out_of_scope | other (REQUIRED when unsupported)",
+      "failure_type": "fabricated_number | unverifiable_entity | unsupported_org_claim | out_of_scope | other | not_applicable",
       "severity": "BLOCKING_UNSUPPORTED_FACT | BLOCKING_UNSAFE_ROADMAP | WARN_MISCLASSIFIED_BUT_REAL | WARN_TACTIC_HYGIENE | SUPPORTED",
       "missing_material": "what evidence or locked finding would make this supportable (REQUIRED when unsupported)"
     }

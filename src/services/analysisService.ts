@@ -839,6 +839,7 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => unresolve
         const summaryResp = await runStage(stage, {
           userText: summaryPrompt,
           images,
+          outputContract: OUTPUT_CONTRACT_IDS.summaryFactCheck,
           validateOutput: value => {
             const checked = parseFactCheckResponse(value, attemptNumber, SUMMARY_FACT_CHECK_CONTRACT);
             if (checked.failed) throw Object.assign(new Error(checked.failure_reason), { code: 'INVALID_FACT_CHECK_OUTPUT' });
@@ -869,6 +870,7 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => unresolve
         const roadmapResp = await runStage(stage, {
           userText: roadmapPrompt,
           images,
+          outputContract: OUTPUT_CONTRACT_IDS.roadmapFactCheck,
           validateOutput: value => {
             const checked = parseFactCheckResponse(value, attemptNumber, ROADMAP_FACT_CHECK_CONTRACT);
             if (checked.failed) throw Object.assign(new Error(checked.failure_reason), { code: 'INVALID_FACT_CHECK_OUTPUT' });
