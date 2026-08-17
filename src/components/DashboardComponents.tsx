@@ -495,7 +495,7 @@ export const GaugeCard: React.FC<GaugeProps> = ({ value, label, color, trend = '
         </p>
       )}
       <div className={`mt-3 text-[9px] font-bold uppercase tracking-wider text-slate-400 opacity-80 bg-white/5 px-3 py-1 rounded-full border border-white/5 ${size === 'large' ? 'scale-110' : ''}`}>
-        {trend === 'positive' ? 'Target: High' : 'Target: Low'}
+        {trend === 'positive' ? 'High = Good' : 'High = Bad'}
       </div>
     </div>
   );

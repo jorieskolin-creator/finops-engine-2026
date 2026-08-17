@@ -3,7 +3,7 @@ import { STRATEGY_GUARDRAILS, FINOPS_PERSONAS } from './knowledge_base';
 
 export const METRIC_DESCRIPTIONS: Record<string, string> = {
   finops_readiness:
-    'Evidence-sensitive FinOps Maturity Score. Full capabilities and tested anti-pattern absences earn one point, partial control earns half a point, and missing or unverified material earns zero without proving a capability is absent.',
+    'Evidence-sensitive FinOps Maturity Score. Equal-weight average of linear evidence-based capability and inverse verified anti-pattern burden. Unknown and unverified material is excluded and reported separately.',
   maturity_ratio:
     'Share of maturity criteria that scored as fully embedded (3 of 3 sub-criteria met).',
   maturity_depth:
@@ -14,6 +14,10 @@ export const METRIC_DESCRIPTIONS: Record<string, string> = {
     'Share of anti-pattern criteria with a confirmed or partial harmful-pattern signal. Higher = more widespread observed friction.',
   antipattern_burden:
     'Average severity across all anti-patterns. Higher = more friction blocking current FinOps practice. Low values mean "low confirmed burden" only when source evidence is strong enough.',
+  capability_attainment:
+    'Supported capability questions across assessed criteria, normalized to 0–100%. Higher is better; unknown criteria are excluded.',
+  antipattern_control:
+    'Inverse of verified anti-pattern burden across score-eligible assessed criteria. Higher is better; unknown and not-assessed criteria are excluded.',
   antipattern_clearance:
     'Share of anti-patterns that were meaningfully tested and not found. This is positive only when the source had relevant coverage.',
   antipattern_coverage:

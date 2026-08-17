@@ -30,7 +30,7 @@ export interface ReportViewModel {
 }
 
 export const MATURITY_SCORE_METHOD_NOTE =
-  'The FinOps Maturity Score equally weights capability attainment and anti-pattern control across criteria with completed verification. A verified 3/3 capability earns 1 point, 2/3 earns 0.5, and 1/3 or 0/3 earns zero. A tested-absent anti-pattern earns 1 point, one harmful subcriterion present earns 0.5, and two or three earn zero. Criteria whose verification did not complete are reported separately and excluded from the score denominator; they force a Quality Gate BLOCK rather than being treated as zero maturity. A BLOCKED assessment cannot report a score above 70%.';
+  'The FinOps Maturity Score equally weights Evidence-Based Capability and Anti-Pattern Control. Capability questions contribute linearly from 0/3 to 3/3. Anti-Pattern Control is the inverse of verified harmful-pattern burden from 0/3 to 3/3. Unknown and not-assessed criteria are excluded and reported separately. Criteria whose verification did not complete are reported separately and excluded from the score denominator. A BLOCKED assessment cannot report a score above 70%.';
 
 const percent = (numerator: number, denominator: number): number =>
   denominator > 0 ? Math.round((numerator / denominator) * 100) : 0;
@@ -57,6 +57,11 @@ export const buildReportViewModel = (result: DiagnosticResult): ReportViewModel 
   const capabilityAttainment = metrics.capability_attainment ?? metrics.maturity_ratio ?? 0;
   const antipatternControl = metrics.antipattern_control ?? metrics.antipattern_clearance ?? 0;
   const rawMaturityScore = metrics.raw_finops_maturity_score ?? metrics.finops_readiness ?? 0;
+  const maturityAssessedCount = metrics.maturity_assessed_count
+    ?? scoreGapBreakdown.maturity_full + scoreGapBreakdown.maturity_partial + scoreGapBreakdown.maturity_low_or_absent;
+  const antipatternScoreEligibleCount = metrics.antipattern_score_eligible_count
+    ?? metrics.antipattern_assessed_count
+    ?? scoreGapBreakdown.antipattern_tested_absent + scoreGapBreakdown.antipattern_uncontrolled;
   const evidenceCheck = result.quality_gate.evidence_check;
   const verificationCompleted = evidenceCheck
     ? evidenceCheck.items.filter(item => !item.adjudication_unresolved && !item.verification_unresolved).length
@@ -127,17 +132,17 @@ export const buildReportViewModel = (result: DiagnosticResult): ReportViewModel 
       },
       {
         value: capabilityAttainment,
-        label: 'Capability Attainment',
-        description: 'Capability score across criteria with completed verification: 3/3 earns one point, 2/3 earns half, and lower verified results earn zero.',
-        denominator: `${scoreGapBreakdown.maturity_full} full · ${scoreGapBreakdown.maturity_partial} partial · ${scoreGapBreakdown.maturity_verification_unresolved} unresolved`,
+        label: 'Evidence-Based Capability',
+        description: 'Supported capability questions across assessed criteria. Unknown criteria are excluded.',
+        denominator: `${result.phase_2_validation.raw_counts.maturity_sub_criteria_met} of ${maturityAssessedCount * 3} assessed questions supported`,
         trend: 'positive',
         color: '#0891b2',
       },
       {
         value: antipatternControl,
         label: 'Anti-Pattern Control',
-        description: 'Control score across criteria with completed verification: tested absence earns one point, one harmful subcriterion earns half, and unknown absence earns zero.',
-        denominator: `${scoreGapBreakdown.antipattern_tested_absent} tested absent · ${scoreGapBreakdown.antipattern_partial_control} partial · ${scoreGapBreakdown.antipattern_verification_unresolved} unresolved`,
+        description: 'Inverse of verified harmful-pattern burden. Unknown and not-assessed anti-patterns are excluded.',
+        denominator: `${antipatternScoreEligibleCount} anti-patterns score-eligible · ${Math.max(antiPatternTotal - antipatternScoreEligibleCount, 0)} excluded`,
         trend: 'positive',
         color: '#7c3aed',
       },
@@ -145,7 +150,7 @@ export const buildReportViewModel = (result: DiagnosticResult): ReportViewModel 
         value: metrics.finops_readiness,
         label: 'FinOps Maturity Score',
         description: metrics.quality_gate_score_cap_reason
-          || 'Equal-weight average of capability attainment and verified anti-pattern control across the complete A–F framework.',
+          || 'Equal-weight average of Evidence-Based Capability and Anti-Pattern Control.',
         denominator: metrics.quality_gate_score_cap_reason
           ? `${Math.round(rawMaturityScore)} calculated · capped at 70 because Quality Gate BLOCKED`
           : `${Math.round(capabilityAttainment)} capability · ${Math.round(antipatternControl)} anti-pattern control`,

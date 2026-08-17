@@ -120,7 +120,9 @@ const metrics = calculateMetrics({
       evidence: 'Evidence-check found a partial cost-blind architecture signal.',
       reasoning: 'Final anti-pattern assessment: Partial finding. Verifier status: weak.',
       antipattern_absence_status: 'partially_present',
-      evidence_quotes: [],
+      assessment_status: 'assessed',
+      evidence_check_status: 'weak',
+      evidence_quotes: [{ quote: 'Partial cost-blind architecture signal.', evidence_source: 'text' }],
     },
   },
 });

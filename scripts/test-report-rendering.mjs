@@ -116,9 +116,16 @@ assert.match(exportSource, /raw values exposed/, 'Master Data should disclose th
 
 const reportViewModelSource = await readFile(new URL('../src/services/reportViewModel.ts', import.meta.url), 'utf8');
 assert.match(reportViewModelSource, /label: 'FinOps Maturity Score'/, 'report gauges should expose the existing FinOps Maturity Score');
+assert.match(reportViewModelSource, /label: 'Evidence-Based Capability'/, 'report gauges should label the evidence-based capability dimension explicitly');
+assert.match(reportViewModelSource, /Inverse of verified harmful-pattern burden/, 'anti-pattern gauge should explain its high-is-good inversion');
 assert.doesNotMatch(reportViewModelSource, /label: 'Observed Friction'/, 'Observed Friction should no longer occupy a primary report gauge');
 assert.match(reportViewModelSource, /Criteria whose verification did not complete are reported separately and excluded from the score denominator/, 'score methodology should distinguish unresolved verification from capability absence');
 assert.match(reportViewModelSource, /A BLOCKED assessment cannot report a score above 70%/, 'score methodology should disclose the Quality Gate cap');
+
+const gaugeComponentSource = await readFile(new URL('../src/components/DashboardComponents.tsx', import.meta.url), 'utf8');
+const svgGaugeSource = await readFile(new URL('../src/services/svgChartService.ts', import.meta.url), 'utf8');
+assert.match(gaugeComponentSource, /High = Good/, 'interactive gauges should state score direction');
+assert.match(svgGaugeSource, /High = Good/, 'exported gauges should state score direction');
 
 console.log(functionalChecksRan
   ? 'report rendering unit tests passed'

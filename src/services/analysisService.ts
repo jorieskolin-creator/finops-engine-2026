@@ -637,7 +637,7 @@ Anti-Pattern Coverage: ${Math.round(validationData.metrics.antipattern_coverage)
 Delivery Integrity: ${validationData.metrics.delivery_integrity}% (criteria the audit returned data for)
 Evidence Density: ${validationData.metrics.evidence_density}% (criteria with verified source coverage, including quote-backed gaps)
 Capability 0/3 Concentration: ${validationData.metrics.maturity_zero_ratio || 0}% (${validationData.metrics.maturity_zero_count || 0} of ${validationData.metrics.maturity_assessed_count || 0} assessed maturity criteria; an evidence-backed low-maturity signal, not missing evidence)
-Anti-Pattern Findings: ${validationData.metrics.antipattern_finding_count || 0} of ${validationData.metrics.antipattern_assessed_count || 0} assessed anti-patterns (${validationData.metrics.antipattern_finding_ratio || 0}%; higher means more harmful patterns evidenced)
+Anti-Pattern Findings: ${validationData.metrics.antipattern_finding_count || 0} of 30 anti-patterns have confirmed or partial signals (${validationData.metrics.antipattern_finding_ratio || 0}%); ${validationData.metrics.antipattern_score_eligible_count || 0} are eligible for the control score
 ${validationData.metrics.readiness_cap_reason ? `Readiness Cap: ${validationData.metrics.readiness_cap_reason}` : ''}
 Verified Anti-Pattern Absences: ${validationData.verified_antipattern_absences.length}
 Unknown / Not-Assessable Anti-Pattern Absences: ${validationData.unknown_antipattern_absences.length}

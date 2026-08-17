@@ -106,6 +106,7 @@ export interface Metrics {
   maturity_zero_count?: number;
   maturity_zero_ratio?: number;
   antipattern_assessed_count?: number;
+  antipattern_score_eligible_count?: number;
   antipattern_finding_count?: number;
   antipattern_finding_ratio?: number;
   /** @deprecated Compatibility alias for maturity_zero_count. */

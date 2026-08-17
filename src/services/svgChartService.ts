@@ -27,7 +27,7 @@ export const svgGaugeCard = (g: GaugeSpec): string => {
   const arcLen = Math.PI * r;
   const filled = (v / 100) * arcLen;
   const empty = arcLen - filled;
-  const trendLabel = g.trend === 'positive' ? 'Target: High' : 'Target: Low';
+  const trendLabel = g.trend === 'positive' ? 'High = Good' : 'High = Bad';
 
   return `
   <div class="gauge-card ${isLarge ? 'gauge-large' : 'gauge-small'}">

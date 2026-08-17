@@ -60,8 +60,8 @@ export const calculateMetrics = (logs: Phase1AuditLogs): Phase2Validation => {
   let testedAbsentCount = 0;
   let assessedMaturityItemCount = 0;
   let assessedAntipatternCount = 0;
-  let capabilityPoints = 0;
-  let antipatternControlPoints = 0;
+  let scoreEligibleAntipatternCount = 0;
+  let scoreEligibleAntipatternFindingCount = 0;
   let maturityFull = 0;
   let maturityPartial = 0;
   let maturityLowOrAbsent = 0;
@@ -106,7 +106,6 @@ export const calculateMetrics = (logs: Phase1AuditLogs): Phase2Validation => {
       verificationUnresolved.push(`[${key}] Maturity verification unavailable; scanner candidate score ${item.original_count ?? item.count}/3 was excluded from validated scoring.`);
       return;
     }
-    maturitySum += Math.max(item.count, 0);
     if (item.status === 'OK') maturityCount++;
     const hasCapabilityEvidence = hasVerifiedSourceCoverage(item, 'maturity');
     if (!hasCapabilityEvidence) {
@@ -116,14 +115,15 @@ export const calculateMetrics = (logs: Phase1AuditLogs): Phase2Validation => {
       );
     } else if (item.count === 3) {
       assessedMaturityItemCount++;
-      capabilityPoints += 1;
+      maturitySum += item.count;
       maturityFull++;
     } else if (item.count === 2) {
       assessedMaturityItemCount++;
-      capabilityPoints += 0.5;
+      maturitySum += item.count;
       maturityPartial++;
     } else {
       assessedMaturityItemCount++;
+      maturitySum += Math.max(item.count, 0);
       if (item.count === 0) maturityZeroCount++;
       maturityLowOrAbsent++;
     }
@@ -151,11 +151,19 @@ export const calculateMetrics = (logs: Phase1AuditLogs): Phase2Validation => {
         : absenceStatus === 'partially_present'
           ? Math.max(item.count, 1)
           : Math.max(item.count, 0);
-    antipatternSum += effectiveBurdenCount;
-    if (absenceStatus !== 'unknown_absent') assessedAntipatternCount++;
+    const hasAntipatternCoverage = hasVerifiedSourceCoverage(item, 'antipattern');
+    const scoreEligible = hasAntipatternCoverage && absenceStatus !== 'unknown_absent';
+    if (hasAntipatternCoverage) assessedAntipatternCount++;
+    if (scoreEligible) {
+      scoreEligibleAntipatternCount++;
+      antipatternSum += effectiveBurdenCount;
+      if (absenceStatus === 'confirmed_present' || absenceStatus === 'partially_present') {
+        scoreEligibleAntipatternFindingCount++;
+      }
+      if (absenceStatus === 'partially_present') antipatternPartialControl++;
+    }
     if (absenceStatus === 'tested_absent') {
       testedAbsentCount++;
-      antipatternControlPoints += 1;
       antipatternTestedAbsent++;
       verifiedAntipatternAbsences.push(`[${key}] Tested absent: ${item.coverage_reason || item.reasoning || item.evidence}`);
     }
@@ -186,11 +194,15 @@ export const calculateMetrics = (logs: Phase1AuditLogs): Phase2Validation => {
   // evidence-density quality gate separately prevents sparse coverage from
   // producing an actionable roadmap or an apparently reliable maturity score.
   const assessedMaturityCount = Math.max(assessedMaturityItemCount, 1);
-  const assessedAntipatternScoreCount = Math.max(assessedAntipatternCount, 1);
+  const assessedAntipatternScoreCount = Math.max(scoreEligibleAntipatternCount, 1);
   const maturity_ratio = (maturityCount / assessedMaturityCount) * 100;
   const maturity_depth = (maturitySum / (assessedMaturityCount * 3)) * 100;
-  const antipattern_ratio = (antipatternCount / assessedAntipatternScoreCount) * 100;
-  const antipattern_burden = (antipatternSum / (assessedAntipatternScoreCount * 3)) * 100;
+  const antipattern_ratio = scoreEligibleAntipatternCount > 0
+    ? (scoreEligibleAntipatternFindingCount / assessedAntipatternScoreCount) * 100
+    : 0;
+  const antipattern_burden = scoreEligibleAntipatternCount > 0
+    ? (antipatternSum / (assessedAntipatternScoreCount * 3)) * 100
+    : 0;
   const antipattern_clearance = Math.round((testedAbsentCount / antipatternCriterionTotal) * 100);
   const antipattern_coverage = Math.round((assessedAntipatternCount / antipatternCriterionTotal) * 100);
   const antipattern_burden_confidence =
@@ -198,8 +210,10 @@ export const calculateMetrics = (logs: Phase1AuditLogs): Phase2Validation => {
       ? 'confirmed'
       : 'unknown';
 
-  const capability_attainment = clampPercent((capabilityPoints / assessedMaturityCount) * 100);
-  const antipattern_control = clampPercent((antipatternControlPoints / assessedAntipatternScoreCount) * 100);
+  const capability_attainment = clampPercent(maturity_depth);
+  const antipattern_control = scoreEligibleAntipatternCount > 0
+    ? clampPercent(100 - antipattern_burden)
+    : 0;
   const raw_finops_maturity_score = clampPercent((capability_attainment + antipattern_control) / 2);
   const finops_readiness = raw_finops_maturity_score;
 
@@ -246,9 +260,10 @@ export const calculateMetrics = (logs: Phase1AuditLogs): Phase2Validation => {
         ? clampPercent((maturityZeroCount / assessedMaturityItemCount) * 100)
         : 0,
       antipattern_assessed_count: assessedAntipatternCount,
+      antipattern_score_eligible_count: scoreEligibleAntipatternCount,
       antipattern_finding_count: antipatternCount,
-      antipattern_finding_ratio: assessedAntipatternCount > 0
-        ? clampPercent((antipatternCount / assessedAntipatternCount) * 100)
+      antipattern_finding_ratio: antipatternCriterionTotal > 0
+        ? clampPercent((antipatternCount / antipatternCriterionTotal) * 100)
         : 0,
       // Compatibility aliases now describe maturity only. Anti-pattern 0/3 is
       // low burden, so pooling it with capability gaps inverted its meaning.
