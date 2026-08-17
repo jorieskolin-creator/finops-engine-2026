@@ -21,7 +21,7 @@ assert.match(loadingComponent, /Six domains execute in parallel/);
 assert.doesNotMatch(loadingComponent, /Claude|GPT|Sonnet|Opus|model/i);
 assert.doesNotMatch(app, /Claude|GPT|Sonnet|Opus/);
 assert.doesNotMatch(app, /Assessment Suite v1\.0/);
-assert.equal((app.match(/FinOps Assessment Engine v2\.0\.0/g) || []).length, 2, 'header and footer should use the current product version');
+assert.equal((app.match(/FinOps Engine v\.2\.0\.0/g) || []).length, 2, 'header and footer should use the current product version');
 assert.match(app, /href="https:\/\/evidence-driven-finops-assessment\.vercel\.app\/"/, 'engine explanation button should use the current public URL');
 assert.doesNotMatch(report, /Model routing mode:|Models:/);
 assert.doesNotMatch(exportedReport, /Model routing mode:|Models:|Model mode /);

@@ -980,7 +980,7 @@ export const generateSummaryReportHtml = (unsafeResult: DiagnosticResult): strin
     ${renderSourceRegistryPacketSummary(result)}
 
     <footer class="footer">
-      <p>FinOps Assessment Engine v${escapeHtml(result.meta.engine_version)} · Summary Report</p>
+      <p>FinOps Engine v.${escapeHtml(result.meta.engine_version)} · Summary Report</p>
       <p>This report is generated deterministically from the validated assessment output. Full audit details are available in the Master Data report.</p>
       ${traceNote}
     </footer>
@@ -1217,7 +1217,7 @@ export const generateReportHtml = (unsafeResult: DiagnosticResult): string => {
 <body>
   <h1>FinOps Master Data</h1>
   <div class="meta">
-    <p>Generated ${escapeHtml(result.meta.timestamp)} · Engine ${escapeHtml(result.meta.engine_version)}</p>
+    <p>Generated ${escapeHtml(result.meta.timestamp)} · FinOps Engine v.${escapeHtml(result.meta.engine_version)}</p>
     ${result.meta.knowledge_base ? `<p>Knowledge Base: ${result.meta.knowledge_base.source === 'remote_blob'
       ? `Remote PDF KB loaded (${escapeHtml(String(result.meta.knowledge_base.document_count))} PDFs${result.meta.knowledge_base.failure_count ? `, ${escapeHtml(String(result.meta.knowledge_base.failure_count))} issue(s)` : ''})`
       : 'Built-in KB fallback'}</p>` : ''}
@@ -1320,7 +1320,7 @@ export const generateReportHtml = (unsafeResult: DiagnosticResult): string => {
   ${renderRunTraceAppendix(result)}
 
   <div class="footer">
-    <p>FinOps Assessment Engine v${escapeHtml(result.meta.engine_version)}</p>
+    <p>FinOps Engine v.${escapeHtml(result.meta.engine_version)}</p>
   </div>
 
   <script id="finops-data" type="application/json">${serializeDiagnosticResultForHtml(result)}</script>

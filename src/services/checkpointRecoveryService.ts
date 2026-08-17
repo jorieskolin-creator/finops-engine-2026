@@ -84,7 +84,7 @@ export async function recoverCheckpointResult(runId: string): Promise<{ result: 
       run_id: runId,
       document_analyzed: 'Recovered temporary assessment',
       timestamp: new Date().toISOString(),
-      engine_version: 'finops-1.0.0',
+      engine_version: '2.0.0',
       source_parse_warnings: ['The pipeline was interrupted. This report was reconstructed from hash-verified temporary checkpoints.'],
     },
     phase_1_audit_logs: phase1Payload.phase_1_audit_logs,

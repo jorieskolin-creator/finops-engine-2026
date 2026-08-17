@@ -59,7 +59,7 @@ import {
 
 const FACT_CHECK_MAX_RETRIES = 2;
 const ID_VALIDATION_MAX_REGENS = 2;
-const ENGINE_VERSION = "finops-1.0.0";
+const ENGINE_VERSION = "2.0.0";
 
 // Pull every [TAC-XXX-NNN] (or [TAC-XXX-NNN-XXX]) reference out of the raw
 // strategy JSON and check each against the verified DB. Returns the list of

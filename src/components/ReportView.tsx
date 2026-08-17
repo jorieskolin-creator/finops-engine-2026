@@ -624,7 +624,7 @@ export const ReportView: React.FC<ReportViewProps> = ({ result, onBack, onDownlo
       <div className="max-w-4xl mx-auto px-6 py-12">
         <div className="mb-8">
           <h1 className="text-4xl font-display font-bold text-slate-900 mb-2">FinOps Maturity Assessment</h1>
-          <p className="text-slate-500">Generated: {result.meta.timestamp} | Engine: {result.meta.engine_version}</p>
+          <p className="text-slate-500">Generated: {result.meta.timestamp} | FinOps Engine v.{result.meta.engine_version}</p>
           {(result.meta.source_parse_warnings?.length ?? 0) > 0 && (
             <p className="text-xs text-amber-700 mt-2">
               Source coverage note: {displaySourceCoverageWarning(result.meta.source_parse_warnings![0])}
@@ -887,7 +887,7 @@ export const ReportView: React.FC<ReportViewProps> = ({ result, onBack, onDownlo
         <QualityGateAppendix gate={result.quality_gate} />
 
         <div className="text-center py-8 border-t border-slate-200 text-sm text-slate-400">
-          <p>FinOps Assessment Engine v{result.meta.engine_version}</p>
+          <p>FinOps Engine v.{result.meta.engine_version}</p>
           {result.meta.knowledge_base && (
             <p>
               Knowledge Base: {result.meta.knowledge_base.source === 'remote_blob'

@@ -98,6 +98,8 @@ assert.doesNotMatch(exportSource, /Evidence summary for the/, 'HTML exports shou
 assert.match(exportSource, /Candidate inclusion measures/, 'Master Data should distinguish retrieval candidate inclusion from evidence sufficiency');
 assert.doesNotMatch(exportSource, /How the maturity score is measured/, 'HTML exports should rely on the concise explanation attached to each gauge');
 assert.match(exportSource, /Assessment BLOCKED/, 'HTML exports should show blocked actionability ahead of maturity classification');
+assert.match(exportSource, /FinOps Engine v\.\$\{escapeHtml\(result\.meta\.engine_version\)\}/, 'HTML exports should render the current FinOps Engine product version');
+assert.doesNotMatch(exportSource, /Engine \$\{escapeHtml\(result\.meta\.engine_version\)\}/, 'HTML exports should not expose the internal version value without the product label');
 assert.equal((exportSource.match(/grid-template-columns: repeat\(5, minmax\(0, 1fr\)\)/g) || []).length, 2, 'both HTML reports should keep all five gauges on one desktop row');
 assert.doesNotMatch(exportSource, /Anti-pattern disposition|renderAntiPatternDisposition/, 'HTML reports should omit the redundant anti-pattern disposition card');
 assert.doesNotMatch(summaryExportSource, /renderScoreEvidenceGaps/, 'Summary Report should leave detailed evidence questions to Master Data');

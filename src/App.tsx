@@ -1291,7 +1291,7 @@ const App: React.FC = () => {
             </div>
             <div className="leading-tight">
               <h1 className="text-lg font-display font-bold tracking-tight text-white group-hover:text-emerald-400 transition-colors">FinOps Engine</h1>
-              <span className="text-[10px] uppercase tracking-widest text-emerald-200 font-semibold group-hover:text-white transition-colors">FinOps Assessment Engine v2.0.0</span>
+              <span className="text-[10px] uppercase tracking-widest text-emerald-200 font-semibold group-hover:text-white transition-colors">FinOps Engine v.2.0.0</span>
             </div>
           </div>
 
@@ -1832,7 +1832,7 @@ const App: React.FC = () => {
               <span className="font-display font-bold text-slate-300">FinOps Assessment Engine</span>
             </div>
             <p className="text-xs text-slate-400 leading-relaxed max-w-xs mx-auto md:mx-0">
-              FinOps Assessment Engine v2.0.0<br />Governed multi-stage architecture
+              FinOps Engine v.2.0.0<br />Governed multi-stage architecture
             </p>
           </div>
 
