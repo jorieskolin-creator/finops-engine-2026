@@ -5,14 +5,14 @@ import { runStage, RunContext } from './modelRouter';
 
 export const EVIDENCE_DENSITY_BLOCK = 30;
 export const EVIDENCE_DENSITY_WARN = 60;
-export const ASSESSED_ZERO_RATIO_BLOCK = 70;
+export const MATURITY_ZERO_RATIO_WARN = 70;
 export const SILENT_AREAS_WARN = 15;
 export const UNSUPPORTED_CLAIMS_BLOCK = 3;
 
 const THRESHOLDS = {
   evidence_density_block: EVIDENCE_DENSITY_BLOCK,
   evidence_density_warn: EVIDENCE_DENSITY_WARN,
-  assessed_zero_ratio_block: ASSESSED_ZERO_RATIO_BLOCK,
+  maturity_zero_ratio_warn: MATURITY_ZERO_RATIO_WARN,
   silent_areas_warn: SILENT_AREAS_WARN,
   unsupported_claims_block: UNSUPPORTED_CLAIMS_BLOCK
 };
@@ -130,9 +130,12 @@ export const runQualityGate = (
       `Evidence density ${phase2.metrics.evidence_density}% < ${EVIDENCE_DENSITY_BLOCK}% floor.`
     );
   }
-  if ((phase2.metrics.assessed_zero_ratio ?? 0) >= ASSESSED_ZERO_RATIO_BLOCK) {
-    blocking_reasons.push(
-      `Assessed zero-result concentration ${Math.round(phase2.metrics.assessed_zero_ratio || 0)}% >= ${ASSESSED_ZERO_RATIO_BLOCK}% integrity limit. The material may describe genuinely low maturity, but it is too dominated by 0/3 results for a directive roadmap without validating the source scope and question alignment.`
+  const maturityZeroRatio = phase2.metrics.maturity_zero_ratio
+    ?? phase2.metrics.assessed_zero_ratio
+    ?? 0;
+  if (maturityZeroRatio >= MATURITY_ZERO_RATIO_WARN) {
+    warnings.push(
+      `Evidence-backed capability gaps are concentrated: ${Math.round(maturityZeroRatio)}% of assessed maturity criteria scored 0/3. This indicates low demonstrated maturity, not missing evidence, and does not by itself block an evidence-bounded roadmap.`
     );
   }
 

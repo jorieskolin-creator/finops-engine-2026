@@ -16,7 +16,6 @@ export interface BracketInputs {
   evidence_density: number;
   delivery_integrity: number;
   silent_areas_count: number;
-  assessed_zero_ratio?: number;
 }
 
 export const HIGH_THRESHOLDS = {
@@ -28,14 +27,12 @@ export const HIGH_THRESHOLDS = {
 export const LOW_THRESHOLDS = {
   evidence_density: 30,
   delivery_integrity: 70,
-  assessed_zero_ratio: 70,
 };
 
 export function computeConfidenceBracket(metrics: BracketInputs): ConfidenceBracket {
   if (
     metrics.evidence_density < LOW_THRESHOLDS.evidence_density ||
-    metrics.delivery_integrity < LOW_THRESHOLDS.delivery_integrity ||
-    (metrics.assessed_zero_ratio ?? 0) >= LOW_THRESHOLDS.assessed_zero_ratio
+    metrics.delivery_integrity < LOW_THRESHOLDS.delivery_integrity
   ) {
     return 'LOW';
   }
@@ -54,10 +51,9 @@ export function bracketFromValidation(v: Phase2Validation): ConfidenceBracket {
     evidence_density: v.metrics.evidence_density,
     delivery_integrity: v.metrics.delivery_integrity,
     silent_areas_count: v.silent_areas.length,
-    assessed_zero_ratio: v.metrics.assessed_zero_ratio,
   });
 }
 
 export function explainBracket(b: ConfidenceBracket, m: BracketInputs): string {
-  return `bracket=${b} evidence_density=${Math.round(m.evidence_density)}% delivery_integrity=${Math.round(m.delivery_integrity)}% assessed_zero_ratio=${Math.round(m.assessed_zero_ratio ?? 0)}% silent_areas=${m.silent_areas_count}`;
+  return `bracket=${b} evidence_density=${Math.round(m.evidence_density)}% delivery_integrity=${Math.round(m.delivery_integrity)}% silent_areas=${m.silent_areas_count}`;
 }

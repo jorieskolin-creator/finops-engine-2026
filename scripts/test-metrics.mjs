@@ -132,8 +132,11 @@ const logs = (maturityFactory, antiFactory) => ({
   ));
   assert.equal(result.metrics.evidence_density, 50, 'quote-backed maturity gaps should count as verified source coverage');
   assert.equal(result.metrics.maturity_depth, 0, 'gap evidence must not improve maturity score');
+  assert.equal(result.metrics.maturity_assessed_count, 30);
+  assert.equal(result.metrics.maturity_zero_count, 30, 'assessed 0/3 capabilities must be retained as evidence-backed gaps');
+  assert.equal(result.metrics.maturity_zero_ratio, 100, 'capability-gap concentration must remain observable independently of evidence density');
   assert.equal(result.metrics.assessed_zero_count, 30, 'assessed 0/3 criteria must be retained as assessed evidence');
-  assert.equal(result.metrics.assessed_zero_ratio, 100, 'zero-result concentration must be observable independently of evidence density');
+  assert.equal(result.metrics.assessed_zero_ratio, 100, 'compatibility zero ratio must describe maturity only');
   assert.equal(result.maturity_gaps.length, 30);
   assert.equal(result.silent_areas.length, 0, 'quote-backed maturity gaps should not be treated as silent');
   assert.match(result.maturity_gaps[0], /Confirmed gap/, 'quote-backed maturity gaps should be labelled as confirmed gaps');
@@ -148,6 +151,23 @@ const logs = (maturityFactory, antiFactory) => ({
   assert.equal(result.metrics.assessed_zero_count, 0, 'unknown criteria must not be misclassified as assessed zeroes');
   assert.equal(result.silent_areas.length, 30, 'silent maturity gaps should remain silent areas');
   assert.match(result.maturity_gaps[0], /Not demonstrated by supplied material/, 'silent maturity gaps should remain evidence gaps, not confirmed capability absences');
+}
+
+{
+  const result = calculateMetrics(logs(
+    () => item(3, true),
+    (_id, index) => index < 12
+      ? anti(0, false, 'tested_absent')
+      : index < 20
+        ? anti(1, true, 'partially_present')
+        : anti(0, false, 'unknown_absent')
+  ));
+  assert.equal(result.metrics.maturity_zero_count, 0, 'anti-pattern 0/3 results must never enter capability-gap concentration');
+  assert.equal(result.metrics.maturity_zero_ratio, 0);
+  assert.equal(result.metrics.antipattern_assessed_count, 20);
+  assert.equal(result.metrics.antipattern_finding_count, 8);
+  assert.equal(result.metrics.antipattern_finding_ratio, 40, 'anti-pattern interpretation must report harmful findings, not zeroes as failures');
+  assert.equal(result.metrics.antipattern_clearance, 40, 'only explicitly tested absences count as positive clearance');
 }
 
 {

@@ -218,6 +218,12 @@ const validateAndSanitizeLogs = (rawData: any): Phase1AuditLogs => {
       || (safeItem.assessment_status === 'not_assessed'
         ? ['unknown', 'unknown', 'unknown']
         : Array.from({ length: 3 }, (_, index) => index < safeItem.count ? 'supported' as const : 'unknown' as const));
+    // Silence describes missing assessment coverage, not score direction.
+    // A quote-backed capability at 0/3 is an assessed gap; an assessed
+    // anti-pattern at 0/3 is low burden. Neither is silent.
+    safeItem.is_silent = isAntipattern && safeItem.antipattern_absence_status
+      ? safeItem.antipattern_absence_status === 'unknown_absent'
+      : safeItem.assessment_status !== 'assessed';
 
     return safeItem;
   };
@@ -544,14 +550,13 @@ export const analyzeDocument = async (
       evidence_density: validationData.metrics.evidence_density,
       delivery_integrity: validationData.metrics.delivery_integrity,
       silent_areas_count: validationData.silent_areas.length,
-      assessed_zero_ratio: validationData.metrics.assessed_zero_ratio,
     });
     console.log(`[FinOps] [${runId}] Synthesis confidence: ${bracketDetail}`);
     serverLog(runId, 'info', 'synthesis_confidence', {
       bracket: confidenceBracket,
       evidence_density: Math.round(validationData.metrics.evidence_density),
       delivery_integrity: Math.round(validationData.metrics.delivery_integrity),
-      assessed_zero_ratio: Math.round(validationData.metrics.assessed_zero_ratio || 0),
+      maturity_zero_ratio: Math.round(validationData.metrics.maturity_zero_ratio || 0),
       silent_areas: validationData.silent_areas.length,
     });
 
@@ -631,9 +636,9 @@ Anti-Pattern Clearance: ${Math.round(validationData.metrics.antipattern_clearanc
 Anti-Pattern Coverage: ${Math.round(validationData.metrics.antipattern_coverage)}%
 Delivery Integrity: ${validationData.metrics.delivery_integrity}% (criteria the audit returned data for)
 Evidence Density: ${validationData.metrics.evidence_density}% (criteria with verified source coverage, including quote-backed gaps)
-Assessed 0/3 Concentration: ${validationData.metrics.assessed_zero_ratio || 0}% (${validationData.metrics.assessed_zero_count || 0} assessed criteria)
+Capability 0/3 Concentration: ${validationData.metrics.maturity_zero_ratio || 0}% (${validationData.metrics.maturity_zero_count || 0} of ${validationData.metrics.maturity_assessed_count || 0} assessed maturity criteria; an evidence-backed low-maturity signal, not missing evidence)
+Anti-Pattern Findings: ${validationData.metrics.antipattern_finding_count || 0} of ${validationData.metrics.antipattern_assessed_count || 0} assessed anti-patterns (${validationData.metrics.antipattern_finding_ratio || 0}%; higher means more harmful patterns evidenced)
 ${validationData.metrics.readiness_cap_reason ? `Readiness Cap: ${validationData.metrics.readiness_cap_reason}` : ''}
-Anti-Pattern Findings: ${validationData.antipattern_findings.length}
 Verified Anti-Pattern Absences: ${validationData.verified_antipattern_absences.length}
 Unknown / Not-Assessable Anti-Pattern Absences: ${validationData.unknown_antipattern_absences.length}
 Maturity Gaps: ${validationData.maturity_gaps.length}

@@ -102,7 +102,15 @@ export interface Metrics {
     antipattern_not_assessed: number;
     antipattern_verification_unresolved: number;
   };
+  maturity_assessed_count?: number;
+  maturity_zero_count?: number;
+  maturity_zero_ratio?: number;
+  antipattern_assessed_count?: number;
+  antipattern_finding_count?: number;
+  antipattern_finding_ratio?: number;
+  /** @deprecated Compatibility alias for maturity_zero_count. */
   assessed_zero_count?: number;
+  /** @deprecated Compatibility alias for maturity_zero_ratio. */
   assessed_zero_ratio?: number;
   antipattern_burden_confidence?: 'confirmed' | 'unknown';
   delivery_integrity: number;
@@ -1387,7 +1395,9 @@ export interface QualityGateResult {
   thresholds: {
     evidence_density_block: number;
     evidence_density_warn: number;
-    assessed_zero_ratio_block: number;
+    maturity_zero_ratio_warn: number;
+    /** @deprecated Older reports may contain this retired threshold. */
+    assessed_zero_ratio_block?: number;
     silent_areas_warn: number;
     unsupported_claims_block: number;
   };

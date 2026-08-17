@@ -72,8 +72,7 @@ export const calculateMetrics = (logs: Phase1AuditLogs): Phase2Validation => {
   let antipatternNotAssessed = 0;
   let maturityVerificationUnresolved = 0;
   let antipatternVerificationUnresolved = 0;
-  let assessedZeroCount = 0;
-  let assessedItemCount = 0;
+  let maturityZeroCount = 0;
   const verifiedAntipatternAbsences: string[] = [];
   const unknownAntipatternAbsences: string[] = [];
   const scoreEvidenceGaps: string[] = [];
@@ -117,18 +116,15 @@ export const calculateMetrics = (logs: Phase1AuditLogs): Phase2Validation => {
       );
     } else if (item.count === 3) {
       assessedMaturityItemCount++;
-      assessedItemCount++;
       capabilityPoints += 1;
       maturityFull++;
     } else if (item.count === 2) {
       assessedMaturityItemCount++;
-      assessedItemCount++;
       capabilityPoints += 0.5;
       maturityPartial++;
     } else {
       assessedMaturityItemCount++;
-      assessedItemCount++;
-      if (item.count === 0) assessedZeroCount++;
+      if (item.count === 0) maturityZeroCount++;
       maturityLowOrAbsent++;
     }
     const catPrefix = key.charAt(0);
@@ -149,11 +145,6 @@ export const calculateMetrics = (logs: Phase1AuditLogs): Phase2Validation => {
       return;
     }
     const absenceStatus = inferAntiPatternAbsenceStatus(item);
-    const hasAntipatternEvidence = hasVerifiedSourceCoverage(item, 'antipattern');
-    if (hasAntipatternEvidence) {
-      assessedItemCount++;
-      if (item.count === 0) assessedZeroCount++;
-    }
     const effectiveBurdenCount =
       absenceStatus === 'confirmed_present'
         ? Math.max(item.count, 3)
@@ -249,8 +240,22 @@ export const calculateMetrics = (logs: Phase1AuditLogs): Phase2Validation => {
         antipattern_not_assessed: antipatternNotAssessed,
         antipattern_verification_unresolved: antipatternVerificationUnresolved,
       },
-      assessed_zero_count: assessedZeroCount,
-      assessed_zero_ratio: assessedItemCount > 0 ? clampPercent((assessedZeroCount / assessedItemCount) * 100) : 0,
+      maturity_assessed_count: assessedMaturityItemCount,
+      maturity_zero_count: maturityZeroCount,
+      maturity_zero_ratio: assessedMaturityItemCount > 0
+        ? clampPercent((maturityZeroCount / assessedMaturityItemCount) * 100)
+        : 0,
+      antipattern_assessed_count: assessedAntipatternCount,
+      antipattern_finding_count: antipatternCount,
+      antipattern_finding_ratio: assessedAntipatternCount > 0
+        ? clampPercent((antipatternCount / assessedAntipatternCount) * 100)
+        : 0,
+      // Compatibility aliases now describe maturity only. Anti-pattern 0/3 is
+      // low burden, so pooling it with capability gaps inverted its meaning.
+      assessed_zero_count: maturityZeroCount,
+      assessed_zero_ratio: assessedMaturityItemCount > 0
+        ? clampPercent((maturityZeroCount / assessedMaturityItemCount) * 100)
+        : 0,
       antipattern_burden_confidence,
       delivery_integrity,
       evidence_density

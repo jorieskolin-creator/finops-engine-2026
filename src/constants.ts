@@ -8,6 +8,8 @@ export const METRIC_DESCRIPTIONS: Record<string, string> = {
     'Share of maturity criteria that scored as fully embedded (3 of 3 sub-criteria met).',
   maturity_depth:
     'Average maturity score across all criteria on a 0–3 scale, normalized to 0–100%. Captures partial progress that maturity_ratio misses.',
+  maturity_zero_ratio:
+    'Share of assessed maturity capabilities that scored 0/3. Higher means more evidence-backed capability gaps; it does not mean evidence was missing.',
   antipattern_ratio:
     'Share of anti-pattern criteria with a confirmed or partial harmful-pattern signal. Higher = more widespread observed friction.',
   antipattern_burden:
@@ -16,6 +18,8 @@ export const METRIC_DESCRIPTIONS: Record<string, string> = {
     'Share of anti-patterns that were meaningfully tested and not found. This is positive only when the source had relevant coverage.',
   antipattern_coverage:
     'Share of anti-pattern criteria that were meaningfully assessed, either as findings or verified absences. Low coverage means absence is unknown, not good.',
+  antipattern_finding_ratio:
+    'Share of assessed anti-patterns with a confirmed or partial harmful-pattern signal. Higher means more anti-pattern burden; a tested 0/3 means no harmful subcriteria were evidenced.',
   delivery_integrity:
     'Did the audit pipeline complete? Share of maturity and anti-pattern criteria the LLM returned valid data for. Below 100% means batches failed.',
   evidence_density:

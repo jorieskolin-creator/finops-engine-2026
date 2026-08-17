@@ -67,7 +67,7 @@ const evidenceCheckOk = {
 {
   const gate = runQualityGate(
     phase1,
-    { ...phase2, metrics: { ...phase2.metrics, assessed_zero_ratio: 70 } },
+    { ...phase2, metrics: { ...phase2.metrics, maturity_zero_ratio: 70 } },
     validationOk,
     validationOk,
     evidenceCheckOk,
@@ -79,8 +79,9 @@ const evidenceCheckOk = {
       failed: false
     }
   );
-  assert.equal(gate.decision, 'BLOCK', 'excessive assessed 0/3 concentration must block roadmap actionability');
-  assert.ok(gate.blocking_reasons.some(reason => reason.includes('0/3 results')));
+  assert.equal(gate.decision, 'WARN', 'evidence-backed capability gaps must not be mistaken for an evidence-integrity blocker');
+  assert.equal(gate.blocking_reasons.length, 0);
+  assert.ok(gate.warnings.some(reason => reason.includes('assessed maturity criteria scored 0/3')));
 }
 
 {
