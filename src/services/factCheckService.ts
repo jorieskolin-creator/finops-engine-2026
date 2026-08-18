@@ -429,6 +429,7 @@ Your job: verify ONLY the evidence summaries and diagnosis. The tactics database
 - Be especially skeptical of claims about organizational ownership, executive sponsorship, culture, tooling adoption, team behavior, savings, and root causes.
 - If the source appears to be a best-practices or case-study document rather than evidence about the audited organization, flag claims that treat document coverage as proven operational adoption.
 - If the underlying source fact is real but the output assigns the wrong category/domain/anti-pattern label, classify unsupported with severity "WARN_MISCLASSIFIED_BUT_REAL" rather than a blocking fact.
+- If Phase 1/2 marks a criterion unsupported, verification_unresolved, or not_assessed, flag wording that calls the criterion a confirmed weak, partial, missing, or immature control. It is an evidence/verification gap unless separate assessed evidence establishes the deficiency.
 - Maximum 15 claims per pass — focus on consequential claims.
 - For every unsupported claim, emit failure_type, severity, and missing_material.
 - For supported claims, emit severity "SUPPORTED", failure_type "not_applicable", and an empty missing_material string.
@@ -491,6 +492,8 @@ ROADMAP GROUNDING:
 - A grounded roadmap action may have zero tactic IDs when no exact tactics DB match exists. Do not flag zero tactic IDs by itself.
 - Activity-playbook details support roadmap HOW language only. They do not support new claims about what the audited organization currently has or does.
 - If the action is grounded but the output uses a wrong label/category for the finding, classify unsupported with severity "WARN_MISCLASSIFIED_BUT_REAL".
+- If a criterion is unsupported, verification_unresolved, or not_assessed, the roadmap may collect evidence for it but may not describe it as a confirmed weak/partial control or prescribe deficiency remediation without another assessed locked finding.
+- Evaluate each required tactic's supplied use and do-not-use conditions. If locked findings establish a do-not-use condition, classify the tactic action as unsupported with severity "WARN_TACTIC_HYGIENE" so it can be recorded as contraindicated rather than forced into the final roadmap.
 - WHY and WHAT may summarize context and intended change, but they may not invent new current-state claims, unsupported financial impacts, or claim that a gap is fully closed unless LOCKED_FINDINGS provide acceptance criteria proving closure.
 - Maximum 15 claims per pass — focus on consequential grounding errors.
 - For every unsupported claim, emit failure_type, severity, and missing_material.

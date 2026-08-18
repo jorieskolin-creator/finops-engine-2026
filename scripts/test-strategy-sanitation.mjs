@@ -171,6 +171,36 @@ assert.equal(hygieneSanitized.factCheck.unsupported_claims.length, 0);
 assert.doesNotMatch(JSON.stringify(hygieneSanitized.strategyData), /low-severity anomaly escalation/);
 assert.doesNotMatch(JSON.stringify(hygieneSanitized.strategyData), /exact verified tactics database patterns/);
 
+const contraindicatedTacticClaim = '[TAC-CULT-003] Executive Sponsor and FinOps Lead establish a new mandate despite the existing funded operating model.';
+const roadmapHygieneSanitized = sanitizeStrategyAfterFactCheck({
+  phase_3_strategy: {
+    remediation_roadmap: [{
+      phase: '3. Walk',
+      actions: [
+        `${contraindicatedTacticClaim} Control: keep scenarios conservative and tied to verified baselines.`,
+        'Retain this independently grounded action.'
+      ]
+    }]
+  }
+}, {
+  attempts: 1,
+  total_claims: 1,
+  supported_count: 0,
+  failed: false,
+  unsupported_claims: [{
+    claim: contraindicatedTacticClaim,
+    classification: 'unsupported',
+    source_location: 'roadmap',
+    failure_type: 'other',
+    severity: 'WARN_TACTIC_HYGIENE',
+    rationale: 'The playbook says not to use this tactic when a funded mandate and accountable operating model already exist.'
+  }]
+});
+assert.deepEqual(roadmapHygieneSanitized.strategyData.phase_3_strategy.remediation_roadmap[0].actions, [
+  'Retain this independently grounded action.'
+]);
+assert.equal(roadmapHygieneSanitized.sanitized[0].action, 'quarantined');
+
 const sanitized = sanitizeStrategyAfterFactCheck(strategyData, factCheck);
 assert.equal(sanitized.sanitized.length, 2);
 assert.equal(sanitized.factCheck.unsupported_claims.length, 1);

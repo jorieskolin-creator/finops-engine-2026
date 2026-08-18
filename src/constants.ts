@@ -258,6 +258,7 @@ ${STRATEGY_PERSONAS_BLOCK}
 7. **SOURCE-TYPE SAFETY:** If the source appears to describe best practices, case studies, or methodology rather than the audited organization's operations, say the audit can assess document coverage but cannot prove operational adoption.
 8. **PRIVACY LANGUAGE:** Do not name individuals. Avoid repeating the assessed organization/legal entity name unless it is essential to preserve meaning; prefer neutral labels such as "the assessed organization", "the finance team", "the engineering team", or "the FinOps team".
 9. **JSON STRING SAFETY:** No double quotes inside JSON values. Use single quotes or asterisks.
+10. **ASSESSMENT-STATUS FIDELITY:** A criterion marked unsupported, verification_unresolved, or not_assessed is an evidence/verification gap. Never describe it as a confirmed weak, partial, missing, or immature control. Only an assessed, source-backed criterion may support current-state strength or deficiency language.
 </strict_constraints>
 
 <task>
@@ -330,7 +331,7 @@ ${FINOPS_METHODOLOGY_CONTEXT}
 1. **LOCKED FINDINGS:** Do not change, reinterpret, or add factual claims to the evidence summary or diagnosis. The roadmap must answer: what actions logically follow from these findings?
 2. **GROUNDING RULE:** Every roadmap action must trace to at least one confirmed gap, confirmed anti-pattern, silent/missing evidence item, or diagnosis statement in LOCKED FINDINGS. Prefer 3-5 actions per phase when the locked findings support them. If a phase has fewer than 3 genuinely grounded actions, return fewer actions rather than inventing filler.
 3. **TACTICS KB SCOPE:** Use the Verified Tactics Database and Tactic Activity Playbook only for prescriptions, mechanism names, case-study references, activity detail, artifacts, roles, and acceptance criteria. Never use them to alter current-state findings.
-4. **TACTIC ID RULE:** Follow the supplied Governed Tactic Selection Plan. Every PRIMARY tactic marked REQUIRED must appear in at least one roadmap action with its exact bracketed ID. For OPTIONAL tactics, include exactly one valid bracketed tactic ID only when the locked finding and applicability guidance support it. Generic evidence-gathering and genuinely supplemental custom actions should omit tactic IDs. Never invent an ID.
+4. **TACTIC ID RULE:** Follow the supplied Governed Tactic Selection Plan. Every PRIMARY tactic marked REQUIRED must be evaluated and initially represented in at least one roadmap action with its exact bracketed ID so independent review can verify applicability. If authoritative locked findings satisfy a supplied do-not-use condition, do not disguise the conflict; the Quality Checker may quarantine that tactic as contraindicated. For OPTIONAL tactics, include exactly one valid bracketed tactic ID only when the locked finding and applicability guidance support it. Generic evidence-gathering and genuinely supplemental custom actions should omit tactic IDs. Never invent an ID.
 5. **PLANNING DECISION:**
    - GO only when evidence is strong and no unresolved fact-check warnings are being regenerated.
    - CONDITIONAL_GO when action is useful but some source claims, assumptions, or confidence limitations remain.
@@ -345,6 +346,7 @@ ${FINOPS_METHODOLOGY_CONTEXT}
 13. **CUSTOM ACTIONS:** When the approved catalog does not fully address a verified finding, a supplemental action may omit a tactic ID. It must state a concrete owner, artifact, acceptance condition, and context-appropriate risk control. Never present a custom action as an approved tactic.
 14. **PRIVACY LANGUAGE:** Do not name individuals. Avoid repeating the assessed organization/legal entity name; use "the assessed organization" or functional labels such as finance, engineering, platform, or FinOps team.
 15. **JSON STRING SAFETY:** No double quotes inside JSON values. Use single quotes or asterisks.
+16. **ASSESSMENT-STATUS FIDELITY:** Treat unsupported, verification_unresolved, and not_assessed criteria only as evidence/verification gaps. Do not call them weak, partial, missing, or immature controls, and do not prescribe remediation for an unverified deficiency. An evidence-collection action is allowed; a control-remediation action requires a separate assessed finding.
 </strict_constraints>
 
 <task>

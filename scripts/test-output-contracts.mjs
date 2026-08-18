@@ -96,4 +96,12 @@ assert.match(forensicPrompts, /evidence at most 180 characters/);
 assert.match(forensicPrompts, /reasoning at most 240 characters/);
 assert.match(forensicPrompts, /no recommendations or repeated definitions/);
 
+const synthesisPrompts = await readFile(new URL('../src/constants.ts', import.meta.url), 'utf8');
+assert.match(synthesisPrompts, /ASSESSMENT-STATUS FIDELITY/);
+assert.match(synthesisPrompts, /unsupported, verification_unresolved, and not_assessed criteria only as evidence\/verification gaps/);
+
+const factCheckPrompts = await readFile(new URL('../src/services/factCheckService.ts', import.meta.url), 'utf8');
+assert.match(factCheckPrompts, /marks a criterion unsupported, verification_unresolved, or not_assessed/);
+assert.match(factCheckPrompts, /supplied use and do-not-use conditions/);
+
 console.log('structured output contract tests passed');

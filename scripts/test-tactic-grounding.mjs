@@ -96,6 +96,7 @@ await writeFile(
 const {
   buildTacticSelectionContext,
   buildTacticSelectionPlan,
+  classifyFinalRequiredTactics,
   findMissingRequiredTacticIds,
   sanitizeRoadmapTacticGrounding,
 } = await import(`file://${modulePath}`);
@@ -176,6 +177,21 @@ assert.deepEqual(findMissingRequiredTacticIds(strategyData, plan), []);
 const missingStrategy = structuredClone(strategyData);
 missingStrategy.phase_3_strategy.remediation_roadmap[0].actions = missingStrategy.phase_3_strategy.remediation_roadmap[0].actions.filter(action => !action.includes('TAC-GOV-002'));
 assert.deepEqual(findMissingRequiredTacticIds(missingStrategy, plan), ['TAC-GOV-002']);
+assert.deepEqual(classifyFinalRequiredTactics(missingStrategy, plan), {
+  contraindicated: [],
+  missing: ['TAC-GOV-002'],
+});
+assert.deepEqual(classifyFinalRequiredTactics(missingStrategy, plan, [{
+  action: 'quarantined',
+  claim: '[TAC-GOV-002] Create a new account-vending control.',
+  rationale: 'The Playbook do-not-use condition is established by the locked findings.',
+  source_location: 'roadmap',
+  failure_type: 'other',
+  severity: 'WARN_TACTIC_HYGIENE',
+}]), {
+  contraindicated: ['TAC-GOV-002'],
+  missing: [],
+});
 
 const result = sanitizeRoadmapTacticGrounding(strategyData, phase2, ['F']);
 assert.equal(result.adjustments.length, 0);

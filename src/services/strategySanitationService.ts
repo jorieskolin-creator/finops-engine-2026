@@ -168,6 +168,10 @@ export const sanitizeStrategyAfterFactCheck = (
   for (const claim of factCheck.unsupported_claims) {
     if (!isBlockingUnsupportedClaim(claim)) {
       if (isSanitizableHygieneClaim(claim)) {
+        if (claim.source_location === 'roadmap' && removeRoadmapAction(data, claim)) {
+          sanitized.push(makeItem(claim, 'quarantined'));
+          continue;
+        }
         const result = sanitizeStringsDeep(data.phase_3_strategy, claim, 'remove');
         if (result.changed) {
           data.phase_3_strategy = result.value;

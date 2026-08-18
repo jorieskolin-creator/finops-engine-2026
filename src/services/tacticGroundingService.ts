@@ -1,4 +1,4 @@
-import type { Phase1AuditLogs, Phase2Validation, StrategicTactic, TacticActivityPlaybookEntry } from '../types';
+import type { Phase1AuditLogs, Phase2Validation, StrategicTactic, StrategySanitationItem, TacticActivityPlaybookEntry } from '../types';
 import { FINOPS_TACTIC_ACTIVITY_PLAYBOOK, FINOPS_TACTICS_LOCAL } from '../knowledge_base';
 import { inferAntiPatternAbsenceStatus } from './antiPatternSemantics';
 import { hasVerifiedSourceCoverage } from './metricsService';
@@ -180,7 +180,7 @@ export const buildTacticSelectionContext = (plan: TacticSelectionPlan): string =
     ? plan.required.map(candidate => compactCandidate(candidate, true)).join('\n\n')
     : 'No PRIMARY tactic was activated by a verified actionable finding.',
   '',
-  'Every REQUIRED tactic must appear in at least one roadmap action with its exact bracketed ID. If prerequisites are not established, use a bounded validation/preparation action for that tactic; do not invent current-state facts.',
+  'Every REQUIRED tactic must be evaluated and initially appear in at least one roadmap action with its exact bracketed ID. If prerequisites are not established, use a bounded validation/preparation action; do not invent current-state facts. If locked findings establish a supplied do-not-use condition, expose that conflict for independent Quality Checker review rather than disguising it.',
   '',
   `Step 2 — Category and semantic candidates (${plan.active_categories.join(', ') || 'none'}):`,
   plan.optional.length > 0
@@ -199,6 +199,23 @@ export const findMissingRequiredTacticIds = (strategyData: any, plan: TacticSele
     .join('\n');
   const present = new Set<string>(Array.from(text.matchAll(TACTIC_RX), match => match[1]));
   return plan.required.map(candidate => candidate.tactic_id).filter(id => !present.has(id));
+};
+
+export const classifyFinalRequiredTactics = (
+  strategyData: any,
+  plan: TacticSelectionPlan,
+  sanitizedClaims: StrategySanitationItem[] = []
+): { contraindicated: string[]; missing: string[] } => {
+  const absent = findMissingRequiredTacticIds(strategyData, plan);
+  const reviewedContraindications = new Set(sanitizedClaims
+    .filter(claim => claim.source_location === 'roadmap'
+      && claim.severity === 'WARN_TACTIC_HYGIENE'
+      && ['quarantined', 'removed'].includes(claim.action))
+    .flatMap(claim => Array.from(claim.claim.matchAll(TACTIC_RX), match => match[1])));
+  return {
+    contraindicated: absent.filter(id => reviewedContraindications.has(id)),
+    missing: absent.filter(id => !reviewedContraindications.has(id)),
+  };
 };
 
 export const buildMissingRequiredTacticAppendix = (

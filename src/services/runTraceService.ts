@@ -196,13 +196,20 @@ const maturityDefinitionById = new Map(FINOPS_CRITERIA.map(criterion => [criteri
 const antipatternDefinitionById = new Map(FINOPS_ANTIPATTERNS.map(criterion => [criterion.id, criterion]));
 const TRACE_STOP_WORDS = new Set([
   'about', 'acceptance', 'action', 'against', 'approved', 'based', 'control', 'define', 'evidence', 'finops',
-  'from', 'implementation', 'implement', 'into', 'owner', 'phase', 'process', 'roadmap', 'through', 'using', 'with'
+  'current', 'defined', 'existing', 'from', 'implementation', 'implement', 'into', 'material', 'owner', 'phase',
+  'process', 'record', 'roadmap', 'target', 'through', 'using', 'with'
 ]);
 
-interface ActionableFinding {
+interface TraceFinding {
   criterionId: string;
   snippet: string;
   searchText: string;
+  evidenceGrounded: boolean;
+}
+
+interface TraceLinkResult {
+  linkedFindings: string[];
+  evidenceGrounded: boolean;
 }
 
 const traceTokens = (value: string): Set<string> => new Set(
@@ -210,49 +217,83 @@ const traceTokens = (value: string): Set<string> => new Set(
     ?.filter(token => !TRACE_STOP_WORDS.has(token)) || []
 );
 
-const actionableFindings = (auditLogs: Phase1AuditLogs): ActionableFinding[] => {
-  const findings: ActionableFinding[] = [];
+const traceFindings = (auditLogs: Phase1AuditLogs): TraceFinding[] => {
+  const findings: TraceFinding[] = [];
   for (const [criterionId, item] of Object.entries(auditLogs.maturity)) {
-    if (item.count < 0 || item.count >= 3 || !hasVerifiedSourceCoverage(item, 'maturity')) continue;
     const definition = maturityDefinitionById.get(criterionId);
+    const evidenceGrounded = hasVerifiedSourceCoverage(item, 'maturity');
+    if (!evidenceGrounded && item.assessment_status !== 'not_assessed' && !item.verification_unresolved) continue;
     findings.push({
       criterionId,
-      snippet: safeSnippet(`[${criterionId}] ${item.reasoning || item.evidence}`, 220),
+      snippet: safeSnippet(`[${criterionId}] ${evidenceGrounded ? item.reasoning || item.evidence : `Assessment gap: ${item.reasoning || item.evidence || 'not assessed'}`}`, 220),
       searchText: [definition?.title, definition?.description, item.reasoning, item.evidence].filter(Boolean).join(' '),
+      evidenceGrounded,
     });
   }
   for (const [criterionId, item] of Object.entries(auditLogs.antipattern)) {
     const absence = inferAntiPatternAbsenceStatus(item);
-    if (!['confirmed_present', 'partially_present'].includes(absence) || !hasVerifiedSourceCoverage(item, 'antipattern')) continue;
+    const evidenceGrounded = ['confirmed_present', 'partially_present'].includes(absence)
+      && hasVerifiedSourceCoverage(item, 'antipattern');
+    if (!evidenceGrounded && item.assessment_status !== 'not_assessed' && !item.verification_unresolved) continue;
     const definition = antipatternDefinitionById.get(criterionId);
     findings.push({
       criterionId: `AP-${criterionId}`,
-      snippet: safeSnippet(`[AP-${criterionId}] ${item.reasoning || item.evidence}`, 220),
+      snippet: safeSnippet(`[AP-${criterionId}] ${evidenceGrounded ? item.reasoning || item.evidence : `Assessment gap: ${item.reasoning || item.evidence || 'not assessed'}`}`, 220),
       searchText: [definition?.title, definition?.description, item.reasoning, item.evidence].filter(Boolean).join(' '),
+      evidenceGrounded,
     });
   }
   return findings;
 };
 
-const linkedFindingsForAction = (action: string, tacticIds: string[], auditLogs: Phase1AuditLogs): string[] => {
-  const allFindings = actionableFindings(auditLogs);
+const criterionIdsInAction = (action: string): Set<string> => {
+  const ids = new Set<string>();
+  const criterionRx = /\b(AP-)?([A-F])([1-5])(?:\s*-\s*(?:\2)?([1-5]))?\b/g;
+  for (const match of action.matchAll(criterionRx)) {
+    const prefix = match[1] || '';
+    const category = match[2];
+    const start = Number(match[3]);
+    const end = Number(match[4] || match[3]);
+    const low = Math.min(start, end);
+    const high = Math.max(start, end);
+    for (let index = low; index <= high; index++) ids.add(`${prefix}${category}${index}`);
+  }
+  return ids;
+};
+
+const linkedFindingsForAction = (action: string, tacticIds: string[], auditLogs: Phase1AuditLogs): TraceLinkResult => {
+  const allFindings = traceFindings(auditLogs);
+  const explicitCriteria = criterionIdsInAction(action);
+  if (explicitCriteria.size > 0) {
+    const direct = allFindings.filter(finding => explicitCriteria.has(finding.criterionId));
+    return {
+      linkedFindings: direct.map(finding => finding.snippet),
+      evidenceGrounded: direct.some(finding => finding.evidenceGrounded),
+    };
+  }
   const mappedCriteria = new Set<string>();
   for (const tacticId of tacticIds) {
     const entry = playbookById.get(tacticId);
     if (!entry) continue;
     for (const binding of [...entry.maturity_bindings, ...entry.antipattern_bindings]) mappedCriteria.add(binding.criterion_id);
   }
-  const candidates = tacticIds.length > 0
+  const candidates = (tacticIds.length > 0
     ? allFindings.filter(finding => mappedCriteria.has(finding.criterionId))
-    : allFindings;
+    : allFindings).filter(finding => finding.evidenceGrounded);
   const actionTokens = traceTokens(action.replace(TACTIC_RX, ' '));
   const ranked = candidates.map(finding => ({
     finding,
     score: Array.from(traceTokens(finding.searchText)).filter(token => actionTokens.has(token)).length,
   })).sort((a, b) => b.score - a.score || a.finding.criterionId.localeCompare(b.finding.criterionId));
-  const meaningful = ranked.filter(candidate => candidate.score >= (tacticIds.length > 0 ? 1 : 2));
-  if (meaningful.length > 0) return meaningful.slice(0, 3).map(candidate => candidate.finding.snippet);
-  return [];
+  const threshold = tacticIds.length > 0 ? 2 : 3;
+  const bestScore = ranked[0]?.score || 0;
+  const meaningful = bestScore >= threshold
+    ? ranked.filter(candidate => candidate.score === bestScore).slice(0, 2)
+    : [];
+  return {
+    linkedFindings: meaningful.map(candidate => candidate.finding.snippet),
+    evidenceGrounded: meaningful.length > 0,
+  };
 };
 
 const tacticPathsFor = (
@@ -267,7 +308,8 @@ const tacticPathsFor = (
     (phase.actions || []).forEach((action, actionIndex) => {
       const tacticIds = Array.from(String(action).matchAll(TACTIC_RX)).map(m => m[1]);
       if (tacticIds.length === 0 && !action) return;
-      const linkedFindings = linkedFindingsForAction(String(action), tacticIds, auditLogs);
+      const links = linkedFindingsForAction(String(action), tacticIds, auditLogs);
+      const linkedFindings = links.linkedFindings;
       paths.push({
         phase: phase.phase || `Phase ${phaseIndex + 1}`,
         action_index: actionIndex,
@@ -276,15 +318,22 @@ const tacticPathsFor = (
         linked_findings: linkedFindings,
         reference_kind: tacticIds.length > 0 ? 'tactic_reference' : 'custom_action',
         grounding_status: tacticIds.length > 0
-          ? linkedFindings.length > 0 ? 'grounded' : 'unknown'
-          : linkedFindings.length > 0 ? 'evidence_grounded_no_tactic_match' : 'unknown',
+          ? links.evidenceGrounded ? 'grounded' : 'unknown'
+          : links.evidenceGrounded
+            ? 'evidence_grounded_no_tactic_match'
+            : linkedFindings.length > 0 ? 'assessment_gap_linked_no_tactic_match' : 'unknown',
         notes: tacticIds.length === 0
           ? [linkedFindings.length > 0
-            ? 'Supplemental action has action-specific customer-finding overlap but no approved tactic ID; semantic support remains subject to roadmap fact-check.'
+            ? links.evidenceGrounded
+              ? 'Supplemental action has action-specific customer-finding overlap but no approved tactic ID; semantic support remains subject to roadmap fact-check.'
+              : 'Supplemental evidence-collection action explicitly references assessment gaps but has no approved tactic ID; it is not evidence of a customer control deficiency.'
             : 'Supplemental action has no deterministic action-specific finding match or approved tactic ID; semantic support remains subject to roadmap fact-check.']
           : [
             ...tacticIds.map(id => `Playbook reference: ${FINOPS_TACTIC_PLAYBOOK_URL}#${id.toLowerCase()}`),
             ...(linkedFindings.length === 0 ? ['No action-specific actionable customer finding was resolved for this tactic reference.'] : []),
+            ...(linkedFindings.length > 0 && !links.evidenceGrounded
+              ? ['The action explicitly references an assessment gap, not an evidence-grounded customer control deficiency.']
+              : []),
           ]
       });
     });
@@ -295,7 +344,7 @@ const tacticPathsFor = (
       action_index: -1,
       action_snippet: safeSnippet(adjustment.action_before, 520),
       tactic_ids: [adjustment.tactic_id],
-      linked_findings: linkedFindingsForAction(adjustment.action_before, [adjustment.tactic_id], auditLogs),
+      linked_findings: linkedFindingsForAction(adjustment.action_before, [adjustment.tactic_id], auditLogs).linkedFindings,
       reference_kind: 'tactic_reference',
       grounding_status: adjustment.action_after ? 'grounded' : 'withheld',
       notes: [
@@ -311,7 +360,7 @@ const tacticPathsFor = (
       action_index: -1,
       action_snippet: safeSnippet(claim.claim, 520),
       tactic_ids: Array.from(claim.claim.matchAll(TACTIC_RX)).map(m => m[1]),
-      linked_findings: linkedFindingsForAction(claim.claim, Array.from(claim.claim.matchAll(TACTIC_RX)).map(m => m[1]), auditLogs),
+      linked_findings: linkedFindingsForAction(claim.claim, Array.from(claim.claim.matchAll(TACTIC_RX)).map(m => m[1]), auditLogs).linkedFindings,
       reference_kind: 'playbook_reference',
       grounding_status: claim.action === 'quarantined' ? 'quarantined' : 'withheld',
       notes: [claim.rationale]

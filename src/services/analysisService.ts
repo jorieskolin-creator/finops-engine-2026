@@ -34,6 +34,7 @@ import {
   buildMissingRequiredTacticAppendix,
   buildTacticSelectionContext,
   buildTacticSelectionPlan,
+  classifyFinalRequiredTactics,
   findMissingRequiredTacticIds,
   sanitizeRoadmapTacticGrounding,
   TacticGroundingAdjustment
@@ -1266,6 +1267,21 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => unresolve
 
 
     let groundingValidation = validatePhase3Grounding(strategyData, validationData, text);
+    const finalRequiredTactics = classifyFinalRequiredTactics(
+      strategyData,
+      tacticSelectionPlan,
+      factCheck.sanitized_claims || []
+    );
+    if (finalRequiredTactics.contraindicated.length > 0) {
+      groundingValidation.warnings.push(
+        `Required tactic evaluation withheld ${finalRequiredTactics.contraindicated.join(', ')} after Quality Checker-confirmed Playbook contraindication.`
+      );
+    }
+    if (finalRequiredTactics.missing.length > 0) {
+      groundingValidation.errors.push(
+        `Required tactic contract is incomplete after final sanitation: ${finalRequiredTactics.missing.join(', ')}.`
+      );
+    }
     groundingValidation.warnings.push(...tacticGroundingWarnings);
     if (groundingValidation.errors.length > 0) {
       console.error(`[FinOps] Phase 3 grounding produced ${groundingValidation.errors.length} error(s); content omitted by logging policy.`);
@@ -1293,6 +1309,21 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => unresolve
         strategyData = sanitation.strategyData;
         factCheck = sanitation.factCheck;
         groundingValidation = validatePhase3Grounding(strategyData, validationData, text);
+        const escalatedRequiredTactics = classifyFinalRequiredTactics(
+          strategyData,
+          tacticSelectionPlan,
+          factCheck.sanitized_claims || []
+        );
+        if (escalatedRequiredTactics.contraindicated.length > 0) {
+          groundingValidation.warnings.push(
+            `Required tactic evaluation withheld ${escalatedRequiredTactics.contraindicated.join(', ')} after Quality Checker-confirmed Playbook contraindication.`
+          );
+        }
+        if (escalatedRequiredTactics.missing.length > 0) {
+          groundingValidation.errors.push(
+            `Required tactic contract is incomplete after final sanitation: ${escalatedRequiredTactics.missing.join(', ')}.`
+          );
+        }
         groundingValidation.warnings.push(...tacticGroundingWarnings);
         qualityGate = runQualityGate(auditLogs, validationData, phase1Validation, groundingValidation, aggregatedRawData.evidence_check, factCheck, sourceRegistryStatus);
       }
