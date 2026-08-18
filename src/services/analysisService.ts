@@ -28,7 +28,14 @@ import { StageId } from "../models";
 import { getModelRoutingConfig, runStage, serverLog } from "./modelRouter";
 import { createRun, failRun, getRun, readyRun, suspendRun } from "./runLifecycleService";
 import { saveCheckpoint, type CheckpointKind } from "./checkpointService";
-import { sanitizeRoadmapTacticGrounding, TacticGroundingAdjustment } from "./tacticGroundingService";
+import {
+  buildMissingRequiredTacticAppendix,
+  buildTacticSelectionContext,
+  buildTacticSelectionPlan,
+  findMissingRequiredTacticIds,
+  sanitizeRoadmapTacticGrounding,
+  TacticGroundingAdjustment
+} from "./tacticGroundingService";
 import { sanitizeBlockedStrategy, sanitizeEvidenceSummaryUncertainty, sanitizeStrategyAfterFactCheck } from "./strategySanitationService";
 import {
   buildDomainPackets,
@@ -658,6 +665,9 @@ CATEGORY BREAKDOWN:
 ${Object.entries(validationData.category_scores).map(([cat, score]) => unresolvedDomainIds.has(cat) ? `  ${cat}: verification unavailable (no validated domain score)` : `  ${cat}: ${score}/15`).join('\n')}
 `;
 
+    const tacticSelectionPlan = buildTacticSelectionPlan(auditLogs, weakDomainIds);
+    const tacticSelectionContext = buildTacticSelectionContext(tacticSelectionPlan);
+
     const compactLockedFindings = (strategy: any): string => JSON.stringify({
       executive_summaries: strategy?.executive_summaries || {},
       evidence_summary: strategy?.evidence_summary || null,
@@ -769,14 +779,16 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => unresolve
         systemInstruction: ROADMAP_SYNTHESIS_SYSTEM_INSTRUCTION,
         regenerated: Boolean(correctionAppendix),
         recordModel: model => { actuals.roadmap_synthesis = model; },
+        validate: value => findMissingRequiredTacticIds(value, tacticSelectionPlan).length === 0,
         buildUserText: formatRetry => [
           ROADMAP_SYNTHESIS_USER_PROMPT,
           confidenceBracket === 'MEDIUM' ? ROADMAP_SYNTHESIS_PROMPT_CAUTIOUS_APPENDIX : '',
           confidenceBracket !== 'LOW' ? `\n\n### THE GOLDEN STANDARD (SSOT)\nYou may ONLY prescribe solutions found in this Knowledge Base. Use it for roadmap actions only; never alter locked findings from it:\n\n${fullSSOT}` : '',
           `\n\n### LOCKED FINDINGS JSON (IMMUTABLE)\n${compactLockedFindings(lockedStrategy)}`,
           `\n\n### DIAGNOSTIC FINDINGS (Phase 1 & 2)\n${handoffSummary}`,
+          `\n\n${tacticSelectionContext}`,
           correctionAppendix || '',
-          formatRetry ? '\n\n### OUTPUT CONTRACT CORRECTION\nThe previous provider chain did not return the required JSON object. Return only the schema-compliant roadmap object without commentary.' : '',
+          formatRetry ? '\n\n### OUTPUT CONTRACT CORRECTION\nThe previous provider chain did not satisfy the complete roadmap contract. Return only the schema-compliant roadmap object, include every REQUIRED tactic from the governed selection plan, and add no commentary.' : '',
         ].join(''),
       });
     };
@@ -1066,7 +1078,30 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => unresolve
           invalid_count: invalid.length,
         });
       }
-      const grounding = sanitizeRoadmapTacticGrounding(data, validationData, weakDomainIds);
+      let grounding = sanitizeRoadmapTacticGrounding(data, validationData, weakDomainIds);
+      let missingRequired = findMissingRequiredTacticIds(grounding.strategyData, tacticSelectionPlan);
+      if (missingRequired.length > 0) {
+        serverLog(runId, 'warn', 'required_tactic_ids_missing', {
+          missing_count: missingRequired.length,
+          tactic_ids: missingRequired.join(','),
+        });
+        const requiredAppendix = buildMissingRequiredTacticAppendix(missingRequired, tacticSelectionPlan);
+        const combined = correctionAppendix ? `${correctionAppendix}\n\n${requiredAppendix}` : requiredAppendix;
+        data = normalizeStrategy(await callPhase3(combined));
+        invalid = findInvalidTacticIds(data, validIds);
+        if (invalid.length > 0) {
+          throw Object.assign(new Error('INVALID_OUTPUT_CONTRACT'), { code: 'INVALID_OUTPUT_CONTRACT' });
+        }
+        grounding = sanitizeRoadmapTacticGrounding(data, validationData, weakDomainIds);
+        missingRequired = findMissingRequiredTacticIds(grounding.strategyData, tacticSelectionPlan);
+      }
+      if (missingRequired.length > 0) {
+        serverLog(runId, 'error', 'required_tactic_ids_persisted', {
+          missing_count: missingRequired.length,
+          tactic_ids: missingRequired.join(','),
+        });
+        throw Object.assign(new Error('INVALID_OUTPUT_CONTRACT'), { code: 'INVALID_OUTPUT_CONTRACT' });
+      }
       tacticGroundingWarnings = grounding.warnings;
       tacticGroundingAdjustments = grounding.adjustments;
       if (grounding.adjustments.length > 0) {

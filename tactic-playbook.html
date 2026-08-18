@@ -1194,7 +1194,7 @@ function renderTactics() {
         </div>
         <div class="tactic-grid">
           ${items.map(tactic => `
-            <article class="tactic-card">
+            <article class="tactic-card" id="${esc(tactic.id.toLowerCase())}">
               <div class="tactic-top">
                 <div>
                   <div class="tactic-category">${esc(tactic.category)}</div>

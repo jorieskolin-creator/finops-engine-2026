@@ -84,11 +84,15 @@ const compactTactics = (tactics: StrategicTactic[] | undefined): string => {
 const compactTacticActivityPlaybook = (entries: TacticActivityPlaybookEntry[] | undefined): string => {
   if (!entries || entries.length === 0) return '(no tactic activity playbook supplied)';
   return entries.map(entry => [
-    `${entry.tactic_id}: maturity=${entry.maturity_criteria.join(', ')}; antipattern=${entry.antipattern_criteria.join(', ')}`,
+    `${entry.tactic_id}: maturity=${entry.maturity_bindings.map(binding => `${binding.criterion_id}:${binding.relationship}`).join(', ')}; antipattern=${entry.antipattern_bindings.map(binding => `${binding.criterion_id}:${binding.relationship}`).join(', ')}`,
     `goal=${entry.activity_goal}`,
+    `use_when=${entry.when_to_use.join('; ')}`,
+    `do_not_use_when=${entry.when_not_to_use.join('; ')}`,
     `activities=${entry.implementation_activities.slice(0, 5).join('; ')}`,
     `artifacts=${entry.expected_artifacts.join(', ')}`,
-    `acceptance=${entry.acceptance_criteria.slice(0, 4).join('; ')}`
+    `semantic_hints=${entry.semantic_hints.join(', ')}`,
+    `acceptance=${entry.acceptance_criteria.slice(0, 4).join('; ')}`,
+    `risk_controls=${entry.risks_and_controls.join('; ')}`
   ].join('\n')).join('\n\n');
 };
 

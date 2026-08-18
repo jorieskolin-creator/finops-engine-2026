@@ -934,6 +934,7 @@ export interface RunTrace {
   kb_version_hashes: Record<string, string>;
   tactic_db_version: string;
   tactic_db_hash: string;
+  playbook_version: string;
   playbook_hash: string;
   created_at: string;
   input_manifest: SourceManifestTrace[];
@@ -1199,7 +1200,7 @@ export interface TacticPathTrace {
   action_snippet: string;
   tactic_ids: string[];
   linked_findings: string[];
-  reference_kind: 'tactic_reference' | 'playbook_reference' | 'kb_reference' | 'customer_evidence';
+  reference_kind: 'tactic_reference' | 'playbook_reference' | 'custom_action' | 'kb_reference' | 'customer_evidence';
   grounding_status: 'grounded' | 'withheld' | 'quarantined' | 'unknown';
   notes?: string[];
 }
@@ -1486,10 +1487,19 @@ export interface StrategicTactic {
   resource_url?: string;
 }
 
+export type TacticRelationship = 'PRIMARY' | 'SUPPORTING' | 'RELATED';
+
+export interface TacticCriterionBinding {
+  criterion_id: string;
+  relationship: TacticRelationship;
+  mandatory_when_activated?: boolean;
+}
+
 export interface TacticActivityPlaybookEntry {
   tactic_id: string;
-  maturity_criteria: string[];
-  antipattern_criteria: string[];
+  category: 'A' | 'B' | 'C' | 'D' | 'E' | 'F';
+  maturity_bindings: TacticCriterionBinding[];
+  antipattern_bindings: TacticCriterionBinding[];
   activity_goal: string;
   when_to_use: string[];
   when_not_to_use: string[];
@@ -1497,6 +1507,7 @@ export interface TacticActivityPlaybookEntry {
   implementation_activities: string[];
   owner_roles: string[];
   expected_artifacts: string[];
+  semantic_hints: string[];
   acceptance_criteria: string[];
   risks_and_controls: string[];
 }

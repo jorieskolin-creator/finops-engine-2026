@@ -1,332 +1,1176 @@
 {
-  "version": "1.0.0",
-  "description": "Execution-depth playbook for approved FinOps tactics. This is prescription/reference material only and must never be used as customer source evidence.",
-  "usage_boundaries": {
-    "allowed_uses": ["roadmap_activity_guidance", "implementation_sequence", "artifact_examples", "acceptance_criteria"],
-    "forbidden_uses": ["customer_current_state_claim", "source_evidence_quote", "summary_evidence", "diagnosis_fact"]
+  "schema_version": "1.0.0",
+  "playbook_id": "FINOPS-TACTIC-PLAYBOOK",
+  "title": "FinOps Tactic Playbook - KB-Aligned Remediation Patterns",
+  "relationship_definitions": {
+    "PRIMARY": "Required when the verified finding activates the binding.",
+    "SUPPORTING": "Evaluated by GenAI during category expansion.",
+    "RELATED": "Available through broader semantic evaluation."
   },
-  "entries": [
+  "tactics": [
     {
       "tactic_id": "TAC-VIS-001",
-      "maturity_criteria": ["A1", "A2", "C1"],
-      "antipattern_criteria": ["AP-A1", "AP-A4"],
-      "activity_goal": "Create enforceable tag and allocation rules that make cloud spend attributable to accountable teams, products, services, or cost centers.",
-      "when_to_use": ["Source evidence shows weak or inconsistent tagging", "Allocation or showback depends on manual cleanup", "Policy exists but enforcement is missing"],
-      "when_not_to_use": ["The locked findings show mature tag compliance with automated enforcement", "The immediate issue is dashboard access rather than allocation quality"],
-      "prerequisite_evidence": ["Current tag taxonomy or policy", "Cloud account or subscription structure", "Known owner/cost-center attributes"],
-      "implementation_activities": ["Define mandatory tag keys and allowed values", "Publish exception and remediation rules", "Deploy policy-as-code checks in cloud accounts and CI/CD", "Run audit mode before enforcement", "Report compliance by team and service"],
-      "owner_roles": ["FinOps lead", "Cloud platform owner", "Engineering lead", "Finance partner"],
-      "expected_artifacts": ["Tagging standard", "Allocation model", "Policy-as-code rules", "Compliance dashboard"],
-      "acceptance_criteria": ["Mandatory tags are defined", "Non-compliant resources are visible by owner", "New deployments are checked before release", "Exceptions have an accountable owner and expiry"],
-      "risks_and_controls": ["Enforcement can break deployments; start with audit mode and time-boxed exceptions"]
-    },
-    {
-      "tactic_id": "TAC-VIS-002",
-      "maturity_criteria": ["A4", "A2", "E2"],
-      "antipattern_criteria": ["AP-A2", "AP-A4", "AP-E1"],
-      "activity_goal": "Give engineering teams usable cost visibility for the services they influence so cost decisions move closer to the work.",
-      "when_to_use": ["Cost data is visible only to finance or administrators", "Teams lack self-service dashboards", "Monthly invoice review is the main cost feedback loop"],
-      "when_not_to_use": ["Dashboards already show team-owned cost with active engineering usage", "The main blocker is allocation data quality rather than dashboard access"],
-      "prerequisite_evidence": ["Billing export or cost API access", "Team/service ownership mapping", "Dashboard platform or reporting tool"],
-      "implementation_activities": ["Define team-level dashboard views", "Publish cost by service, owner, environment, and trend", "Add anomaly and budget context", "Route dashboard access to engineering managers and service owners", "Review adoption in engineering cadence"],
-      "owner_roles": ["Engineering lead", "FinOps analyst", "Platform team", "Finance partner"],
-      "expected_artifacts": ["Engineering cost dashboard", "Owner mapping", "Dashboard usage metric", "Team cost review template"],
-      "acceptance_criteria": ["Each team can see its own cloud cost", "Dashboard data refresh cadence is documented", "Cost view includes allocation owner or service", "Engineering review uses the dashboard"],
-      "risks_and_controls": ["Raw spend without context creates noise; include ownership, trends, and actionable drivers"]
-    },
-    {
-      "tactic_id": "TAC-VIS-003",
-      "maturity_criteria": ["A4", "D4", "C5"],
-      "antipattern_criteria": ["AP-A4", "AP-D4", "AP-C4"],
-      "activity_goal": "Normalize multi-provider cost data so reporting, allocation, and governance use a common cost language.",
-      "when_to_use": ["Cost views are split across providers, accounts, or tools", "Hybrid or multi-cloud scope prevents consolidated reporting", "Procurement or compliance needs consistent reporting"],
-      "when_not_to_use": ["The assessed scope is single-provider and not fragmented", "Basic billing export is missing and must be established first"],
-      "prerequisite_evidence": ["Provider billing exports", "Account/subscription inventory", "Common allocation dimensions"],
-      "implementation_activities": ["List providers and billing sources", "Choose a normalization model or FOCUS-compatible schema", "Map accounts to owners and business units", "Publish a unified reporting layer", "Document provider-specific limitations"],
-      "owner_roles": ["FinOps lead", "Data platform owner", "Cloud platform owner", "Procurement"],
-      "expected_artifacts": ["Normalized cost schema", "Provider mapping table", "Unified report", "Data quality checks"],
-      "acceptance_criteria": ["Major providers appear in one reporting view", "Common dimensions are documented", "Known mapping gaps are visible", "Reporting users can compare provider cost consistently"],
-      "risks_and_controls": ["Normalization can hide provider nuance; keep provider-specific fields available for drilldown"]
-    },
-    {
-      "tactic_id": "TAC-VIS-004",
-      "maturity_criteria": ["A3", "A4", "C2"],
-      "antipattern_criteria": ["AP-A3", "AP-C2"],
-      "activity_goal": "Detect cost anomalies quickly and route them to accountable owners before monthly reporting exposes the issue late.",
-      "when_to_use": ["Cost spikes are discovered late", "Anomaly detection or alert routing is absent", "Budget thresholds exist but ownership response is unclear"],
-      "when_not_to_use": ["Anomaly alerts already route to owners with documented resolution", "The source has no cost data or owner mapping to support alert design"],
-      "prerequisite_evidence": ["Cost data refresh cadence", "Owner or service mapping", "Alerting channel", "Budget or threshold logic"],
-      "implementation_activities": ["Define anomaly thresholds by service and team", "Enable cloud-native anomaly detection", "Route alerts to service owners and finance", "Create triage workflow and escalation rules", "Track alert resolution outcomes"],
-      "owner_roles": ["FinOps lead", "Engineering service owner", "Finance partner", "Platform operations"],
-      "expected_artifacts": ["Anomaly alert rules", "Alert routing matrix", "Triage runbook", "Resolution log"],
-      "acceptance_criteria": ["Alerts have owners", "Thresholds are documented", "Resolution status is tracked", "Recurring false positives are tuned"],
-      "risks_and_controls": ["Alert fatigue reduces trust; start with material thresholds and tune after review"]
-    },
-    {
-      "tactic_id": "TAC-OPT-001",
-      "maturity_criteria": ["B1", "C4", "C2"],
-      "antipattern_criteria": ["AP-B1", "AP-B5"],
-      "activity_goal": "Create a controlled commitment purchasing process for stable usage while avoiding stranded commitments.",
-      "when_to_use": ["Stable on-demand usage exists without commitment strategy", "Commitment coverage or utilization is unknown", "Procurement decisions are not tied to usage forecasts"],
-      "when_not_to_use": ["Usage is volatile and no baseline can be trusted", "The locked findings already show healthy commitment coverage and utilization"],
-      "prerequisite_evidence": ["Historical usage data", "Forecast or demand plan", "Finance approval model", "Commitment utilization reporting"],
-      "implementation_activities": ["Segment stable baseline usage", "Calculate conservative commitment candidates", "Review purchase risk with finance and engineering", "Define coverage and utilization targets", "Monitor utilization after purchase"],
-      "owner_roles": ["FinOps lead", "Finance partner", "Procurement", "Engineering owner"],
-      "expected_artifacts": ["Commitment analysis", "Purchase approval record", "Coverage/utilization dashboard", "Renewal calendar"],
-      "acceptance_criteria": ["Purchase candidates trace to stable usage", "Approval thresholds are documented", "Utilization is monitored", "Renewal decisions use actual performance"],
-      "risks_and_controls": ["Over-commitment creates waste; start conservative and expand only after utilization evidence"]
-    },
-    {
-      "tactic_id": "TAC-OPT-002",
-      "maturity_criteria": ["B2", "D1"],
-      "antipattern_criteria": ["AP-B2"],
-      "activity_goal": "Turn utilization evidence into controlled right-sizing actions that preserve reliability while reducing over-provisioning.",
-      "when_to_use": ["Low utilization or over-provisioning is evidenced", "Right-sizing recommendations are not reviewed", "Production changes lack performance validation"],
-      "when_not_to_use": ["No utilization data exists", "The gap is commitment pricing rather than resource sizing"],
-      "prerequisite_evidence": ["CPU, memory, storage, or network utilization", "Service criticality", "Recommendation tooling", "Change process"],
-      "implementation_activities": ["Collect utilization metrics", "Rank right-sizing candidates by materiality and risk", "Apply non-production changes first", "Validate production changes with owners", "Track accepted, rejected, and deferred recommendations"],
-      "owner_roles": ["Engineering lead", "Service owner", "FinOps analyst", "SRE or operations"],
-      "expected_artifacts": ["Right-sizing candidate list", "Risk classification", "Change records", "Savings tracking log"],
-      "acceptance_criteria": ["Recommendations have owners", "Production changes include validation", "Rejected recommendations have rationale", "Repeated review cadence exists"],
-      "risks_and_controls": ["Aggressive downsizing can harm performance; require workload validation and rollback path"]
-    },
-    {
-      "tactic_id": "TAC-OPT-003",
-      "maturity_criteria": ["B3", "B5"],
-      "antipattern_criteria": ["AP-B3"],
-      "activity_goal": "Remove idle, orphaned, and expired resources through governed lifecycle controls rather than ad hoc cleanup campaigns.",
-      "when_to_use": ["Orphaned or idle resources are evidenced", "Dev/test environments run without schedules", "Ownership or expiry metadata is missing"],
-      "when_not_to_use": ["Resource inventory and lifecycle automation are already operating", "The main issue is pricing strategy rather than waste"],
-      "prerequisite_evidence": ["Resource inventory", "Owner metadata", "Environment tags", "Deletion or retention policy"],
-      "implementation_activities": ["Identify idle and orphaned resources", "Add owner and expiry attributes", "Create cleanup approval workflow", "Automate dev/test scheduling", "Track recurring waste causes"],
-      "owner_roles": ["FinOps analyst", "Cloud platform owner", "Engineering service owner", "Operations"],
-      "expected_artifacts": ["Waste inventory", "Cleanup runbook", "Expiry policy", "Exception register"],
-      "acceptance_criteria": ["Idle candidates are reviewed", "Deleted resources have approval or retention logic", "Exceptions expire", "Waste recurrence is reported"],
-      "risks_and_controls": ["Cleanup can remove needed assets; use soft-delete, owner approval, and recovery windows"]
-    },
-    {
-      "tactic_id": "TAC-OPT-004",
-      "maturity_criteria": ["B4", "D1"],
-      "antipattern_criteria": ["AP-B4"],
-      "activity_goal": "Use spot or preemptible capacity only for workloads that can tolerate interruption and retry safely.",
-      "when_to_use": ["Fault-tolerant workloads are identified but not using spot/preemptible capacity", "Batch, CI/CD, or test workloads run on on-demand capacity", "Interruption handling can be designed"],
-      "when_not_to_use": ["Workloads are latency-sensitive, stateful, or lack retry design", "No workload eligibility evidence exists"],
-      "prerequisite_evidence": ["Workload inventory", "Interruption tolerance", "Retry or checkpoint design", "Environment criticality"],
-      "implementation_activities": ["Identify eligible workloads", "Design graceful interruption handling", "Pilot in non-critical environments", "Set fallback capacity rules", "Measure reliability and cost impact"],
-      "owner_roles": ["Engineering lead", "Platform team", "SRE", "FinOps analyst"],
-      "expected_artifacts": ["Eligibility register", "Interruption handling design", "Pilot results", "Fallback policy"],
-      "acceptance_criteria": ["Eligible workloads are documented", "Interruption behavior is tested", "Fallback exists", "Production adoption follows reliability review"],
-      "risks_and_controls": ["Spot interruption can disrupt service; limit to eligible workloads and test failure paths"]
-    },
-    {
-      "tactic_id": "TAC-OPT-005",
-      "maturity_criteria": ["B5"],
-      "antipattern_criteria": ["AP-B5", "AP-B3"],
-      "activity_goal": "Control storage growth and tiering through documented lifecycle policies and access-pattern evidence.",
-      "when_to_use": ["Storage lifecycle management is absent", "Snapshots or retained data create waste", "Access patterns support tiering decisions"],
-      "when_not_to_use": ["Storage access patterns are unknown", "Retention requirements prevent lifecycle automation"],
-      "prerequisite_evidence": ["Storage inventory", "Access frequency", "Retention requirements", "Snapshot ownership"],
-      "implementation_activities": ["Classify storage by owner and access pattern", "Define lifecycle thresholds", "Pilot tiering on low-risk data", "Automate snapshot cleanup", "Monitor retrieval latency and exceptions"],
-      "owner_roles": ["FinOps analyst", "Storage owner", "Data owner", "Compliance partner"],
-      "expected_artifacts": ["Lifecycle policy", "Storage inventory", "Retention exception list", "Tiering report"],
-      "acceptance_criteria": ["Lifecycle thresholds are documented", "Owners approve retention rules", "Exceptions are visible", "Tiering outcomes are monitored"],
-      "risks_and_controls": ["Aggressive tiering can harm access; validate access patterns and compliance constraints first"]
+      "category": "A",
+      "maturity_bindings": [
+        { "criterion_id": "A1", "relationship": "PRIMARY" },
+        { "criterion_id": "A2", "relationship": "SUPPORTING" },
+        { "criterion_id": "C1", "relationship": "RELATED" }
+      ],
+      "antipattern_bindings": [
+        { "criterion_id": "AP-A1", "relationship": "PRIMARY", "mandatory_when_activated": true },
+        { "criterion_id": "AP-A4", "relationship": "SUPPORTING", "mandatory_when_activated": false }
+      ],
+      "activity_goal": "Establish enforceable tagging and allocation controls that connect material cloud spend to a validated owner and allocation dimension, while keeping exceptions visible and time-bound.",
+      "when_to_use": [
+        "Verified evidence shows missing, inconsistent, or non-enforced allocation tags.",
+        "Material spend cannot be attributed reliably to teams, products, services, or cost centers."
+      ],
+      "when_not_to_use": [
+        "Allocation failure is caused mainly by billing-source ingestion or account hierarchy defects.",
+        "The organization has no approved ownership or cost-allocation model to encode."
+      ],
+      "prerequisite_evidence": [
+        "Tag-key and value coverage by account, service, and spend.",
+        "Approved ownership and allocation dimensions.",
+        "Examples of policy violations, exceptions, and unallocated spend."
+      ],
+      "implementation_activities": [
+        "Define mandatory tag keys, controlled values, scope, and precedence rules.",
+        "Map each rule to an accountable owner and allocation outcome.",
+        "Implement policy-as-code in audit mode and measure violations before enforcement.",
+        "Create remediation, exception approval, expiry, and escalation workflows.",
+        "Phase enforcement by risk and report compliance and unallocated spend by owner."
+      ],
+      "owner_roles": ["FinOps Lead", "Cloud Platform Owner", "Engineering Service Owners", "Finance Controller"],
+      "expected_artifacts": [
+        "Versioned tagging and allocation standard with scope and precedence",
+        "Policy-as-code rules and deployment inventory",
+        "Time-bound exception register with owners and expiry dates",
+        "Compliance and unallocated-spend dashboard"
+      ],
+      "semantic_hints": ["missing tags", "inconsistent tag values", "unallocated spend", "allocation key", "tag policy"],
+      "acceptance_criteria": [
+        "Mandatory rules are approved, versioned, and mapped to allocation outcomes.",
+        "Audit-mode results establish a baseline and enforcement scope.",
+        "Every active exception has an owner, rationale, expiry date, and review path."
+      ],
+      "risks_and_controls": [
+        "Risk: immediate enforcement may block valid deployments. Control: begin in audit mode and phase hard enforcement by tested risk tier.",
+        "Risk: compliant tags may still produce incorrect allocation. Control: reconcile tagged allocation to billing totals and ownership records."
+      ]
     },
     {
       "tactic_id": "TAC-GOV-001",
-      "maturity_criteria": ["C1", "C2", "C5", "A1"],
-      "antipattern_criteria": ["AP-C2", "AP-C3", "AP-C5", "AP-A1"],
-      "activity_goal": "Define and enforce the financial guardrails that make cloud spend governable without turning governance into a manual bottleneck.",
-      "when_to_use": ["Cloud financial policy is missing or fragmented", "Spend approvals, tags, budgets, or exceptions are unclear", "Policy intent exists but enforcement is weak"],
-      "when_not_to_use": ["The issue is only architecture cost estimation", "Policy exists and the gap is cultural adoption or dashboard usage"],
-      "prerequisite_evidence": ["Existing financial policy", "Approval thresholds", "Provisioning process", "Exception process"],
-      "implementation_activities": ["Define spend approval thresholds", "Document provisioning standards", "Add tag and budget requirements", "Create exception workflow", "Automate enforceable controls where feasible"],
-      "owner_roles": ["FinOps lead", "CFO or finance owner", "Cloud platform owner", "Engineering lead"],
-      "expected_artifacts": ["Cloud financial policy", "Approval matrix", "Exception register", "Policy-as-code rules"],
-      "acceptance_criteria": ["Policy requirements are published", "Exceptions have owner and expiry", "Controls are auditable", "Engineering has a clear path to compliant provisioning"],
-      "risks_and_controls": ["Overly strict policy slows delivery; use guardrails and automated feedback before hard gates"]
+      "category": "C",
+      "maturity_bindings": [
+        { "criterion_id": "C1", "relationship": "PRIMARY" },
+        { "criterion_id": "C2", "relationship": "SUPPORTING" },
+        { "criterion_id": "C5", "relationship": "SUPPORTING" },
+        { "criterion_id": "A1", "relationship": "RELATED" }
+      ],
+      "antipattern_bindings": [
+        { "criterion_id": "AP-C2", "relationship": "PRIMARY", "mandatory_when_activated": true },
+        { "criterion_id": "AP-C3", "relationship": "SUPPORTING", "mandatory_when_activated": false },
+        { "criterion_id": "AP-C5", "relationship": "SUPPORTING", "mandatory_when_activated": false },
+        { "criterion_id": "AP-A1", "relationship": "RELATED", "mandatory_when_activated": false }
+      ],
+      "activity_goal": "Create a versioned cloud financial policy framework that assigns decision rights and converts approved spend, provisioning, allocation, budget, and exception rules into proportionate controls.",
+      "when_to_use": [
+        "Verified evidence shows cloud financial policies are absent, fragmented, contradictory, or non-enforced.",
+        "Provisioning and spend decisions lack consistent thresholds, owners, or exceptions."
+      ],
+      "when_not_to_use": [
+        "The immediate issue is non-compliance with an already complete and effectively enforced policy.",
+        "Decision rights and accountable owners have not been agreed."
+      ],
+      "prerequisite_evidence": [
+        "Current policies, approval paths, exception records, and provisioning controls.",
+        "Material spend-risk scenarios and delivery constraints.",
+        "Decision-authority and ownership model."
+      ],
+      "implementation_activities": [
+        "Consolidate current rules and identify conflicts, gaps, and unenforced obligations.",
+        "Define policy scope, decision rights, thresholds, required evidence, and control strength.",
+        "Specify tag, budget, provisioning, commitment, and exception requirements.",
+        "Implement automated feedback, audit checks, and hard gates only where proportionate.",
+        "Approve, publish, version, communicate, and review the policy on a defined cadence."
+      ],
+      "owner_roles": ["FinOps Lead", "Cloud Governance Owner", "Finance Controller", "Engineering Leadership"],
+      "expected_artifacts": [
+        "Versioned cloud financial policy with scope and decision rights",
+        "Approval and escalation matrix with financial thresholds",
+        "Control catalog linking each policy clause to detection and enforcement",
+        "Exception register with owner, rationale, expiry, and compensating control"
+      ],
+      "semantic_hints": ["cloud financial policy", "spend approval", "financial guardrail", "policy exception", "provisioning standard"],
+      "acceptance_criteria": [
+        "Each material policy requirement has an owner, decision right, and measurable control.",
+        "Automated and manual enforcement points are documented and tested.",
+        "Exceptions are time-bound, reviewable, and linked to compensating controls."
+      ],
+      "risks_and_controls": [
+        "Risk: excessive policy friction drives bypass behavior. Control: use proportional guardrails and automated feedback before hard gates.",
+        "Risk: policy exists only on paper. Control: map clauses to owners, telemetry, workflow controls, and compliance reporting."
+      ]
     },
     {
       "tactic_id": "TAC-GOV-002",
-      "maturity_criteria": ["C3", "C1"],
-      "antipattern_criteria": ["AP-C1"],
-      "activity_goal": "Bring cloud account creation under governed provisioning so ownership, billing, and baseline controls are applied by default.",
-      "when_to_use": ["Shadow accounts or unmanaged subscriptions are evidenced", "Account ownership is unclear", "New accounts bypass baseline cost controls"],
-      "when_not_to_use": ["Account governance is mature and the issue is resource-level waste", "No cloud account structure evidence exists"],
-      "prerequisite_evidence": ["Account inventory", "Organization or landing zone structure", "Baseline controls", "Owner assignment process"],
-      "implementation_activities": ["Inventory all accounts and subscriptions", "Define account request workflow", "Apply mandatory baseline controls", "Consolidate billing visibility", "Migrate unmanaged accounts into governance"],
-      "owner_roles": ["Cloud platform owner", "FinOps lead", "Security owner", "Finance partner"],
-      "expected_artifacts": ["Account inventory", "Account vending workflow", "Baseline control set", "Owner register"],
-      "acceptance_criteria": ["New accounts are provisioned through the approved workflow", "Existing accounts have owners", "Billing is consolidated", "Baseline controls are inherited"],
-      "risks_and_controls": ["Unmanaged accounts may host production workloads; migrate with owners instead of terminating abruptly"]
+      "category": "C",
+      "maturity_bindings": [
+        { "criterion_id": "C3", "relationship": "PRIMARY" },
+        { "criterion_id": "C1", "relationship": "SUPPORTING" }
+      ],
+      "antipattern_bindings": [
+        { "criterion_id": "AP-C1", "relationship": "PRIMARY", "mandatory_when_activated": true }
+      ],
+      "activity_goal": "Bring cloud account and subscription creation into a governed vending process that applies ownership, billing, identity, security, network, logging, and lifecycle controls by default.",
+      "when_to_use": [
+        "Verified evidence identifies shadow accounts, unmanaged subscriptions, or ad hoc account creation.",
+        "New accounts are created without consistent owner, billing, or baseline controls."
+      ],
+      "when_not_to_use": [
+        "The environment already uses a complete vending process and the finding concerns post-provisioning policy drift.",
+        "There is no approved target landing-zone or baseline-control model."
+      ],
+      "prerequisite_evidence": [
+        "Complete account and subscription inventory with billing and ownership status.",
+        "Approved landing-zone, identity, network, security, logging, and tagging baselines.",
+        "Examples of unmanaged-account risks and production dependencies."
+      ],
+      "implementation_activities": [
+        "Reconcile provider, identity, billing, and configuration inventories to identify unmanaged scopes.",
+        "Define request, approval, ownership, purpose, budget, and lifecycle requirements.",
+        "Automate account creation and baseline controls through approved templates.",
+        "Register each account in billing, identity, monitoring, and ownership systems.",
+        "Risk-rank and migrate unmanaged accounts with workload owners and rollback plans."
+      ],
+      "owner_roles": ["Cloud Platform Owner", "Cloud Governance Owner", "Security Architect", "FinOps Lead"],
+      "expected_artifacts": [
+        "Reconciled account and subscription inventory with governance status",
+        "Account vending workflow and approval contract",
+        "Versioned baseline-control template with validation checks",
+        "Risk-ranked unmanaged-account migration register"
+      ],
+      "semantic_hints": ["shadow account", "unmanaged subscription", "account vending", "landing zone", "cloud account factory"],
+      "acceptance_criteria": [
+        "Every active in-scope account has a verified owner, purpose, billing scope, and governance status.",
+        "New accounts can be created only through the approved workflow or a recorded exception.",
+        "Baseline-control validation passes before account handover."
+      ],
+      "risks_and_controls": [
+        "Risk: abrupt closure of unmanaged accounts disrupts production. Control: classify dependencies and migrate with owners using staged cutover and rollback.",
+        "Risk: teams bypass a slow vending process. Control: define service targets, automate standard paths, and monitor out-of-band creation."
+      ]
     },
     {
       "tactic_id": "TAC-GOV-003",
-      "maturity_criteria": ["C2", "C1"],
-      "antipattern_criteria": ["AP-C2"],
-      "activity_goal": "Turn budgets from passive reports into accountable thresholds with defined response paths.",
-      "when_to_use": ["Budget overruns are tolerated", "Alerts exist but escalation is unclear", "Teams are not accountable for budget variance"],
-      "when_not_to_use": ["No budget model exists yet", "Production hard stops would create unacceptable service risk"],
-      "prerequisite_evidence": ["Budget owner", "Forecast or baseline", "Alerting tool", "Escalation contacts"],
-      "implementation_activities": ["Define budget thresholds", "Route alerts by owner", "Create escalation stages", "Review variance monthly", "Use hard controls only for safe non-production scopes"],
-      "owner_roles": ["Finance partner", "FinOps lead", "Engineering manager", "Service owner"],
-      "expected_artifacts": ["Budget threshold policy", "Alert routing map", "Variance review log", "Escalation runbook"],
-      "acceptance_criteria": ["Budget alerts have owners", "Escalation thresholds are documented", "Variance is reviewed", "Production safeguards avoid accidental outage"],
-      "risks_and_controls": ["Hard stops can disrupt service; use progressive controls and production-safe escalation"]
-    },
-    {
-      "tactic_id": "TAC-GOV-004",
-      "maturity_criteria": ["E5", "C3", "A5"],
-      "antipattern_criteria": ["AP-C3", "AP-E5", "AP-A5"],
-      "activity_goal": "Measure FinOps by operational outcomes instead of activity volume, meetings, or vanity metrics.",
-      "when_to_use": ["FinOps activity exists but outcomes are unclear", "KPIs track reporting effort rather than savings, waste, or unit economics", "Continuous improvement is not evidenced"],
-      "when_not_to_use": ["No baseline metrics exist at all", "The locked findings do not show outcome-tracking weakness"],
-      "prerequisite_evidence": ["Existing FinOps cadence", "Baseline cost metrics", "Optimization backlog", "Leadership review forum"],
-      "implementation_activities": ["Define outcome KPIs", "Link actions to savings, waste, coverage, or unit economics", "Publish monthly scorecard", "Review progress with accountable owners", "Retire activity-only measures"],
-      "owner_roles": ["FinOps lead", "CFO or finance owner", "Engineering lead", "Business owner"],
-      "expected_artifacts": ["Outcome scorecard", "KPI definitions", "Action-to-outcome register", "Review cadence"],
-      "acceptance_criteria": ["KPIs measure outcomes", "Actions have owners", "Progress is visible monthly", "Activity-only metrics no longer drive status"],
-      "risks_and_controls": ["Outcome targets without reliable baselines damage trust; validate baseline before setting targets"]
+      "category": "C",
+      "maturity_bindings": [
+        { "criterion_id": "C2", "relationship": "PRIMARY" },
+        { "criterion_id": "C1", "relationship": "SUPPORTING" }
+      ],
+      "antipattern_bindings": [
+        { "criterion_id": "AP-C2", "relationship": "PRIMARY", "mandatory_when_activated": true }
+      ],
+      "activity_goal": "Turn approved budgets into progressive, owner-routed controls that prompt timely decisions while protecting production continuity and explicitly governing exceptions.",
+      "when_to_use": [
+        "Verified evidence shows repeated budget overruns without accountable response.",
+        "Budget alerts exist but lack materiality, owner routing, escalation, or decision records."
+      ],
+      "when_not_to_use": [
+        "Budgets are not based on an approved scope, forecast, or ownership model.",
+        "Hard enforcement would affect production without a tested service-continuity exception path."
+      ],
+      "prerequisite_evidence": [
+        "Approved budgets and scope-to-owner mappings.",
+        "Historical variance, seasonality, and response outcomes.",
+        "Production criticality and safe enforcement boundaries."
+      ],
+      "implementation_activities": [
+        "Define progressive forecast, actual-spend, and materiality thresholds by scope.",
+        "Route each threshold to an owner with required response and decision deadline.",
+        "Implement escalation stages from notification to approval or bounded restriction.",
+        "Restrict automated hard controls to tested, reversible, non-production scopes.",
+        "Review variance causes, exceptions, and threshold effectiveness monthly."
+      ],
+      "owner_roles": ["Finance Business Partner", "FinOps Lead", "Budget Owners", "Cloud Operations"],
+      "expected_artifacts": [
+        "Budget threshold and materiality policy by governed scope",
+        "Owner-routing and progressive escalation matrix",
+        "Production-safe enforcement and exception runbook",
+        "Variance decision log with corrective actions"
+      ],
+      "semantic_hints": ["budget overrun", "spend threshold", "budget alert", "quota enforcement", "variance escalation"],
+      "acceptance_criteria": [
+        "Every governed budget has an owner, thresholds, response duties, and escalation path.",
+        "Production-impacting controls require an approved exception and continuity check.",
+        "Material variances produce a recorded decision, action, or accepted rationale."
+      ],
+      "risks_and_controls": [
+        "Risk: hard stops disrupt service. Control: use progressive controls and limit automation to tested reversible scopes.",
+        "Risk: static thresholds generate noise. Control: review materiality, seasonality, forecast changes, and alert outcomes regularly."
+      ]
     },
     {
       "tactic_id": "TAC-ARCH-001",
-      "maturity_criteria": ["D1", "D5", "B2"],
-      "antipattern_criteria": ["AP-D1", "AP-D5", "AP-B2"],
-      "activity_goal": "Review migrated or legacy workloads for cloud-native cost and architecture improvements after the initial move.",
-      "when_to_use": ["Lift-and-shift patterns are evidenced", "Migrated workloads are not right-sized or modernized", "Container/serverless optimization is absent"],
-      "when_not_to_use": ["Workloads are already optimized cloud-native services", "No architecture or workload inventory exists"],
-      "prerequisite_evidence": ["Workload inventory", "Migration status", "Utilization data", "Architecture review capability"],
-      "implementation_activities": ["Rank migrated workloads by cost and risk", "Assess right-sizing and managed-service candidates", "Identify container or serverless opportunities", "Create modernization backlog", "Sequence changes by value and operational risk"],
-      "owner_roles": ["Engineering lead", "Architecture owner", "FinOps analyst", "Platform team"],
-      "expected_artifacts": ["Workload optimization backlog", "Architecture review notes", "Modernization decision records", "Risk-ranked sequence"],
-      "acceptance_criteria": ["High-cost workloads are reviewed", "Modernization candidates have owners", "Architecture decisions include cost impact", "Changes are sequenced safely"],
-      "risks_and_controls": ["Modernization can add delivery risk; prioritize stable high-cost workloads and require rollback plans"]
+      "category": "D",
+      "maturity_bindings": [
+        { "criterion_id": "D1", "relationship": "PRIMARY" },
+        { "criterion_id": "D5", "relationship": "SUPPORTING" },
+        { "criterion_id": "B2", "relationship": "RELATED" }
+      ],
+      "antipattern_bindings": [
+        { "criterion_id": "AP-D1", "relationship": "PRIMARY", "mandatory_when_activated": true },
+        { "criterion_id": "AP-D5", "relationship": "SUPPORTING", "mandatory_when_activated": false },
+        { "criterion_id": "AP-B2", "relationship": "RELATED", "mandatory_when_activated": false }
+      ],
+      "activity_goal": "Create an evidence-ranked modernization backlog for migrated workloads by comparing current cost and operational constraints with feasible cloud-native alternatives and accountable decision points.",
+      "when_to_use": [
+        "Verified evidence shows lift-and-shift workloads retain material legacy cost or operational inefficiency.",
+        "Post-migration optimization has not been performed or decisions are undocumented."
+      ],
+      "when_not_to_use": [
+        "Workloads are scheduled for near-term retirement or repatriation.",
+        "Current cost, dependency, reliability, or owner evidence is insufficient for prioritization."
+      ],
+      "prerequisite_evidence": [
+        "Workload cost, utilization, dependencies, criticality, and service objectives.",
+        "Migration history and known technical debt.",
+        "Owner, lifecycle decision, and delivery constraints."
+      ],
+      "implementation_activities": [
+        "Rank migrated workloads by material cost, stability, technical debt, and business criticality.",
+        "Assess right-sizing, managed-service, container, serverless, storage, and retirement options.",
+        "Estimate value, change effort, reliability risk, and dependency impact for feasible options.",
+        "Record optimize, modernize, retain, retire, or defer decisions with owners.",
+        "Sequence approved work into a funded backlog with validation and rollback expectations."
+      ],
+      "owner_roles": ["Cloud Architect", "Service Owner", "FinOps Analyst", "Engineering Portfolio Owner"],
+      "expected_artifacts": [
+        "Risk- and value-ranked post-migration workload backlog",
+        "Current-versus-target architecture and cost assessment",
+        "Modernization decision records with assumptions and owner",
+        "Sequenced delivery roadmap with validation and rollback gates"
+      ],
+      "semantic_hints": ["lift and shift", "post migration", "legacy workload", "managed service candidate", "modernization backlog"],
+      "acceptance_criteria": [
+        "Priorities combine verified cost, feasibility, reliability, and business criticality.",
+        "Each in-scope workload has a documented disposition and accountable owner.",
+        "Approved changes include outcome measures, validation gates, and rollback criteria."
+      ],
+      "risks_and_controls": [
+        "Risk: modernization cost exceeds achievable value. Control: require option comparison, bounded pilots, and stage-gated funding.",
+        "Risk: architectural change degrades reliability. Control: sequence stable high-value workloads and require service-objective validation and rollback."
+      ]
     },
     {
       "tactic_id": "TAC-ARCH-002",
-      "maturity_criteria": ["D1", "D2", "C1"],
-      "antipattern_criteria": ["AP-D2"],
-      "activity_goal": "Make cost visible before architecture and infrastructure decisions are approved.",
-      "when_to_use": ["Architecture decisions are cost-blind", "IaC or design reviews lack cost estimates", "New deployments do not show cost impact before approval"],
-      "when_not_to_use": ["Architecture reviews already require cost estimates", "The issue is runtime waste after deployment rather than design-time visibility"],
-      "prerequisite_evidence": ["Architecture review process", "IaC pipeline", "Cost estimation tooling option", "Approval workflow"],
-      "implementation_activities": ["Add cost section to design documents", "Integrate cost estimates into IaC pull requests", "Define review thresholds", "Train architects and service owners", "Track decisions with material cost impact"],
-      "owner_roles": ["Engineering lead", "Architecture owner", "Platform team", "FinOps analyst"],
-      "expected_artifacts": ["Cost-aware architecture checklist", "Cost estimate output", "ADR template", "Pipeline check"],
-      "acceptance_criteria": ["Material architecture decisions include cost estimates", "IaC changes show expected cost impact", "Review thresholds are documented", "Exceptions are visible"],
-      "risks_and_controls": ["Estimates are directional; use them for decision quality, not exact forecasts"]
+      "category": "D",
+      "maturity_bindings": [
+        { "criterion_id": "D1", "relationship": "PRIMARY" },
+        { "criterion_id": "D2", "relationship": "SUPPORTING" },
+        { "criterion_id": "C1", "relationship": "RELATED" }
+      ],
+      "antipattern_bindings": [
+        { "criterion_id": "AP-D2", "relationship": "PRIMARY", "mandatory_when_activated": true }
+      ],
+      "activity_goal": "Make material cost implications and uncertainty visible before architecture or infrastructure decisions are approved, without presenting estimates as guaranteed forecasts.",
+      "when_to_use": [
+        "Verified evidence shows architecture decisions omit cost estimates or financial trade-offs.",
+        "Material infrastructure changes are approved without cost ownership or variance thresholds."
+      ],
+      "when_not_to_use": [
+        "The decision has no material or differentiating cost impact.",
+        "The available design is too incomplete to produce even a bounded directional estimate."
+      ],
+      "prerequisite_evidence": [
+        "Proposed architecture, demand assumptions, service objectives, and regions.",
+        "Current unit prices, discount assumptions, and comparable actuals where available.",
+        "Architecture approval workflow and materiality thresholds."
+      ],
+      "implementation_activities": [
+        "Define which decisions require cost analysis and the minimum evidence standard.",
+        "Add demand, unit-price, discount, growth, and uncertainty assumptions to design records.",
+        "Estimate baseline and alternative scenarios with material cost drivers.",
+        "Integrate automated IaC cost deltas and reviewer thresholds where reliable.",
+        "Record the approved option, assumptions, owner, and post-deployment validation date."
+      ],
+      "owner_roles": ["Solution Architect", "Service Owner", "FinOps Analyst", "Architecture Review Board"],
+      "expected_artifacts": [
+        "Cost-aware architecture review checklist and evidence threshold",
+        "Scenario-based cost estimate with assumptions and uncertainty range",
+        "Cost-extended architecture decision record",
+        "IaC cost-delta control and post-deployment validation record"
+      ],
+      "semantic_hints": ["cost blind architecture", "IaC cost estimate", "architecture decision record", "cost scenario", "design review"],
+      "acceptance_criteria": [
+        "Material decisions compare feasible options using consistent assumptions.",
+        "Estimate uncertainty and excluded cost drivers are explicit.",
+        "Actual post-deployment cost is compared with the approved estimate and variance is explained."
+      ],
+      "risks_and_controls": [
+        "Risk: directional estimates are treated as promises. Control: state ranges, assumptions, exclusions, and confidence explicitly.",
+        "Risk: cost dominates reliability or security. Control: evaluate cost alongside mandatory non-financial architecture requirements."
+      ]
     },
     {
       "tactic_id": "TAC-ARCH-003",
-      "maturity_criteria": ["D3", "C2"],
-      "antipattern_criteria": ["AP-D3"],
-      "activity_goal": "Add cost guardrails to autoscaling so scale events remain reliable and financially bounded.",
-      "when_to_use": ["Autoscaling lacks limits or cost guardrails", "Runaway scaling risk is evidenced", "Thresholds and circuit breakers are absent"],
-      "when_not_to_use": ["No autoscaling is used or evidenced", "The issue is static over-provisioning rather than scaling behavior"],
-      "prerequisite_evidence": ["Autoscaling configuration", "Service criticality", "Cost alerting", "Traffic or demand pattern"],
-      "implementation_activities": ["Review maximum scale settings", "Define cost ceiling alerts", "Add circuit-breaker escalation", "Test scaling limits in staging", "Document reliability tradeoffs"],
-      "owner_roles": ["SRE", "Engineering service owner", "Platform team", "FinOps analyst"],
-      "expected_artifacts": ["Autoscaling guardrail policy", "Cost ceiling alerts", "Scaling test results", "Exception process"],
-      "acceptance_criteria": ["Autoscaling limits are documented", "Cost alerts route to owners", "Staging tests validate limits", "Reliability exceptions are approved"],
-      "risks_and_controls": ["Cost limits can affect availability; balance guardrails with service reliability requirements"]
+      "category": "D",
+      "maturity_bindings": [
+        { "criterion_id": "D3", "relationship": "PRIMARY" },
+        { "criterion_id": "C2", "relationship": "RELATED" }
+      ],
+      "antipattern_bindings": [
+        { "criterion_id": "AP-D3", "relationship": "PRIMARY", "mandatory_when_activated": true }
+      ],
+      "activity_goal": "Bound autoscaling cost exposure with workload-specific limits, anomaly escalation, and tested safety mechanisms while preserving agreed reliability objectives.",
+      "when_to_use": [
+        "Verified evidence shows autoscaling has unbounded or unjustified maximums and no cost signal.",
+        "Scale events have caused material unexpected spend or uncontrolled retry amplification."
+      ],
+      "when_not_to_use": [
+        "The workload does not use automatic scaling.",
+        "Demand and reliability behavior have not been characterized sufficiently to set safe bounds."
+      ],
+      "prerequisite_evidence": [
+        "Scaling policies, observed demand peaks, and scale-event history.",
+        "Service objectives, capacity model, and failure behavior.",
+        "Unit cost per scaled resource or request."
+      ],
+      "implementation_activities": [
+        "Model cost and capacity across expected, peak, and failure-induced scale scenarios.",
+        "Set justified minimums, maximums, rate limits, and cost ceiling alerts.",
+        "Define escalation and circuit-breaker behavior for abnormal growth.",
+        "Test legitimate peaks, runaway demand, retry storms, and capacity exhaustion in staging.",
+        "Monitor cost, saturation, availability, and exception use after rollout."
+      ],
+      "owner_roles": ["Service Owner", "SRE", "Cloud Architect", "FinOps Analyst"],
+      "expected_artifacts": [
+        "Workload-specific autoscaling and financial-guardrail policy",
+        "Capacity-to-cost model with approved operating bounds",
+        "Peak, failure, and circuit-breaker test evidence",
+        "Guardrail exception and post-rollout monitoring record"
+      ],
+      "semantic_hints": ["unbounded autoscaling", "scale out cost", "retry storm", "cost ceiling", "circuit breaker"],
+      "acceptance_criteria": [
+        "Scaling bounds are justified by tested demand and reliability scenarios.",
+        "Abnormal scale events generate owner-routed cost and operational alerts.",
+        "Guardrails preserve approved service objectives in tested peak scenarios."
+      ],
+      "risks_and_controls": [
+        "Risk: cost limits cause under-capacity or outage. Control: derive bounds from service objectives and test legitimate peak demand.",
+        "Risk: permissive exceptions make limits ineffective. Control: require owner, rationale, expiry, and monitoring for every exception."
+      ]
+    },
+    {
+      "tactic_id": "TAC-VIS-002",
+      "category": "A",
+      "maturity_bindings": [
+        { "criterion_id": "A4", "relationship": "PRIMARY" },
+        { "criterion_id": "A2", "relationship": "SUPPORTING" },
+        { "criterion_id": "E2", "relationship": "RELATED" }
+      ],
+      "antipattern_bindings": [
+        { "criterion_id": "AP-A2", "relationship": "PRIMARY", "mandatory_when_activated": true },
+        { "criterion_id": "AP-A4", "relationship": "SUPPORTING", "mandatory_when_activated": false },
+        { "criterion_id": "AP-E1", "relationship": "RELATED", "mandatory_when_activated": false }
+      ],
+      "activity_goal": "Provide service-owning teams with decision-ready cost views that link spend movement to ownership, operational drivers, budgets, and actions within existing engineering cadences.",
+      "when_to_use": [
+        "Verified evidence shows cost data is restricted to finance, administrators, or provider consoles.",
+        "Engineering owners cannot explain or act on material service-level cost changes."
+      ],
+      "when_not_to_use": [
+        "Source cost data or ownership mappings are too incomplete to support trusted team views.",
+        "The main gap is authority to act rather than access to cost information."
+      ],
+      "prerequisite_evidence": [
+        "Service-to-team ownership map.",
+        "Validated cost and usage data at an actionable granularity.",
+        "Current engineering review cadence and user-access constraints."
+      ],
+      "implementation_activities": [
+        "Define dashboard decisions, audiences, materiality thresholds, and drill-down paths.",
+        "Publish cost by service, owner, environment, trend, budget, and material driver.",
+        "Add anomaly context and links to accountable action workflows.",
+        "Grant role-based access and embed review into engineering operating cadence.",
+        "Measure adoption, unresolved ownership gaps, and actions initiated from the view."
+      ],
+      "owner_roles": ["FinOps Analyst", "Engineering Managers", "Service Owners", "Data Platform Owner"],
+      "expected_artifacts": [
+        "Role-based engineering cost dashboard with documented metric definitions",
+        "Service and owner mapping with unresolved-gap register",
+        "Team cost-review template with decision and action fields",
+        "Dashboard adoption and actionability report"
+      ],
+      "semantic_hints": ["finance-only visibility", "service cost dashboard", "cost by owner", "engineering showback", "cost driver"],
+      "acceptance_criteria": [
+        "Material services have named owners and accessible cost views.",
+        "Dashboard totals reconcile to the approved reporting source within defined tolerance.",
+        "Engineering reviews record decisions or actions for material variances."
+      ],
+      "risks_and_controls": [
+        "Risk: raw spend views create noise or blame. Control: show trends, drivers, ownership, thresholds, and action paths together.",
+        "Risk: inconsistent metrics erode trust. Control: publish definitions and reconcile dashboard totals to the governed source."
+      ]
+    },
+    {
+      "tactic_id": "TAC-VIS-003",
+      "category": "A",
+      "maturity_bindings": [
+        { "criterion_id": "A4", "relationship": "PRIMARY" },
+        { "criterion_id": "D4", "relationship": "SUPPORTING" },
+        { "criterion_id": "C5", "relationship": "RELATED" }
+      ],
+      "antipattern_bindings": [
+        { "criterion_id": "AP-A4", "relationship": "PRIMARY", "mandatory_when_activated": true },
+        { "criterion_id": "AP-D4", "relationship": "SUPPORTING", "mandatory_when_activated": false },
+        { "criterion_id": "AP-C4", "relationship": "RELATED", "mandatory_when_activated": false }
+      ],
+      "activity_goal": "Create a governed, reconcilable cost model across providers and billing scopes without discarding provider-specific dimensions needed for audit and optimization.",
+      "when_to_use": [
+        "Verified evidence shows fragmented provider, account, or tool-specific cost views.",
+        "Cross-cloud allocation or comparison requires a common semantic and unit model."
+      ],
+      "when_not_to_use": [
+        "Only one provider and one governed billing source are in assessment scope.",
+        "Provider exports are unavailable or cannot be reconciled to invoices."
+      ],
+      "prerequisite_evidence": [
+        "Provider billing exports, schemas, currencies, and invoice totals.",
+        "Account-to-owner and business-unit mappings.",
+        "Known provider-specific discounts, credits, and amortization rules."
+      ],
+      "implementation_activities": [
+        "Inventory billing sources, scopes, currencies, refresh cycles, and data owners.",
+        "Define a FOCUS-compatible or equivalent canonical cost schema and mapping rules.",
+        "Preserve provider-native fields and lineage for drill-down and reconciliation.",
+        "Implement currency, credit, discount, and amortization transformations.",
+        "Reconcile normalized totals to source exports and publish data-quality exceptions."
+      ],
+      "owner_roles": ["FinOps Data Lead", "Cloud Provider Owners", "Finance Controller", "Data Engineer"],
+      "expected_artifacts": [
+        "Versioned canonical cost schema and provider mapping specifications",
+        "Provider/account/owner mapping table",
+        "Invoice and source reconciliation report with tolerances",
+        "Unified reporting layer with provider-native drill-down"
+      ],
+      "semantic_hints": ["multi-cloud billing", "FOCUS schema", "provider normalization", "currency conversion", "billing reconciliation"],
+      "acceptance_criteria": [
+        "All in-scope sources map to the canonical schema with documented exceptions.",
+        "Normalized totals reconcile to approved sources within stated tolerance.",
+        "Users can trace a normalized value to its provider-native record and transformation."
+      ],
+      "risks_and_controls": [
+        "Risk: normalization hides provider nuance. Control: retain provider-native fields and lineage for drill-down.",
+        "Risk: currency or discount treatment distorts comparisons. Control: version transformation rules and reconcile each reporting period."
+      ]
+    },
+    {
+      "tactic_id": "TAC-VIS-004",
+      "category": "A",
+      "maturity_bindings": [
+        { "criterion_id": "A3", "relationship": "PRIMARY" },
+        { "criterion_id": "A4", "relationship": "SUPPORTING" },
+        { "criterion_id": "C2", "relationship": "RELATED" }
+      ],
+      "antipattern_bindings": [
+        { "criterion_id": "AP-A3", "relationship": "PRIMARY", "mandatory_when_activated": true },
+        { "criterion_id": "AP-C2", "relationship": "SUPPORTING", "mandatory_when_activated": false }
+      ],
+      "activity_goal": "Detect material cost deviations early and route each actionable signal to a verified owner through a measurable triage and resolution process.",
+      "when_to_use": [
+        "Verified evidence shows material cost spikes are discovered only during periodic reporting.",
+        "Existing alerts lack owner routing, materiality tuning, or recorded resolution."
+      ],
+      "when_not_to_use": [
+        "Cost data latency is longer than the response window the tactic is expected to provide.",
+        "Ownership gaps prevent reliable alert routing."
+      ],
+      "prerequisite_evidence": [
+        "Historical spend patterns and known seasonality.",
+        "Service and owner mapping.",
+        "Examples of past anomalies, detection delay, and financial impact."
+      ],
+      "implementation_activities": [
+        "Define materiality and sensitivity thresholds by service, environment, and owner.",
+        "Configure anomaly detection with seasonality and known-change context where available.",
+        "Route alerts to accountable owners with severity, evidence, and response targets.",
+        "Implement triage, escalation, closure reason, and false-positive feedback workflows.",
+        "Tune thresholds using precision, response time, and realized impact."
+      ],
+      "owner_roles": ["FinOps Analyst", "Service Owners", "Cloud Operations", "Finance Business Partner"],
+      "expected_artifacts": [
+        "Versioned anomaly rules and materiality thresholds",
+        "Owner-based alert routing and escalation matrix",
+        "Triage runbook with response targets and closure reasons",
+        "Resolution and tuning log with false-positive metrics"
+      ],
+      "semantic_hints": ["cost spike", "unexpected spend", "anomaly alert", "late detection", "alert fatigue"],
+      "acceptance_criteria": [
+        "Material anomalies route to a named owner within the defined latency target.",
+        "Alerts record acknowledgement, decision, resolution, and closure reason.",
+        "Threshold reviews use false-positive rate and missed-impact evidence."
+      ],
+      "risks_and_controls": [
+        "Risk: excessive alerts reduce trust. Control: start with material thresholds and tune from recorded outcomes.",
+        "Risk: automated detection misreads planned changes. Control: enrich alerts with deployment, budget, and seasonality context."
+      ]
+    },
+    {
+      "tactic_id": "TAC-OPT-001",
+      "category": "B",
+      "maturity_bindings": [
+        { "criterion_id": "B1", "relationship": "PRIMARY" },
+        { "criterion_id": "C4", "relationship": "SUPPORTING" },
+        { "criterion_id": "C2", "relationship": "RELATED" }
+      ],
+      "antipattern_bindings": [
+        { "criterion_id": "AP-B1", "relationship": "PRIMARY", "mandatory_when_activated": true },
+        { "criterion_id": "AP-B5", "relationship": "SUPPORTING", "mandatory_when_activated": false }
+      ],
+      "activity_goal": "Convert verified stable demand into conservatively sized commitments governed by forecast confidence, purchase authority, utilization targets, and renewal controls.",
+      "when_to_use": [
+        "Verified evidence shows sustained eligible on-demand usage without a governed commitment strategy.",
+        "Existing commitments lack utilization, coverage, ownership, or renewal oversight."
+      ],
+      "when_not_to_use": [
+        "Demand is volatile, short-lived, or expected to migrate before the commitment term ends.",
+        "Usage eligibility or billing data is not reliable enough to model downside risk."
+      ],
+      "prerequisite_evidence": [
+        "Historical eligible usage and spend by region, service, and purchase family.",
+        "Demand forecast and known architecture changes.",
+        "Current commitment inventory, utilization, expiry, and ownership."
+      ],
+      "implementation_activities": [
+        "Segment stable baseline demand and exclude uncertain or non-eligible usage.",
+        "Model conservative purchase scenarios with utilization and break-even sensitivity.",
+        "Review financial exposure, portability, and architecture risk with accountable owners.",
+        "Approve purchases through defined authority and record assumptions.",
+        "Monitor coverage, utilization, realized savings, and renewal decisions."
+      ],
+      "owner_roles": ["FinOps Lead", "Finance Controller", "Cloud Platform Owner", "Workload Owners"],
+      "expected_artifacts": [
+        "Commitment candidate analysis with scenario and sensitivity assumptions",
+        "Approved purchase decision record with accountable owner",
+        "Coverage, utilization, and realized-savings dashboard",
+        "Renewal and expiry calendar with decision lead times"
+      ],
+      "semantic_hints": ["reserved instances", "savings plans", "committed use", "coverage ratio", "utilization risk"],
+      "acceptance_criteria": [
+        "Purchase quantity is supported by stable eligible usage and documented downside analysis.",
+        "Approval authority, assumptions, and owner are recorded before purchase.",
+        "Utilization and expiry exceptions trigger a defined review action."
+      ],
+      "risks_and_controls": [
+        "Risk: over-commitment creates stranded cost. Control: size against conservative baselines and phase purchases.",
+        "Risk: architecture change invalidates assumptions. Control: require workload-owner review and pre-renewal reassessment."
+      ]
+    },
+    {
+      "tactic_id": "TAC-OPT-002",
+      "category": "B",
+      "maturity_bindings": [
+        { "criterion_id": "B2", "relationship": "PRIMARY" },
+        { "criterion_id": "D1", "relationship": "SUPPORTING" }
+      ],
+      "antipattern_bindings": [
+        { "criterion_id": "AP-B2", "relationship": "PRIMARY", "mandatory_when_activated": true }
+      ],
+      "activity_goal": "Turn sustained utilization evidence into owner-approved right-sizing changes with workload safeguards, rollback paths, and traceable savings outcomes.",
+      "when_to_use": [
+        "Verified evidence shows sustained low utilization, oversizing, or materially inefficient resource shapes.",
+        "Provider recommendations exist but are not risk-ranked, actioned, or tracked."
+      ],
+      "when_not_to_use": [
+        "Utilization history excludes peak cycles or critical performance indicators.",
+        "The workload is scheduled for retirement or modernization before savings can be realized."
+      ],
+      "prerequisite_evidence": [
+        "Representative CPU, memory, storage, network, and latency metrics.",
+        "Workload criticality, service objectives, and owner.",
+        "Current resource cost and change/rollback capability."
+      ],
+      "implementation_activities": [
+        "Build a candidate set using sustained utilization and material cost thresholds.",
+        "Classify candidates by criticality, peak behavior, dependency, and rollback risk.",
+        "Validate recommendations with workload owners and exclude unsupported cases.",
+        "Pilot low-risk changes before controlled production rollout.",
+        "Measure performance, accepted/rejected/deferred status, and realized savings."
+      ],
+      "owner_roles": ["FinOps Analyst", "Service Owner", "SRE or Cloud Operations", "Change Manager"],
+      "expected_artifacts": [
+        "Evidence-backed right-sizing candidate register",
+        "Workload risk classification and owner decision record",
+        "Approved change and rollback plan",
+        "Post-change performance and realized-savings log"
+      ],
+      "semantic_hints": ["low utilization", "oversized instance", "rightsizing", "idle capacity", "provider recommendation"],
+      "acceptance_criteria": [
+        "Every executed change has representative metrics, owner approval, and rollback criteria.",
+        "Post-change service objectives remain within approved bounds.",
+        "Savings are calculated from validated before-and-after cost rather than recommendations alone."
+      ],
+      "risks_and_controls": [
+        "Risk: downsizing harms performance during peaks. Control: include peak windows and service objectives in eligibility tests.",
+        "Risk: estimated savings are overstated. Control: record realized cost after change and account for shifted consumption."
+      ]
+    },
+    {
+      "tactic_id": "TAC-OPT-003",
+      "category": "B",
+      "maturity_bindings": [
+        { "criterion_id": "B3", "relationship": "PRIMARY" },
+        { "criterion_id": "B5", "relationship": "SUPPORTING" }
+      ],
+      "antipattern_bindings": [
+        { "criterion_id": "AP-B3", "relationship": "PRIMARY", "mandatory_when_activated": true }
+      ],
+      "activity_goal": "Replace episodic cleanup with governed lifecycle controls that identify ownership, expiry, inactivity, approval, recovery, and recurring waste causes.",
+      "when_to_use": [
+        "Verified evidence identifies idle, orphaned, expired, or permanently unused resources.",
+        "Cleanup depends on manual campaigns without repeatable owner and recovery controls."
+      ],
+      "when_not_to_use": [
+        "Resource telemetry or ownership data cannot distinguish idle from intermittently required assets.",
+        "Retention, legal-hold, or recovery requirements are unresolved."
+      ],
+      "prerequisite_evidence": [
+        "Resource inventory with owner, age, activity, and cost.",
+        "Workload schedules and retention requirements.",
+        "Past cleanup incidents and recovery constraints."
+      ],
+      "implementation_activities": [
+        "Define resource-specific inactivity, orphan, expiry, and materiality rules.",
+        "Assign owners and classify candidates by operational and retention risk.",
+        "Create notification, approval, quarantine, deletion, and recovery stages.",
+        "Automate low-risk schedules and expiry controls with exception handling.",
+        "Track removed cost, recoveries, exceptions, and recurring creation causes."
+      ],
+      "owner_roles": ["Cloud Operations", "Service Owners", "FinOps Analyst", "Data or Compliance Owner"],
+      "expected_artifacts": [
+        "Risk-ranked waste and orphan inventory",
+        "Lifecycle and expiry policy by resource class",
+        "Cleanup runbook with quarantine and recovery windows",
+        "Time-bound exception and realized-savings register"
+      ],
+      "semantic_hints": ["orphaned resource", "idle resource", "expired environment", "zombie asset", "dev test scheduling"],
+      "acceptance_criteria": [
+        "Deletion candidates meet documented inactivity and ownership checks.",
+        "Material removals use approval, quarantine, and recovery controls.",
+        "Recurring waste causes are assigned preventive actions, not only cleanup actions."
+      ],
+      "risks_and_controls": [
+        "Risk: cleanup removes a needed asset. Control: require owner notification, quarantine, and tested recovery windows.",
+        "Risk: retention duties are breached. Control: integrate legal, backup, and data-retention checks before deletion."
+      ]
+    },
+    {
+      "tactic_id": "TAC-OPT-004",
+      "category": "B",
+      "maturity_bindings": [
+        { "criterion_id": "B4", "relationship": "PRIMARY" },
+        { "criterion_id": "D1", "relationship": "SUPPORTING" }
+      ],
+      "antipattern_bindings": [
+        { "criterion_id": "AP-B4", "relationship": "PRIMARY", "mandatory_when_activated": true }
+      ],
+      "activity_goal": "Adopt discounted interruptible capacity only where workload design, retry behavior, fallback capacity, and service objectives make interruption financially and operationally acceptable.",
+      "when_to_use": [
+        "Verified evidence identifies batch, stateless, distributed, or delay-tolerant workloads using only on-demand capacity.",
+        "Workload owners can test interruption and fallback behavior."
+      ],
+      "when_not_to_use": [
+        "The workload cannot tolerate interruption, checkpoint, retry, or capacity unavailability.",
+        "Regulatory or service-level constraints require guaranteed capacity."
+      ],
+      "prerequisite_evidence": [
+        "Workload interruption tolerance and recovery design.",
+        "Availability objectives, runtime duration, and demand pattern.",
+        "Provider interruption history and alternative-capacity pricing."
+      ],
+      "implementation_activities": [
+        "Classify workload eligibility using interruption, state, duration, and service-objective criteria.",
+        "Design checkpoint, retry, graceful termination, and fallback behavior.",
+        "Pilot with bounded capacity in a non-critical or recoverable scope.",
+        "Test forced interruption and loss-of-capacity scenarios.",
+        "Measure completion reliability, fallback usage, and net realized savings."
+      ],
+      "owner_roles": ["Workload Owner", "Cloud Architect", "SRE", "FinOps Analyst"],
+      "expected_artifacts": [
+        "Workload eligibility and exclusion register",
+        "Interruption, retry, checkpoint, and fallback design",
+        "Forced-interruption test evidence",
+        "Pilot reliability and net-savings report"
+      ],
+      "semantic_hints": ["spot instance", "preemptible capacity", "interruptible workload", "checkpoint retry", "fallback capacity"],
+      "acceptance_criteria": [
+        "Eligible workloads meet documented interruption and recovery criteria.",
+        "Forced-interruption tests complete within approved service bounds.",
+        "Net savings include fallback, retry, and operational overhead."
+      ],
+      "risks_and_controls": [
+        "Risk: interruption causes failed work or service impact. Control: restrict eligibility and test checkpoint, retry, and fallback paths.",
+        "Risk: savings disappear through retries or fallback. Control: measure net cost per successful workload outcome."
+      ]
     },
     {
       "tactic_id": "TAC-CULT-001",
-      "maturity_criteria": ["E2", "A4"],
-      "antipattern_criteria": ["AP-E1", "AP-A2"],
-      "activity_goal": "Give engineering teams cost accountability together with the visibility and authority needed to act.",
-      "when_to_use": ["Cost is treated as finance-only or IT-only", "Engineering teams lack accountability for spend", "Teams cannot see or influence their service cost"],
-      "when_not_to_use": ["Engineering already owns cost outcomes with dashboards and decision rights", "The issue is financial policy rather than team ownership"],
-      "prerequisite_evidence": ["Team ownership map", "Cost dashboard or data source", "Engineering review cadence", "Leadership support"],
-      "implementation_activities": ["Assign cost ownership by service or team", "Add cost review to engineering cadence", "Define team-level cost metrics", "Create escalation and support path", "Recognize optimization wins"],
-      "owner_roles": ["Engineering lead", "FinOps lead", "Engineering managers", "Finance partner"],
-      "expected_artifacts": ["Team cost ownership map", "Review agenda", "Team scorecard", "Optimization backlog"],
-      "acceptance_criteria": ["Teams know their cost owner", "Cost is reviewed in engineering cadence", "Teams have actionable data", "Optimization work has owners"],
-      "risks_and_controls": ["Accountability without control creates blame; pair expectations with tooling and support"]
+      "category": "E",
+      "maturity_bindings": [
+        { "criterion_id": "E2", "relationship": "PRIMARY" },
+        { "criterion_id": "A4", "relationship": "SUPPORTING" }
+      ],
+      "antipattern_bindings": [
+        { "criterion_id": "AP-E1", "relationship": "PRIMARY", "mandatory_when_activated": true },
+        { "criterion_id": "AP-A2", "relationship": "SUPPORTING", "mandatory_when_activated": false }
+      ],
+      "activity_goal": "Assign cloud-cost accountability to service-owning engineering teams together with the visibility, decision rights, support, and feedback needed to improve cost without creating blame.",
+      "when_to_use": [
+        "Verified evidence shows cloud cost is treated as a finance-only or central-IT responsibility.",
+        "Engineering teams influence spend but lack explicit ownership, metrics, or decision cadence."
+      ],
+      "when_not_to_use": [
+        "Teams lack reliable service ownership or actionable cost data.",
+        "Leadership intends to transfer accountability without authority, enablement, or support."
+      ],
+      "prerequisite_evidence": [
+        "Service-to-team ownership and decision-right mappings.",
+        "Actionable team-level cost and operational data.",
+        "Existing engineering planning, review, and escalation cadences."
+      ],
+      "implementation_activities": [
+        "Define cost responsibilities and decision rights by service and role.",
+        "Provide team-level cost, unit, trend, anomaly, and allocation views.",
+        "Embed material cost review and optimization decisions into engineering cadence.",
+        "Create FinOps coaching, escalation, and platform-support paths.",
+        "Track actions, realized outcomes, unresolved blockers, and repeatable wins."
+      ],
+      "owner_roles": ["Engineering Leadership", "Service Owners", "FinOps Lead", "Finance Business Partner"],
+      "expected_artifacts": [
+        "Service-level cost ownership and decision-right map",
+        "Engineering cost scorecard with governed metric definitions",
+        "Cost-review agenda and decision/action register",
+        "FinOps enablement and escalation model"
+      ],
+      "semantic_hints": ["finance only", "engineering ownership", "service cost owner", "team showback", "cost accountability"],
+      "acceptance_criteria": [
+        "Material services have named owners with defined cost decisions and escalation rights.",
+        "Teams receive reconciled, actionable cost views in their normal operating cadence.",
+        "Accountability reviews record decisions, blockers, and outcomes without using spend alone as performance judgment."
+      ],
+      "risks_and_controls": [
+        "Risk: accountability without authority creates blame. Control: pair ownership with visibility, decision rights, enablement, and support.",
+        "Risk: teams optimize local spend at system expense. Control: include reliability, product, and shared-platform constraints in decisions."
+      ]
     },
     {
       "tactic_id": "TAC-CULT-002",
-      "maturity_criteria": ["E4", "C3"],
-      "antipattern_criteria": ["AP-E4"],
-      "activity_goal": "Create a working cadence between finance, engineering, and business stakeholders so cloud cost decisions are shared.",
-      "when_to_use": ["Finance and engineering operate separately", "FinOps decisions lack cross-functional participation", "Cost questions are lost between teams"],
-      "when_not_to_use": ["A cross-functional cadence already operates with decisions and owners", "The gap is purely technical cost visibility"],
-      "prerequisite_evidence": ["Stakeholder map", "Existing review forum", "Cost dashboard or report", "Decision ownership"],
-      "implementation_activities": ["Define monthly FinOps review", "Set required inputs and outputs", "Assign decision owners", "Track action items", "Create shared cost vocabulary"],
-      "owner_roles": ["FinOps lead", "Finance partner", "Engineering lead", "Business owner"],
-      "expected_artifacts": ["FinOps review agenda", "Decision log", "Action register", "Stakeholder RACI"],
-      "acceptance_criteria": ["Review cadence has required participants", "Decisions are recorded", "Actions have owners", "Finance and engineering use the same cost view"],
-      "risks_and_controls": ["Meetings without decisions become theater; require inputs, outputs, and action tracking"]
+      "category": "E",
+      "maturity_bindings": [
+        { "criterion_id": "E4", "relationship": "PRIMARY" },
+        { "criterion_id": "C3", "relationship": "SUPPORTING" }
+      ],
+      "antipattern_bindings": [
+        { "criterion_id": "AP-E4", "relationship": "PRIMARY", "mandatory_when_activated": true }
+      ],
+      "activity_goal": "Create a decision-oriented cadence connecting finance, engineering, product, and business owners around a shared evidence pack, explicit authorities, and tracked outcomes.",
+      "when_to_use": [
+        "Verified evidence shows finance, engineering, and business stakeholders make cloud-cost decisions separately.",
+        "Existing FinOps meetings lack required inputs, decisions, owners, or closure tracking."
+      ],
+      "when_not_to_use": [
+        "The required cost, forecast, ownership, or action data cannot be prepared reliably.",
+        "The forum has no delegated authority or escalation destination."
+      ],
+      "prerequisite_evidence": [
+        "Stakeholder and decision-right map.",
+        "Recurring decisions, unresolved cross-functional issues, and current meeting outputs.",
+        "Governed cost, forecast, variance, anomaly, and action data."
+      ],
+      "implementation_activities": [
+        "Define forum scope, decision rights, escalation path, cadence, and participants.",
+        "Standardize the pre-read: material variances, forecasts, anomalies, commitments, and open actions.",
+        "Use a shared vocabulary and require decision-ready proposals for material items.",
+        "Record decisions, owners, due dates, assumptions, and unresolved dependencies.",
+        "Review closure rate and retire agenda items that do not produce decisions or learning."
+      ],
+      "owner_roles": ["FinOps Lead", "Finance Business Partner", "Engineering Representative", "Product or Business Owner"],
+      "expected_artifacts": [
+        "FinOps forum charter with scope and decision authority",
+        "Standard pre-read and meeting agenda",
+        "Decision and escalation log with owners and due dates",
+        "Action closure and recurring-blocker report"
+      ],
+      "semantic_hints": ["finance engineering silo", "FinOps cadence", "cloud cost council", "decision forum", "shared cost vocabulary"],
+      "acceptance_criteria": [
+        "The forum receives complete required inputs before each review.",
+        "Material items end in a decision, assigned action, or explicit escalation.",
+        "Overdue actions and recurring blockers are visible to accountable leaders."
+      ],
+      "risks_and_controls": [
+        "Risk: the cadence becomes meeting theater. Control: define decision rights, mandatory inputs, outputs, owners, and closure metrics.",
+        "Risk: conflicting metrics stall decisions. Control: use governed definitions and reconcile the pre-read before the forum."
+      ]
     },
     {
       "tactic_id": "TAC-CULT-003",
-      "maturity_criteria": ["E1", "E3", "C3"],
-      "antipattern_criteria": ["AP-E3"],
-      "activity_goal": "Turn executive interest in FinOps into funded ownership, mandate, and measurable operating capacity.",
-      "when_to_use": ["FinOps sponsorship is aspirational", "No funded team or mandate exists", "Investment case for tooling or headcount is missing"],
-      "when_not_to_use": ["A funded FinOps function with executive mandate already exists", "Evidence is too weak to estimate investment need"],
-      "prerequisite_evidence": ["Cloud spend baseline", "Optimization opportunity evidence", "Stakeholder sponsor", "Candidate operating model"],
-      "implementation_activities": ["Document FinOps mandate", "Build investment case from verified spend and gaps", "Define team responsibilities", "Set initial measurable milestones", "Secure executive decision forum"],
-      "owner_roles": ["CFO", "FinOps lead", "Engineering executive", "Business sponsor"],
-      "expected_artifacts": ["FinOps charter", "Business case", "Role/RACI model", "Milestone plan"],
-      "acceptance_criteria": ["Executive sponsor is named by role", "Mandate is documented", "Funding or capacity decision is made", "Initial outcomes are measurable"],
-      "risks_and_controls": ["Inflated savings claims reduce credibility; base the case on verified evidence and conservative assumptions"]
+      "category": "E",
+      "maturity_bindings": [
+        { "criterion_id": "E1", "relationship": "PRIMARY" },
+        { "criterion_id": "E3", "relationship": "SUPPORTING" },
+        { "criterion_id": "C3", "relationship": "RELATED" }
+      ],
+      "antipattern_bindings": [
+        { "criterion_id": "AP-E3", "relationship": "PRIMARY", "mandatory_when_activated": true }
+      ],
+      "activity_goal": "Convert executive interest into an approved FinOps mandate, funded capacity, accountable ownership, and conservative outcome commitments grounded in verified baseline evidence.",
+      "when_to_use": [
+        "Verified evidence shows FinOps sponsorship is verbal, unfunded, or lacks decision authority.",
+        "Responsibilities and measurable outcomes are unclear across finance, engineering, and business leadership."
+      ],
+      "when_not_to_use": [
+        "A funded mandate, operating model, and accountable executive forum already exist.",
+        "The proposal depends on unverified savings or an unreliable baseline."
+      ],
+      "prerequisite_evidence": [
+        "Verified spend baseline, material gaps, and current operating costs.",
+        "Stakeholder responsibilities and decision constraints.",
+        "Conservative benefit scenarios and required capability investment."
+      ],
+      "implementation_activities": [
+        "Define the mandate, scope, decision rights, services, and executive sponsor.",
+        "Quantify the current-state problem using verified spend and control gaps.",
+        "Build conservative benefit, cost, capacity, and dependency scenarios.",
+        "Define roles, funding, milestones, outcome measures, and governance forum.",
+        "Secure a recorded executive decision and establish baseline review dates."
+      ],
+      "owner_roles": ["Executive Sponsor", "FinOps Lead", "Finance Leadership", "Engineering Leadership"],
+      "expected_artifacts": [
+        "Approved FinOps charter with mandate and decision rights",
+        "Evidence-grounded business case with conservative scenarios",
+        "Funded role, capacity, and RACI model",
+        "Milestone and outcome plan with baseline review dates"
+      ],
+      "semantic_hints": ["aspirational sponsorship", "FinOps mandate", "business case", "unfunded FinOps", "executive sponsor"],
+      "acceptance_criteria": [
+        "The mandate, sponsor, funding, roles, and decision forum are explicitly approved.",
+        "Benefit claims trace to verified baselines and documented assumptions.",
+        "Initial milestones have accountable owners, dates, and measurable outcomes."
+      ],
+      "risks_and_controls": [
+        "Risk: inflated savings claims undermine credibility. Control: use conservative scenarios, confidence ranges, and verified baselines.",
+        "Risk: approval lacks execution capacity. Control: tie mandate approval to funded roles, milestones, and decision authority."
+      ]
     },
     {
       "tactic_id": "TAC-CULT-004",
-      "maturity_criteria": ["E5", "E4"],
-      "antipattern_criteria": ["AP-E2"],
-      "activity_goal": "Use cost incidents and overruns as system-learning events rather than blame events.",
-      "when_to_use": ["Cost management is blame-oriented", "Teams avoid surfacing cost issues", "Cost incidents lack learning reviews"],
-      "when_not_to_use": ["No evidence of blame culture or cost incident behavior exists", "The problem is missing visibility rather than review culture"],
-      "prerequisite_evidence": ["Cost incident examples", "Review process", "Leadership commitment", "Action tracking mechanism"],
-      "implementation_activities": ["Define blameless cost review format", "Review systemic causes", "Assign improvements", "Track recurring themes", "Share lessons across teams"],
-      "owner_roles": ["FinOps lead", "Engineering lead", "Service owner", "Finance partner"],
-      "expected_artifacts": ["Cost review template", "Incident learning log", "Improvement backlog", "Theme report"],
-      "acceptance_criteria": ["Reviews focus on system causes", "Actions are tracked", "Teams can surface issues safely", "Recurring causes are reduced"],
-      "risks_and_controls": ["Blameless language without leadership behavior will fail; leaders must model the expected response"]
+      "category": "E",
+      "maturity_bindings": [
+        { "criterion_id": "E5", "relationship": "PRIMARY" },
+        { "criterion_id": "E4", "relationship": "SUPPORTING" }
+      ],
+      "antipattern_bindings": [
+        { "criterion_id": "AP-E2", "relationship": "PRIMARY", "mandatory_when_activated": true }
+      ],
+      "activity_goal": "Turn material cost incidents and overruns into evidence-based system learning that improves controls, workflows, and design without suppressing early reporting through blame.",
+      "when_to_use": [
+        "Verified evidence shows cost incidents trigger individual blame, concealment, or repeated uncorrected causes.",
+        "Reviews focus on who acted rather than why controls and signals failed."
+      ],
+      "when_not_to_use": [
+        "The issue requires a formal fraud, misconduct, or compliance investigation.",
+        "Leaders are unwilling to model non-punitive learning behavior."
+      ],
+      "prerequisite_evidence": [
+        "Material cost incidents, timelines, alerts, decisions, and impacts.",
+        "Relevant process, architecture, ownership, and control context.",
+        "Current incident-review and escalation expectations."
+      ],
+      "implementation_activities": [
+        "Define review scope, facilitation rules, evidence standard, and separation from misconduct processes.",
+        "Reconstruct the event timeline and distinguish proximate actions from systemic causes.",
+        "Identify failed, missing, noisy, or bypassed controls and decision conditions.",
+        "Assign preventive improvements with owners, dates, and verification measures.",
+        "Share sanitized lessons and track recurring themes across teams."
+      ],
+      "owner_roles": ["Engineering Leader", "FinOps Lead", "Service Owner", "Incident Facilitator"],
+      "expected_artifacts": [
+        "Blameless cost-review standard and facilitation guide",
+        "Evidence-based incident timeline and systemic-cause record",
+        "Preventive improvement backlog with owners and verification",
+        "Sanitized recurring-theme and learning report"
+      ],
+      "semantic_hints": ["cost blame", "cost incident", "postmortem", "systemic cause", "psychological safety"],
+      "acceptance_criteria": [
+        "Reviews distinguish system conditions from misconduct requiring a separate process.",
+        "Each material systemic cause produces an owned preventive action or accepted risk decision.",
+        "Repeat events are analyzed against prior corrective actions and control effectiveness."
+      ],
+      "risks_and_controls": [
+        "Risk: blameless language masks accountability. Control: assign clear action ownership while avoiding unsupported personal fault claims.",
+        "Risk: participants withhold evidence. Control: leaders model learning behavior and separate reviews from disciplinary investigations."
+      ]
+    },
+    {
+      "tactic_id": "TAC-GOV-004",
+      "category": "C",
+      "maturity_bindings": [
+        { "criterion_id": "C3", "relationship": "PRIMARY" },
+        { "criterion_id": "E5", "relationship": "SUPPORTING" },
+        { "criterion_id": "A5", "relationship": "RELATED" }
+      ],
+      "antipattern_bindings": [
+        { "criterion_id": "AP-C3", "relationship": "PRIMARY", "mandatory_when_activated": true },
+        { "criterion_id": "AP-E5", "relationship": "SUPPORTING", "mandatory_when_activated": false },
+        { "criterion_id": "AP-A5", "relationship": "RELATED", "mandatory_when_activated": false }
+      ],
+      "activity_goal": "Measure FinOps through attributable operational and financial outcomes linked to verified baselines, accountable actions, and decision cadence rather than activity volume.",
+      "when_to_use": [
+        "Verified evidence shows FinOps reports meetings, recommendations, or gross savings estimates without outcome traceability.",
+        "Leaders cannot connect FinOps actions to waste, coverage, unit economics, risk, or realized value."
+      ],
+      "when_not_to_use": [
+        "Reliable baselines, metric definitions, and action ownership cannot yet be established.",
+        "The proposed KPI is outside FinOps influence or cannot support a decision."
+      ],
+      "prerequisite_evidence": [
+        "Validated financial and operational baselines.",
+        "Action register with owners and implementation dates.",
+        "Governed metric sources, definitions, and reconciliation controls."
+      ],
+      "implementation_activities": [
+        "Select a bounded KPI set tied to explicit FinOps decisions and stakeholder outcomes.",
+        "Define formula, source, owner, baseline, target, frequency, and attribution rule for each KPI.",
+        "Link actions to expected and realized outcomes without double counting.",
+        "Publish a monthly scorecard with variance, confidence, and corrective decisions.",
+        "Retire activity-only or vanity measures that do not inform action."
+      ],
+      "owner_roles": ["FinOps Lead", "Finance Controller", "Data Owner", "Executive Sponsor"],
+      "expected_artifacts": [
+        "Governed FinOps KPI dictionary with formulas and owners",
+        "Baseline and target approval record",
+        "Action-to-outcome attribution register",
+        "Monthly outcome scorecard with variance decisions"
+      ],
+      "semantic_hints": ["vanity metric", "realized savings", "FinOps KPI", "outcome scorecard", "activity metric"],
+      "acceptance_criteria": [
+        "Every KPI has a reconciled source, formula, baseline, owner, and decision use.",
+        "Realized outcomes are separated from forecast, avoidance, and recommendation estimates.",
+        "Material variance produces a recorded corrective action or accepted decision."
+      ],
+      "risks_and_controls": [
+        "Risk: unreliable baselines damage trust. Control: reconcile and approve baselines before targets are set.",
+        "Risk: teams game narrow KPIs or double-count savings. Control: define attribution, counter-metrics, and independent finance review."
+      ]
+    },
+    {
+      "tactic_id": "TAC-OPT-005",
+      "category": "B",
+      "maturity_bindings": [
+        { "criterion_id": "B5", "relationship": "PRIMARY" }
+      ],
+      "antipattern_bindings": [
+        { "criterion_id": "AP-B5", "relationship": "PRIMARY", "mandatory_when_activated": true },
+        { "criterion_id": "AP-B3", "relationship": "SUPPORTING", "mandatory_when_activated": false }
+      ],
+      "activity_goal": "Control storage growth, retention, tiering, snapshot cleanup, and retrieval trade-offs through owner-approved lifecycle rules grounded in observed access patterns and obligations.",
+      "when_to_use": [
+        "Verified evidence shows uncontrolled storage growth, stale snapshots, or absent tiering and retention rules.",
+        "Material data remains in high-cost tiers without validated access need."
+      ],
+      "when_not_to_use": [
+        "Access telemetry, data ownership, retention, legal hold, or recovery requirements are unresolved.",
+        "The storage is short-lived and already governed by an effective service lifecycle."
+      ],
+      "prerequisite_evidence": [
+        "Storage inventory with owner, age, tier, access pattern, cost, and growth.",
+        "Retention, legal-hold, backup, recovery, and data-classification requirements.",
+        "Retrieval latency, fee, and availability constraints."
+      ],
+      "implementation_activities": [
+        "Classify storage by owner, data class, access pattern, retention, and recovery requirement.",
+        "Define tiering, archive, snapshot expiry, deletion, and exception thresholds.",
+        "Model retrieval cost and latency before selecting candidates.",
+        "Pilot policies on low-risk data and test restore and access behavior.",
+        "Automate approved rules and monitor cost, retrieval, exceptions, and compliance."
+      ],
+      "owner_roles": ["Data Owner", "Cloud Platform Owner", "FinOps Analyst", "Compliance or Records Owner"],
+      "expected_artifacts": [
+        "Classified storage inventory with owner and lifecycle state",
+        "Versioned lifecycle, retention, and snapshot policy",
+        "Tiering business case and restore-test evidence",
+        "Retention and retrieval exception register"
+      ],
+      "semantic_hints": ["storage growth", "stale snapshot", "archive tier", "retention policy", "retrieval fee"],
+      "acceptance_criteria": [
+        "Lifecycle rules respect approved retention, legal-hold, recovery, and access requirements.",
+        "Pilot restore and retrieval tests meet documented service expectations.",
+        "Automated actions and exceptions are monitored by owner and measured for realized cost."
+      ],
+      "risks_and_controls": [
+        "Risk: tiering or deletion impairs access or compliance. Control: validate access, retention, legal hold, and restore before activation.",
+        "Risk: retrieval charges erase savings. Control: model total lifecycle cost and monitor post-tier retrieval behavior."
+      ]
     },
     {
       "tactic_id": "TAC-AI-001",
-      "maturity_criteria": ["F1", "F2", "A2", "A4"],
-      "antipattern_criteria": ["AP-F1", "AP-F2", "AP-A2"],
-      "activity_goal": "Make token, model, API, and inference spend attributable to accountable products, teams, use cases, customers, and environments.",
-      "when_to_use": ["AI costs are visible only as platform or provider totals", "Token/API/model usage has no product or owner allocation", "AI pilots or production apps generate spend without accountable cost dimensions"],
-      "when_not_to_use": ["AI spend is already allocated to owners and unit economics", "The source has no evidence of AI/API/model usage"],
-      "prerequisite_evidence": ["AI provider billing exports", "Application or use-case inventory", "Owner/team mapping", "Request metadata or AI gateway logs"],
-      "implementation_activities": ["Define AI cost allocation dimensions", "Instrument AI requests with owner and use-case metadata", "Map provider/model billing to applications", "Publish token and model spend dashboards", "Review unallocated AI spend each month"],
-      "owner_roles": ["FinOps lead", "AI platform owner", "Product owner", "Engineering lead", "Finance partner"],
-      "expected_artifacts": ["AI cost allocation model", "Token/model spend dashboard", "Owner mapping", "Unallocated AI spend report"],
-      "acceptance_criteria": ["AI spend is reportable by owner and use case", "Unallocated AI cost is visible", "Dashboards separate provider/model/environment where available", "Cost owners review AI spend cadence"],
-      "risks_and_controls": ["Avoid storing sensitive prompts or personal data; meter cost metadata without unnecessary content capture"]
+      "category": "F",
+      "maturity_bindings": [
+        { "criterion_id": "F1", "relationship": "PRIMARY" },
+        { "criterion_id": "F2", "relationship": "SUPPORTING" },
+        { "criterion_id": "A2", "relationship": "RELATED" },
+        { "criterion_id": "A4", "relationship": "RELATED" }
+      ],
+      "antipattern_bindings": [
+        { "criterion_id": "AP-F1", "relationship": "PRIMARY", "mandatory_when_activated": true },
+        { "criterion_id": "AP-F2", "relationship": "SUPPORTING", "mandatory_when_activated": false },
+        { "criterion_id": "AP-A2", "relationship": "RELATED", "mandatory_when_activated": false }
+      ],
+      "activity_goal": "Attribute model, token, API, inference, and supporting platform cost to approved products, teams, use cases, customers, and environments using cost metadata that excludes unnecessary prompt or personal content.",
+      "when_to_use": [
+        "Verified evidence shows AI spend is visible only as provider, platform, or shared-account totals.",
+        "Material AI consumption cannot be traced to an accountable use case or product owner."
+      ],
+      "when_not_to_use": [
+        "AI request telemetry or provider billing identifiers cannot be joined reliably.",
+        "Attribution would require capturing sensitive prompt content rather than bounded metadata."
+      ],
+      "prerequisite_evidence": [
+        "Provider billing exports and model or deployment identifiers.",
+        "Application, product, team, use-case, customer, and environment ownership mappings.",
+        "Current AI gateway or application telemetry fields and privacy constraints."
+      ],
+      "implementation_activities": [
+        "Define allocation dimensions, precedence, shared-cost rules, and privacy boundaries.",
+        "Instrument requests with approved owner, product, use-case, environment, and correlation metadata.",
+        "Map provider model, deployment, token, API, and platform charges to governed dimensions.",
+        "Reconcile attributed totals to provider invoices and quantify unallocated spend.",
+        "Publish owner views and review material unallocated or anomalous AI spend."
+      ],
+      "owner_roles": ["AI Platform Owner", "FinOps Analyst", "Product Owners", "Privacy or Security Owner"],
+      "expected_artifacts": [
+        "Versioned AI cost-allocation model with precedence and shared-cost rules",
+        "Approved request-metadata contract and instrumentation inventory",
+        "Token, model, API, and platform cost dashboard by accountable dimension",
+        "Invoice reconciliation and unallocated AI spend report"
+      ],
+      "semantic_hints": ["token cost", "model spend", "AI chargeback", "unallocated inference", "use case attribution"],
+      "acceptance_criteria": [
+        "Material AI spend maps to approved dimensions or a quantified unallocated category.",
+        "Attributed totals reconcile to provider and platform cost sources within defined tolerance.",
+        "Instrumentation captures cost metadata without unnecessary prompt or personal content."
+      ],
+      "risks_and_controls": [
+        "Risk: attribution telemetry captures sensitive content. Control: collect bounded identifiers and usage measures, not prompt or response bodies.",
+        "Risk: shared platform cost is allocated arbitrarily. Control: document drivers, precedence, exceptions, and reconciliation for each shared-cost rule."
+      ]
     },
     {
       "tactic_id": "TAC-AI-002",
-      "maturity_criteria": ["F3", "F1", "D1"],
-      "antipattern_criteria": ["AP-F3", "AP-F4"],
-      "activity_goal": "Control GenAI unit cost by routing work to appropriate models and managing context, caching, batching, and retry behavior.",
-      "when_to_use": ["Premium models are used without task-based justification", "Prompt/context growth is uncontrolled", "Retries, agent loops, or RAG retrieval inflate token cost"],
-      "when_not_to_use": ["Model selection is already governed by cost-quality evaluations", "Quality or risk requirements explicitly justify premium model use"],
-      "prerequisite_evidence": ["Model usage logs", "Prompt/context telemetry", "Quality evaluation set", "Application criticality or risk tiering"],
-      "implementation_activities": ["Define model tiers by task complexity and risk", "Set token and context budgets", "Measure cache hit rate and retry volume", "Create premium-model approval rules", "Review cost-quality-latency outcomes before rollout"],
-      "owner_roles": ["Engineering lead", "AI platform owner", "Product owner", "FinOps analyst", "Risk or quality owner"],
-      "expected_artifacts": ["Model routing policy", "Prompt/context budget", "Evaluation scorecard", "Premium model exception register"],
-      "acceptance_criteria": ["Tasks have documented model tiers", "Context limits are visible", "Premium model use has rationale", "Cost-quality tradeoffs are measured"],
-      "risks_and_controls": ["Lower-cost routing can reduce output quality; use evaluation thresholds and exception paths for high-risk tasks"]
+      "category": "F",
+      "maturity_bindings": [
+        { "criterion_id": "F3", "relationship": "PRIMARY" },
+        { "criterion_id": "F1", "relationship": "SUPPORTING" },
+        { "criterion_id": "D1", "relationship": "RELATED" }
+      ],
+      "antipattern_bindings": [
+        { "criterion_id": "AP-F3", "relationship": "PRIMARY", "mandatory_when_activated": true },
+        { "criterion_id": "AP-F4", "relationship": "SUPPORTING", "mandatory_when_activated": false }
+      ],
+      "activity_goal": "Control cost per successful AI task through risk-based model routing, context and output budgets, caching, batching, and retry limits validated against task-specific quality and latency thresholds.",
+      "when_to_use": [
+        "Verified evidence shows premium models are used by default without task-level justification.",
+        "Material AI cost is driven by excessive context, output, retries, low cache use, or inefficient batching."
+      ],
+      "when_not_to_use": [
+        "Task quality, safety, and latency have no measurable acceptance standard.",
+        "The workload is too low-volume for routing complexity to provide material value."
+      ],
+      "prerequisite_evidence": [
+        "Task inventory with quality, safety, latency, and business-criticality requirements.",
+        "Model-level token, latency, retry, cache, error, and cost telemetry.",
+        "Representative evaluation cases and current routing behavior."
+      ],
+      "implementation_activities": [
+        "Classify tasks by complexity, risk, modality, latency, and evidence requirements.",
+        "Benchmark eligible models and context strategies on representative evaluation cases.",
+        "Define primary and near-equivalent fallback routes with quality and escalation gates.",
+        "Set context, output, cache, batch, retry, and premium-route limits by task class.",
+        "Roll out incrementally and monitor cost per accepted result, quality, latency, and fallback behavior."
+      ],
+      "owner_roles": ["AI Platform Owner", "AI Product Owner", "Evaluation Lead", "FinOps Analyst"],
+      "expected_artifacts": [
+        "Task-classification and model-routing policy",
+        "Representative evaluation suite with quality, safety, and latency thresholds",
+        "Context, output, cache, batch, and retry budget configuration",
+        "Cost-quality-latency and fallback performance scorecard"
+      ],
+      "semantic_hints": ["premium model default", "model routing", "context bloat", "retry amplification", "cache hit rate"],
+      "acceptance_criteria": [
+        "Each route and fallback meets task-specific quality, safety, and latency thresholds.",
+        "Premium routing and escalation conditions are explicit, logged, and reviewable.",
+        "Optimization is measured as cost per accepted result, not token price alone."
+      ],
+      "risks_and_controls": [
+        "Risk: lower-cost routing reduces quality or safety. Control: enforce representative evaluation thresholds and escalation paths.",
+        "Risk: retry or fallback loops increase cost unpredictably. Control: cap attempts, log route transitions, and stop on bounded failure conditions."
+      ]
     },
     {
       "tactic_id": "TAC-AI-003",
-      "maturity_criteria": ["F4", "F5", "C2", "E5"],
-      "antipattern_criteria": ["AP-F2", "AP-F5", "AP-C2", "AP-E5"],
-      "activity_goal": "Govern AI consumption with budgets, alerts, approvals, and value metrics so adoption does not outpace financial accountability.",
-      "when_to_use": ["AI usage grows without budgets or quotas", "AI spend anomalies or runaway retries are not detected", "AI success is measured by activity rather than value per outcome"],
-      "when_not_to_use": ["No AI consumption is evidenced", "The immediate blocker is basic attribution rather than budget or value governance"],
-      "prerequisite_evidence": ["AI spend baseline", "Team/application owner mapping", "Budget owner", "Outcome or productivity metric candidates"],
-      "implementation_activities": ["Set AI budgets and quota thresholds", "Route spend and token anomaly alerts to owners", "Define approval rules for premium model expansion", "Create AI value scorecard", "Review low-value or high-cost use cases for redesign"],
-      "owner_roles": ["CFO or finance owner", "FinOps lead", "AI platform owner", "Product owner", "Engineering lead"],
-      "expected_artifacts": ["AI budget policy", "Quota and alert rules", "Premium model approval workflow", "AI value scorecard"],
-      "acceptance_criteria": ["AI budget thresholds have owners", "Anomaly alerts route to accountable teams", "Premium expansion requires approval", "Cost per outcome is reviewed for material use cases"],
-      "risks_and_controls": ["Value metrics can become vanity metrics; tie them to verified workflows, business outcomes, and owner decisions"]
+      "category": "F",
+      "maturity_bindings": [
+        { "criterion_id": "F4", "relationship": "PRIMARY" },
+        { "criterion_id": "F5", "relationship": "SUPPORTING" },
+        { "criterion_id": "C2", "relationship": "RELATED" },
+        { "criterion_id": "E5", "relationship": "RELATED" }
+      ],
+      "antipattern_bindings": [
+        { "criterion_id": "AP-F2", "relationship": "SUPPORTING", "mandatory_when_activated": false },
+        { "criterion_id": "AP-F5", "relationship": "PRIMARY", "mandatory_when_activated": true },
+        { "criterion_id": "AP-C2", "relationship": "RELATED", "mandatory_when_activated": false },
+        { "criterion_id": "AP-E5", "relationship": "RELATED", "mandatory_when_activated": false }
+      ],
+      "activity_goal": "Govern AI consumption with owner-based budgets, quotas, anomaly response, approval thresholds, and a value scorecard that links cost to verified workflow and business outcomes.",
+      "when_to_use": [
+        "Verified evidence shows AI consumption grows without budgets, quotas, owner alerts, or approval thresholds.",
+        "High-cost AI use cases continue without evidence of workflow, product, or business value."
+      ],
+      "when_not_to_use": [
+        "AI cost cannot yet be attributed to accountable use cases or owners.",
+        "Proposed value metrics have no governed data source or decision use."
+      ],
+      "prerequisite_evidence": [
+        "Use-case ownership and reconciled cost or usage baseline.",
+        "Historical token, request, model, quota, and anomaly patterns.",
+        "Verified workflow or business outcome measures and decision rights."
+      ],
+      "implementation_activities": [
+        "Define budgets, quotas, materiality thresholds, and growth approvals by use case and environment.",
+        "Route spend, token, and usage anomalies to owners with progressive escalation.",
+        "Require evidence and approval for premium-model or quota expansion.",
+        "Define a bounded value scorecard linking cost to accepted outputs, workflow results, or business outcomes.",
+        "Review low-value or high-cost use cases for redesign, routing change, throttling, or retirement."
+      ],
+      "owner_roles": ["AI Product Owner", "AI Platform Owner", "FinOps Lead", "Finance Business Partner"],
+      "expected_artifacts": [
+        "AI budget, quota, and materiality policy by owned use case",
+        "Owner alert-routing and progressive escalation configuration",
+        "Premium-model and quota-expansion approval workflow",
+        "AI value scorecard with governed cost and outcome definitions"
+      ],
+      "semantic_hints": ["AI budget", "token quota", "premium model approval", "AI value theater", "cost per accepted output"],
+      "acceptance_criteria": [
+        "Every governed use case has an owner, budget or quota, thresholds, and response path.",
+        "Expansion decisions include cost, quality, risk, utilization, and value evidence.",
+        "Value measures trace to governed workflow or business outcomes and avoid double counting."
+      ],
+      "risks_and_controls": [
+        "Risk: quotas interrupt critical AI workflows. Control: use progressive thresholds, criticality-based exceptions, and tested fallback behavior.",
+        "Risk: value scorecards become vanity reporting. Control: require governed outcome definitions, accountable decisions, and periodic retirement review."
+      ]
     }
   ]
 }

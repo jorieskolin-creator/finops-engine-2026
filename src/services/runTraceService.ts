@@ -24,6 +24,8 @@ import {
   TacticPathTrace
 } from '../types';
 import {
+  FINOPS_TACTIC_PLAYBOOK_URL,
+  FINOPS_TACTIC_PLAYBOOK_VERSION,
   FINOPS_TACTIC_ACTIVITY_PLAYBOOK,
   FINOPS_TACTICS_LOCAL,
   FINOPS_TAXONOMY_REGISTRY
@@ -186,17 +188,35 @@ const scorePathsFor = (
 
 const TACTIC_RX = /\[(TAC-[A-Z]+-\d+(?:-[A-Z]+)?)\]/g;
 
+const playbookById = new Map(FINOPS_TACTIC_ACTIVITY_PLAYBOOK.map(entry => [entry.tactic_id, entry]));
+
+const linkedFindingsForTactics = (tacticIds: string[], auditLogs: Phase1AuditLogs): string[] => {
+  const linked = new Map<string, string>();
+  for (const tacticId of tacticIds) {
+    const entry = playbookById.get(tacticId);
+    if (!entry) continue;
+    for (const binding of entry.maturity_bindings) {
+      const item = auditLogs.maturity[binding.criterion_id];
+      if (!item || item.verification_unresolved || item.assessment_status === 'not_assessed' || item.count >= 3) continue;
+      linked.set(binding.criterion_id, safeSnippet(`[${binding.criterion_id}] ${item.reasoning || item.evidence}`, 220));
+    }
+    for (const binding of entry.antipattern_bindings) {
+      const criterionId = binding.criterion_id.replace(/^AP-/, '');
+      const item = auditLogs.antipattern[criterionId];
+      const absence = item ? inferAntiPatternAbsenceStatus(item) : 'unknown_absent';
+      if (!item || item.verification_unresolved || item.assessment_status === 'not_assessed' || !['confirmed_present', 'partially_present'].includes(absence)) continue;
+      linked.set(binding.criterion_id, safeSnippet(`[${binding.criterion_id}] ${item.reasoning || item.evidence}`, 220));
+    }
+  }
+  return Array.from(linked.values());
+};
+
 const tacticPathsFor = (
   strategy: DiagnosticResult['phase_3_strategy'],
-  phase2: Phase2Validation,
+  auditLogs: Phase1AuditLogs,
   adjustments: TacticGroundingTraceAdjustment[],
   qualityGate: QualityGateResult
 ): TacticPathTrace[] => {
-  const findings = [
-    ...phase2.maturity_gaps,
-    ...phase2.antipattern_findings,
-    ...phase2.silent_areas
-  ].map(safe => safeSnippet(safe, 180));
   const paths: TacticPathTrace[] = [];
   const roadmap = strategy.remediation_roadmap || [];
   roadmap.forEach((phase, phaseIndex) => {
@@ -208,10 +228,12 @@ const tacticPathsFor = (
         action_index: actionIndex,
         action_snippet: safeSnippet(String(action), 520),
         tactic_ids: tacticIds,
-        linked_findings: findings.slice(0, 8),
-        reference_kind: tacticIds.length > 0 ? 'tactic_reference' : 'playbook_reference',
-        grounding_status: 'grounded',
-        notes: tacticIds.length === 0 ? ['No tactic ID was forced where no exact tactic reference was present.'] : undefined
+        linked_findings: linkedFindingsForTactics(tacticIds, auditLogs),
+        reference_kind: tacticIds.length > 0 ? 'tactic_reference' : 'custom_action',
+        grounding_status: tacticIds.length > 0 ? 'grounded' : 'unknown',
+        notes: tacticIds.length === 0
+          ? ['Supplemental action without an approved tactic ID. Semantic support remains subject to roadmap fact-check.']
+          : tacticIds.map(id => `Playbook reference: ${FINOPS_TACTIC_PLAYBOOK_URL}#${id.toLowerCase()}`)
       });
     });
   });
@@ -221,7 +243,7 @@ const tacticPathsFor = (
       action_index: -1,
       action_snippet: safeSnippet(adjustment.action_before, 520),
       tactic_ids: [adjustment.tactic_id],
-      linked_findings: findings.slice(0, 8),
+      linked_findings: linkedFindingsForTactics([adjustment.tactic_id], auditLogs),
       reference_kind: 'tactic_reference',
       grounding_status: adjustment.action_after ? 'grounded' : 'withheld',
       notes: [
@@ -237,7 +259,7 @@ const tacticPathsFor = (
       action_index: -1,
       action_snippet: safeSnippet(claim.claim, 520),
       tactic_ids: Array.from(claim.claim.matchAll(TACTIC_RX)).map(m => m[1]),
-      linked_findings: findings.slice(0, 8),
+      linked_findings: linkedFindingsForTactics(Array.from(claim.claim.matchAll(TACTIC_RX)).map(m => m[1]), auditLogs),
       reference_kind: 'playbook_reference',
       grounding_status: claim.action === 'quarantined' ? 'quarantined' : 'withheld',
       notes: [claim.rationale]
@@ -345,6 +367,7 @@ export const buildRunTrace = (input: BuildRunTraceInput): RunTrace => {
     kb_version_hashes: kbVersionHashes,
     tactic_db_version: 'local-tactics-v1',
     tactic_db_hash: hashString(JSON.stringify(FINOPS_TACTICS_LOCAL)),
+    playbook_version: FINOPS_TACTIC_PLAYBOOK_VERSION,
     playbook_hash: hashString(JSON.stringify(FINOPS_TACTIC_ACTIVITY_PLAYBOOK)),
     created_at: new Date().toISOString(),
     input_manifest: sourceManifest(input.sourceRegistry),
@@ -365,7 +388,7 @@ export const buildRunTrace = (input: BuildRunTraceInput): RunTrace => {
     stages: input.stageTraces,
     evidence_paths: evidencePaths,
     score_paths: scorePaths,
-    tactic_paths: tacticPathsFor(input.strategy, input.phase2, input.tacticGroundingAdjustments, qualityGate),
+    tactic_paths: tacticPathsFor(input.strategy, input.auditLogs, input.tacticGroundingAdjustments, qualityGate),
     quality_gate: {
       decision: qualityGate.decision,
       blocking_reasons: qualityGate.blocking_reasons,

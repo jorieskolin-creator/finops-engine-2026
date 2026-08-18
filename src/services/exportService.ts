@@ -1,6 +1,6 @@
 
 import { AuditItem, DiagnosticResult, QualityGateResult } from '../types';
-import { BATCH_TITLES, MASTER_BINGO_FINOPS } from '../knowledge_base';
+import { BATCH_TITLES, FINOPS_TACTIC_PLAYBOOK_URL, MASTER_BINGO_FINOPS } from '../knowledge_base';
 import { SVG_CSS, svgGaugeCard } from './svgChartService';
 import {
   displayPlanningDecisionRationale,
@@ -19,6 +19,10 @@ import { stripSourceFilenameMetadata } from './privacyService';
 const BATCHES = Object.keys(BATCH_TITLES);
 const escapeHtml = (s: string): string =>
   s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+const renderTacticAction = (action: string): string =>
+  escapeHtml(action).replace(/\[(TAC-[A-Z]+-\d{3})\]/g, (_match, id: string) =>
+    `<a href="${FINOPS_TACTIC_PLAYBOOK_URL}#${id.toLowerCase()}" target="_blank" rel="noreferrer">[${id}]</a>`
+  );
 
 const qualityGateStatusText = (gate: QualityGateResult): string => {
   if (gate.decision === 'GO') return gate.notes[0] || 'All checks passed.';
@@ -634,7 +638,7 @@ const renderSummaryRoadmap = (result: DiagnosticResult): string => {
             </div>
             <div class="how-list">
               <span>How</span>
-              <ul>${step.actions.map(a => `<li>${escapeHtml(a)}</li>`).join('')}</ul>
+              <ul>${step.actions.map(a => `<li>${renderTacticAction(a)}</li>`).join('')}</ul>
             </div>
           </article>`).join('')}
       </div>
@@ -1301,7 +1305,7 @@ export const generateReportHtml = (unsafeResult: DiagnosticResult): string => {
           ${step.what ? `<div class="roadmap-context-block"><div class="roadmap-context-label">What</div><p>${escapeHtml(step.what)}</p></div>` : ''}
         </div>` : ''}
         <div class="roadmap-how-label">How</div>
-        <ul>${step.actions.map(a => `<li><span>${escapeHtml(a)}</span></li>`).join('')}</ul>
+        <ul>${step.actions.map(a => `<li><span>${renderTacticAction(a)}</span></li>`).join('')}</ul>
       </div>
     `).join('')}
   ` : (effectiveBracket === 'LOW' || isBlocked) && !hasFindingsMode ? `

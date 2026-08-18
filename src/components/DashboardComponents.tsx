@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { ResponsiveContainer, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar, Legend, Tooltip } from 'recharts';
 import { AuditCategory, AuditItem, PipelineProgressStage, PipelineProgressStatus, PipelineProgressUpdate, QualityGateResult, RemediationStep } from '../types';
-import { BATCH_DEFINITIONS, BATCH_IDS, MASTER_BINGO_FINOPS } from '../knowledge_base';
+import { BATCH_DEFINITIONS, BATCH_IDS, FINOPS_TACTIC_PLAYBOOK_URL, MASTER_BINGO_FINOPS } from '../knowledge_base';
 import { antiPatternStatusLabel, inferAntiPatternAbsenceStatus } from '../services/antiPatternSemantics';
 import { displayQualityGateDiagnostic, scannerEvidenceCheckDisagreementTitle, splitQualityGateDiagnostics } from '../services/reportDiagnosticsService';
 
@@ -40,6 +40,26 @@ interface BenchmarkingProps {
 
 const ALL_CRITERIA_IDS = BATCH_IDS.flatMap(batch => [1, 2, 3, 4, 5].map(n => `${batch}${n}`));
 
+export const TacticLinkedText: React.FC<{ content: string }> = ({ content }) => (
+  <>
+    {content.split(/(\[TAC-[A-Z]+-\d{3}\])/g).map((part, index) => {
+      const match = part.match(/^\[(TAC-[A-Z]+-\d{3})\]$/);
+      if (!match) return <React.Fragment key={index}>{part}</React.Fragment>;
+      return (
+        <a
+          key={index}
+          href={`${FINOPS_TACTIC_PLAYBOOK_URL}#${match[1].toLowerCase()}`}
+          target="_blank"
+          rel="noreferrer"
+          className="font-mono font-semibold text-emerald-600 hover:text-emerald-500 underline underline-offset-2"
+        >
+          {part}
+        </a>
+      );
+    })}
+  </>
+);
+
 export const MarkdownRenderer: React.FC<{ content: string; textColor?: string }> = ({ content, textColor = "text-slate-200" }) => {
   if (!content) return null;
   const blocks = content.split(/\n\n+/);
@@ -56,7 +76,7 @@ export const MarkdownRenderer: React.FC<{ content: string; textColor?: string }>
         if (subPart.startsWith('*') && subPart.endsWith('*') && subPart.length > 2) {
           return <strong key={`${i}-${j}`} className="font-medium text-emerald-400">{subPart.slice(1, -1)}</strong>;
         }
-        return subPart;
+        return <TacticLinkedText key={`${i}-${j}`} content={subPart} />;
       });
     });
   };

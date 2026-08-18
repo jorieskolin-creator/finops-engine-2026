@@ -1,5 +1,7 @@
-import type { Phase2Validation, StrategicTactic } from '../types';
+import type { Phase1AuditLogs, Phase2Validation, StrategicTactic, TacticActivityPlaybookEntry } from '../types';
 import { FINOPS_TACTIC_ACTIVITY_PLAYBOOK, FINOPS_TACTICS_LOCAL } from '../knowledge_base';
+import { inferAntiPatternAbsenceStatus } from './antiPatternSemantics';
+import { hasVerifiedSourceCoverage } from './metricsService';
 
 export interface TacticGroundingAdjustment {
   action_before: string;
@@ -15,10 +17,24 @@ export interface TacticGroundingResult {
   warnings: string[];
 }
 
-interface TacticSemanticRule {
-  requiredFindingKeywords?: string[];
-  actionKeywords?: string[];
-  replacementWhenActionMatches?: Array<{ keywords: string[]; id: string }>;
+export interface TacticSelectionCandidate {
+  tactic_id: string;
+  canonical_name: string;
+  category: TacticActivityPlaybookEntry['category'];
+  activated_by: string[];
+  activity_goal: string;
+  when_to_use: string[];
+  when_not_to_use: string[];
+  expected_artifacts: string[];
+  semantic_hints: string[];
+  risks_and_controls: string[];
+}
+
+export interface TacticSelectionPlan {
+  required: TacticSelectionCandidate[];
+  optional: TacticSelectionCandidate[];
+  active_criteria: string[];
+  active_categories: string[];
 }
 
 interface UnsupportedActionRule {
@@ -26,75 +42,6 @@ interface UnsupportedActionRule {
   requiredFindingKeywords: string[];
   reason: string;
 }
-
-const TACTIC_RULES: Record<string, TacticSemanticRule> = {
-  'TAC-VIS-001': {
-    requiredFindingKeywords: ['tag', 'allocation', 'showback', 'chargeback', 'owner tag', 'cost center']
-  },
-  'TAC-VIS-002': {
-    requiredFindingKeywords: ['dashboard', 'visibility', 'engineering visibility', 'black box', 'cost view']
-  },
-  'TAC-VIS-003': {
-    requiredFindingKeywords: ['multi-cloud', 'multiple providers', 'siloed cost', 'normalization']
-  },
-  'TAC-VIS-004': {
-    requiredFindingKeywords: ['anomaly', 'alert', 'unexpected spend', 'cost spike']
-  },
-  'TAC-OPT-001': {
-    requiredFindingKeywords: ['commitment', 'reservation', 'savings plan', 'on-demand', 'coverage', 'utilisation', 'utilization'],
-    replacementWhenActionMatches: [
-      { keywords: ['spot', 'preemptible', 'interruption'], id: 'TAC-OPT-004' }
-    ]
-  },
-  'TAC-OPT-002': {
-    requiredFindingKeywords: ['right-size', 'rightsizing', 'over-provision', 'underutilized', 'utilisation', 'utilization']
-  },
-  'TAC-OPT-003': {
-    requiredFindingKeywords: ['zombie', 'orphaned', 'idle', 'unused resource', 'lifecycle']
-  },
-  'TAC-OPT-004': {
-    requiredFindingKeywords: ['spot', 'preemptible', 'fault-tolerant', 'interruption', 'fallback']
-  },
-  'TAC-OPT-005': {
-    requiredFindingKeywords: ['storage', 'lifecycle', 'retention', 'tiering']
-  },
-  'TAC-GOV-001': {
-    requiredFindingKeywords: ['no cloud financial policy', 'missing policy', 'policy framework', 'spend limit', 'financial policy'],
-    replacementWhenActionMatches: [
-      { keywords: ['infracost', 'terraform', 'pull request', 'repository', 'pipeline', 'ci/cd'], id: 'TAC-ARCH-002' }
-    ]
-  },
-  'TAC-GOV-002': {
-    requiredFindingKeywords: ['shadow it', 'unmanaged account', 'account vending', 'rogue account']
-  },
-  'TAC-GOV-003': {
-    requiredFindingKeywords: ['budget', 'blowout', 'overspend', 'enforcement', 'no consequence']
-  },
-  'TAC-GOV-004': {
-    requiredFindingKeywords: ['theater', 'theatre', 'no operational outcome', 'no measurable outcome', 'vanity metric']
-  },
-  'TAC-ARCH-001': {
-    requiredFindingKeywords: ['lift-and-shift', 'post-migration', 'legacy architecture', 'cloud-native']
-  },
-  'TAC-ARCH-002': {
-    requiredFindingKeywords: ['architecture review', 'infracost', 'terraform', 'iac', 'cost estimation', 'cost-blind']
-  },
-  'TAC-ARCH-003': {
-    requiredFindingKeywords: ['autoscaling', 'scaling policy', 'cost guardrail']
-  },
-  'TAC-CULT-001': {
-    requiredFindingKeywords: ['cost accountability', 'unit economics', 'owner', 'engineering ownership']
-  },
-  'TAC-CULT-002': {
-    requiredFindingKeywords: ['finance-engineering wall', 'cross-functional', 'collaboration gap', 'cadence']
-  },
-  'TAC-CULT-003': {
-    requiredFindingKeywords: ['lip service', 'no investment', 'no sponsorship', 'no headcount', 'business case']
-  },
-  'TAC-CULT-004': {
-    requiredFindingKeywords: ['blame', 'blameless', 'punitive', 'punishment', 'adversarial']
-  }
-};
 
 const TACTIC_RX = /\[(TAC-[A-Z]+-\d+(?:-[A-Z]+)?)\]/g;
 
@@ -126,33 +73,145 @@ const buildFindingCorpus = (phase2: Phase2Validation): string => [
   phase2.metrics.readiness_cap_reason || ''
 ].join('\n').toLowerCase();
 
-const tacticById = new Map<string, StrategicTactic>(FINOPS_TACTICS_LOCAL.map(t => [t.id, t]));
+const tacticById = new Map<string, StrategicTactic>(FINOPS_TACTICS_LOCAL.map(tactic => [tactic.id, tactic]));
 const tacticDomainsById = new Map(FINOPS_TACTIC_ACTIVITY_PLAYBOOK.map(entry => [
   entry.tactic_id,
-  new Set([...entry.maturity_criteria, ...entry.antipattern_criteria].map(id => id.replace(/^AP-/, '').charAt(0)))
+  new Set([...entry.maturity_bindings, ...entry.antipattern_bindings]
+    .map(binding => binding.criterion_id.replace(/^AP-/, '').charAt(0)))
 ]));
 
-const applyReplacementOrRemoval = (
-  action: string,
-  id: string,
-  replacementId: string | undefined,
-  reason: string,
-  adjustments: TacticGroundingAdjustment[]
-): string => {
-  const before = action;
-  const after = replacementId
-    ? action.replace(`[${id}]`, `[${replacementId}]`)
-    : action.replace(new RegExp(`\\s*\\[${id.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\]`, 'g'), '');
-  if (after !== before) {
-    adjustments.push({
-      action_before: before,
-      action_after: after,
-      tactic_id: id,
-      replacement_id: replacementId,
-      reason
-    });
+const confirmedCriterionFindings = (auditLogs: Phase1AuditLogs): Map<string, string> => {
+  const findings = new Map<string, string>();
+  for (const [criterionId, item] of Object.entries(auditLogs.maturity)) {
+    if (
+      item.count >= 0
+      && item.count < 3
+      && item.assessment_status !== 'not_assessed'
+      && hasVerifiedSourceCoverage(item, 'maturity')
+    ) {
+      findings.set(criterionId, item.reasoning || item.evidence);
+    }
   }
-  return after;
+  for (const [rawCriterionId, item] of Object.entries(auditLogs.antipattern)) {
+    if (
+      item.assessment_status !== 'not_assessed'
+      && hasVerifiedSourceCoverage(item, 'antipattern')
+      && ['confirmed_present', 'partially_present'].includes(inferAntiPatternAbsenceStatus(item))
+    ) {
+      findings.set(`AP-${rawCriterionId.replace(/^AP-/, '')}`, item.reasoning || item.evidence);
+    }
+  }
+  return findings;
+};
+
+const candidateFor = (
+  entry: TacticActivityPlaybookEntry,
+  activatedBy: string[]
+): TacticSelectionCandidate => ({
+  tactic_id: entry.tactic_id,
+  canonical_name: tacticById.get(entry.tactic_id)?.canonical_name || entry.tactic_id,
+  category: entry.category,
+  activated_by: activatedBy,
+  activity_goal: entry.activity_goal,
+  when_to_use: entry.when_to_use,
+  when_not_to_use: entry.when_not_to_use,
+  expected_artifacts: entry.expected_artifacts,
+  semantic_hints: entry.semantic_hints,
+  risks_and_controls: entry.risks_and_controls,
+});
+
+export const buildTacticSelectionPlan = (
+  auditLogs: Phase1AuditLogs,
+  weakDomains: string[] = []
+): TacticSelectionPlan => {
+  const findingByCriterion = confirmedCriterionFindings(auditLogs);
+  const weakDomainSet = new Set(weakDomains);
+  const activeCriteria = Array.from(findingByCriterion.keys())
+    .filter(criterion => !weakDomainSet.has(criterion.replace(/^AP-/, '').charAt(0)));
+  const activeCriterionSet = new Set(activeCriteria);
+  const activeCategories = new Set(activeCriteria.map(criterion => criterion.replace(/^AP-/, '').charAt(0)));
+
+  const required = FINOPS_TACTIC_ACTIVITY_PLAYBOOK.flatMap(entry => {
+    const activatedBy = [...entry.maturity_bindings, ...entry.antipattern_bindings]
+      .filter(binding => binding.relationship === 'PRIMARY' && activeCriterionSet.has(binding.criterion_id))
+      .map(binding => binding.criterion_id);
+    return activatedBy.length > 0 ? [candidateFor(entry, activatedBy)] : [];
+  });
+  const requiredIds = new Set(required.map(candidate => candidate.tactic_id));
+  const optional = FINOPS_TACTIC_ACTIVITY_PLAYBOOK.flatMap(entry => {
+    if (requiredIds.has(entry.tactic_id)) return [];
+    const activatedBy = [...entry.maturity_bindings, ...entry.antipattern_bindings]
+      .filter(binding => activeCriterionSet.has(binding.criterion_id))
+      .map(binding => binding.criterion_id);
+    if (activatedBy.length === 0 && !activeCategories.has(entry.category)) return [];
+    return [candidateFor(entry, activatedBy)];
+  });
+
+  return {
+    required,
+    optional,
+    active_criteria: activeCriteria,
+    active_categories: Array.from(activeCategories).sort(),
+  };
+};
+
+const compactCandidate = (candidate: TacticSelectionCandidate, required: boolean): string => {
+  const identity = [
+    `${required ? 'REQUIRED' : 'OPTIONAL'} [${candidate.tactic_id}] ${candidate.canonical_name}`,
+    candidate.activated_by.length > 0 ? `Activated/matched criteria: ${candidate.activated_by.join(', ')}` : `Home category candidate: ${candidate.category}`,
+  ];
+  if (!required) {
+    return [...identity, `Semantic hints: ${candidate.semantic_hints.join(', ')}`].join('\n');
+  }
+  return [
+    ...identity,
+    `Goal: ${candidate.activity_goal}`,
+    `Use when: ${candidate.when_to_use.join('; ')}`,
+    `Do not use when: ${candidate.when_not_to_use.join('; ')}`,
+    `Expected artifacts (hints, not activation proof): ${candidate.expected_artifacts.join('; ')}`,
+    `Risk-control guidance (adapt; do not copy mechanically): ${candidate.risks_and_controls.join('; ')}`,
+  ].join('\n');
+};
+
+export const buildTacticSelectionContext = (plan: TacticSelectionPlan): string => [
+  '### GOVERNED TACTIC SELECTION PLAN',
+  'Step 1 — Direct Playbook grounding:',
+  plan.required.length > 0
+    ? plan.required.map(candidate => compactCandidate(candidate, true)).join('\n\n')
+    : 'No PRIMARY tactic was activated by a verified actionable finding.',
+  '',
+  'Every REQUIRED tactic must appear in at least one roadmap action with its exact bracketed ID. If prerequisites are not established, use a bounded validation/preparation action for that tactic; do not invent current-state facts.',
+  '',
+  `Step 2 — Category and semantic candidates (${plan.active_categories.join(', ') || 'none'}):`,
+  plan.optional.length > 0
+    ? plan.optional.map(candidate => compactCandidate(candidate, false)).join('\n\n')
+    : 'No optional same-category candidate is available.',
+  '',
+  'Evaluate OPTIONAL tactics using the locked findings, use/do-not-use rules, semantic hints, expected artifacts, and risk controls. Select only semantically justified tactics. You may evaluate a cross-category approved tactic when the locked finding genuinely spans domains.',
+  '',
+  'Step 3 — Supplemental actions:',
+  'If the approved catalog does not fully address a verified finding, add a grounded action without a tactic ID. Do not invent a TAC-* ID. Make its owner, artifact, acceptance condition, and adapted risk control explicit. Prefer an approved tactic whenever it genuinely implements the action.',
+].join('\n');
+
+export const findMissingRequiredTacticIds = (strategyData: any, plan: TacticSelectionPlan): string[] => {
+  const text: string = (strategyData?.phase_3_strategy?.remediation_roadmap || [])
+    .flatMap((phase: any) => Array.isArray(phase?.actions) ? phase.actions : [])
+    .join('\n');
+  const present = new Set<string>(Array.from(text.matchAll(TACTIC_RX), match => match[1]));
+  return plan.required.map(candidate => candidate.tactic_id).filter(id => !present.has(id));
+};
+
+export const buildMissingRequiredTacticAppendix = (
+  missingIds: string[],
+  plan: TacticSelectionPlan
+): string => {
+  const missing = plan.required.filter(candidate => missingIds.includes(candidate.tactic_id));
+  return [
+    '### REQUIRED TACTIC CONTRACT CORRECTION',
+    `The previous roadmap omitted required direct Playbook tactic IDs: ${missingIds.join(', ')}.`,
+    'Regenerate the roadmap and include each exact bracketed ID in a grounded action. Preserve the locked findings. If implementation prerequisites are absent, prescribe a bounded validation/preparation action rather than omitting the required tactic or inventing evidence.',
+    ...missing.map(candidate => compactCandidate(candidate, true)),
+  ].join('\n\n');
 };
 
 const removeUnsupportedActionIfNeeded = (
@@ -200,53 +259,18 @@ export const sanitizeRoadmapTacticGrounding = (
   for (const phase of clonedRoadmap) {
     if (!Array.isArray(phase.actions)) continue;
     phase.actions = phase.actions.map((rawAction: unknown) => {
-      let action = typeof rawAction === 'string' ? rawAction : String(rawAction ?? '');
+      const action = typeof rawAction === 'string' ? rawAction : String(rawAction ?? '');
       const groundedAction = removeUnsupportedActionIfNeeded(action, findingCorpus, adjustments);
       if (groundedAction === undefined) return '';
-      action = groundedAction;
-      const actionText = lower(action);
-      const ids = Array.from(action.matchAll(TACTIC_RX)).map(m => m[1]);
-      const weakOnlyTactic = weakOnlyTacticFor(action);
-      if (weakOnlyTactic) {
-        adjustments.push({
-          action_before: action,
-          action_after: '',
-          tactic_id: weakOnlyTactic,
-          reason: `${weakOnlyTactic} was withheld because its mapped domain has incomplete source coverage. Collect domain evidence before prescribing remediation.`,
-        });
-        return '';
-      }
-      for (const id of ids) {
-        const rule = TACTIC_RULES[id];
-        const tactic = tacticById.get(id);
-        if (!rule || !tactic) continue;
-
-        const replacement = rule.replacementWhenActionMatches
-          ?.find(candidate => includesAny(actionText, candidate.keywords));
-        if (replacement) {
-          action = applyReplacementOrRemoval(
-            action,
-            id,
-            replacement.id,
-            `${id} was replaced because the action language matches ${replacement.id}, not ${tactic.canonical_name || id}.`,
-            adjustments
-          );
-          continue;
-        }
-
-        const matchesAction = includesAny(actionText, rule.requiredFindingKeywords);
-        const matchesFinding = includesAny(findingCorpus, rule.requiredFindingKeywords);
-        if (!matchesAction || !matchesFinding) {
-          action = applyReplacementOrRemoval(
-            action,
-            id,
-            undefined,
-            `${id} was removed because its problem pattern was not present in both the action and the locked findings.`,
-            adjustments
-          );
-        }
-      }
-      return action.trim().replace(/\s{2,}/g, ' ');
+      const weakOnlyTactic = weakOnlyTacticFor(groundedAction);
+      if (!weakOnlyTactic) return groundedAction.trim().replace(/\s{2,}/g, ' ');
+      adjustments.push({
+        action_before: groundedAction,
+        action_after: '',
+        tactic_id: weakOnlyTactic,
+        reason: `${weakOnlyTactic} was withheld because all mapped domains have incomplete source coverage. Collect domain evidence before prescribing remediation.`,
+      });
+      return '';
     }).filter((action: string) => action.length > 0);
   }
   data.phase_3_strategy.remediation_roadmap = clonedRoadmap.filter((phase: any) =>
@@ -263,19 +287,16 @@ export const sanitizeRoadmapTacticGrounding = (
         action_before: action,
         action_after: '',
         tactic_id: weakOnlyTactic,
-        reason: `${weakOnlyTactic} was withheld from Safe To Act On because its mapped domain has incomplete source coverage.`,
+        reason: `${weakOnlyTactic} was withheld from Safe To Act On because all mapped domains have incomplete source coverage.`,
       });
       return false;
     });
   }
 
-  const warnings = adjustments.map(a =>
-    a.tactic_id === 'ACTION'
-      ? `Roadmap grounding removed unsupported action: ${a.reason}`
-      : a.replacement_id
-      ? `Roadmap tactic grounding adjusted ${a.tactic_id} → ${a.replacement_id}: ${a.reason}`
-      : `Roadmap tactic grounding removed ${a.tactic_id}: ${a.reason}`
+  const warnings = adjustments.map(adjustment =>
+    adjustment.tactic_id === 'ACTION'
+      ? `Roadmap grounding removed unsupported action: ${adjustment.reason}`
+      : `Roadmap tactic grounding removed ${adjustment.tactic_id}: ${adjustment.reason}`
   );
-
   return { strategyData: data, adjustments, warnings };
 };

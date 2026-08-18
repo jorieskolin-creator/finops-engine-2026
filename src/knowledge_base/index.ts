@@ -10,13 +10,20 @@ import tacticActivityPlaybookData from './finops_tactic_activity_playbook.json';
 import validationData from './finops_validation_rules.json';
 import taxonomyRegistryData from './finops_taxonomy_registry.json';
 
+export const FINOPS_TACTIC_PLAYBOOK_URL = 'https://finops-tactic-playbook-knowledge-base.vercel.app/';
+export const FINOPS_TACTIC_PLAYBOOK_VERSION = tacticActivityPlaybookData.schema_version;
+
 export const FINOPS_CRITERIA = criteriaData.criteria;
 export const FINOPS_ANTIPATTERNS = antipatternData.criteria;
 export const FINOPS_KEYWORDS = keywordsData;
 export const FINOPS_EVIDENCE_TAXONOMY = taxonomyData;
 export const FINOPS_PERSONAS = personasData;
-export const FINOPS_TACTICS_LOCAL = tacticsData.tactics as StrategicTactic[];
-export const FINOPS_TACTIC_ACTIVITY_PLAYBOOK = tacticActivityPlaybookData.entries as TacticActivityPlaybookEntry[];
+export const FINOPS_TACTICS_LOCAL = (tacticsData.tactics as StrategicTactic[]).map(tactic => ({
+  ...tactic,
+  resource_label: 'Tactic Playbook',
+  resource_url: `${FINOPS_TACTIC_PLAYBOOK_URL}#${tactic.id.toLowerCase()}`,
+}));
+export const FINOPS_TACTIC_ACTIVITY_PLAYBOOK = tacticActivityPlaybookData.tactics as TacticActivityPlaybookEntry[];
 export const FINOPS_VALIDATION_RULES = validationData;
 export const FINOPS_TAXONOMY_REGISTRY = taxonomyRegistryData as KnowledgeTaxonomyRegistry;
 
@@ -55,9 +62,12 @@ export function buildTacticActivityContext(
     .filter(entry => tacticIds.has(entry.tactic_id))
     .map(entry => {
       const tactic = byId.get(entry.tactic_id);
+      const maturity = entry.maturity_bindings.map(binding => `${binding.criterion_id}:${binding.relationship}`).join(', ');
+      const antipattern = entry.antipattern_bindings.map(binding => `${binding.criterion_id}:${binding.relationship}`).join(', ');
       return [
         `[${entry.tactic_id}] ${tactic?.canonical_name || tactic?.problem_pattern || 'Unnamed tactic'}`,
-        `KB coverage: maturity=${entry.maturity_criteria.join(', ')}; antipattern=${entry.antipattern_criteria.join(', ')}`,
+        `Home category: ${entry.category}`,
+        `KB bindings: maturity=${maturity}; antipattern=${antipattern}`,
         `Activity goal: ${entry.activity_goal}`,
         `Use when: ${entry.when_to_use.join('; ')}`,
         `Do not use when: ${entry.when_not_to_use.join('; ')}`,
@@ -65,6 +75,7 @@ export function buildTacticActivityContext(
         `Implementation activities: ${entry.implementation_activities.join('; ')}`,
         `Owner roles: ${entry.owner_roles.join(', ')}`,
         `Expected artifacts: ${entry.expected_artifacts.join(', ')}`,
+        `Semantic hints: ${entry.semantic_hints.join(', ')}`,
         `Acceptance criteria: ${entry.acceptance_criteria.join('; ')}`,
         `Risks and controls: ${entry.risks_and_controls.join('; ')}`
       ].join('\n');
@@ -613,7 +624,7 @@ The remote reference Knowledge Base was unavailable or could not be parsed. Use 
         entry += `\n   RISK: ${t.risk_notes}`;
       }
       if (t.resource_label) {
-        entry += `\n   REFERENCE: ${t.resource_label}`;
+        entry += `\n   REFERENCE: ${t.resource_label}${t.resource_url ? ` — ${t.resource_url}` : ''}`;
       }
       return entry;
     }).join("\n\n");
@@ -626,10 +637,14 @@ ${formattedContext}
 
 <TACTIC_ACTIVITY_PLAYBOOK usage="roadmap_activity_guidance_only_not_customer_evidence">
 BOUNDARIES:
-- Use this playbook only to enrich roadmap WHY, WHAT, and HOW for tactic actions that are already grounded in locked findings.
+- Use PRIMARY bindings activated by verified findings as required roadmap foundations.
+- Evaluate SUPPORTING and RELATED bindings semantically against locked findings and applicability guidance.
+- Use this playbook to enrich roadmap WHY, WHAT, and HOW only after that grounding decision.
 - Never cite this playbook as proof of the assessed organization's current state.
 - Never copy this playbook into source_evidence_quote.
-- If the locked findings do not match the tactic coverage or use-when rules, withhold the tactic ID.
+- Expected artifacts and semantic hints aid candidate discovery; they do not prove applicability.
+- Adapt risk-control guidance to the grounded action instead of copying it mechanically.
+- If an optional tactic does not match the locked findings or use-when rules, withhold its ID.
 
 ${activityContext || '(no tactic activity playbook entries available)'}
 </TACTIC_ACTIVITY_PLAYBOOK>`;

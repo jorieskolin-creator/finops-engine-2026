@@ -18,7 +18,7 @@ const hasSourceQuote = (item: AuditItem): boolean =>
     (q.evidence_source === undefined || q.evidence_source === 'text' || q.evidence_source === 'image')
   );
 
-const hasVerifiedSourceCoverage = (item: AuditItem, stream: 'maturity' | 'antipattern'): boolean => {
+export const hasVerifiedSourceCoverage = (item: AuditItem, stream: 'maturity' | 'antipattern'): boolean => {
   if (item.verification_unresolved) return false;
   if (item.assessment_status !== 'not_assessed' && hasSourceQuote(item)) return true;
   if (item.evidence_check_status === 'unsupported' || item.evidence_check_status === 'missing') return false;

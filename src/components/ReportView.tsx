@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { AuditItem, DiagnosticResult, QualityGateResult, ConfidenceBracket, FindingsModeOutput, RemediationStep } from '../types';
-import { MarkdownRenderer } from './DashboardComponents';
+import { MarkdownRenderer, TacticLinkedText } from './DashboardComponents';
 import { BATCH_TITLES, MASTER_BINGO_FINOPS } from '../knowledge_base';
 import { SVG_CSS, svgGaugeCard, svgRadar, svgScatter } from '../services/svgChartService';
 import {
@@ -108,7 +108,7 @@ const RemediationStepBlock: React.FC<{ step: RemediationStep; index: number }> =
         {step.actions.map((action, i) => (
           <li key={i} className="flex items-start gap-3 text-sm text-slate-700">
             <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0"></span>
-            <span>{action}</span>
+            <span><TacticLinkedText content={action} /></span>
           </li>
         ))}
       </ul>
