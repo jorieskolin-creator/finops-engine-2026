@@ -24,6 +24,10 @@ const SOURCE_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
 const SOURCE_KINDS = new Set(['text', 'pdf', 'html', 'csv', 'tsv', 'json', 'xlsx', 'image']);
 const PDF_PAGE_STATES = new Set(['TEXT_EXTRACTED', 'SPARSE_TEXT_ONLY', 'OCR_REQUIRED', 'OCR_COMPLETE', 'VISUAL_INTERPRETATION_REQUIRED', 'VISUAL_REGION_WITHHELD', 'EXTRACTION_FAILED']);
 const SHA256_PATTERN = /^sha256_[a-f0-9]{64}$/;
+const invalidStructuredTable = (): Error & { code: string } => Object.assign(
+  new Error('INVALID_STRUCTURED_TABLE'),
+  { code: 'INVALID_STRUCTURED_TABLE' }
+);
 
 const DOMAIN_TERMS: Record<string, string[]> = {
   A: [
@@ -407,14 +411,14 @@ const validateSourceRecords = (records: SourceRecord[]): void => {
       || record.structured_tables.length > 20 || record.structured_table !== undefined
     )) || (tables.length > 0 && !['csv', 'tsv', 'xlsx'].includes(record.kind))
       || tables.some(table => !validStructuredTable(table))) {
-      throw new Error('INVALID_STRUCTURED_TABLE');
+      throw invalidStructuredTable();
     }
     if (record.kind === 'xlsx' && record.structured_tables) {
       const sheetNames = new Set<string>();
-      if (!record.structured_tables.some(table => table.model_eligible)) throw new Error('INVALID_STRUCTURED_TABLE');
+      if (!record.structured_tables.some(table => table.model_eligible)) throw invalidStructuredTable();
       for (const table of record.structured_tables) {
         if (!table.sheet_name || sheetNames.has(table.sheet_name)
-          || table.model_eligible !== (table.sheet_visibility === 'visible')) throw new Error('INVALID_STRUCTURED_TABLE');
+          || table.model_eligible !== (table.sheet_visibility === 'visible')) throw invalidStructuredTable();
         sheetNames.add(table.sheet_name);
       }
     }

@@ -109,6 +109,20 @@ assert.deepEqual(
 assert.match(respondentJson, /Controller/, 'non-person role context should remain available for analysis');
 assert.match(respondentJson, /Tietoallas/, 'team context should remain available for analysis');
 
+const expansionSource = renderDelimitedTableForAnalysis(`Question;Toni;Esa Hakanen / Controller\nDetails;${'Toni '.repeat(80)};Reviewed`, {
+  fileName: 'bounded-respondents.csv', delimiter: ';'
+});
+assert.equal(expansionSource.structuredTable.rows[0][1].length, 243, 'parser preview must begin at its maximum valid width');
+const expansionPrivacy = sanitizeEvidenceSources([{
+  schema_version: 'source_record_v1', source_id: 'src-bounded-respondents', source_name: 'bounded-respondents.csv', kind: 'csv',
+  text: expansionSource.text, structured_table: expansionSource.structuredTable,
+}]);
+const expansionTable = expansionPrivacy.sources[0].structured_table;
+assert.equal(expansionTable.rows[0][1].length, 243, 'privacy-label expansion must preserve the bounded preview contract');
+assert.ok(expansionTable.analysis_rows[0][1].length > 243, 'complete redacted analytical evidence must not be truncated');
+assert.match(expansionTable.analysis_rows[0][1], /Respondent 1/);
+assert.doesNotMatch(JSON.stringify(expansionPrivacy.sources[0]), /Toni/, 'the bounded preview and complete analytical value must both remain redacted');
+
 const ordinaryHeadersPrivacy = sanitizeEvidenceSources([{
   schema_version: 'source_record_v1', source_id: 'src-costs', source_name: 'costs.csv', kind: 'csv',
   text: 'Region,Service,Cost\nWest,Compute,12',

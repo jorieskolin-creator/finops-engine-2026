@@ -3,7 +3,7 @@ import type {
   EvidencePrivacyFindingKind,
   SourceRecord
 } from '../types';
-import { buildDeterministicTableInspection } from './tableService';
+import { boundStructuredTablePreviewCell, buildDeterministicTableInspection } from './tableService';
 
 type Pattern = {
   kind: EvidencePrivacyFindingKind;
@@ -190,8 +190,11 @@ export const sanitizeEvidenceSources = (sources: SourceRecord[]): {
       return {
         ...table,
         sheet_name: table.sheet_name ? sanitizeText(table.sheet_name, source.source_id, findings, personRedactions) : undefined,
-        headers: sanitizedHeaders,
-        rows: table.rows.map(row => row.map(cell => applyKnownRedactions(cell, personRedactions))),
+        // Privacy labels can be longer than the values they replace. Preserve
+        // complete redacted values below, but restore the parser's bounded
+        // contract for model-preview headers and cells before packetization.
+        headers: sanitizedHeaders.map(boundStructuredTablePreviewCell),
+        rows: table.rows.map(row => row.map(cell => boundStructuredTablePreviewCell(applyKnownRedactions(cell, personRedactions)))),
         analysis_rows: table.analysis_rows ? sanitizedCompleteRows : undefined,
         privacy_scan_headers: table.privacy_scan_headers ? sanitizedPrivacyHeaders : undefined,
         privacy_scan_rows: table.privacy_scan_rows ? sanitizedPrivacyRows : undefined,

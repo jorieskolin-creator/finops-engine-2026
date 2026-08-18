@@ -28,6 +28,10 @@ export const TABLE_SAMPLE_STRATEGY_VERSION = 'deterministic_table_sample_v1' as 
 const DISTINCT_VALUE_LIMIT = 10_000;
 const DUPLICATE_ANALYSIS_ROW_LIMIT = 100_000;
 
+export const boundStructuredTablePreviewCell = (value: string): string => value.length > MAX_CELL_CHARS
+  ? `${value.slice(0, MAX_CELL_CHARS)}...`
+  : value;
+
 const roundedPercent = (value: number): number => Math.round(value * 100) / 100;
 const valueType = (value: string): Exclude<DeterministicTableInspection['columns'][number]['inferred_type'], 'EMPTY' | 'MIXED'> => {
   const trimmed = value.trim();
@@ -245,7 +249,7 @@ const probableHeaderIndex = (rows: Array<{ cells: string[]; rowNumber: number }>
 const normalizeCell = (value: string): { value: string; originalLength: number; retainedLength: number } => {
   const normalized = normalizeAnalysisCell(value);
   return {
-    value: normalized.length > MAX_CELL_CHARS ? `${normalized.slice(0, MAX_CELL_CHARS)}...` : normalized,
+    value: boundStructuredTablePreviewCell(normalized),
     originalLength: normalized.length,
     retainedLength: Math.min(normalized.length, MAX_CELL_CHARS)
   };

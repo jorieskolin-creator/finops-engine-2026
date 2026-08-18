@@ -1605,7 +1605,8 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => unresolve
     for (const stage of activeProgressStages) onProgress({ stage, status: 'failed' });
     clearStageTraces(runId);
     const integrityError = error instanceof PipelineIntegrityError ? error : null;
-    const errorCode = integrityError?.code || (error?.code === 'SYNTHESIS_OUTPUT_INVALID' ? error.code : 'PIPELINE_FAILED');
+    const errorCode = integrityError?.code
+      || (['SYNTHESIS_OUTPUT_INVALID', 'INVALID_STRUCTURED_TABLE'].includes(error?.code) ? error.code : 'PIPELINE_FAILED');
     if (!completionIntent) {
       if (hasRecoverableCheckpoint) await suspendRun(runId, errorCode).catch(() => undefined);
       else await failRun(runId, errorCode).catch(() => undefined);
