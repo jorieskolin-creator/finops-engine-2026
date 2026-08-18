@@ -42,7 +42,11 @@ for (const stage of MODEL_STAGES) {
   const chain = config.routes[stage];
   assert.ok(role, `${stage} must have exactly one role`);
   assert.equal(chain.length, 2, `${stage} must have primary and fallback`);
-  assert.deepEqual(chain, config.roles[role].profiles, `${stage} must use its role route`);
+  assert.deepEqual(
+    chain.map(candidate => `${candidate.provider}:${candidate.id}`),
+    config.roles[role].profiles.map(candidate => `${candidate.provider}:${candidate.id}`),
+    `${stage} must preserve its role provider/model route`,
+  );
   assert.notDeepEqual(chain[0], chain[1], `${stage} primary and fallback must differ`);
   for (const candidate of chain) {
     authorizeDestination(stage, candidate.provider, candidate.id, settingsForProfile(candidate));
@@ -75,6 +79,14 @@ assert.deepEqual(config.routes.fact_check.map(value => `${value.provider}:${valu
 ]);
 assert.deepEqual(config.routes.evidence_adjudication[0].reasoningEffort, 'high');
 assert.deepEqual(config.routes.fact_check[0].reasoningEffort, 'medium');
+assert.equal(config.routes.synthesis[0].maxTokens, 24576, 'Anthropic synthesis alone receives the larger completion budget');
+assert.equal(config.routes.synthesis[1].maxTokens, 16384, 'the Grok synthesis fallback retains its role default');
+assert.equal(config.routes.forensic_audit[0].maxTokens, 16384, 'other Anthropic Workhorse stages retain their role default');
+assert.equal(config.routes.quality_gate[0].maxTokens, 16384, 'Quality Gate explanation retains its bounded Workhorse budget');
+assert.equal(config.roles.WORKHORSE.profiles[0].maxTokens, 16384, 'the role default remains bounded outside the stage override');
+assert.throws(() => authorizeConfiguredDestination(
+  'synthesis', 'anthropic', 'claude-sonnet-5', { max_tokens: 16384 }, env,
+), /DESTINATION_NOT_CONFIGURED/, 'the old synthesis budget must fail closed after the policy change');
 
 for (const invalid of [
   {},

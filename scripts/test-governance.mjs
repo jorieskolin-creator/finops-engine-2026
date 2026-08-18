@@ -38,8 +38,9 @@ assert.throws(()=>authorizeDestination('forensic_audit','anthropic','claude-sonn
 const xaiRequest={...request,provider:'xai',model:'grok-4.6',destination:'xai:external_model',system_instruction:'Return JSON only',settings:{max_tokens:16384,reasoning_effort:'medium'}};
 assert.equal(approveRequest(xaiRequest).provider,'xai');
 assert.throws(()=>authorizeDestination('forensic_audit','xai','grok-4.6',{max_tokens:4096,reasoning_effort:'medium'}),/INVALID_MODEL_SETTINGS/);
-const synthesisRequest={...request,stage:'synthesis',output_contract:OUTPUT_CONTRACT_IDS.evidenceSynthesis};
+const synthesisRequest={...request,stage:'synthesis',settings:{max_tokens:24576},output_contract:OUTPUT_CONTRACT_IDS.evidenceSynthesis};
 assert.equal(approveRequest(synthesisRequest).output_contract,OUTPUT_CONTRACT_IDS.evidenceSynthesis);
+assert.throws(()=>approveRequest({...synthesisRequest,settings:{max_tokens:16384}}),/INVALID_MODEL_SETTINGS/);
 assert.throws(()=>approveRequest({...synthesisRequest,stage:'roadmap_synthesis',settings:{max_tokens:32768}}),/OUTPUT_CONTRACT_NOT_AUTHORIZED/);
 assert.throws(()=>approveRequest({...synthesisRequest,output_contract:'client_schema'}),/OUTPUT_CONTRACT_NOT_AUTHORIZED/);
 let committedBody;const repository={getRun:async()=>({state:'active',effective_expires_at:new Date(Date.now()+60_000),absolute_deadline_at:new Date(Date.now()+60_000)}),commitPacket:async value=>{committedBody=value.canonicalBody;return true;}};
