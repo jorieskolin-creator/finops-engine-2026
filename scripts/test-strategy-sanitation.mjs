@@ -171,13 +171,13 @@ assert.equal(hygieneSanitized.factCheck.unsupported_claims.length, 0);
 assert.doesNotMatch(JSON.stringify(hygieneSanitized.strategyData), /low-severity anomaly escalation/);
 assert.doesNotMatch(JSON.stringify(hygieneSanitized.strategyData), /exact verified tactics database patterns/);
 
-const contraindicatedTacticClaim = '[TAC-CULT-003] Executive Sponsor and FinOps Lead establish a new mandate despite the existing funded operating model.';
+const contraindicatedTacticClaim = 'The engineering platform owner will extend [TAC-ARCH-002] from platform pull requests to product repositories [D2].';
 const roadmapHygieneSanitized = sanitizeStrategyAfterFactCheck({
   phase_3_strategy: {
     remediation_roadmap: [{
       phase: '3. Walk',
       actions: [
-        `${contraindicatedTacticClaim} Control: keep scenarios conservative and tied to verified baselines.`,
+        `${contraindicatedTacticClaim} Preserve existing architecture cost reviews and use time-bound exceptions.`,
         'Retain this independently grounded action.'
       ]
     }]
@@ -193,13 +193,14 @@ const roadmapHygieneSanitized = sanitizeStrategyAfterFactCheck({
     source_location: 'roadmap',
     failure_type: 'other',
     severity: 'WARN_TACTIC_HYGIENE',
-    rationale: 'The playbook says not to use this tactic when a funded mandate and accountable operating model already exist.'
+    rationale: 'The action is grounded, but this tactic assumes cost-blind architecture decisions that the locked findings contradict.'
   }]
 });
 assert.deepEqual(roadmapHygieneSanitized.strategyData.phase_3_strategy.remediation_roadmap[0].actions, [
+  'The engineering platform owner will extend the existing practice from platform pull requests to product repositories [D2]. Preserve existing architecture cost reviews and use time-bound exceptions.',
   'Retain this independently grounded action.'
 ]);
-assert.equal(roadmapHygieneSanitized.sanitized[0].action, 'quarantined');
+assert.equal(roadmapHygieneSanitized.sanitized[0].action, 'rewritten');
 
 const sanitized = sanitizeStrategyAfterFactCheck(strategyData, factCheck);
 assert.equal(sanitized.sanitized.length, 2);

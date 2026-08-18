@@ -36,6 +36,7 @@ import {
   buildTacticSelectionPlan,
   classifyFinalRequiredTactics,
   findMissingRequiredTacticIds,
+  findRoadmapActionsMissingCriterionReferences,
   sanitizeRoadmapTacticGrounding,
   TacticGroundingAdjustment
 } from "./tacticGroundingService";
@@ -785,7 +786,8 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => unresolve
         systemInstruction: ROADMAP_SYNTHESIS_SYSTEM_INSTRUCTION,
         regenerated: Boolean(correctionAppendix),
         recordModel: model => { actuals.roadmap_synthesis = model; },
-        validate: value => findMissingRequiredTacticIds(value, tacticSelectionPlan).length === 0,
+        validate: value => findMissingRequiredTacticIds(value, tacticSelectionPlan).length === 0
+          && findRoadmapActionsMissingCriterionReferences(value).length === 0,
         buildUserText: formatRetry => [
           ROADMAP_SYNTHESIS_USER_PROMPT,
           confidenceBracket === 'MEDIUM' ? ROADMAP_SYNTHESIS_PROMPT_CAUTIOUS_APPENDIX : '',
@@ -794,7 +796,7 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => unresolve
           `\n\n### DIAGNOSTIC FINDINGS (Phase 1 & 2)\n${handoffSummary}`,
           `\n\n${tacticSelectionContext}`,
           correctionAppendix || '',
-          formatRetry ? '\n\n### OUTPUT CONTRACT CORRECTION\nThe previous provider chain did not satisfy the complete roadmap contract. Return only the schema-compliant roadmap object, include every REQUIRED tactic from the governed selection plan, and add no commentary.' : '',
+          formatRetry ? '\n\n### OUTPUT CONTRACT CORRECTION\nThe previous provider chain did not satisfy the complete roadmap contract. Return only the schema-compliant roadmap object, include every REQUIRED tactic from the governed selection plan, include at least one exact bracketed finding reference in every action, and add no commentary.' : '',
         ].join(''),
       });
     };
@@ -857,78 +859,104 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => unresolve
       return mergePhase3Outputs(normalizedSummary, roadmapData);
     };
 
-    const runFactCheck = async (data: any, attemptNumber: number, stage: Extract<StageId, 'fact_check' | 'fact_check_high'> = 'fact_check'): Promise<FactCheckResult> => {
+    interface SplitFactCheckResult {
+      merged: FactCheckResult;
+      summary?: FactCheckResult;
+      roadmap?: FactCheckResult;
+    }
+
+    const runFactCheck = async (
+      data: any,
+      attemptNumber: number,
+      stage: Extract<StageId, 'fact_check' | 'fact_check_high'> = 'fact_check',
+      scope: Phase3RepairScope = 'both',
+      previous?: SplitFactCheckResult
+    ): Promise<SplitFactCheckResult> => {
       const strategy = data?.phase_3_strategy || {};
       const roadmap = strategy.remediation_roadmap || [];
       const roadmapText = buildRoadmapGroundingText(roadmap);
       try {
-        const summaryPrompt = buildSummaryFactCheckPrompt({
-          contentToCheck: buildSummaryCheckText(strategy),
-          remediationRoadmapText: '',
-          sourceDocument: text,
-          phase1: auditLogs,
-          phase2: validationData,
-          imageCount: images.length,
-        });
-        const summaryStarted = Date.now();
-        const summaryResp = await runStage(stage, {
-          userText: summaryPrompt,
-          images,
-          outputContract: OUTPUT_CONTRACT_IDS.summaryFactCheck,
-          validateOutput: value => {
-            const checked = parseFactCheckResponse(value, attemptNumber, SUMMARY_FACT_CHECK_CONTRACT);
-            if (checked.failed) throw Object.assign(new Error(checked.failure_reason), { code: 'INVALID_FACT_CHECK_OUTPUT' });
-          },
-        }, { runId });
-        actuals[stage] = summaryResp.modelUsed.id;
-        serverLog(runId, 'info', 'stage_complete', {
-          stage,
-          model: summaryResp.modelUsed.id,
-          substage: 'summary',
-          duration_ms: Date.now() - summaryStarted,
-          attempt: attemptNumber,
-        });
-        const summaryCheck = parseFactCheckResponse(summaryResp.text, attemptNumber, SUMMARY_FACT_CHECK_CONTRACT);
-
-        const roadmapPrompt = buildRoadmapFactCheckPrompt({
-          contentToCheck: buildRoadmapCheckText(strategy),
-          remediationRoadmapText: roadmapText,
-          lockedFindingsText: compactLockedFindings(strategy),
-          sourceDocument: text,
-          phase1: auditLogs,
-          phase2: validationData,
-          imageCount: images.length,
-          tactics: FINOPS_TACTICS_LOCAL,
-          tacticActivityPlaybook: FINOPS_TACTIC_ACTIVITY_PLAYBOOK,
-        });
-        const roadmapStarted = Date.now();
-        const roadmapResp = await runStage(stage, {
-          userText: roadmapPrompt,
-          images,
-          outputContract: OUTPUT_CONTRACT_IDS.roadmapFactCheck,
-          validateOutput: value => {
-            const checked = parseFactCheckResponse(value, attemptNumber, ROADMAP_FACT_CHECK_CONTRACT);
-            if (checked.failed) throw Object.assign(new Error(checked.failure_reason), { code: 'INVALID_FACT_CHECK_OUTPUT' });
-          },
-        }, { runId });
-        actuals[stage] = roadmapResp.modelUsed.id;
-        serverLog(runId, 'info', 'stage_complete', {
-          stage,
-          model: roadmapResp.modelUsed.id,
-          substage: 'roadmap',
-          duration_ms: Date.now() - roadmapStarted,
-          attempt: attemptNumber,
-        });
-        const roadmapCheck = parseFactCheckResponse(roadmapResp.text, attemptNumber, ROADMAP_FACT_CHECK_CONTRACT);
-        return mergeRequiredFactChecks(summaryCheck, roadmapCheck, attemptNumber);
+        let summaryCheck = scope === 'roadmap' ? previous?.summary : undefined;
+        let roadmapCheck = scope === 'summary' ? previous?.roadmap : undefined;
+        if (scope !== 'roadmap') {
+          const summaryPrompt = buildSummaryFactCheckPrompt({
+            contentToCheck: buildSummaryCheckText(strategy),
+            remediationRoadmapText: '',
+            sourceDocument: text,
+            phase1: auditLogs,
+            phase2: validationData,
+            imageCount: images.length,
+          });
+          const summaryStarted = Date.now();
+          const summaryResp = await runStage(stage, {
+            userText: summaryPrompt,
+            images,
+            outputContract: OUTPUT_CONTRACT_IDS.summaryFactCheck,
+            validateOutput: value => {
+              const checked = parseFactCheckResponse(value, attemptNumber, SUMMARY_FACT_CHECK_CONTRACT);
+              if (checked.failed) throw Object.assign(new Error(checked.failure_reason), { code: 'INVALID_FACT_CHECK_OUTPUT' });
+            },
+          }, { runId });
+          actuals[stage] = summaryResp.modelUsed.id;
+          serverLog(runId, 'info', 'stage_complete', {
+            stage,
+            model: summaryResp.modelUsed.id,
+            substage: 'summary',
+            duration_ms: Date.now() - summaryStarted,
+            attempt: attemptNumber,
+          });
+          summaryCheck = parseFactCheckResponse(summaryResp.text, attemptNumber, SUMMARY_FACT_CHECK_CONTRACT);
+        }
+        if (scope !== 'summary') {
+          const roadmapPrompt = buildRoadmapFactCheckPrompt({
+            contentToCheck: buildRoadmapCheckText(strategy),
+            remediationRoadmapText: roadmapText,
+            lockedFindingsText: compactLockedFindings(strategy),
+            sourceDocument: text,
+            phase1: auditLogs,
+            phase2: validationData,
+            imageCount: images.length,
+            tactics: FINOPS_TACTICS_LOCAL,
+            tacticActivityPlaybook: FINOPS_TACTIC_ACTIVITY_PLAYBOOK,
+          });
+          const roadmapStarted = Date.now();
+          const roadmapResp = await runStage(stage, {
+            userText: roadmapPrompt,
+            images,
+            outputContract: OUTPUT_CONTRACT_IDS.roadmapFactCheck,
+            validateOutput: value => {
+              const checked = parseFactCheckResponse(value, attemptNumber, ROADMAP_FACT_CHECK_CONTRACT);
+              if (checked.failed) throw Object.assign(new Error(checked.failure_reason), { code: 'INVALID_FACT_CHECK_OUTPUT' });
+            },
+          }, { runId });
+          actuals[stage] = roadmapResp.modelUsed.id;
+          serverLog(runId, 'info', 'stage_complete', {
+            stage,
+            model: roadmapResp.modelUsed.id,
+            substage: 'roadmap',
+            duration_ms: Date.now() - roadmapStarted,
+            attempt: attemptNumber,
+          });
+          roadmapCheck = parseFactCheckResponse(roadmapResp.text, attemptNumber, ROADMAP_FACT_CHECK_CONTRACT);
+        }
+        if (!summaryCheck || !roadmapCheck) {
+          throw Object.assign(new Error('Missing fact-check result for locked scope.'), { code: 'INVALID_FACT_CHECK_OUTPUT' });
+        }
+        return {
+          summary: summaryCheck,
+          roadmap: roadmapCheck,
+          merged: mergeRequiredFactChecks(summaryCheck, roadmapCheck, attemptNumber),
+        };
       } catch (e: any) {
         return {
-          attempts: attemptNumber,
-          total_claims: 0,
-          supported_count: 0,
-          unsupported_claims: [],
-          failed: true,
-          failure_reason: `Fact-check call failed: ${e?.message || e}`
+          merged: {
+            attempts: attemptNumber,
+            total_claims: 0,
+            supported_count: 0,
+            unsupported_claims: [],
+            failed: true,
+            failure_reason: `Fact-check call failed: ${e?.message || e}`
+          }
         };
       }
     };
@@ -1150,6 +1178,26 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => unresolve
       unsupported_signatures: fc.unsupported_claims.map(c => c.claim.substring(0, 80)),
     });
 
+    const defectsForScope = (claims: FactCheckClaim[], scope: Phase3RepairScope): FactCheckClaim[] =>
+      scope === 'both'
+        ? claims
+        : claimsForRepairScope(claims, scope);
+
+    const isStrictFactCheckImprovement = (
+      current: FactCheckClaim[],
+      candidate: FactCheckClaim[],
+      scope: Phase3RepairScope
+    ): boolean => {
+      const profile = (claims: FactCheckClaim[]): [number, number] => {
+        const scoped = defectsForScope(claims, scope);
+        return [scoped.filter(claim => claim.severity?.startsWith('BLOCKING_')).length, scoped.length];
+      };
+      const [currentBlocking, currentTotal] = profile(current);
+      const [candidateBlocking, candidateTotal] = profile(candidate);
+      return candidateBlocking < currentBlocking
+        || (candidateBlocking === currentBlocking && candidateTotal < currentTotal);
+    };
+
     let strategyData: any;
     let deterministicSynthesisFallback = false;
     if (validationData.metrics.evidence_density < EVIDENCE_DENSITY_BLOCK) {
@@ -1179,7 +1227,8 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => unresolve
     await checkpoint('synthesis', 'accepted', { phase_3_strategy: strategyData.phase_3_strategy });
     emitProgress({ stage: 'synthesis', status: deterministicSynthesisFallback ? 'completed_with_warnings' : 'completed' });
     emitProgress({ stage: 'verification', status: 'in_progress' });
-    let factCheck = await runFactCheck(strategyData, 1);
+    let acceptedFactChecks = await runFactCheck(strategyData, 1);
+    let factCheck = acceptedFactChecks.merged;
     await checkpoint('fact_check', 'pass_1', { fact_check: factCheck });
     let lastUnsupported: FactCheckClaim[] = factCheck.unsupported_claims;
     if (!factCheck.failed) trajectory.push(snapshot(factCheck));
@@ -1209,17 +1258,32 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => unresolve
             };
         const candidateStrategy = await callPhase3Validated(repairCorrections, requestedScope, strategyData);
         const candidateAttempt = attempt + 1;
-        const candidateFactCheck = await runFactCheck(candidateStrategy, candidateAttempt);
-        await checkpoint('fact_check', `pass_${candidateAttempt}`, { fact_check: candidateFactCheck });
+        const candidateChecks = await runFactCheck(
+          candidateStrategy,
+          candidateAttempt,
+          'fact_check',
+          requestedScope,
+          acceptedFactChecks
+        );
+        const candidateFactCheck = candidateChecks.merged;
         attempt = candidateAttempt;
         if (candidateFactCheck.failed) {
           serverLog(runId, 'warn', 'synthesis_candidate_rejected', { attempt, reason_code: 'FACT_CHECK_FAILED' });
           break;
         }
+        trajectory.push(snapshot(candidateFactCheck));
+        if (!isStrictFactCheckImprovement(lastUnsupported, candidateFactCheck.unsupported_claims, requestedScope)) {
+          serverLog(runId, 'warn', 'synthesis_candidate_rejected', {
+            attempt,
+            reason_code: 'FACT_CHECK_NOT_IMPROVED',
+          });
+          break;
+        }
         strategyData = candidateStrategy;
+        acceptedFactChecks = candidateChecks;
         factCheck = candidateFactCheck;
         lastUnsupported = factCheck.unsupported_claims;
-        trajectory.push(snapshot(factCheck));
+        await checkpoint('fact_check', `pass_${candidateAttempt}`, { fact_check: candidateFactCheck });
         await checkpoint('synthesis', 'accepted', { phase_3_strategy: strategyData.phase_3_strategy });
       } catch (error: any) {
         serverLog(runId, 'warn', 'synthesis_candidate_rejected', {
@@ -1230,6 +1294,7 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => unresolve
       }
     }
 
+    factCheck.attempts = attempt;
     factCheck.trajectory = trajectory;
 
     if (factCheck.failed) {
@@ -1301,7 +1366,8 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => unresolve
         medium_attempts: factCheck.attempts,
         blocking_reasons: qualityGate.blocking_reasons.length,
       });
-      const highFactCheck = await runFactCheck(strategyData, factCheck.attempts + 1, 'fact_check_high');
+      const highFactChecks = await runFactCheck(strategyData, factCheck.attempts + 1, 'fact_check_high');
+      const highFactCheck = highFactChecks.merged;
       await checkpoint('fact_check', 'escalated', { fact_check: highFactCheck });
       if (!highFactCheck.failed) {
         highFactCheck.trajectory = [...(factCheck.trajectory || []), snapshot(highFactCheck)];

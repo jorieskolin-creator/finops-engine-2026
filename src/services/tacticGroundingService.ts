@@ -44,6 +44,7 @@ interface UnsupportedActionRule {
 }
 
 const TACTIC_RX = /\[(TAC-[A-Z]+-\d+(?:-[A-Z]+)?)\]/g;
+const CRITERION_REFERENCE_RX = /\[(?:AP-)?[A-F][1-5](?:\s*-\s*(?:[A-F])?[1-5])?\]/;
 
 const UNSUPPORTED_ACTION_RULES: UnsupportedActionRule[] = [
   {
@@ -201,6 +202,12 @@ export const findMissingRequiredTacticIds = (strategyData: any, plan: TacticSele
   return plan.required.map(candidate => candidate.tactic_id).filter(id => !present.has(id));
 };
 
+export const findRoadmapActionsMissingCriterionReferences = (strategyData: any): string[] =>
+  (strategyData?.phase_3_strategy?.remediation_roadmap || [])
+    .flatMap((phase: any) => Array.isArray(phase?.actions) ? phase.actions : [])
+    .map((action: unknown) => typeof action === 'string' ? action.trim() : String(action ?? '').trim())
+    .filter((action: string) => action.length > 0 && !CRITERION_REFERENCE_RX.test(action));
+
 export const classifyFinalRequiredTactics = (
   strategyData: any,
   plan: TacticSelectionPlan,
@@ -210,7 +217,7 @@ export const classifyFinalRequiredTactics = (
   const reviewedContraindications = new Set(sanitizedClaims
     .filter(claim => claim.source_location === 'roadmap'
       && claim.severity === 'WARN_TACTIC_HYGIENE'
-      && ['quarantined', 'removed'].includes(claim.action))
+      && ['quarantined', 'removed', 'rewritten'].includes(claim.action))
     .flatMap(claim => Array.from(claim.claim.matchAll(TACTIC_RX), match => match[1])));
   return {
     contraindicated: absent.filter(id => reviewedContraindications.has(id)),

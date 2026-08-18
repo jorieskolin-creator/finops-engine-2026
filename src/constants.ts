@@ -259,6 +259,7 @@ ${STRATEGY_PERSONAS_BLOCK}
 8. **PRIVACY LANGUAGE:** Do not name individuals. Avoid repeating the assessed organization/legal entity name unless it is essential to preserve meaning; prefer neutral labels such as "the assessed organization", "the finance team", "the engineering team", or "the FinOps team".
 9. **JSON STRING SAFETY:** No double quotes inside JSON values. Use single quotes or asterisks.
 10. **ASSESSMENT-STATUS FIDELITY:** A criterion marked unsupported, verification_unresolved, or not_assessed is an evidence/verification gap. Never describe it as a confirmed weak, partial, missing, or immature control. Only an assessed, source-backed criterion may support current-state strength or deficiency language.
+11. **BOUNDED RESPONSE:** Keep each persona summary at or below 180 words. Use at most five bullets per evidence_summary list, at most three root causes, at most 55 words per domain diagnosis, and at most 80 words for confidence rationale. Do not repeat the same finding across multiple bullets in one section.
 </strict_constraints>
 
 <task>
@@ -329,7 +330,7 @@ ${FINOPS_METHODOLOGY_CONTEXT}
 
 <strict_constraints>
 1. **LOCKED FINDINGS:** Do not change, reinterpret, or add factual claims to the evidence summary or diagnosis. The roadmap must answer: what actions logically follow from these findings?
-2. **GROUNDING RULE:** Every roadmap action must trace to at least one confirmed gap, confirmed anti-pattern, silent/missing evidence item, or diagnosis statement in LOCKED FINDINGS. Prefer 3-5 actions per phase when the locked findings support them. If a phase has fewer than 3 genuinely grounded actions, return fewer actions rather than inventing filler.
+2. **GROUNDING RULE:** Every roadmap action must trace to at least one confirmed gap, confirmed anti-pattern, silent/missing evidence item, or diagnosis statement in LOCKED FINDINGS. Prefer 2-4 actions per phase when the locked findings support them. If a phase has fewer than 2 genuinely grounded actions, return fewer actions rather than inventing filler.
 3. **TACTICS KB SCOPE:** Use the Verified Tactics Database and Tactic Activity Playbook only for prescriptions, mechanism names, case-study references, activity detail, artifacts, roles, and acceptance criteria. Never use them to alter current-state findings.
 4. **TACTIC ID RULE:** Follow the supplied Governed Tactic Selection Plan. Every PRIMARY tactic marked REQUIRED must be evaluated and initially represented in at least one roadmap action with its exact bracketed ID so independent review can verify applicability. If authoritative locked findings satisfy a supplied do-not-use condition, do not disguise the conflict; the Quality Checker may quarantine that tactic as contraindicated. For OPTIONAL tactics, include exactly one valid bracketed tactic ID only when the locked finding and applicability guidance support it. Generic evidence-gathering and genuinely supplemental custom actions should omit tactic IDs. Never invent an ID.
 5. **PLANNING DECISION:**
@@ -347,6 +348,8 @@ ${FINOPS_METHODOLOGY_CONTEXT}
 14. **PRIVACY LANGUAGE:** Do not name individuals. Avoid repeating the assessed organization/legal entity name; use "the assessed organization" or functional labels such as finance, engineering, platform, or FinOps team.
 15. **JSON STRING SAFETY:** No double quotes inside JSON values. Use single quotes or asterisks.
 16. **ASSESSMENT-STATUS FIDELITY:** Treat unsupported, verification_unresolved, and not_assessed criteria only as evidence/verification gaps. Do not call them weak, partial, missing, or immature controls, and do not prescribe remediation for an unverified deficiency. An evidence-collection action is allowed; a control-remediation action requires a separate assessed finding.
+17. **EXPLICIT FINDING REFERENCES:** Every action must include one or more exact bracketed criterion references from LOCKED FINDINGS, such as [A5], [AP-B3], or [F1-F5]. These references are mandatory provenance, not tactic IDs. Do not cite a criterion that does not support the action. Evidence-collection actions must cite the corresponding assessment-gap criteria.
+18. **BOUNDED RESPONSE:** Keep each why and what paragraph between 50 and 90 words. Use 2-4 grounded actions per phase when available. Each action must be concise while retaining owner, artifact, acceptance condition, and risk control; avoid repeating phase narrative inside actions.
 </strict_constraints>
 
 <task>
@@ -357,9 +360,9 @@ ${FINOPS_METHODOLOGY_CONTEXT}
    - 3. Walk — Embedding (6-12 Months)
    - 4. Run — Continuous (12+ Months)
 3. For every phase:
-   - "why": 75-125 words explaining why this phase exists, referencing only locked findings, confirmed gaps, confirmed anti-patterns, missing-evidence needs, diagnosis statements, and matching KB mechanisms.
-   - "what": 75-125 words describing the intended change/outcome without inventing unproven benefits or claiming a gap is fully closed unless the locked findings prove the acceptance criteria.
-   - "actions": the HOW layer — 3-5 concrete bullets grounded in locked findings where possible. Include all REQUIRED tactics from the Governed Tactic Selection Plan across the roadmap. Use the Tactic Activity Playbook for practical activity, owner, artifact, acceptance, and adapted risk-control language. Evaluate OPTIONAL tactics semantically; omit their IDs when applicability is not supported. If fewer than 3 grounded HOW actions exist for a phase, use fewer and do not pad with generic work.
+   - "why": 50-90 words explaining why this phase exists, referencing only locked findings, confirmed gaps, confirmed anti-patterns, missing-evidence needs, diagnosis statements, and matching KB mechanisms.
+   - "what": 50-90 words describing the intended change/outcome without inventing unproven benefits or claiming a gap is fully closed unless the locked findings prove the acceptance criteria.
+   - "actions": the HOW layer — 2-4 concise, concrete bullets grounded in locked findings where possible. Every action must include exact bracketed finding references. Include all REQUIRED tactics from the Governed Tactic Selection Plan across the roadmap. Use the Tactic Activity Playbook for practical activity, owner, artifact, acceptance, and adapted risk-control language. Evaluate OPTIONAL tactics semantically; omit their IDs when applicability is not supported. If fewer than 2 grounded HOW actions exist for a phase, use fewer and do not pad with generic work.
    - "confidence": "high", "medium", or "low" according to how directly the locked findings support the phase.
    - "assumptions": up to four short assumptions that must hold for the phase to apply; return an empty array when none are needed.
    - Do not write blanket claims that every gap maps to a verified KB tactic. Use narrower wording: source-confirmed gaps drive the roadmap; tactic IDs are used only where an exact KB match is supported.
@@ -377,10 +380,10 @@ STRICTLY return JSON:
       "evidence_needed_before_action": ["String bullets"]
     },
     "remediation_roadmap": [
-      { "phase": "1. Crawl — Foundation (0-3 Months)", "why": "75-125 grounded words", "what": "75-125 grounded words", "actions": ["3-5 grounded HOW actions where evidence supports them"], "confidence": "high|medium|low", "assumptions": [] },
-      { "phase": "2. Walk — Optimization (3-6 Months)", "why": "75-125 grounded words", "what": "75-125 grounded words", "actions": ["3-5 grounded HOW actions where evidence supports them"], "confidence": "high|medium|low", "assumptions": [] },
-      { "phase": "3. Walk — Embedding (6-12 Months)", "why": "75-125 grounded words", "what": "75-125 grounded words", "actions": ["3-5 grounded HOW actions where evidence supports them"], "confidence": "high|medium|low", "assumptions": [] },
-      { "phase": "4. Run — Continuous (12+ Months)", "why": "75-125 grounded words", "what": "75-125 grounded words", "actions": ["3-5 grounded HOW actions where evidence supports them"], "confidence": "high|medium|low", "assumptions": [] }
+      { "phase": "1. Crawl — Foundation (0-3 Months)", "why": "50-90 grounded words", "what": "50-90 grounded words", "actions": ["Owner performs a grounded action with artifact, acceptance, risk control, and [A3] [TAC-VIS-004] where applicable"], "confidence": "high|medium|low", "assumptions": [] },
+      { "phase": "2. Walk — Optimization (3-6 Months)", "why": "50-90 grounded words", "what": "50-90 grounded words", "actions": ["2-4 grounded HOW actions with exact finding references"], "confidence": "high|medium|low", "assumptions": [] },
+      { "phase": "3. Walk — Embedding (6-12 Months)", "why": "50-90 grounded words", "what": "50-90 grounded words", "actions": ["2-4 grounded HOW actions with exact finding references"], "confidence": "high|medium|low", "assumptions": [] },
+      { "phase": "4. Run — Continuous (12+ Months)", "why": "50-90 grounded words", "what": "50-90 grounded words", "actions": ["2-4 grounded HOW actions with exact finding references"], "confidence": "high|medium|low", "assumptions": [] }
     ]
   }
 }
@@ -421,7 +424,7 @@ This run produced MEDIUM-confidence evidence (mixed density, some silent areas, 
 4. **Persona summaries.** In the 3rd paragraph ("Source Confidence & Boundaries"), include a one-sentence confidence statement that mirrors the strongest phase confidence (e.g., "Evidence confidence is medium overall; the Crawl phase is high-confidence, later phases rest on assumptions about org readiness."). Do not place directives in the summary.
 
 5. **Output schema additions.** The remediation_roadmap items now look like:
-   { "phase": "1. Crawl — Foundation (0-3 Months)", "why": "75-125 grounded words", "what": "75-125 grounded words", "actions": [...], "confidence": "high|medium|low", "assumptions": ["...", "..."] }
+   { "phase": "1. Crawl — Foundation (0-3 Months)", "why": "50-90 grounded words", "what": "50-90 grounded words", "actions": [...], "confidence": "high|medium|low", "assumptions": ["...", "..."] }
    Keep evidence_summary, diagnosis, planning_decision, executive_summaries, and visual_scorecard in the output shape.
 </cautious_mode_overrides>
 `;

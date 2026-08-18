@@ -153,6 +153,48 @@ const removeRoadmapAction = (strategy: any, claim: FactCheckClaim): boolean => {
   return changed;
 };
 
+const TACTIC_REFERENCE_RX = /\[(TAC-[A-Z]+-\d+(?:-[A-Z]+)?)\]/g;
+
+const removeTacticReferences = (value: string, tacticIds: Set<string>): string => {
+  let next = value;
+  for (const tacticId of tacticIds) {
+    const reference = `\\[${escapeRegExp(tacticId)}\\]`;
+    next = next
+      .replace(new RegExp(`\\bapply\\s+${reference}\\s+to\\b`, 'gi'), 'address')
+      .replace(new RegExp(`\\buse\\s+${reference}\\s+only\\s+for\\b`, 'gi'), 'perform')
+      .replace(new RegExp(`\\bextend\\s+${reference}\\s+from\\b`, 'gi'), 'extend the existing practice from')
+      .replace(new RegExp(`\\s+(?:under|through|using|via|with)\\s+${reference}`, 'gi'), '')
+      .replace(new RegExp(reference, 'gi'), '');
+  }
+  return next
+    .replace(/\s+([,.;:!?])/g, '$1')
+    .replace(/[ \t]{2,}/g, ' ')
+    .trim();
+};
+
+const preserveRoadmapActionWithoutRejectedTactic = (strategy: any, claim: FactCheckClaim): boolean => {
+  const roadmap = strategy?.phase_3_strategy?.remediation_roadmap;
+  if (!Array.isArray(roadmap)) return false;
+  const tacticIds = new Set(Array.from(claim.claim.matchAll(TACTIC_REFERENCE_RX), match => match[1]));
+  const claimText = compact(claim.claim);
+  if (tacticIds.size === 0 || !claimText) return false;
+  const claimLower = claimText.toLowerCase();
+  let changed = false;
+  for (const phase of roadmap) {
+    if (!Array.isArray(phase?.actions)) continue;
+    phase.actions = phase.actions.flatMap((action: unknown) => {
+      const actionText = compact(String(action || ''));
+      const actionLower = actionText.toLowerCase();
+      const matches = actionLower.includes(claimLower) || claimLower.includes(actionLower);
+      if (!matches) return actionText ? [action] : [];
+      const rewritten = removeTacticReferences(String(action), tacticIds);
+      changed ||= rewritten !== String(action);
+      return rewritten ? [rewritten] : [];
+    });
+  }
+  return changed;
+};
+
 export const sanitizeStrategyAfterFactCheck = (
   strategyData: any,
   factCheck: FactCheckResult,
@@ -168,6 +210,14 @@ export const sanitizeStrategyAfterFactCheck = (
   for (const claim of factCheck.unsupported_claims) {
     if (!isBlockingUnsupportedClaim(claim)) {
       if (isSanitizableHygieneClaim(claim)) {
+        if (
+          claim.source_location === 'roadmap'
+          && claim.severity === 'WARN_TACTIC_HYGIENE'
+          && preserveRoadmapActionWithoutRejectedTactic(data, claim)
+        ) {
+          sanitized.push(makeItem(claim, 'rewritten'));
+          continue;
+        }
         if (claim.source_location === 'roadmap' && removeRoadmapAction(data, claim)) {
           sanitized.push(makeItem(claim, 'quarantined'));
           continue;

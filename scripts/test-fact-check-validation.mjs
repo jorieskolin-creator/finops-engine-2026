@@ -87,5 +87,8 @@ assert.match(buildRegenerateAppendix([summaryDefect, roadmapDefect], 'both'), /R
 const analysisSource = await readFile(new URL('../src/services/analysisService.ts', import.meta.url), 'utf8');
 assert.match(analysisSource, /determineFactCheckRepairScope\(lastUnsupported\)/);
 assert.match(analysisSource, /callPhase3Validated\([\s\S]*requestedScope, strategyData\)/, 'repair must retain the accepted strategy and invoke only the requested contract scope');
+assert.match(analysisSource, /requestedScope,\s*acceptedFactChecks/, 'fact-check must reuse the verdict for the unchanged contract scope');
+assert.match(analysisSource, /FACT_CHECK_NOT_IMPROVED/, 'a regenerated candidate that does not improve the scoped defect profile must be rejected');
+assert.match(analysisSource, /findRoadmapActionsMissingCriterionReferences/, 'roadmap output validation must require explicit action-to-finding references');
 
 console.log('fact-check validation tests passed');

@@ -98,6 +98,7 @@ const {
   buildTacticSelectionPlan,
   classifyFinalRequiredTactics,
   findMissingRequiredTacticIds,
+  findRoadmapActionsMissingCriterionReferences,
   sanitizeRoadmapTacticGrounding,
 } = await import(`file://${modulePath}`);
 
@@ -163,17 +164,21 @@ const strategyData = {
     remediation_roadmap: [{
       phase: '1. Crawl',
       actions: [
-        'Migrate verified unmanaged accounts through a staged owner-approved path [TAC-GOV-002]',
-        'Introduce owner-approved budget controls with staged enforcement [TAC-GOV-003]',
-        'Track the verified governance outcomes against accepted measures [TAC-GOV-004]',
-        'Pilot owner-approved retention controls with restore validation [TAC-OPT-005]',
-        'Define an additional customer-specific handoff artifact with an owner and acceptance check',
+        'Migrate verified unmanaged accounts through a staged owner-approved path [TAC-GOV-002] [AP-C1]',
+        'Introduce owner-approved budget controls with staged enforcement [TAC-GOV-003] [C2]',
+        'Track the verified governance outcomes against accepted measures [TAC-GOV-004] [C3]',
+        'Pilot owner-approved retention controls with restore validation [TAC-OPT-005] [B5]',
+        'Define an additional customer-specific handoff artifact with an owner and acceptance check [B5]',
       ],
     }],
   },
 };
 
 assert.deepEqual(findMissingRequiredTacticIds(strategyData, plan), []);
+assert.deepEqual(findRoadmapActionsMissingCriterionReferences(strategyData), []);
+assert.deepEqual(findRoadmapActionsMissingCriterionReferences({ phase_3_strategy: { remediation_roadmap: [{
+  actions: ['Grounded action without an explicit criterion reference'],
+}] } }), ['Grounded action without an explicit criterion reference']);
 const missingStrategy = structuredClone(strategyData);
 missingStrategy.phase_3_strategy.remediation_roadmap[0].actions = missingStrategy.phase_3_strategy.remediation_roadmap[0].actions.filter(action => !action.includes('TAC-GOV-002'));
 assert.deepEqual(findMissingRequiredTacticIds(missingStrategy, plan), ['TAC-GOV-002']);
