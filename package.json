@@ -39,6 +39,7 @@
     "test:operational-logging": "node scripts/test-operational-logging.mjs",
     "test:tactic-grounding": "node scripts/test-tactic-grounding.mjs",
     "test:tactic-activity-playbook": "node scripts/test-tactic-activity-playbook.mjs",
+    "test:run-trace-tactics": "node scripts/test-run-trace-tactics.mjs",
     "test:kb-index": "node scripts/test-kb-index.mjs",
     "test:acquisition-quality": "node scripts/test-acquisition-quality.mjs",
     "test:structured-data": "node scripts/test-structured-data-analysis.mjs",

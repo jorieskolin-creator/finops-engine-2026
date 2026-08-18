@@ -1201,7 +1201,7 @@ export interface TacticPathTrace {
   tactic_ids: string[];
   linked_findings: string[];
   reference_kind: 'tactic_reference' | 'playbook_reference' | 'custom_action' | 'kb_reference' | 'customer_evidence';
-  grounding_status: 'grounded' | 'withheld' | 'quarantined' | 'unknown';
+  grounding_status: 'grounded' | 'evidence_grounded_no_tactic_match' | 'withheld' | 'quarantined' | 'unknown';
   notes?: string[];
 }
 

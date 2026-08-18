@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
 import {
   authorizeOutputContract,
   OUTPUT_CONTRACT_IDS,
@@ -87,5 +88,12 @@ await assert.rejects(
   withOneOutputRegeneration(async () => { throw Object.assign(new Error(), { code: 'INVALID_OUTPUT_CONTRACT' }); }),
   error => error.code === 'SYNTHESIS_OUTPUT_INVALID' && /provider fallback/.test(error.message),
 );
+
+const forensicPrompts = await readFile(new URL('../src/prompts.ts', import.meta.url), 'utf8');
+assert.match(forensicPrompts, /exactly ONE best evidence quote per assessed item/);
+assert.match(forensicPrompts, /quote text at most 240 characters/);
+assert.match(forensicPrompts, /evidence at most 180 characters/);
+assert.match(forensicPrompts, /reasoning at most 240 characters/);
+assert.match(forensicPrompts, /no recommendations or repeated definitions/);
 
 console.log('structured output contract tests passed');

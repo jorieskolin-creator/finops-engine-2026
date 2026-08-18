@@ -24,6 +24,26 @@ export const ROADMAP_FACT_CHECK_CONTRACT: FactCheckParseContract = {
   allowedUnsupportedSeverities: VALID_SEVERITIES.filter(severity => severity !== 'SUPPORTED')
 };
 
+export type FactCheckRepairScope = 'summary' | 'roadmap' | 'both';
+
+const SUMMARY_LOCATIONS = new Set<ClaimSourceLocation>(['finops_lead', 'cfo', 'engineering_lead', 'diagnosis']);
+const ROADMAP_LOCATIONS = new Set<ClaimSourceLocation>(['planning_decision', 'roadmap']);
+
+export const determineFactCheckRepairScope = (claims: FactCheckClaim[]): FactCheckRepairScope => {
+  const hasSummaryDefect = claims.some(claim => claim.source_location && SUMMARY_LOCATIONS.has(claim.source_location));
+  const hasRoadmapDefect = claims.some(claim => claim.source_location && ROADMAP_LOCATIONS.has(claim.source_location));
+  if (hasSummaryDefect && !hasRoadmapDefect) return 'summary';
+  if (hasRoadmapDefect && !hasSummaryDefect) return 'roadmap';
+  return 'both';
+};
+
+export const claimsForRepairScope = (
+  claims: FactCheckClaim[],
+  scope: Exclude<FactCheckRepairScope, 'both'>
+): FactCheckClaim[] => claims.filter(claim => scope === 'summary'
+  ? Boolean(claim.source_location && SUMMARY_LOCATIONS.has(claim.source_location))
+  : Boolean(claim.source_location && ROADMAP_LOCATIONS.has(claim.source_location)));
+
 export interface FactCheckInputs {
   contentToCheck: string;
   remediationRoadmapText: string;
@@ -342,7 +362,10 @@ const FAILURE_TYPE_GUIDANCE: Record<ClaimFailureType, string> = {
   other: 'The claim could not be verified. Remove it or replace with a verified statement from the Phase 1 evidence.'
 };
 
-export const buildRegenerateAppendix = (unsupported: FactCheckClaim[]): string => {
+export const buildRegenerateAppendix = (
+  unsupported: FactCheckClaim[],
+  scope: FactCheckRepairScope = 'both'
+): string => {
   const grouped: Partial<Record<ClaimFailureType, FactCheckClaim[]>> = {};
   const ungrouped: FactCheckClaim[] = [];
   for (const c of unsupported) {
@@ -363,6 +386,12 @@ ${items.map(c => `  - "${c.claim}"\n      Found in: ${c.source_location || 'unsp
     ? `\n\n**Other unverified claims:**\n${ungrouped.map(c => `  - "${c.claim}"\n      Reason: ${c.rationale}`).join('\n')}`
     : '';
 
+  const regenerationInstruction = scope === 'summary'
+    ? 'Regenerate ONLY executive_summaries, evidence_summary, diagnosis, and visual_scorecard. The existing planning decision and remediation roadmap are locked and must not be rewritten.'
+    : scope === 'roadmap'
+      ? 'Regenerate ONLY planning_decision and remediation_roadmap. The existing executive summaries, evidence summary, diagnosis, and visual scorecard are locked and must not be rewritten.'
+      : 'Regenerate both the evidence-summary/diagnosis section and the planning-decision/roadmap section because defects cross both contracts.';
+
   return `
 
 ### REGENERATE INSTRUCTIONS — your previous output failed fact-check
@@ -371,13 +400,13 @@ A separate split fact-check pass found these claims in your previous output. Evi
 
 ${groupBlocks}${ungroupedBlock}
 
-Regenerate the evidence summaries (all three personas), diagnosis, planning decision, AND remediation roadmap. The new output:
+${regenerationInstruction} The repaired output:
 - MUST NOT include any of the above claims, even rephrased.
 - MUST follow the failure-mode-specific guidance above.
 - Evidence summaries and diagnosis MUST cite only facts that appear in <SOURCE_DOCUMENT_TO_AUDIT>, Phase 1 evidence quotes, or Phase 2 metrics. Do not use tactics DB knowledge there.
 - Planning decisions and roadmap actions MUST trace to the locked findings and may use only tactic IDs/companies actually paired in the Verified Tactics Database.
 - Prefer fewer specific claims over inventing replacements. It is better to be vague but truthful than precise but unsupported.
-- Keep the exact same JSON output shape (executive_summaries with finops_lead / cfo / engineering_lead, evidence_summary, diagnosis, planning_decision, visual_scorecard, remediation_roadmap).
+- Keep the exact JSON shape required by the scoped output contract.
 `;
 };
 

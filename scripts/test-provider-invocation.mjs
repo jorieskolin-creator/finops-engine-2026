@@ -45,6 +45,44 @@ await assert.rejects(
 );
 
 await assert.rejects(
+  invokeProvider({ ...packet, provider: 'openai', model: 'gpt-5.6-sol' }, {
+    env: { OPENAI_API_KEY: 'test-key' },
+    fetchFn: async () => ({
+      ok: false,
+      status: 400,
+      headers: { get: name => name === 'x-request-id' ? 'req_safe-123' : null },
+      json: async () => ({
+        error: {
+          code: 'unsupported_parameter',
+          message: 'raw provider response must never propagate',
+        },
+      }),
+    }),
+  }),
+  error => error?.code === 'UPSTREAM_HTTP_ERROR'
+    && error?.providerHttpStatus === 400
+    && error?.providerErrorCode === 'unsupported_parameter'
+    && error?.providerRequestId === 'req_safe-123'
+    && !String(error?.message).includes('raw provider response'),
+);
+
+await assert.rejects(
+  invokeProvider(packet, {
+    env: { XAI_API_KEY: 'test-key' },
+    fetchFn: async () => ({
+      ok: false,
+      status: 429,
+      headers: { get: () => 'invalid request id with spaces and source text' },
+      json: async () => ({ error: { code: 'invalid code with spaces', message: 'private response content' } }),
+    }),
+  }),
+  error => error?.code === 'UPSTREAM_HTTP_ERROR'
+    && error?.providerHttpStatus === 429
+    && error?.providerErrorCode === undefined
+    && error?.providerRequestId === undefined,
+);
+
+await assert.rejects(
   invokeProvider(packet, {
     env: { XAI_API_KEY: 'test-key' },
     fetchFn: async () => ({

@@ -30,6 +30,7 @@ You must evaluate **ALL 3 criteria** for every item to determine the final score
 ### EVIDENCE QUOTES (CRITICAL)
 For EVERY assessed item, including an assessed score of 0, you MUST include at least one criterion-relevant direct source-text quote, visible-image description, or approved deterministic summary line as evidence. A not-assessed item has no evidence quotes.
 Wrap each citation in the "evidence_quotes" array.
+Return exactly ONE best evidence quote per assessed item. Keep quote or image-description text to at most 240 characters; preserve the exact source wording within that bound. Do not repeat the surrounding paragraph.
 Every source-text quote MUST copy its "source_id" and "chunk_id" from the enclosing <CHUNK> marker. Also copy every locator present on that marker: "page_number"/"page_id" for PDF pages and "sheet_name"/"row_number" for table evidence. Never cite text outside the cited chunk.
 For approved deterministic evidence inside <DERIVED_EVIDENCE>, set evidence_source to "derived", copy source_id and derived_evidence_id, and quote one exact summary_lines entry. Do not add chunk_id. Use a derived observation only for its declared target criterion, never recalculate it, and never infer policy, enforcement, culture, intent, or remediation from table population metrics alone.
 
@@ -64,6 +65,7 @@ Every evidence quote MUST be tagged with exactly ONE of these seven categories o
 ### JSON SAFETY PROTOCOL
 *   **NO DOUBLE QUOTES** inside JSON values. Use single quotes or asterisks.
 *   **NO MARKDOWN** formatting outside the JSON block.
+*   **BOUNDED OUTPUT:** Return only the requested criterion results—at most 10 results (30 sub-criterion decisions) for a full batch—and their required fields. Keep "evidence" to at most 180 characters and "reasoning" to at most 240 characters per item. question_results already records each sub-criterion decision, so do not restate definitions, reproduce source passages, add recommendations, or write narrative analysis.
 `;
 
 export const generateBatchUserPrompt = (columnId: string, definitions: any) => `
@@ -98,6 +100,7 @@ For the 5 criteria in Stream A (${columnId}1-${columnId}5) AND the 5 criteria in
 4. Sum only the supported entries to get the **Count (0-3)**.
 5. If assessment_status is assessed, extract at least one criterion-relevant quote even when Count is 0. If no relevant quote exists, return not_assessed.
 6. Every quote must include source_id, chunk_id, and all page/sheet/row locators shown by its enclosing CHUNK marker.
+7. Return exactly one best quote per assessed item. Keep quote text at most 240 characters, evidence at most 180 characters, and reasoning at most 240 characters. Be concise; do not reproduce definitions or add recommendations.
 
 **REQUIRED OUTPUT STRUCTURE (JSON Only):**
 {
@@ -175,6 +178,7 @@ Rules:
 4. Source-text quotes must include source_id, chunk_id, and every page/sheet/row locator shown by the enclosing CHUNK. Derived quotes must instead include evidence_source="derived", source_id, derived_evidence_id, and an exact summary_lines entry from approved <DERIVED_EVIDENCE>. Never cite content outside the referenced evidence unit.
 5. For anti-pattern Count = 0, distinguish verified absence from unknown absence in the evidence/reasoning text. Verified absence requires relevant source coverage; silence or irrelevant source material is not positive evidence.
 6. Do not return criteria that were not listed in <target_criteria>.
+7. Return exactly one best quote per assessed item. Keep quote text at most 240 characters, evidence at most 180 characters, and reasoning at most 240 characters. Return decisions and references only—no recommendations or repeated definitions.
 
 Required JSON shape:
 {

@@ -55,7 +55,9 @@ try {
   });
   workerOperationalLog('warn', 'execution_attempt_failed', {
     run_id: 'run-1', attempt_id: 'attempt-1', stage: 'forensic_audit', provider: 'anthropic', model: 'claude-sonnet-5',
-    outcome_code: 'INCOMPLETE_RESPONSE', termination_reason: 'MAX_OUTPUT_TOKENS', duration_ms: 42,
+    outcome_code: 'UPSTREAM_HTTP_ERROR', provider_http_status: 400, provider_error_code: 'unsupported_parameter',
+    provider_request_id: 'req_safe-123', duration_ms: 42,
+    response_body: 'private model output', provider_error_message: 'private provider message', authorization: 'secret',
   });
 } finally {
   console.log = originalLog;
@@ -65,8 +67,11 @@ assert.equal(logged.length, 2);
 assert.match(logged[0], /event=execution_attempt_claimed/);
 assert.match(logged[0], /run_id=run-1/);
 assert.doesNotMatch(logged[0], /private source content|private\.pdf|private model output/);
-assert.match(logged[1], /outcome_code=INCOMPLETE_RESPONSE/);
-assert.match(logged[1], /termination_reason=MAX_OUTPUT_TOKENS/);
+assert.match(logged[1], /outcome_code=UPSTREAM_HTTP_ERROR/);
+assert.match(logged[1], /provider_http_status=400/);
+assert.match(logged[1], /provider_error_code=unsupported_parameter/);
+assert.match(logged[1], /provider_request_id=req_safe-123/);
+assert.doesNotMatch(logged[1], /private model output|private provider message|authorization|secret/);
 
 for (const file of ['../api/openai-generate.js', '../api/anthropic-generate.js', '../api/xai-generate.js']) {
   const source = await readFile(new URL(file, import.meta.url), 'utf8');

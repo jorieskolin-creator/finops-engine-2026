@@ -18,6 +18,8 @@ import {
   buildRegenerateAppendix,
   buildRoadmapFactCheckPrompt,
   buildSummaryFactCheckPrompt,
+  claimsForRepairScope,
+  determineFactCheckRepairScope,
   mergeRequiredFactChecks,
   parseFactCheckResponse,
   ROADMAP_FACT_CHECK_CONTRACT,
@@ -665,7 +667,10 @@ CATEGORY BREAKDOWN:
 ${Object.entries(validationData.category_scores).map(([cat, score]) => unresolvedDomainIds.has(cat) ? `  ${cat}: verification unavailable (no validated domain score)` : `  ${cat}: ${score}/15`).join('\n')}
 `;
 
-    const tacticSelectionPlan = buildTacticSelectionPlan(auditLogs, weakDomainIds);
+    const activatedTacticSelectionPlan = buildTacticSelectionPlan(auditLogs, weakDomainIds);
+    const tacticSelectionPlan = confidenceBracket === 'LOW'
+      ? { ...activatedTacticSelectionPlan, required: [], optional: [] }
+      : activatedTacticSelectionPlan;
     const tacticSelectionContext = buildTacticSelectionContext(tacticSelectionPlan);
 
     const compactLockedFindings = (strategy: any): string => JSON.stringify({
@@ -824,13 +829,30 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => unresolve
       };
     };
 
-    const callPhase3 = async (correctionAppendix?: string): Promise<any> => {
+    type Phase3RepairScope = 'summary' | 'roadmap' | 'both';
+    interface Phase3Corrections {
+      summary?: string;
+      roadmap?: string;
+    }
+
+    const appendCorrection = (existing: string | undefined, appendix: string): string =>
+      existing ? `${existing}\n\n${appendix}` : appendix;
+
+    const callPhase3 = async (
+      corrections: Phase3Corrections = {},
+      scope: Phase3RepairScope = 'both',
+      currentStrategy?: any
+    ): Promise<any> => {
       if (confidenceBracket === 'LOW') {
-        return callFindingsSynthesis(correctionAppendix);
+        return callFindingsSynthesis([corrections.summary, corrections.roadmap].filter(Boolean).join('\n\n') || undefined);
       }
-      const summaryData = await callEvidenceSynthesis(correctionAppendix);
-      const normalizedSummary = normalizeStrategy(summaryData)?.phase_3_strategy || summaryData?.phase_3_strategy || {};
-      const roadmapData = await callRoadmapSynthesis(normalizedSummary, correctionAppendix);
+      const current = currentStrategy?.phase_3_strategy || {};
+      const normalizedSummary = scope === 'roadmap'
+        ? current
+        : normalizeStrategy(await callEvidenceSynthesis(corrections.summary))?.phase_3_strategy || {};
+      const roadmapData = scope === 'summary'
+        ? { phase_3_strategy: current }
+        : await callRoadmapSynthesis(normalizedSummary, corrections.roadmap);
       return mergePhase3Outputs(normalizedSummary, roadmapData);
     };
 
@@ -1056,8 +1078,12 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => unresolve
     const validIds = validTacticIdSet();
     let tacticGroundingWarnings: string[] = [];
     let tacticGroundingAdjustments: TacticGroundingAdjustment[] = [];
-    const callPhase3Validated = async (correctionAppendix?: string): Promise<any> => {
-      let data = normalizeStrategy(await callPhase3(correctionAppendix));
+    const callPhase3Validated = async (
+      corrections: Phase3Corrections = {},
+      scope: Phase3RepairScope = 'both',
+      currentStrategy?: any
+    ): Promise<any> => {
+      let data = normalizeStrategy(await callPhase3(corrections, scope, currentStrategy));
       let invalid = findInvalidTacticIds(data, validIds);
       let regen = 0;
       while (invalid.length > 0 && regen < ID_VALIDATION_MAX_REGENS) {
@@ -1068,8 +1094,8 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => unresolve
           regen,
         });
         const idAppendix = buildInvalidIdAppendix(invalid, validIds);
-        const combined = correctionAppendix ? `${correctionAppendix}\n\n${idAppendix}` : idAppendix;
-        data = normalizeStrategy(await callPhase3(combined));
+        corrections = { ...corrections, roadmap: appendCorrection(corrections.roadmap, idAppendix) };
+        data = normalizeStrategy(await callPhase3(corrections, 'roadmap', data));
         invalid = findInvalidTacticIds(data, validIds);
       }
       if (invalid.length > 0) {
@@ -1086,8 +1112,8 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => unresolve
           tactic_ids: missingRequired.join(','),
         });
         const requiredAppendix = buildMissingRequiredTacticAppendix(missingRequired, tacticSelectionPlan);
-        const combined = correctionAppendix ? `${correctionAppendix}\n\n${requiredAppendix}` : requiredAppendix;
-        data = normalizeStrategy(await callPhase3(combined));
+        corrections = { ...corrections, roadmap: appendCorrection(corrections.roadmap, requiredAppendix) };
+        data = normalizeStrategy(await callPhase3(corrections, 'roadmap', data));
         invalid = findInvalidTacticIds(data, validIds);
         if (invalid.length > 0) {
           throw Object.assign(new Error('INVALID_OUTPUT_CONTRACT'), { code: 'INVALID_OUTPUT_CONTRACT' });
@@ -1165,7 +1191,22 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => unresolve
     ) {
       console.log(`[FinOps] Fact-check pass ${attempt}: ${lastUnsupported.length} unsupported claims, regenerating...`);
       try {
-        const candidateStrategy = await callPhase3Validated(buildRegenerateAppendix(lastUnsupported));
+        const requestedScope = confidenceBracket === 'LOW'
+          ? 'both'
+          : determineFactCheckRepairScope(lastUnsupported);
+        const summaryDefects = claimsForRepairScope(lastUnsupported, 'summary');
+        const roadmapDefects = claimsForRepairScope(lastUnsupported, 'roadmap');
+        const repairCorrections: Phase3Corrections = confidenceBracket === 'LOW'
+          ? { summary: buildRegenerateAppendix(lastUnsupported, 'both') }
+          : {
+              ...(requestedScope !== 'roadmap' ? {
+                summary: buildRegenerateAppendix(summaryDefects.length > 0 ? summaryDefects : lastUnsupported, 'summary')
+              } : {}),
+              ...(requestedScope !== 'summary' ? {
+                roadmap: buildRegenerateAppendix(roadmapDefects.length > 0 ? roadmapDefects : lastUnsupported, 'roadmap')
+              } : {}),
+            };
+        const candidateStrategy = await callPhase3Validated(repairCorrections, requestedScope, strategyData);
         const candidateAttempt = attempt + 1;
         const candidateFactCheck = await runFactCheck(candidateStrategy, candidateAttempt);
         await checkpoint('fact_check', `pass_${candidateAttempt}`, { fact_check: candidateFactCheck });

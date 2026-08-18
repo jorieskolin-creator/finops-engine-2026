@@ -17,6 +17,9 @@ const modulePath = join(dir, 'factCheckService.mjs');
 await writeFile(modulePath, compiled, 'utf8');
 
 const {
+  buildRegenerateAppendix,
+  claimsForRepairScope,
+  determineFactCheckRepairScope,
   mergeRequiredFactChecks,
   parseFactCheckResponse,
   ROADMAP_FACT_CHECK_CONTRACT,
@@ -68,5 +71,21 @@ const failedSubcheck = {
 const merged = mergeRequiredFactChecks(valid, failedSubcheck, 1);
 assert.equal(merged.failed, true, 'either required fact-check substage failing must fail the merged check');
 assert.equal(merged.total_claims, 0, 'partial verdicts must not be represented as complete coverage');
+
+const summaryDefect = { claim: 'Unsupported summary.', classification: 'unsupported', rationale: 'Missing.', source_location: 'cfo' };
+const roadmapDefect = { claim: 'Unsupported roadmap.', classification: 'unsupported', rationale: 'Missing.', source_location: 'roadmap' };
+assert.equal(determineFactCheckRepairScope([summaryDefect]), 'summary');
+assert.equal(determineFactCheckRepairScope([roadmapDefect]), 'roadmap');
+assert.equal(determineFactCheckRepairScope([summaryDefect, roadmapDefect]), 'both');
+assert.equal(determineFactCheckRepairScope([{ ...summaryDefect, source_location: undefined }]), 'both', 'unclassified defects must use the safe cross-contract repair');
+assert.deepEqual(claimsForRepairScope([summaryDefect, roadmapDefect], 'summary'), [summaryDefect]);
+assert.deepEqual(claimsForRepairScope([summaryDefect, roadmapDefect], 'roadmap'), [roadmapDefect]);
+assert.match(buildRegenerateAppendix([summaryDefect], 'summary'), /Regenerate ONLY executive_summaries/);
+assert.match(buildRegenerateAppendix([roadmapDefect], 'roadmap'), /Regenerate ONLY planning_decision/);
+assert.match(buildRegenerateAppendix([summaryDefect, roadmapDefect], 'both'), /Regenerate both/);
+
+const analysisSource = await readFile(new URL('../src/services/analysisService.ts', import.meta.url), 'utf8');
+assert.match(analysisSource, /determineFactCheckRepairScope\(lastUnsupported\)/);
+assert.match(analysisSource, /callPhase3Validated\([\s\S]*requestedScope, strategyData\)/, 'repair must retain the accepted strategy and invoke only the requested contract scope');
 
 console.log('fact-check validation tests passed');
