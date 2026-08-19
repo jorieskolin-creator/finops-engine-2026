@@ -56,12 +56,26 @@ const detectedFromBytes = (
     return { format: 'html', detected_media_type: 'text/html', detection_method: 'structured_text' };
   }
   if (expectedFormat === 'csv' || expectedFormat === 'tsv') {
-    const delimiter = expectedFormat === 'csv' ? ',' : '\t';
     const lines = prefix.split(/\r?\n/).filter(Boolean).slice(0, 5);
-    if (lines.length > 0 && lines.some(line => line.includes(delimiter))) {
+    if (lines.length === 0) return null;
+
+    // Locale CSV exports (e.g. Finnish/European Excel) commonly use ';' instead of ','.
+    // Accept either delimiter for .csv; TSV remains tab-only.
+    const hasComma = lines.some(line => line.includes(','));
+    const hasSemicolon = lines.some(line => line.includes(';'));
+    const hasTab = lines.some(line => line.includes('\t'));
+
+    if (expectedFormat === 'csv' && (hasComma || hasSemicolon)) {
       return {
-        format: expectedFormat,
-        detected_media_type: expectedFormat === 'csv' ? 'text/csv' : 'text/tab-separated-values',
+        format: 'csv',
+        detected_media_type: 'text/csv',
+        detection_method: 'structured_text'
+      };
+    }
+    if (expectedFormat === 'tsv' && hasTab) {
+      return {
+        format: 'tsv',
+        detected_media_type: 'text/tab-separated-values',
         detection_method: 'structured_text'
       };
     }

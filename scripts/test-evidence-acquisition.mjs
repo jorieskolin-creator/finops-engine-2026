@@ -53,6 +53,31 @@ const xlsxAcceptedForDefensiveParser = await inspectEvidenceBytes({
 });
 assert.equal(xlsxAcceptedForDefensiveParser.validation_status, 'PASS');
 
+// Locale CSV (semicolon) must pass type validation so auto-delimiter parsing can run.
+const semicolonCsv = await inspectEvidenceBytes({
+  bytes: encoder.encode('Question;Answer;Notes\nQ1;Cost ownership;Manual\nQ2;Tagging;Partial'),
+  fileName: 'responses.csv',
+  declaredMediaType: 'text/csv',
+});
+assert.equal(semicolonCsv.validation_status, 'PASS');
+assert.equal(semicolonCsv.format, 'csv');
+assert.equal(semicolonCsv.detected_media_type, 'text/csv');
+assert.equal(semicolonCsv.validation_codes.length, 0);
+
+const commaCsv = await inspectEvidenceBytes({
+  bytes: encoder.encode('owner,cost\nalice,12'),
+  fileName: 'costs.csv',
+});
+assert.equal(commaCsv.validation_status, 'PASS');
+assert.equal(commaCsv.format, 'csv');
+
+const undelimitedCsv = await inspectEvidenceBytes({
+  bytes: encoder.encode('plain text without any field separators at all'),
+  fileName: 'not-really.csv',
+});
+assert.equal(undelimitedCsv.validation_status, 'BLOCK');
+assert.ok(undelimitedCsv.validation_codes.includes('CONTENT_TYPE_UNDETECTED'));
+
 const rows = Array.from({ length: 151 }, (_, index) => `owner-${index},${index}`);
 rows[150] = 'AKIAABCDEFGHIJKLMNOP,150';
 rows[150] = `${'AKIA'}${'A'.repeat(16)},150`;
