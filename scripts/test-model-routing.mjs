@@ -88,6 +88,33 @@ assert.throws(() => authorizeConfiguredDestination(
   'synthesis', 'anthropic', 'claude-sonnet-5', { max_tokens: 16384 }, env,
 ), /DESTINATION_NOT_CONFIGURED/, 'the old synthesis budget must fail closed after the policy change');
 
+const terraEnv = {
+  ...env,
+  REASONER_MODEL: 'gpt-5.6-terra',
+  WORKHORSE_PROVIDER: 'OPENAI',
+  WORKHORSE_MODEL: 'gpt-5.6-terra',
+  QUALITY_CHECKER_PROVIDER: 'OPENAI',
+  QUALITY_CHECKER_MODEL: 'gpt-5.6-terra',
+};
+const terraConfig = resolveModelRouting(terraEnv);
+assert.equal(terraConfig.routes.evidence_adjudication[0].id, 'gpt-5.6-terra', 'Terra must be selectable for REASONER');
+assert.equal(terraConfig.routes.forensic_audit[0].id, 'gpt-5.6-terra', 'Terra must be selectable for WORKHORSE');
+assert.equal(terraConfig.routes.fact_check[0].id, 'gpt-5.6-terra', 'Terra must be selectable for QUALITY_CHECKER');
+assert.deepEqual(settingsForProfile(terraConfig.routes.evidence_adjudication[0]), { max_tokens: 32768, reasoning_effort: 'high' });
+assert.deepEqual(settingsForProfile(terraConfig.routes.forensic_audit[0]), { max_tokens: 16384, reasoning_effort: 'medium' });
+for (const stage of MODEL_STAGES) {
+  const candidate = terraConfig.routes[stage][0];
+  assert.doesNotThrow(() => authorizeConfiguredDestination(
+    stage, candidate.provider, candidate.id, settingsForProfile(candidate), terraEnv,
+  ), `Terra primary must satisfy the configured contract for ${stage}`);
+}
+assert.doesNotThrow(() => authorizeConfiguredDestination(
+  'fact_check', 'openai', 'gpt-5.6-terra', { max_tokens: 16384, reasoning_effort: 'medium' }, terraEnv,
+));
+assert.throws(() => authorizeConfiguredDestination(
+  'fact_check', 'openai', 'gpt-5.6-sol', { max_tokens: 16384, reasoning_effort: 'medium' }, terraEnv,
+), /DESTINATION_NOT_CONFIGURED/, 'an authorized but unconfigured OpenAI model must remain unavailable');
+
 for (const invalid of [
   {},
   { ...env, REASONER_MODEL: '' },

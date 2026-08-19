@@ -35,7 +35,7 @@ Model profiles, AI-role assignments, and fallback chains are centralized in the 
 | `QUALITY_CHECKER` | xAI Grok 4.6 → Anthropic Claude Sonnet 5 |
 | Deterministic Quality Gate | Authoritative code path; no model decision |
 
-All twelve role-routing variables are required as one complete policy. The configured model must match the code-authorized model for its provider. Partial policies, legacy provider-level variables, unknown providers, unsupported models, and identical primary/fallback profiles fail closed. Provider fallback is allowed only for the existing explicit safe-failure outcomes; post-send uncertainty never becomes fallback.
+All twelve role-routing variables are required as one complete policy. The configured model must match a code-authorized model for its provider; OpenAI `gpt-5.6-sol` and `gpt-5.6-terra` are authorized for every role. Partial policies, legacy provider-level variables, unknown providers, unsupported models, and identical primary/fallback profiles fail closed. Provider fallback is allowed only for the existing explicit safe-failure outcomes; post-send uncertainty never becomes fallback.
 
 ## Environment variables
 
