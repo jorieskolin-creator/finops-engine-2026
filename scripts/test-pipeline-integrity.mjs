@@ -257,4 +257,46 @@ assert.throws(
   'model-supplied sheet and row locators must match the governed packet manifest',
 );
 
+const semanticGapChunk = {
+  ...chunk,
+  chunk_id: 'src-001-c002',
+  text: 'Kubernetes autoscaling thresholds are reviewed every month.',
+};
+const expandedRegistry = { ...registry, chunk_count: 2, chunks: [chunk, semanticGapChunk] };
+const semanticGapQuote = {
+  quote: 'autoscaling thresholds are reviewed every month',
+  chunk_id: semanticGapChunk.chunk_id,
+  source_id: semanticGapChunk.source_id,
+};
+const semanticGapPhase1 = {
+  ...phase1,
+  phase_1_audit_logs: {
+    ...phase1.phase_1_audit_logs,
+    maturity: { ...phase1.phase_1_audit_logs.maturity, A1: { ...assessedOneOfThree, evidence_quotes: [semanticGapQuote] } },
+  },
+};
+const expandedBaselineSnapshot = validateEvidenceAcquisition([sourceRecord], expandedRegistry, routedPackets);
+assert.throws(
+  () => validatePreSynthesisIntegrity(expandedBaselineSnapshot, knowledgeSnapshot, expandedRegistry, routedPackets, knowledgeIndex, semanticGapPhase1),
+  error => error instanceof PipelineIntegrityError && error.code === 'FINDING_PROVENANCE_INVALID',
+  'newly found evidence must not be accepted against the baseline packet manifest',
+);
+const effectivePacket = {
+  ...routedPacket,
+  text: `<SOURCE_PACKET domain="A"><CHUNK id="${chunk.chunk_id}" source_id="${chunk.source_id}">${chunk.text}</CHUNK><CHUNK id="${semanticGapChunk.chunk_id}" source_id="${semanticGapChunk.source_id}">${semanticGapChunk.text}</CHUNK></SOURCE_PACKET>`,
+  manifest: [
+    ...routedPacket.manifest,
+    { chunk_id: semanticGapChunk.chunk_id, source_id: semanticGapChunk.source_id, type: 'text', relevance: 'semantic_gap', routed_domains: ['A'] },
+  ],
+  included_chunk_count: 2,
+  total_candidate_chunks: 2,
+};
+effectivePacket.char_count = effectivePacket.text.length;
+const effectivePackets = { ...packets, A: effectivePacket };
+const effectiveSnapshot = validateEvidenceAcquisition([sourceRecord], expandedRegistry, effectivePackets);
+assert.doesNotThrow(
+  () => validatePreSynthesisIntegrity(effectiveSnapshot, knowledgeSnapshot, expandedRegistry, effectivePackets, knowledgeIndex, semanticGapPhase1),
+  'newly found evidence must survive pre-synthesis integrity when the effective revised packet is authoritative',
+);
+
 console.log('pipeline integrity tests passed');

@@ -74,11 +74,27 @@ const gapItem = reasoning => ({
   evidence_check_status: 'supported',
   evidence_quotes: [],
 });
+const effectivePacket = {
+  domain_id: 'D', title: 'D', text: 'baseline\nsemantic gap evidence', images: [],
+  manifest: [
+    { chunk_id: 'chunk-1', source_id: 'src-1', type: 'text', relevance: 'high', routed_domains: ['D'] },
+    { chunk_id: 'chunk-2', source_id: 'src-1', type: 'text', relevance: 'semantic_gap', routed_domains: ['D'] },
+  ],
+  included_chunk_count: 2, total_candidate_chunks: 2, char_count: 30, weak_coverage: false, coverage_notes: [],
+};
 const trace = buildRunTrace({
   runId: 'run-1',
   engineVersion: 'test',
-  sourceRegistry: { chunks: [], warnings: [], source_acquisition: [] },
-  sourcePackets: {},
+  sourceRegistry: {
+    chunks: [
+      { chunk_id: 'chunk-1', source_id: 'src-1', type: 'text', text: 'baseline' },
+      { chunk_id: 'chunk-2', source_id: 'src-1', type: 'text', text: 'semantic gap evidence' },
+    ],
+    warnings: [], source_acquisition: [],
+  },
+  sourcePackets: { D: effectivePacket },
+  evidenceStagePackets: { D: { schema_version: 'evidence_lane_stage_packet_v1', integrity_hash: 'effective-stage-hash' } },
+  baselineEvidenceStagePackets: { D: { integrity_hash: 'baseline-stage-hash' } },
   dlpScan: { scanned_chunk_count: 0, high_risk_hits: [], caution_hits: [], blocked: false, warnings: [] },
   dlpReviewChunkCount: 0,
   referenceKbIndex: { documents: [] },
@@ -140,5 +156,8 @@ assert.ok(trace.tactic_paths.every(path => path.linked_findings.length <= 6));
 assert.equal(trace.gap_retrieval.generative, false);
 assert.deepEqual(trace.gap_retrieval.trigger_domains, ['A']);
 assert.equal(trace.bounded_retrieval, undefined);
+assert.deepEqual(trace.context_packets[0].included_chunk_ids, ['chunk-1', 'chunk-2']);
+assert.equal(trace.context_packets[0].evidence_stage_packet_hash, 'effective-stage-hash');
+assert.equal(trace.context_packets[0].baseline_evidence_stage_packet_hash, 'baseline-stage-hash');
 
 console.log('RunTrace action-specific tactic provenance tests passed');

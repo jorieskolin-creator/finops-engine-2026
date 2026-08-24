@@ -39,6 +39,21 @@ assert.equal(generated.failed, false);
 assert.match(globalThis.__gapPrompt.userText, /LOW_EVIDENCE_SUMMARY/);
 assert.doesNotMatch(globalThis.__gapPrompt.userText + globalThis.__gapPrompt.systemInstruction, /REMOTE_KB_CANARY|source chunk|customer quote/i);
 
+globalThis.__gapStage = 'not-called';
+const notTriggered = await analyzeEvidenceGaps({ domainId: 'D', items: [{ ...weak, status: 'supported' }], pass: 1, seenTerms: new Set(), ctx: { runId: 'run-1' } });
+assert.equal(globalThis.__gapStage, 'not-called', 'non-weak evidence must not invoke the query-planning model');
+assert.equal(notTriggered.failed, false);
+assert.equal(notTriggered.terms, undefined);
+
+const omittedCriterion = await analyzeEvidenceGaps({
+  domainId: 'D',
+  items: [weak, { ...weak, stream: 'antipattern', id: 'D1' }],
+  pass: 1,
+  seenTerms: new Set(),
+  ctx: { runId: 'run-1' },
+});
+assert.equal(omittedCriterion.failed, true, 'the model must return one bounded query for every supplied weak criterion');
+
 globalThis.__gapResponse = { ...globalThis.__gapResponse, score: 100 };
 const invalid = await analyzeEvidenceGaps({ domainId: 'D', items: [weak], pass: 1, seenTerms: new Set(), ctx: { runId: 'run-1' } });
 assert.equal(invalid.failed, true, 'invalid or scoring output must fall back deterministically');
