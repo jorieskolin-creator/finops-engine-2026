@@ -432,4 +432,43 @@ const guardrail = familyOf(deriveAllEvidenceSignals([sourceOf(
 assert.ok(guardrail);
 assert.equal(guardrail.targets[0].criterion_id, 'D2');
 
+const pascalCost = analyzeTaggingAllocationTable(sourceOf(
+  'focus-cost',
+  'focus.csv',
+  ['RegionName', 'BilledCost', 'EffectiveCost', 'Tags'],
+  [
+    ['eastus', '10', '8', '{"env":"prod"}'],
+    ['westus', '-2', '9', ''],
+    ['northeurope', '4', '4', '{"env":"dev"}'],
+  ],
+  'FOCUS-style billing extract',
+));
+assert.equal(pascalCost.result.status, 'OBSERVED', 'Tags column must still observe tagging');
+assert.equal(pascalCost.result.cost_basis.state, 'VALID', 'PascalCase EffectiveCost must become a cost basis');
+assert.equal(pascalCost.result.cost_basis.column_index, 2, 'effective_cost is preferred over billed_cost');
+assert.equal(pascalCost.result.field_coverage.find(item => item.field === 'tagging').cost_coverage_percent, 57.14, 'cost-weighted tagging uses EffectiveCost including signed billed siblings');
+assert.doesNotMatch(JSON.stringify(pascalCost), /eastus|"env":"prod"/);
+
+const utilizationPct = familyOf(deriveAllEvidenceSignals([sourceOf(
+  'ri-util',
+  'reservation_lifecycle.csv',
+  ['ReservationId', 'Status', 'UtilizationPct'],
+  months.slice(0, 8).map((period, index) => [`RI-${index}`, 'Active', String(40 + index)]),
+  'reservation utilization snapshot',
+)]), 'trend_v1');
+assert.ok(utilizationPct, 'UtilizationPct must tokenise onto B1 utilization');
+assert.equal(utilizationPct.targets[0].criterion_id, 'B1');
+assert.doesNotMatch(leaked(utilizationPct), /RI-0|40|"mean"|"slope"/i);
+
+const policyEnforced = familyOf(deriveAllEvidenceSignals([sourceOf(
+  'tag-policy',
+  'tagging_governance.csv',
+  ['TagName', 'Required', 'PolicyEnforced'],
+  [['Owner', 'Yes', 'Yes'], ['Environment', 'Yes', 'Yes'], ['CostCenter', 'Yes', 'No'], ['Application', 'Yes', 'Yes']],
+  'required tag policy list',
+)]), 'adoption_v1');
+assert.ok(policyEnforced, 'PolicyEnforced must tokenise onto A1 adoption');
+assert.equal(policyEnforced.targets[0].criterion_id, 'A1');
+assert.doesNotMatch(leaked(policyEnforced), /Owner|CostCenter|PolicyEnforced/i);
+
 console.log('theme-binding catalog tests passed');

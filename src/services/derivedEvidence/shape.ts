@@ -8,7 +8,12 @@ import {
 } from './bindings';
 
 export const normalizeHeader = (value: string): string =>
-  value.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
+  value
+    .replace(/([a-z0-9])([A-Z])/g, '$1_$2')
+    .replace(/([A-Z]+)([A-Z][a-z])/g, '$1_$2')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_|_$/g, '');
 
 export const matchesHeader = (header: string, patterns: readonly string[]): boolean =>
   patterns.some(pattern =>
@@ -58,8 +63,31 @@ export const locatorFor = (table: StructuredTableData) => ({
 });
 
 export const COST_PATTERNS = ['cost', 'spend', 'amount', 'net_cost', 'amortized_cost', 'unblended_cost', 'effective_cost'] as const;
+export const COST_HEADER_PREFERENCE = [
+  'effective_cost',
+  'amortized_cost',
+  'unblended_cost',
+  'net_cost',
+  'billed_cost',
+  'cost',
+  'spend',
+  'amount',
+  'list_cost',
+] as const;
 export const isCostHeader = (header: string): boolean =>
   (COST_PATTERNS as readonly string[]).includes(header) || /(?:_cost|_spend|_amount)$/.test(header);
+
+export const selectCostHeaderIndex = (headers: string[]): number => {
+  const indexes = headers.flatMap((header, index) => isCostHeader(header) ? [index] : []);
+  if (indexes.length === 0) return -1;
+  for (const preferred of COST_HEADER_PREFERENCE) {
+    const hit = indexes.find(index =>
+      headers[index] === preferred || headers[index].endsWith(`_${preferred}`)
+    );
+    if (hit !== undefined) return hit;
+  }
+  return indexes[0];
+};
 
 export const parseNumber = (value: string | undefined): number | null => {
   if (!value || !value.trim()) return null;
@@ -230,7 +258,10 @@ export const detectConcentration = (table: StructuredTableData): {
     }
   }
   if (segmentIdx < 0 || !binding) return null;
-  const weightIdx = headers.findIndex(header => isCostHeader(header) || matchesHeader(header, WEIGHT_PATTERNS));
+  const costIdx = selectCostHeaderIndex(headers);
+  const weightIdx = costIdx >= 0
+    ? costIdx
+    : headers.findIndex(header => matchesHeader(header, WEIGHT_PATTERNS));
   const groups = new Map<string, number>();
   for (const row of rows) {
     const key = (row[segmentIdx] || '').trim().toLowerCase();
@@ -275,9 +306,11 @@ export const detectAdoption = (table: StructuredTableData): {
   let index = headers.findIndex(header => matchesHeader(header, ADOPTION_PATTERNS));
   let binding: ThemeBinding | undefined;
   if (index >= 0) {
-    binding = adoptionBindings.find(item =>
-      matchesTheme(headers[index], item.theme_patterns || item.header_patterns)
-    );
+    const joined = headers.join(' ');
+    binding = adoptionBindings.find(item => {
+      const patterns = item.theme_patterns || item.header_patterns;
+      return matchesTheme(headers[index], patterns) || matchesTheme(joined, patterns);
+    });
   }
   if (!binding) {
     for (const item of adoptionBindings) {

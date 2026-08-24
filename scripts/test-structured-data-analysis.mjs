@@ -37,4 +37,10 @@ const workbookEvidence=analyzeStructuredSources([{...sourceRecord,kind:'xlsx',st
 ]}]);assert.equal(workbookEvidence.length,2,'each visible sheet receives an independent deterministic result and hidden sheets remain non-evidence');assert.deepEqual(workbookEvidence.map(item=>item.locator.sheet),['January','February']);assert.notEqual(workbookEvidence[0].evidence_id,workbookEvidence[1].evidence_id);
 assert.equal(Object.isFrozen(DATA_SIGNAL_REGISTRY),true);assert.equal(Object.isFrozen(DATA_SIGNAL_REGISTRY[0].canonical_fields),true);assert.equal(DATA_SIGNAL_REGISTRY.every(entry=>Object.isFrozen(entry)&&Object.isFrozen(entry.targets)&&entry.targets.every(Object.isFrozen)),true);
 assert.equal(Object.isFrozen(EVIDENCE_ANALYSIS_REGISTRY),true);assert.equal(Object.isFrozen(EVIDENCE_ANALYSIS_REGISTRY[0].calculations),true);assert.equal(Object.isFrozen(EVIDENCE_ANALYSIS_REGISTRY[0].forbidden_interpretations),true);
+const focus=analyzeTaggingAllocationTable({...sourceRecord,structured_table:{...sourceRecord.structured_table,headers:['BilledCost','EffectiveCost','Tags'],rows:[['10','8','prod'],['-2','9',''],['4','4','dev']],total_row_count:3,truncated:false}});
+assert.equal(focus.result.cost_basis.state,'VALID','FOCUS PascalCase EffectiveCost must be a cost basis even when billed_cost is also present');
+assert.equal(focus.result.cost_basis.column_index,1);
+assert.equal(focus.result.cost_basis.excluded_row_count,0,'signed sibling cost cells must not invalidate a parseable preferred cost column');
+assert.equal(focus.result.tagging_population_coverage,67);
+assert.equal(focus.result.field_coverage.find(item=>item.field==='tagging').cost_coverage_percent,57.14);
 console.log('structured data analysis tests passed');
