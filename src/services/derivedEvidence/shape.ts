@@ -241,6 +241,7 @@ export const detectAdoption = (table: StructuredTableData): {
   }
   if (!binding) {
     for (const item of adoptionBindings) {
+      if (item.phase !== 'F1') continue;
       const idx = headers.findIndex(header => matchesHeader(header, item.header_patterns));
       if (idx < 0) continue;
       index = idx;
@@ -350,7 +351,7 @@ export const detectException = (table: StructuredTableData): {
   }
   if (!binding) {
     for (const item of exceptionBindings) {
-      if (item.match_scope === 'headers_joined') continue;
+      if (item.phase !== 'F1' || item.match_scope === 'headers_joined') continue;
       const idx = headers.findIndex(header => matchesHeader(header, item.header_patterns));
       if (idx < 0) continue;
       exceptionIdx = idx;

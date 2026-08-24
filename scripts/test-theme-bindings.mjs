@@ -115,15 +115,17 @@ assert.equal(unattributed.targets[0].criterion_id, 'A2');
 assert.equal(unattributed.result.adoption.practice_presence, 'PRESENT');
 assert.doesNotMatch(leaked(unattributed), /svc-a|svc-b/i);
 
-const unused = familyOf(deriveAllEvidenceSignals([sourceOf(
+const unusedBundle = deriveAllEvidenceSignals([sourceOf(
   'b1-unused',
   'unused-ri.csv',
   ['Instrument', 'Unused RI'],
   [['ri-1', 'yes'], ['ri-2', 'no'], ['ri-3', 'yes'], ['ri-4', 'yes']],
   'unused commitment incidence',
-)]), 'exception_v1');
+)]);
+const unused = familyOf(unusedBundle, 'exception_v1');
 assert.ok(unused, 'F1 B1 unused instrument must fire');
 assert.equal(unused.targets[0].criterion_id, 'B1');
+assert.equal(familyOf(unusedBundle, 'adoption_v1'), undefined, 'unused_ri must not look like commitment adoption');
 assert.doesNotMatch(leaked(unused), /ri-1|ri-2/i);
 
 const eligible = familyOf(deriveAllEvidenceSignals([sourceOf(
