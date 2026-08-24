@@ -1,0 +1,268 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://finops-engine.local/schemas/antipattern.schema.json",
+  "title": "FinOps Engine Canonical Anti-Pattern Knowledge Object",
+  "description": "Schema for one canonical anti-pattern Knowledge Base object (AP-A1 through AP-F5). One anti-pattern is stored in one JSON file.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "kb_type",
+    "kb_id",
+    "domain_id",
+    "domain_name",
+    "stream",
+    "criterion_id",
+    "capability_id",
+    "antipattern_name",
+    "evidence_categories",
+    "allowed_uses",
+    "forbidden_uses",
+    "version",
+    "status",
+    "authority_level",
+    "engine_usage_note",
+    "purpose",
+    "applies_to",
+    "canonical_definition",
+    "assessment_questions",
+    "state_model",
+    "absence_test_contract",
+    "evidence_requirements",
+    "accepted_evidence_types",
+    "false_positive_guards",
+    "validation_questions",
+    "detection_heuristics",
+    "operational_indicators",
+    "risk_notes",
+    "remediation_directions",
+    "prohibited_inferences",
+    "scoring_guidance",
+    "source_foundations"
+  ],
+  "properties": {
+    "schema_version": {"$ref": "shared-definitions.schema.json#/$defs/semver"},
+    "kb_type": {"const": "reference"},
+    "kb_id": {
+      "type": "string",
+      "pattern": "^KB-AP-[A-F][1-5]$"
+    },
+    "domain_id": {"$ref": "shared-definitions.schema.json#/$defs/domainId"},
+    "domain_name": {"type": "string", "minLength": 1},
+    "stream": {"const": "antipattern"},
+    "criterion_id": {"$ref": "shared-definitions.schema.json#/$defs/antipatternCriterionId"},
+    "capability_id": {"$ref": "shared-definitions.schema.json#/$defs/criterionId"},
+    "antipattern_name": {"type": "string", "minLength": 1},
+    "legacy_ids": {
+      "type": "array",
+      "items": {"type": "string", "minLength": 1},
+      "uniqueItems": true
+    },
+    "evidence_categories": {
+      "type": "array",
+      "items": {"$ref": "shared-definitions.schema.json#/$defs/evidenceCategory"},
+      "minItems": 1,
+      "uniqueItems": true
+    },
+    "allowed_uses": {
+      "type": "array",
+      "items": {"$ref": "shared-definitions.schema.json#/$defs/useTag"},
+      "minItems": 1,
+      "uniqueItems": true
+    },
+    "forbidden_uses": {
+      "type": "array",
+      "items": {"$ref": "shared-definitions.schema.json#/$defs/useTag"},
+      "minItems": 4,
+      "uniqueItems": true,
+      "allOf": [
+        {"contains": {"const": "customer_current_state_claim"}},
+        {"contains": {"const": "source_evidence_quote"}},
+        {"contains": {"const": "audited_finding"}},
+        {"contains": {"const": "phase1_evidence_quote"}}
+      ]
+    },
+    "version": {"$ref": "shared-definitions.schema.json#/$defs/semver"},
+    "status": {"$ref": "shared-definitions.schema.json#/$defs/status"},
+    "authority_level": {"$ref": "shared-definitions.schema.json#/$defs/authorityLevel"},
+    "engine_usage_note": {"type": "string", "minLength": 1},
+    "purpose": {"$ref": "shared-definitions.schema.json#/$defs/purpose"},
+    "applies_to": {"$ref": "shared-definitions.schema.json#/$defs/appliesTo"},
+    "canonical_definition": {"$ref": "shared-definitions.schema.json#/$defs/canonicalDefinition"},
+    "assessment_questions": {
+      "type": "array",
+      "items": {"$ref": "shared-definitions.schema.json#/$defs/assessmentQuestion"},
+      "minItems": 1
+    },
+    "state_model": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["confirmed_present", "partially_present", "tested_absent", "unknown_absent"],
+      "properties": {
+        "confirmed_present": {"$ref": "shared-definitions.schema.json#/$defs/stateDefinition"},
+        "partially_present": {"$ref": "shared-definitions.schema.json#/$defs/stateDefinition"},
+        "tested_absent": {"$ref": "shared-definitions.schema.json#/$defs/stateDefinition"},
+        "unknown_absent": {"$ref": "shared-definitions.schema.json#/$defs/stateDefinition"}
+      }
+    },
+    "absence_test_contract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["silence_is_evidence", "tested_absent_requires", "unknown_absent_when"],
+      "properties": {
+        "silence_is_evidence": {"const": false},
+        "tested_absent_requires": {
+          "type": "array",
+          "items": {"type": "string", "minLength": 1},
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "unknown_absent_when": {
+          "type": "array",
+          "items": {"type": "string", "minLength": 1},
+          "minItems": 1,
+          "uniqueItems": true
+        }
+      }
+    },
+    "interpretation_dimensions": {
+      "type": "array",
+      "items": {"$ref": "shared-definitions.schema.json#/$defs/interpretationDimension"},
+      "minItems": 1
+    },
+    "evidence_requirements": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["strong", "moderate", "weak", "contradictory"],
+      "properties": {
+        "strong": {"$ref": "shared-definitions.schema.json#/$defs/evidenceClass"},
+        "moderate": {"$ref": "shared-definitions.schema.json#/$defs/evidenceClass"},
+        "weak": {"$ref": "shared-definitions.schema.json#/$defs/evidenceClass"},
+        "contradictory": {"$ref": "shared-definitions.schema.json#/$defs/evidenceClass"}
+      }
+    },
+    "accepted_evidence_types": {
+      "type": "array",
+      "items": {"$ref": "shared-definitions.schema.json#/$defs/acceptedEvidenceType"},
+      "minItems": 1
+    },
+    "provider_mapping": {
+      "type": "array",
+      "items": {"$ref": "shared-definitions.schema.json#/$defs/providerMapping"},
+      "minItems": 1
+    },
+    "focus_normalization": {"$ref": "shared-definitions.schema.json#/$defs/focusNormalization"},
+    "related_capabilities": {
+      "type": "array",
+      "items": {
+        "allOf": [
+          {"$ref": "shared-definitions.schema.json#/$defs/relationship"},
+          {
+            "properties": {
+              "criterion_id": {"$ref": "shared-definitions.schema.json#/$defs/criterionId"}
+            }
+          }
+        ]
+      },
+      "uniqueItems": true
+    },
+    "false_positive_guards": {
+      "type": "array",
+      "items": {"$ref": "shared-definitions.schema.json#/$defs/falsePositiveGuard"},
+      "minItems": 1
+    },
+    "validation_questions": {
+      "type": "array",
+      "items": {"type": "string", "minLength": 1},
+      "minItems": 1,
+      "uniqueItems": true
+    },
+    "detection_heuristics": {
+      "type": "array",
+      "items": {"$ref": "shared-definitions.schema.json#/$defs/detectionHeuristic"},
+      "minItems": 1
+    },
+    "operational_indicators": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["severe_presence"],
+      "properties": {
+        "severe_presence": {
+          "type": "array",
+          "items": {"type": "string", "minLength": 1},
+          "minItems": 1,
+          "uniqueItems": true
+        }
+      }
+    },
+    "risk_notes": {"$ref": "shared-definitions.schema.json#/$defs/riskNotes"},
+    "remediation_directions": {
+      "type": "array",
+      "items": {"$ref": "shared-definitions.schema.json#/$defs/remediationDirection"},
+      "minItems": 1
+    },
+    "prohibited_inferences": {
+      "type": "array",
+      "items": {"$ref": "shared-definitions.schema.json#/$defs/prohibitedInference"},
+      "minItems": 1
+    },
+    "scoring_guidance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "confirmed_present_requires",
+        "partially_present_when",
+        "tested_absent_requires",
+        "unknown_absent_when",
+        "general_rules"
+      ],
+      "properties": {
+        "confirmed_present_requires": {
+          "type": "array",
+          "items": {"type": "string", "minLength": 1},
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "partially_present_when": {
+          "type": "array",
+          "items": {"type": "string", "minLength": 1},
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "tested_absent_requires": {
+          "type": "array",
+          "items": {"type": "string", "minLength": 1},
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "unknown_absent_when": {
+          "type": "array",
+          "items": {"type": "string", "minLength": 1},
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "general_rules": {
+          "type": "array",
+          "items": {"type": "string", "minLength": 1},
+          "minItems": 1,
+          "uniqueItems": true
+        }
+      }
+    },
+    "source_foundations": {
+      "type": "array",
+      "items": {"$ref": "shared-definitions.schema.json#/$defs/sourceFoundation"},
+      "minItems": 1,
+      "uniqueItems": true
+    },
+    "engine_outcome_intent": {"type": "string", "minLength": 1}
+  },
+  "allOf": [
+    {
+      "description": "capability_id must correspond to criterion_id after removing the AP- prefix. Equality is enforced by deterministic cross-field validation outside JSON Schema."
+    },
+    {
+      "description": "domain_id must match the capability/anti-pattern ID family and kb_id. This is enforced by the Knowledge Readiness validator."
+    }
+  ]
+}
