@@ -110,6 +110,18 @@ assert.equal(contactPrivacy.sources[0].pages[0].text, 'Owner [EMAIL_REDACTED] us
 assert.throws(() => assertDeterministicEgressText(['owner alice@example.com']), /DETERMINISTIC_EGRESS_SCAN_FAILED/);
 assert.doesNotThrow(() => assertDeterministicEgressText([contactPrivacy.sources[0].pages[0].text]));
 
+const contextualNamePrivacy = sanitizeEvidenceSources([{
+  schema_version: 'source_record_v1', source_id: 'src-contextual-name', source_name: 'owner.txt', kind: 'txt',
+  text: 'Owner Toni\nPrepared by Toni\nContact Toni',
+}]);
+assert.equal(contextualNamePrivacy.decision.decision, 'PASS_WITH_REDACTIONS', 'a contextual person name must not make its own replacement fail the post-redaction scan');
+assert.equal(contextualNamePrivacy.sources[0].text, 'Owner Respondent\nPrepared by Respondent\nContact Respondent');
+assert.doesNotMatch(JSON.stringify(contextualNamePrivacy.sources), /Toni/, 'the original person name must not cross the privacy boundary');
+assert.doesNotThrow(() => assertDeterministicEgressText([contextualNamePrivacy.sources[0].text]));
+const repeatedContextualPrivacy = sanitizeEvidenceSources(contextualNamePrivacy.sources);
+assert.equal(repeatedContextualPrivacy.decision.decision, 'PASS', 'sanitizing an already-redacted contextual name must be idempotent');
+assert.equal(repeatedContextualPrivacy.sources[0].text, contextualNamePrivacy.sources[0].text);
+
 const respondentPrivacy = sanitizeEvidenceSources([{
   schema_version: 'source_record_v1', source_id: 'src-respondents', source_name: 'answers.csv', kind: 'csv',
   text: 'Question,Toni,Jaakko,Esa Hakanen / Controller,Tietoallas (Niilo & Markku)\nTagging?,Manual,Partial,Unknown,Documented',
