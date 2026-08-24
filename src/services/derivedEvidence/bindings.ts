@@ -29,13 +29,13 @@ export interface ThemeBinding {
   series_name?: string;
   non_negative?: boolean;
   allow_cost_header?: boolean;
-  left_patterns?: string[];
-  right_patterns?: string[];
-  header_patterns: string[];
-  theme_patterns?: string[];
+  left_patterns?: readonly string[];
+  right_patterns?: readonly string[];
+  header_patterns: readonly string[];
+  theme_patterns?: readonly string[];
   pair_id?: string;
-  aliases?: string[];
-  never?: string[];
+  aliases?: readonly string[];
+  never?: readonly string[];
 }
 
 type CatalogFile = {
@@ -51,19 +51,25 @@ type CatalogFile = {
 
 const DATA = catalog as CatalogFile;
 
+const freezeStrings = (values: readonly string[]): readonly string[] =>
+  Object.freeze([...values]);
+
+const freezeBinding = (binding: ThemeBinding): ThemeBinding =>
+  Object.freeze({
+    ...binding,
+    header_patterns: freezeStrings(binding.header_patterns || []),
+    theme_patterns: binding.theme_patterns ? freezeStrings(binding.theme_patterns) : undefined,
+    left_patterns: binding.left_patterns ? freezeStrings(binding.left_patterns) : undefined,
+    right_patterns: binding.right_patterns ? freezeStrings(binding.right_patterns) : undefined,
+    aliases: binding.aliases ? freezeStrings(binding.aliases) : undefined,
+    never: binding.never ? freezeStrings(binding.never) : undefined,
+  }) as ThemeBinding;
+
 export const THEME_BINDING_CATALOG_VERSION = DATA.version;
 export const THEME_BINDING_REGISTRY_ID = DATA.registry_id;
 export const THEME_BINDING_FAMILIES = Object.freeze([...DATA.families]);
 export const THEME_BINDINGS: readonly ThemeBinding[] = Object.freeze(
-  DATA.bindings.map(binding => Object.freeze({
-    ...binding,
-    header_patterns: Object.freeze([...(binding.header_patterns || [])]),
-    theme_patterns: binding.theme_patterns ? Object.freeze([...binding.theme_patterns]) : undefined,
-    left_patterns: binding.left_patterns ? Object.freeze([...binding.left_patterns]) : undefined,
-    right_patterns: binding.right_patterns ? Object.freeze([...binding.right_patterns]) : undefined,
-    aliases: binding.aliases ? Object.freeze([...binding.aliases]) : undefined,
-    never: binding.never ? Object.freeze([...binding.never]) : undefined,
-  }))
+  DATA.bindings.map(freezeBinding)
 );
 
 export const liveThemeBindings = (family?: string): ThemeBinding[] =>
