@@ -1,0 +1,28 @@
+{
+  "version": "1.0.0",
+  "registry_id": "AN-ASSOCIATION-001",
+  "description": "Closed pair list for AN-ASSOCIATION-001. No pairwise exploration. causal_authority is always NONE.",
+  "pairs": [
+    {
+      "pair_id": "forecast_vs_actual",
+      "left_patterns": ["forecast", "ennuste"],
+      "right_patterns": ["actual", "actuals", "realized"],
+      "min_observations": 6,
+      "targets": [{ "stream": "maturity", "criterion_id": "C2" }]
+    },
+    {
+      "pair_id": "coverage_vs_utilization",
+      "left_patterns": ["coverage"],
+      "right_patterns": ["utilization", "utilisation", "kayttoaste"],
+      "min_observations": 6,
+      "targets": [{ "stream": "maturity", "criterion_id": "B1" }]
+    },
+    {
+      "pair_id": "adoption_vs_exception",
+      "left_patterns": ["enabled", "adopted", "enforced", "compliant"],
+      "right_patterns": ["exception", "override", "violation"],
+      "min_observations": 6,
+      "targets": [{ "stream": "maturity", "criterion_id": "D2" }]
+    }
+  ]
+}

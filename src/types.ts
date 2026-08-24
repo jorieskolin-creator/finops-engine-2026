@@ -944,6 +944,7 @@ export interface RunTrace {
   data_signal_coverage?: DataSignalCoverageReport;
   semantic_gap_retrieval?: SemanticGapRetrievalTrace;
   bounded_retrieval?: BoundedRetrievalTrace;
+  gap_retrieval?: GapRetrievalPlan;
   dlp: {
     scanned_chunk_count: number;
     model_review_chunk_count: number;
@@ -1016,18 +1017,43 @@ export interface BoundedRetrievalTrace {
 
 export interface DataSignalRegistryEntry {
   readonly signal_id: string;
-  analyzer_id: 'tagging_allocation_v1';
-  readonly targets: ReadonlyArray<{ readonly stream: 'maturity' | 'antipattern'; readonly criterion_id: 'A1' }>;
+  analyzer_id: DerivedAnalyzerId;
+  readonly targets: ReadonlyArray<{ readonly stream: 'maturity' | 'antipattern'; readonly criterion_id: string }>;
   readonly canonical_fields: readonly string[];
 }
 
+export type DerivedAnalyzerId =
+  | 'tagging_allocation_v1'
+  | 'crucial_item_coverage_v1'
+  | 'trend_v1'
+  | 'variation_v1'
+  | 'concentration_v1'
+  | 'adoption_v1'
+  | 'process_v1'
+  | 'consistency_v1'
+  | 'exception_v1'
+  | 'association_v1';
+
+export type DerivedAnalyzerMethod =
+  | 'tagging_allocation_coverage_analysis'
+  | 'crucial_item_coverage_analysis'
+  | 'trend_analysis'
+  | 'variation_analysis'
+  | 'concentration_analysis'
+  | 'adoption_analysis'
+  | 'process_analysis'
+  | 'consistency_analysis'
+  | 'exception_profile_analysis'
+  | 'association_analysis';
+
 export interface EvidenceAnalysisRegistryEntry {
-  readonly analyzer_id: 'tagging_allocation_v1';
-  readonly analyzer_version: '1.3.0';
-  readonly registry_version: 'evidence_analysis_registry_v1';
+  readonly analyzer_id: DerivedAnalyzerId;
+  readonly analyzer_version: string;
+  readonly registry_version: 'evidence_analysis_registry_v1' | 'evidence_analysis_registry_v2';
   readonly approval_status: 'SHADOW_ONLY' | 'APPROVED';
   readonly approved_for_model_packet: boolean;
-  readonly accepted_source_kinds: readonly ['csv', 'tsv', 'xlsx'];
+  readonly accepted_source_kinds: readonly string[];
+  readonly accepted_row_scopes?: readonly ('full_table' | 'bounded_prefix' | 'acquired_corpus')[];
   readonly targets: ReadonlyArray<{ readonly stream: 'maturity' | 'antipattern'; readonly criterion_id: string }>;
   readonly calculations: ReadonlyArray<{
     readonly calculation_id: string;
@@ -1036,6 +1062,13 @@ export interface EvidenceAnalysisRegistryEntry {
     readonly eligibility_rule: string;
   }>;
   readonly forbidden_interpretations: readonly string[];
+  readonly packet_representation?: 'SUMMARY_LINES' | 'BANDED';
+  readonly packet_source_policy?: 'WITHHOLD_CELL_VALUES' | 'PROFILE_ONLY';
+  readonly exact_result_retention?: 'LOCAL_ONLY';
+  readonly causal_authority?: 'NONE';
+  readonly minimum_observations?: number;
+  readonly allowed_semantic_types?: readonly string[];
+  readonly required_time_dimension?: boolean;
 }
 
 export interface DerivedAnalyticalEvidence {
@@ -1046,21 +1079,21 @@ export interface DerivedAnalyticalEvidence {
   source_id: string;
   targets: Array<{ stream: 'maturity' | 'antipattern'; criterion_id: string }>;
   derivation: {
-    analyzer_id: 'tagging_allocation_v1';
-    analyzer_version: '1.3.0';
-    registry_version: 'evidence_analysis_registry_v1';
-    method: 'tagging_allocation_coverage_analysis';
+    analyzer_id: DerivedAnalyzerId;
+    analyzer_version: string;
+    registry_version: 'evidence_analysis_registry_v1' | 'evidence_analysis_registry_v2';
+    method: DerivedAnalyzerMethod;
     calculation_ids: string[];
   };
   result: {
-    status: 'OBSERVED' | 'INSUFFICIENT_SIGNAL';
+    status: 'OBSERVED' | 'INSUFFICIENT_SIGNAL' | 'NO_STATISTICALLY_USABLE_POPULATION' | 'NO_MATERIAL_SIGNAL';
     source_row_count: number;
     withheld_source_row_count: number;
     withheld_source_column_count: number;
     analyzed_row_count: number;
     eligible_row_count: number;
     excluded_total_row_count: number;
-    row_scope: 'full_table' | 'bounded_prefix';
+    row_scope: 'full_table' | 'bounded_prefix' | 'acquired_corpus';
     row_truncated: boolean;
     detected_signal_count: number;
     mapping_population_coverage: number | null;
@@ -1091,6 +1124,60 @@ export interface DerivedAnalyticalEvidence {
     reconciliation: {
       state: 'NOT_AVAILABLE' | 'PASSED' | 'FAILED' | 'AMBIGUOUS';
     };
+    coverage?: {
+      expected: number;
+      found: number;
+      not_found: number;
+      unusable: number;
+      coverage_band: '0_25' | '25_50' | '50_75' | '75_90' | '90_100';
+      critical_coverage: 'COMPLETE' | 'PARTIAL' | 'MISSING';
+      missing_items: string[];
+    };
+    trend?: {
+      direction: 'IMPROVING' | 'DETERIORATING' | 'STABLE' | 'MIXED' | 'NO_MATERIAL_TREND';
+      magnitude_band: 'LT_5_PERCENT' | '5_10' | '10_20' | '20_50' | 'GT_50';
+      persistence: 'SUSTAINED' | 'INTERMITTENT' | 'SINGLE_PERIOD';
+      variation: 'LOW' | 'MODERATE' | 'HIGH';
+    };
+    variation?: {
+      variability: 'LOW' | 'MODERATE' | 'HIGH';
+      pattern: 'STABLE' | 'ERRATIC' | 'NO_MATERIAL_VARIATION';
+    };
+    concentration?: {
+      concentration_band: 'EVEN' | 'MODERATE' | 'HIGH';
+      lowest_segment: 'MATERIAL' | 'IMMATERIAL' | 'WITHHELD';
+      distribution: 'EVEN' | 'SKEWED' | 'NO_MATERIAL_CONCENTRATION';
+    };
+    adoption?: {
+      practice_presence: 'PRESENT' | 'NOT_OBSERVED';
+      adoption_band: '0_25' | '25_50' | '50_75' | '75_90' | '90_100';
+      organizational_reach: 'NARROW' | 'PARTIAL' | 'BROAD';
+    };
+    process?: {
+      cadence: 'WEEKLY' | 'MONTHLY' | 'QUARTERLY' | 'AD_HOC' | 'UNKNOWN';
+      closure_band: '0_25' | '25_50' | '50_75' | '75_90' | '90_100';
+      aging_band: 'LT_7D' | '7_30D' | '30_90D' | 'GT_90D' | 'NOT_AVAILABLE';
+      ownerless_band: '0_25' | '25_50' | '50_75' | '75_90' | '90_100' | 'NOT_AVAILABLE';
+      recurrence: 'NONE' | 'PRESENT' | 'NOT_AVAILABLE';
+    };
+    consistency?: {
+      declared_cadence: 'WEEKLY' | 'MONTHLY' | 'QUARTERLY' | 'AD_HOC' | 'UNKNOWN';
+      observed_cadence: 'WEEKLY' | 'MONTHLY' | 'QUARTERLY' | 'AD_HOC' | 'UNKNOWN';
+      agreement_state: 'ALIGNED' | 'DIVERGENT' | 'AMBIGUOUS';
+      policy_execution_alignment: 'CONSISTENT' | 'INCONSISTENT' | 'INCONCLUSIVE';
+    };
+    exception?: {
+      frequency_band: '0_25' | '25_50' | '50_75' | '75_90' | '90_100';
+      recurrence: 'NONE' | 'PRESENT' | 'NOT_AVAILABLE';
+      aging_band: 'LT_7D' | '7_30D' | '30_90D' | 'GT_90D' | 'NOT_AVAILABLE';
+      closure_band: '0_25' | '25_50' | '50_75' | '75_90' | '90_100' | 'NOT_AVAILABLE';
+    };
+    association?: {
+      pair_id: string;
+      association_direction: 'POSITIVE' | 'NEGATIVE' | 'NONE';
+      association_strength: 'NO_MATERIAL_ASSOCIATION' | 'WEAK' | 'MODERATE' | 'STRONG';
+      causal_authority: 'NONE';
+    };
   };
   summary_lines: string[];
   locator: { sheet?: string; range?: string; header_row?: number };
@@ -1101,6 +1188,26 @@ export interface DerivedAnalyticalEvidence {
   unit_fingerprint: string;
   report_eligible: boolean;
   raw_value_exposure: false;
+  quality?: {
+    population_coverage: 'HIGH' | 'MODERATE' | 'LOW';
+    confidence: 'HIGH' | 'MODERATE' | 'LOW';
+    limitation: string | null;
+  };
+  llm_policy?: {
+    may_use_as_evidence: boolean;
+    may_recalculate: false;
+    may_infer_exact_values: false;
+    causal_authority: 'NONE';
+  };
+}
+
+export interface GapRetrievalPlan {
+  schema_version: 'gap_retrieval_plan_v1';
+  generative: false;
+  trigger_domains: string[];
+  terms_by_domain: Record<string, string[]>;
+  chunk_ids_by_domain: Record<string, string[]>;
+  reasons: Array<{ domain_id: string; reason: string }>;
 }
 
 export interface SourceManifestTrace {

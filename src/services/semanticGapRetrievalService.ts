@@ -1,23 +1,11 @@
 import type { EvidenceCheckItem, RoutedSourcePacket, SemanticGapRetrievalPassTrace, SourceChunk, SourceRegistry } from '../types';
 import { MASTER_BINGO_FINOPS } from '../knowledge_base';
 import { expandDomainPacket, routingTermsForDomain } from './sourceRegistryService';
+import aliasData from '../knowledge_base/finops_term_aliases.json';
 
 const MAX_SELECTIONS_PER_PASS = 8;
 const MAX_TERMS_PER_PASS = 24;
-const FINOPS_ALIASES: Record<string, string[]> = {
-  autoscaling: ['auto scaling', 'automatic scaling', 'automaattinen skaalaus'],
-  rightsizing: ['right sizing', 'resource sizing', 'resurssien mitoitus'],
-  allocation: ['cost allocation', 'kustannusten kohdistus', 'kohdistaminen'],
-  tagging: ['resource tags', 'tag policy', 'tunnisteet', 'tagit'],
-  budget: ['budjetti', 'budget variance', 'budjettipoikkeama'],
-  forecast: ['forecasting', 'ennuste', 'ennustaminen'],
-  anomaly: ['anomaly detection', 'poikkeama', 'poikkeamien tunnistus'],
-  commitment: ['reserved instance', 'savings plan', 'sitoumus', 'varaus'],
-  showback: ['chargeback', 'cost transparency', 'kustannusnakymä'],
-  utilization: ['usage efficiency', 'kayttoaste', 'kapasiteetin kaytto'],
-  ownership: ['cost owner', 'accountability', 'kustannusvastuu', 'omistajuus'],
-  unit: ['unit economics', 'unit cost', 'yksikkokustannus', 'yksikkotalous'],
-};
+const FINOPS_ALIASES = aliasData.concepts as Record<string, string[]>;
 const STOP_WORDS = new Set([
   'about','after','again','against','also','and','are','because','been','before','being','but','cannot','could','does','each','evidence','from','have','into','more','most','not','only','other','over','same','scanner','score','source','status','than','that','the','their','them','then','there','these','they','this','those','through','under','using','verifier','very','was','were','what','when','where','which','while','with','without','would',
   'että','joka','kanssa','kun','mutta','myös','ole','ovat','sen','sitä','tai','tämä'

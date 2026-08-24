@@ -138,8 +138,46 @@ const shadow = shadowTelemetryPersistence({
   { result: { status: 'OBSERVED', row_scope: 'full_table' } },
   { result: { status: 'INSUFFICIENT_SIGNAL', row_scope: 'bounded_prefix' } }
 ], { registry_version: 'data_signal_registry_v1', total_object_count: 60, analyzer_available_count: 2, unsupported_count: 58 });
-assert.equal(shadow.retrieval_domain_count, 2);assert.equal(shadow.retrieval_triggered_domain_count, 1);assert.equal(shadow.retrieval_selected_candidate_count, 2);assert.equal(shadow.retrieval_average_gain_points, 10);assert.equal(shadow.retrieval_max_gain_points, 20);assert.equal(shadow.derived_observed_count, 1);assert.equal(shadow.scale_unsupported_count, 58);
-assert.doesNotMatch(JSON.stringify(shadow), /PRIVATE_CHUNK_CANARY|source_id|chunk_id|row_value/);
+assert.equal(shadow.retrieval_domain_count, 2);assert.equal(shadow.retrieval_triggered_domain_count, 1);assert.equal(shadow.retrieval_selected_candidate_count, 2);assert.equal(shadow.retrieval_average_gain_points, 10);assert.equal(shadow.retrieval_max_gain_points, 20);assert.equal(shadow.derived_observed_count, 1);assert.equal(shadow.derived_insufficient_signal_count, 1);assert.equal(shadow.derived_full_table_count, 1);assert.equal(shadow.derived_bounded_prefix_count, 1);assert.equal(shadow.scale_unsupported_count, 58);
+assert.equal(shadow.analyzer_version, 'tagging_allocation_v1@1.3.0');
+assert.equal(shadow.derived_observed_count + shadow.derived_insufficient_signal_count, shadow.derived_evidence_count);
+assert.equal(shadow.derived_full_table_count + shadow.derived_bounded_prefix_count, shadow.derived_evidence_count);
+assert.equal(shadow.scale_analyzer_available_count + shadow.scale_unsupported_count, shadow.scale_total_object_count);
+assert.deepEqual(Object.keys(shadow).sort(), [
+  'analyzer_version', 'derived_bounded_prefix_count', 'derived_evidence_count', 'derived_evidence_schema_version',
+  'derived_full_table_count', 'derived_insufficient_signal_count', 'derived_observed_count', 'retrieval_average_gain_points',
+  'retrieval_domain_count', 'retrieval_max_gain_points', 'retrieval_pass_1_count', 'retrieval_pass_2_count',
+  'retrieval_policy_version', 'retrieval_selected_candidate_count', 'retrieval_triggered_domain_count',
+  'scale_analyzer_available_count', 'scale_registry_version', 'scale_total_object_count', 'scale_unsupported_count',
+  'schema_version', 'stop_max_passes_reached_count', 'stop_minimum_gain_not_met_count', 'stop_no_new_candidates_count',
+  'stop_sufficient_baseline_count'
+].sort());
+assert.doesNotMatch(JSON.stringify(shadow), /PRIVATE_CHUNK_CANARY|source_id|chunk_id|row_value|gap_trigger_count|acquired_corpus|NO_STATISTICALLY_USABLE_POPULATION/);
+
+const mixedShadow = shadowTelemetryPersistence({
+  policy_version: 'bounded_retrieval_policy_v1',
+  domains: [
+    { baseline_coverage: 50, final_coverage: 70, stop_reason: 'MAX_PASSES_REACHED', passes: [{ pass: 1, selected_chunk_ids: ['c1'] }, { pass: 2, selected_chunk_ids: ['c2'] }] },
+    { baseline_coverage: 100, final_coverage: 100, stop_reason: 'SUFFICIENT_BASELINE', passes: [] }
+  ]
+}, [
+  { result: { status: 'OBSERVED', row_scope: 'full_table' } },
+  { result: { status: 'OBSERVED', row_scope: 'acquired_corpus' } },
+  { result: { status: 'NO_STATISTICALLY_USABLE_POPULATION', row_scope: 'full_table' } },
+  { result: { status: 'NO_MATERIAL_SIGNAL', row_scope: 'full_table' } },
+  { result: { status: 'INSUFFICIENT_SIGNAL', row_scope: 'bounded_prefix' } }
+], { registry_version: 'data_signal_registry_v1', total_object_count: 60, analyzer_available_count: 2, unsupported_count: 58 });
+assert.equal(mixedShadow.derived_evidence_count, 5);
+assert.equal(mixedShadow.derived_observed_count, 2);
+assert.equal(mixedShadow.derived_insufficient_signal_count, 3);
+assert.equal(mixedShadow.derived_full_table_count, 4);
+assert.equal(mixedShadow.derived_bounded_prefix_count, 1);
+assert.equal(mixedShadow.derived_observed_count + mixedShadow.derived_insufficient_signal_count, mixedShadow.derived_evidence_count);
+assert.equal(mixedShadow.derived_full_table_count + mixedShadow.derived_bounded_prefix_count, mixedShadow.derived_evidence_count);
+assert.equal(mixedShadow.analyzer_version, 'tagging_allocation_v1@1.3.0');
+assert.equal(mixedShadow.scale_analyzer_available_count, 2);
+assert.equal(mixedShadow.scale_analyzer_available_count + mixedShadow.scale_unsupported_count, mixedShadow.scale_total_object_count);
+assert.deepEqual(Object.keys(mixedShadow).sort(), Object.keys(shadow).sort());
 
 const forgedLogs = {
   maturity: { A1: item('supported', [quote('FORGED_SOURCE_CANARY', 'invented-source', 'Policy')]) },

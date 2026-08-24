@@ -1,0 +1,175 @@
+{
+  "version": "1.0.0",
+  "registry_id": "AN-COVERAGE-001",
+  "description": "Expected observable evidence elements per maturity criterion. FOUND/NOT_FOUND is coverage, not a maturity score.",
+  "criteria": [
+    {"criterion_id":"A1","stream":"maturity","theme":"TAGGING_ALLOCATION","items":[
+      {"id":"tagging_policy","critical":true,"aliases":["tagging policy","tag policy","tunnistepolitiikka","label policy"]},
+      {"id":"bu_mapping","critical":true,"aliases":["business unit","cost center","kustannuspaikka"]},
+      {"id":"environment_mapping","critical":true,"aliases":["environment tag","prod","nonprod"]},
+      {"id":"untagged_tracking","critical":true,"aliases":["untagged","mis-tagged","unallocated","tag compliance"]},
+      {"id":"enforcement","critical":true,"aliases":["tag enforcement","required tags","policy block"]},
+      {"id":"showback_support","critical":false,"aliases":["showback","chargeback"]}
+    ]},
+    {"criterion_id":"A2","stream":"maturity","theme":"SHOWBACK_CHARGEBACK","items":[
+      {"id":"model_presence","critical":true,"aliases":["showback","chargeback","cost attribution"]},
+      {"id":"team_attribution","critical":true,"aliases":["attributed to team","consuming team","cost owner"]},
+      {"id":"methodology","critical":true,"aliases":["allocation model","allocation methodology"]},
+      {"id":"dispute_process","critical":false,"aliases":["allocation dispute","chargeback dispute"]},
+      {"id":"model_refresh","critical":false,"aliases":["allocation refined","model updated"]}
+    ]},
+    {"criterion_id":"A3","stream":"maturity","theme":"ANOMALY_DETECTION","items":[
+      {"id":"detector_presence","critical":true,"aliases":["anomaly detection","cost anomaly","spend alert"]},
+      {"id":"alert_routing","critical":true,"aliases":["alert routing","on-call","responsible team"]},
+      {"id":"actionable_context","critical":true,"aliases":["affected service","affected account","magnitude"]},
+      {"id":"response_process","critical":true,"aliases":["anomaly response","escalation path"]},
+      {"id":"timeliness","critical":false,"aliases":["within 24 hours","near real-time"]}
+    ]},
+    {"criterion_id":"A4","stream":"maturity","theme":"COST_DASHBOARDS","items":[
+      {"id":"dashboard_presence","critical":true,"aliases":["cost dashboard","cost report","cloud dashboard"]},
+      {"id":"role_views","critical":true,"aliases":["engineering view","finance view","executive view"]},
+      {"id":"freshness","critical":true,"aliases":["refreshed daily","daily refresh","data freshness"]},
+      {"id":"trends_forecasts","critical":false,"aliases":["trend analysis","forecast projection"]},
+      {"id":"multi_provider","critical":false,"aliases":["multi-cloud","all cloud providers","unified view"]}
+    ]},
+    {"criterion_id":"A5","stream":"maturity","theme":"UNIT_ECONOMICS","items":[
+      {"id":"unit_metric_presence","critical":true,"aliases":["unit economics","cost per customer","cost per transaction","yksikkokustannus"]},
+      {"id":"unit_trend","critical":true,"aliases":["unit cost trend","efficiency metric"]},
+      {"id":"engineering_targets","critical":false,"aliases":["unit cost target","cost efficiency target"]}
+    ]},
+    {"criterion_id":"B1","stream":"maturity","theme":"COMMITMENTS","items":[
+      {"id":"commitment_program","critical":true,"aliases":["reserved instance","savings plan","committed use","sitoumus"]},
+      {"id":"coverage_target","critical":true,"aliases":["coverage target","commitment coverage"]},
+      {"id":"utilization_tracking","critical":true,"aliases":["commitment utilization","unused commitment"]},
+      {"id":"review_cadence","critical":true,"aliases":["quarterly review","commitment review"]}
+    ]},
+    {"criterion_id":"B2","stream":"maturity","theme":"RIGHTSIZING","items":[
+      {"id":"rightsizing_program","critical":true,"aliases":["right-sizing","rightsizing","resurssien mitoitus"]},
+      {"id":"recommendations","critical":true,"aliases":["rightsizing recommendation","utilization analysis"]},
+      {"id":"review_cadence","critical":true,"aliases":["regular cadence","engineering review"]},
+      {"id":"savings_tracking","critical":false,"aliases":["savings achieved","rightsizing savings"]}
+    ]},
+    {"criterion_id":"B3","stream":"maturity","theme":"WASTE_ELIMINATION","items":[
+      {"id":"idle_identification","critical":true,"aliases":["orphaned","idle instance","unattached volume","unused ip"]},
+      {"id":"nonprod_schedule","critical":true,"aliases":["non-production","after hours","scheduled shutdown"]},
+      {"id":"waste_metric","critical":false,"aliases":["waste percentage","waste of total spend"]}
+    ]},
+    {"criterion_id":"B4","stream":"maturity","theme":"SPOT_PREEMPTIBLE","items":[
+      {"id":"spot_usage","critical":true,"aliases":["spot instance","preemptible","spot vm"]},
+      {"id":"interruption_handling","critical":true,"aliases":["spot interruption","fallback","graceful handling"]},
+      {"id":"spot_savings","critical":false,"aliases":["spot savings","spot coverage"]}
+    ]},
+    {"criterion_id":"B5","stream":"maturity","theme":"STORAGE_LIFECYCLE","items":[
+      {"id":"lifecycle_policy","critical":true,"aliases":["storage lifecycle","lifecycle policy","tiering"]},
+      {"id":"retention_policy","critical":true,"aliases":["retention policy","data retention"]},
+      {"id":"storage_class","critical":false,"aliases":["hot storage","cold storage","archive","storage class"]}
+    ]},
+    {"criterion_id":"C1","stream":"maturity","theme":"POLICY_FRAMEWORK","items":[
+      {"id":"policy_document","critical":true,"aliases":["cloud financial policy","spend limit","provisioning standard"]},
+      {"id":"approval_workflow","critical":true,"aliases":["approval workflow","spend approval"]},
+      {"id":"automated_guardrail","critical":true,"aliases":["service control policy","azure policy","opa","policy as code"]},
+      {"id":"policy_review","critical":false,"aliases":["policy review cadence","policy update"]}
+    ]},
+    {"criterion_id":"C2","stream":"maturity","theme":"FORECAST_VARIANCE","items":[
+      {"id":"forecast_exists","critical":true,"aliases":["forecast","ennuste","forecasting"]},
+      {"id":"forecast_period","critical":true,"aliases":["forecast period","monthly forecast","budget period"]},
+      {"id":"forecast_ownership","critical":true,"aliases":["forecast owner","budget owner"]},
+      {"id":"forecast_cadence","critical":true,"aliases":["forecast update","monthly budget","budget-to-actual"]},
+      {"id":"variance_tracked","critical":true,"aliases":["budget variance","forecast variance","budjettipoikkeama"]},
+      {"id":"variance_threshold","critical":true,"aliases":["variance threshold","overrun threshold"]},
+      {"id":"corrective_action","critical":true,"aliases":["corrective action","overrun action"]},
+      {"id":"decision_authority","critical":false,"aliases":["decision authority","budget authority"]},
+      {"id":"business_participation","critical":false,"aliases":["business participation","business stakeholder"]}
+    ]},
+    {"criterion_id":"C3","stream":"maturity","theme":"OPERATING_MODEL","items":[
+      {"id":"roles_raci","critical":true,"aliases":["raci","finops practitioner","operating model"]},
+      {"id":"executive_sponsorship","critical":true,"aliases":["executive sponsorship","steering committee"]},
+      {"id":"operating_cadence","critical":true,"aliases":["weekly review","monthly review","finops cadence"]}
+    ]},
+    {"criterion_id":"C4","stream":"maturity","theme":"PROCUREMENT","items":[
+      {"id":"edp_or_negotiated","critical":true,"aliases":["enterprise discount","private pricing","negotiated rate","edp"]},
+      {"id":"vendor_management","critical":true,"aliases":["vendor management","market benchmark"]},
+      {"id":"multi_year_justification","critical":false,"aliases":["multi-year","exit strategy","business justification"]}
+    ]},
+    {"criterion_id":"C5","stream":"maturity","theme":"COMPLIANCE_COST","items":[
+      {"id":"residency_cost","critical":true,"aliases":["data residency","sovereignty","residency cost"]},
+      {"id":"audit_trail","critical":true,"aliases":["audit trail","financial decision log"]},
+      {"id":"compliance_cost_separated","critical":false,"aliases":["compliance-driven cost","dedicated tenancy"]}
+    ]},
+    {"criterion_id":"D1","stream":"maturity","theme":"COST_AWARE_DESIGN","items":[
+      {"id":"review_gate","critical":true,"aliases":["architecture review","design review"]},
+      {"id":"cost_modeling","critical":true,"aliases":["cost modeling","estimated monthly spend","scaling cost"]},
+      {"id":"engineer_cost_access","critical":true,"aliases":["cost data during development","cost impact"]}
+    ]},
+    {"criterion_id":"D2","stream":"maturity","theme":"IAC_GUARDRAILS","items":[
+      {"id":"iac_presence","critical":true,"aliases":["terraform","pulumi","cloudformation","infrastructure as code"]},
+      {"id":"cost_guardrail","critical":true,"aliases":["infracost","opa","cost guardrail","policy as code"]},
+      {"id":"pipeline_estimate","critical":false,"aliases":["cost estimation","ci/cd cost","predicted cost"]}
+    ]},
+    {"criterion_id":"D3","stream":"maturity","theme":"AUTOSCALING","items":[
+      {"id":"scaling_policy","critical":true,"aliases":["autoscaling","auto scaling","horizontal scaling"]},
+      {"id":"scale_tested","critical":true,"aliases":["scale-to-zero","scaling tested"]},
+      {"id":"scaling_cost_monitored","critical":false,"aliases":["scaling cost","over-aggressive scaling"]}
+    ]},
+    {"criterion_id":"D4","stream":"maturity","theme":"MULTI_CLOUD","items":[
+      {"id":"unified_visibility","critical":true,"aliases":["unified cost","single view","multi-cloud cost"]},
+      {"id":"cross_provider_tags","critical":true,"aliases":["consistent tagging","cross-provider"]},
+      {"id":"placement_by_cost","critical":false,"aliases":["workload placement","cross-provider cost"]}
+    ]},
+    {"criterion_id":"D5","stream":"maturity","theme":"CONTAINER_SERVERLESS","items":[
+      {"id":"k8s_optimization","critical":true,"aliases":["kubernetes","pod right-sizing","bin-packing","cluster autoscaling"]},
+      {"id":"serverless_monitoring","critical":true,"aliases":["serverless","function cost","lambda cost"]},
+      {"id":"placement_framework","critical":false,"aliases":["containers vs serverless","cost-performance"]}
+    ]},
+    {"criterion_id":"E1","stream":"maturity","theme":"FINOPS_COE","items":[
+      {"id":"team_or_charter","critical":true,"aliases":["finops team","center of excellence","coe","finops charter"]},
+      {"id":"campaigns","critical":true,"aliases":["optimization campaign","savings target"]},
+      {"id":"value_enabler","critical":false,"aliases":["value enabler","not cost police"]}
+    ]},
+    {"criterion_id":"E2","stream":"maturity","theme":"ENG_ACCOUNTABILITY","items":[
+      {"id":"team_cost_visibility","critical":true,"aliases":["engineering cost","team cloud cost"]},
+      {"id":"cost_in_objectives","critical":true,"aliases":["cost okr","sprint review","cost efficiency objective"]},
+      {"id":"optimize_incentive","critical":false,"aliases":["incentivized to optimize","empowered to optimize"]}
+    ]},
+    {"criterion_id":"E3","stream":"maturity","theme":"EXECUTIVE_SPONSORSHIP","items":[
+      {"id":"named_sponsor","critical":true,"aliases":["cto","cfo","executive sponsor","vp-level"]},
+      {"id":"review_engagement","critical":true,"aliases":["executive review","leadership meeting"]},
+      {"id":"finops_budget","critical":false,"aliases":["finops tooling","finops headcount","finops budget"]}
+    ]},
+    {"criterion_id":"E4","stream":"maturity","theme":"CROSS_FUNCTIONAL","items":[
+      {"id":"shared_forum","critical":true,"aliases":["finance engineering","cross-functional","finops review"]},
+      {"id":"shared_cadence","critical":true,"aliases":["monthly finops","shared cadence"]},
+      {"id":"shared_accountability","critical":false,"aliases":["shared accountability","engineering buys"]}
+    ]},
+    {"criterion_id":"E5","stream":"maturity","theme":"CONTINUOUS_IMPROVEMENT","items":[
+      {"id":"retrospective","critical":true,"aliases":["retrospective","maturity assessment","continuous improvement"]},
+      {"id":"internal_benchmark","critical":true,"aliases":["team-vs-team","month-over-month","internal benchmark"]},
+      {"id":"external_benchmark","critical":false,"aliases":["industry peer","finops foundation"]}
+    ]},
+    {"criterion_id":"F1","stream":"maturity","theme":"AI_SPEND_VISIBILITY","items":[
+      {"id":"token_spend_by_app","critical":true,"aliases":["token spend","inference spend","model spend"]},
+      {"id":"driver_visibility","critical":true,"aliases":["retry","cache","batch","endpoint"]},
+      {"id":"ai_dashboard","critical":true,"aliases":["ai cost","ai spend dashboard","ai alert"]}
+    ]},
+    {"criterion_id":"F2","stream":"maturity","theme":"AI_UNIT_ECONOMICS","items":[
+      {"id":"ai_allocation","critical":true,"aliases":["ai cost allocation","llm cost","platform cost"]},
+      {"id":"shared_platform_model","critical":true,"aliases":["shared ai platform","unassigned overhead"]},
+      {"id":"ai_unit_metric","critical":true,"aliases":["cost per task","cost per outcome","cost per workflow"]}
+    ]},
+    {"criterion_id":"F3","stream":"maturity","theme":"MODEL_ROUTING","items":[
+      {"id":"routing_policy","critical":true,"aliases":["model routing","model-routing","task value"]},
+      {"id":"prompt_efficiency","critical":true,"aliases":["prompt length","context size","caching","batching","retry"]},
+      {"id":"premium_tradeoff","critical":false,"aliases":["premium model","quality latency","larger context"]}
+    ]},
+    {"criterion_id":"F4","stream":"maturity","theme":"AI_GUARDRAILS","items":[
+      {"id":"ai_budget","critical":true,"aliases":["ai budget","ai quota","model tier"]},
+      {"id":"ai_forecast_anomaly","critical":true,"aliases":["ai forecast","token volume","usage spike"]},
+      {"id":"production_limits","critical":true,"aliases":["rate limit","spend limit","model-access"]}
+    ]},
+    {"criterion_id":"F5","stream":"maturity","theme":"AI_VALUE","items":[
+      {"id":"value_comparison","critical":true,"aliases":["business value","productivity gain","cost per outcome"]},
+      {"id":"ai_cost_ownership","critical":true,"aliases":["ai cost owner","ai governance"]},
+      {"id":"low_value_review","critical":false,"aliases":["low-value","downgraded","retired"]}
+    ]}
+  ]
+}

@@ -175,7 +175,7 @@ ${summarizeBatch(batch)}
 - assessment_status must be "assessed" only when criterion-relevant customer evidence is present. Use "not_assessed" for silence or irrelevant material, regardless of packet size.
 - An assessed 0/3 is valid when relevant evidence was evaluated but supports none of the three questions. It is not missing evidence and its source-bound quotes must be retained.
 - For text evidence, quoted text must be a real substring or clearly faithful excerpt from the source.
-- For deterministic derived evidence, require evidence_source="derived", a known derived_evidence_id, the correct source_id and an exact summary line targeted to this criterion. Never require a chunk_id for derived evidence and never recalculate its values.
+- For deterministic derived evidence, require evidence_source="derived", a known derived_evidence_id, the correct source_id and an exact summary line targeted to this criterion. Never require a chunk_id for derived evidence, never recalculate its values, never infer exact percentages or currency from bands, and never treat association_direction as causality or NOT_FOUND coverage as tested absence.
 - When the source contains <CHUNK ...> markers, verify against the exact chunk text. Use chunk IDs/source IDs/page markers in your rationale when they clarify support or absence coverage.
 - If the packet says coverage is weak or broad-source fallback was used, do not treat missing packet evidence as positive absence. Mark maturity as missing/silent or anti-pattern absence as unknown unless an exact chunk supports the conclusion.
 - For image evidence, the description must be something visible in the attached image content.

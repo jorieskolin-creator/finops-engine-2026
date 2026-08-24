@@ -31,9 +31,14 @@ export const expandDomainPacket = (registry, packet, ids) => {
     }
   };
 };`);
+await writeFile(join(dir, 'aliases.mjs'), `export default { concepts: {
+  autoscaling: ['auto scaling', 'automatic scaling', 'automaattinen skaalaus'],
+  rightsizing: ['right sizing', 'resource sizing', 'resurssien mitoitus']
+}};`);
 const serviceSource = (await readFile(new URL('../src/services/semanticGapRetrievalService.ts', import.meta.url), 'utf8'))
   .replace("'../knowledge_base'", "'./knowledgeBase.mjs'")
-  .replace("'./sourceRegistryService'", "'./sourceRegistryService.mjs'");
+  .replace("'./sourceRegistryService'", "'./sourceRegistryService.mjs'")
+  .replace("'../knowledge_base/finops_term_aliases.json'", "'./aliases.mjs'");
 await writeFile(join(dir, 'semanticGapRetrievalService.mjs'), compile(serviceSource));
 const { expandWeakEvidencePacket } = await import(`file://${join(dir, 'semanticGapRetrievalService.mjs')}`);
 

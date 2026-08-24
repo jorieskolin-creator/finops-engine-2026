@@ -2,18 +2,10 @@ import assert from 'node:assert/strict';
 import { mkdtemp } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { build } from 'esbuild';
+import { emitTypescript } from './ts-emit.mjs';
 
 const dir = await mkdtemp(join(tmpdir(), 'finops-evidence-stage-packet-'));
-const outfile = join(dir, 'evidenceStagePacketService.mjs');
-await build({
-  entryPoints: [new URL('../src/services/evidenceStagePacketService.ts', import.meta.url).pathname],
-  bundle: true,
-  platform: 'node',
-  format: 'esm',
-  outfile,
-  logLevel: 'silent',
-});
+const outfile = await emitTypescript(new URL('../src/services/evidenceStagePacketService.ts', import.meta.url).pathname, dir);
 const { assertEvidenceLaneStagePacket, buildEvidenceLaneStagePackets: buildEvidenceLaneStagePacketsRaw } = await import(`file://${outfile}`);
 
 const hashString = value => {

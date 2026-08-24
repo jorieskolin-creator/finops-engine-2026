@@ -113,6 +113,14 @@ const trace = buildRunTrace({
   },
   qualityGate: { decision: 'GO', blocking_reasons: [], warnings: [], notes: [], thresholds: {} },
   tacticGroundingAdjustments: [],
+  gapRetrieval: {
+    schema_version: 'gap_retrieval_plan_v1',
+    generative: false,
+    trigger_domains: ['A'],
+    terms_by_domain: {},
+    chunk_ids_by_domain: {},
+    reasons: [{ domain_id: 'A', reason: 'packet weak_coverage' }],
+  },
 });
 
 const [tagging, customStorage, unrelated, commitment, assessmentGaps] = trace.tactic_paths;
@@ -129,5 +137,8 @@ assert.deepEqual(assessmentGaps.linked_findings.map(finding => finding.match(/^\
 assert.equal(assessmentGaps.grounding_status, 'assessment_gap_linked_no_tactic_match');
 assert.match(assessmentGaps.notes[0], /not evidence of a customer control deficiency/);
 assert.ok(trace.tactic_paths.every(path => path.linked_findings.length <= 6));
+assert.equal(trace.gap_retrieval.generative, false);
+assert.deepEqual(trace.gap_retrieval.trigger_domains, ['A']);
+assert.equal(trace.bounded_retrieval, undefined);
 
 console.log('RunTrace action-specific tactic provenance tests passed');

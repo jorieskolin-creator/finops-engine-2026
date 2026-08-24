@@ -1,0 +1,20 @@
+{
+  "version": "1.0.0",
+  "description": "Maintainer-owned EN/FI aliases for crucial-item matching and gap re-search. Not an embedding model.",
+  "concepts": {
+    "tagging": ["resource tags", "tag policy", "tunnisteet", "tagit", "labels", "cost allocation tags"],
+    "allocation": ["cost allocation", "kustannusten kohdistus", "kohdistaminen", "showback", "chargeback"],
+    "forecast": ["forecasting", "ennuste", "ennustaminen", "budget variance", "budjettipoikkeama"],
+    "budget": ["budjetti", "spend limit", "cost budget"],
+    "commitment": ["reserved instance", "savings plan", "sitoumus", "varaus", "committed use", "cud"],
+    "rightsizing": ["right sizing", "resource sizing", "resurssien mitoitus"],
+    "anomaly": ["anomaly detection", "poikkeama", "poikkeamien tunnistus", "spend alert", "cost spike"],
+    "ownership": ["cost owner", "accountability", "kustannusvastuu", "omistajuus"],
+    "unit": ["unit economics", "unit cost", "yksikkokustannus", "yksikkotalous", "cost per transaction"],
+    "autoscaling": ["auto scaling", "automatic scaling", "automaattinen skaalaus", "scale to zero"],
+    "showback": ["chargeback", "cost transparency", "kustannusnakyma"],
+    "utilization": ["usage efficiency", "kayttoaste", "kapasiteetin kaytto"],
+    "waste": ["idle resource", "orphaned resource", "unattached volume", "zombie instance"],
+    "guardrail": ["policy as code", "service control policy", "azure policy", "opa", "infracost"]
+  }
+}

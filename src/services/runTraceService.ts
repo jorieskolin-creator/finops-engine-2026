@@ -3,6 +3,7 @@ import {
   BoundedRetrievalTrace,
   DataSignalCoverageReport,
   SemanticGapRetrievalTrace,
+  GapRetrievalPlan,
   DiagnosticResult,
   DlpScanResult,
   DerivedAnalyticalEvidence,
@@ -65,6 +66,7 @@ interface BuildRunTraceInput {
   dataSignalCoverage?: DataSignalCoverageReport;
   boundedRetrieval?: BoundedRetrievalTrace;
   semanticGapRetrieval?: SemanticGapRetrievalTrace;
+  gapRetrieval?: GapRetrievalPlan;
 }
 
 const stageTraceBuffer = new Map<string, StageTrace[]>();
@@ -478,6 +480,7 @@ export const buildRunTrace = (input: BuildRunTraceInput): RunTrace => {
     data_signal_coverage: input.dataSignalCoverage,
     semantic_gap_retrieval: input.semanticGapRetrieval,
     bounded_retrieval: input.boundedRetrieval,
+    gap_retrieval: input.gapRetrieval,
     dlp: {
       scanned_chunk_count: input.dlpScan.scanned_chunk_count,
       model_review_chunk_count: input.dlpReviewChunkCount,

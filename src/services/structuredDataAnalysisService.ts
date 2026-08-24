@@ -39,25 +39,37 @@ export const EVIDENCE_ANALYSIS_REGISTRY: readonly EvidenceAnalysisRegistryEntry[
   })
 ]);
 
-export const isDerivedEvidenceApprovedForPacket = (evidence: DerivedAnalyticalEvidence): boolean =>
-  EVIDENCE_ANALYSIS_REGISTRY.some(entry =>
+export const isDerivedEvidenceApprovedForPacket = (evidence: DerivedAnalyticalEvidence): boolean => {
+  const structural = evidence.schema_version === 'derived_analytical_evidence_v1'
+    && evidence.mode === 'authoritative'
+    && evidence.report_eligible
+    && evidence.raw_value_exposure === false
+    && evidence.result.status === 'OBSERVED'
+    && !evidence.result.row_truncated
+    && evidence.eligibility.state === 'ELIGIBLE'
+    && evidence.eligibility.reasons.length === 0
+    && evidence.summary_lines.length > 0
+    && /^[a-f0-9]{8}$/.test(evidence.unit_fingerprint);
+  if (!structural) return false;
+  const tagging = EVIDENCE_ANALYSIS_REGISTRY.some(entry =>
     entry.analyzer_id === evidence.derivation.analyzer_id
     && entry.analyzer_version === evidence.derivation.analyzer_version
     && entry.registry_version === evidence.derivation.registry_version
     && entry.approval_status === 'APPROVED'
     && entry.approved_for_model_packet
-    && evidence.schema_version === 'derived_analytical_evidence_v1'
-    && evidence.mode === 'authoritative'
-    && evidence.report_eligible
-    && evidence.raw_value_exposure === false
-    && evidence.result.status === 'OBSERVED'
     && evidence.result.row_scope === 'full_table'
-    && !evidence.result.row_truncated
-    && evidence.eligibility.state === 'ELIGIBLE'
-    && evidence.eligibility.reasons.length === 0
-    && evidence.summary_lines.length > 0
-    && /^[a-f0-9]{8}$/.test(evidence.unit_fingerprint)
   );
+  const registered = evidence.derivation.registry_version === 'evidence_analysis_registry_v2'
+    && evidence.derivation.analyzer_version === '1.0.0'
+    && ['crucial_item_coverage_v1', 'trend_v1', 'variation_v1', 'concentration_v1', 'adoption_v1', 'process_v1', 'consistency_v1', 'exception_v1', 'association_v1'].includes(evidence.derivation.analyzer_id)
+    && evidence.llm_policy?.may_recalculate === false
+    && evidence.llm_policy?.causal_authority === 'NONE'
+    && (
+      (evidence.derivation.analyzer_id === 'crucial_item_coverage_v1' && evidence.result.row_scope === 'acquired_corpus')
+      || (evidence.derivation.analyzer_id !== 'crucial_item_coverage_v1' && evidence.result.row_scope === 'full_table')
+    );
+  return tagging || registered;
+};
 
 export const buildDataSignalCoverageReport=():DataSignalCoverageReport=>{
   const objects:DataSignalCoverageReport['objects']=[];
@@ -85,8 +97,8 @@ const coverageFor=(rows:string[][],indexes:number[]):number|null=>{
 };
 
 const fieldPatterns={
-  owner:['owner'],cost_center:['cost_center','costcentre'],product:['product'],application:['application','app'],environment:['environment','env'],
-  tagging:['tag','tags','label','labels'],allocation:['allocation','allocated','cost_center','costcentre','billing_account']
+  owner:['owner','omistaja','kustannusvastuu'],cost_center:['cost_center','costcentre'],product:['product'],application:['application','app'],environment:['environment','env'],
+  tagging:['tag','tags','label','labels','tunniste','tunnisteet','tagit'],allocation:['allocation','allocated','cost_center','costcentre','billing_account']
 } as const;
 type CoverageField=keyof typeof fieldPatterns;
 const costPatterns=['cost','spend','amount','net_cost','amortized_cost','unblended_cost','effective_cost'] as const;
@@ -185,7 +197,13 @@ export const analyzeTaggingAllocationTable=(source:SourceRecord, tableOverride?:
     derivation:{analyzer_id:analyzerId,analyzer_version:TAGGING_ALLOCATION_ANALYZER_VERSION,registry_version:EVIDENCE_ANALYSIS_REGISTRY_VERSION,method,calculation_ids:calculationIds},
     result:{status:detectedSignalCount>0&&rows.length>0?'OBSERVED':'INSUFFICIENT_SIGNAL',source_row_count:table.source_total_row_count??table.total_row_count,withheld_source_row_count:table.hidden_row_count||0,withheld_source_column_count:table.hidden_column_count||0,analyzed_row_count:rows.length,eligible_row_count:eligibleRows.length,excluded_total_row_count:declaredTotalRows.length,row_scope:rows.length<table.total_row_count?'bounded_prefix':'full_table',row_truncated:table.analysis_complete===false||rows.length<table.total_row_count,detected_signal_count:detectedSignalCount,mapping_population_coverage:mappingCoverage,tagging_population_coverage:taggingCoverage,allocation_population_coverage:allocationCoverage,field_coverage:fieldCoverage,cost_basis:{state:costState,column_index:costIndex,source_column_number:costIndex===null?null:sourceColumnNumbers[costIndex],currencies,excluded_row_count:excludedCostRows},reconciliation:{state:reconciliationState}},summary_lines:summaryLines,
     locator:{sheet:table.sheet_name,range:table.source_range,header_row:table.header_row_number},eligibility:{state:eligibilityReasons.length===0?'ELIGIBLE':'INELIGIBLE',reasons:eligibilityReasons},unit_fingerprint:hash(JSON.stringify(table)),report_eligible:eligibilityReasons.length===0,
-    raw_value_exposure:false
+    raw_value_exposure:false,
+    quality:{
+      population_coverage:eligibilityReasons.length===0?(rows.length>=20?'HIGH':'MODERATE'):'LOW',
+      confidence:eligibilityReasons.length===0?(detectedSignalCount>=2&&costState!=='AMBIGUOUS_CURRENCY'?'HIGH':'MODERATE'):'LOW',
+      limitation:eligibilityReasons.length?eligibilityReasons.join('; '):(costState==='AMBIGUOUS_CURRENCY'?'Cost-weighted coverage withheld because currency is ambiguous.':null)
+    },
+    llm_policy:{may_use_as_evidence:eligibilityReasons.length===0&&detectedSignalCount>0&&rows.length>0,may_recalculate:false,may_infer_exact_values:false,causal_authority:'NONE'}
   };
 };
 

@@ -50,7 +50,9 @@ import {
 } from "./sourceRegistryService";
 import { buildRunTrace, clearStageTraces, consumeStageTraces, summarizeRunTrace } from "./runTraceService";
 import { acquisitionQualityPersistence, buildAcquisitionQualitySnapshot, shadowTelemetryPersistence } from "./acquisitionQualityService";
-import { analyzeStructuredSources, buildDataSignalCoverageReport } from "./structuredDataAnalysisService";
+import { buildDataSignalCoverageReport } from "./structuredDataAnalysisService";
+import { deriveAllEvidenceSignals } from "./derivedEvidence";
+import { planGapRetrieval } from "./gapAnalyzerService";
 import { buildEvidenceLaneStagePackets } from "./evidenceStagePacketService";
 import { applyBoundedRetrieval } from "./boundedRetrievalService";
 import { expandWeakEvidencePacket } from "./semanticGapRetrievalService";
@@ -318,7 +320,8 @@ export const analyzeDocument = async (
     emitProgress({ stage: 'extraction', status: extractionWarnings > 0 ? 'completed_with_warnings' : 'completed' });
     emitProgress({ stage: 'packetization', status: 'in_progress' });
     const sourceRegistry = buildSourceRegistry(acquiredSources);
-    const derivedAnalyticalEvidence = analyzeStructuredSources(acquiredSources);
+    const derivedRun = deriveAllEvidenceSignals(acquiredSources, sourceRegistry);
+    let derivedAnalyticalEvidence = derivedRun.evidence;
     const tableInspections = acquiredSources.flatMap(source =>
       [...(source.structured_tables || []), ...(source.structured_table ? [source.structured_table] : [])]
         .flatMap(table => table.deterministic_inspection ? [{
@@ -331,7 +334,19 @@ export const analyzeDocument = async (
     const dataSignalCoverage = buildDataSignalCoverageReport();
     const text = renderPseudonymousSourceContext(sourceRegistry, 120000);
     const baselineSourcePackets = buildDomainPackets(sourceRegistry);
-    const { packets: sourcePackets, trace: boundedRetrieval } = applyBoundedRetrieval(sourceRegistry, baselineSourcePackets);
+    const gapPlan = planGapRetrieval({
+      packets: baselineSourcePackets,
+      derived: derivedAnalyticalEvidence,
+      locations: derivedRun.locations
+    });
+    const { packets: sourcePackets, trace: boundedRetrieval } = applyBoundedRetrieval(sourceRegistry, baselineSourcePackets, { gap_plan: gapPlan });
+    if (boundedRetrieval.domains.some(domain => domain.passes.some(pass => pass.selected_chunk_ids.length > 0))) {
+      const privacyAgain = sanitizeEvidenceSources(acquiredSources);
+      if (privacyAgain.decision.decision === 'BLOCK') {
+        throw new Error(`Deterministic privacy gate blocked the evidence set after gap re-read (${privacyAgain.decision.blocking_codes.join(', ')}). Remove prohibited secrets before running the assessment.`);
+      }
+      derivedAnalyticalEvidence = deriveAllEvidenceSignals(acquiredSources, sourceRegistry).evidence;
+    }
     const weakDomainIds = Object.entries(sourcePackets)
       .filter(([, packet]) => packet.weak_coverage)
       .map(([domain]) => domain);
@@ -406,6 +421,9 @@ export const analyzeDocument = async (
         seenTerms: input.seenTerms
       });
       semanticPackets[input.batchId] = expanded.packet;
+      if (expanded.trace.selected_chunk_ids.length > 0) {
+        derivedAnalyticalEvidence = deriveAllEvidenceSignals(acquiredSources, sourceRegistry).evidence;
+      }
       const snapshot = { ...sourcePackets, [input.batchId]: expanded.packet };
       const integrity = validateEvidenceAcquisition(acquiredSources, sourceRegistry, snapshot);
       const status = sourceRegistryRuntimeStatus(sourceRegistry, snapshot, 0, dlpScan, privacy.decision, integrity);
@@ -1565,7 +1583,8 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => unresolve
       tableInspections,
       dataSignalCoverage,
       boundedRetrieval,
-      semanticGapRetrieval: aggregatedRawData.semantic_gap_retrieval
+      semanticGapRetrieval: aggregatedRawData.semantic_gap_retrieval,
+      gapRetrieval: gapPlan
     });
     finalResult.meta.run_trace = runTrace;
     finalResult.meta.run_trace_summary = summarizeRunTrace(runTrace);

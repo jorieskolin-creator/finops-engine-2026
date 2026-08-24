@@ -20,11 +20,26 @@ const FORBIDDEN_USES = [
   'Treat knowledge-base statements as customer evidence.',
   'Treat shadow-only derived evidence as a finding or score input.',
   'Infer non-text visual semantics from OCR text.',
-  'Infer tested absence from weak or unrouted coverage.'
+  'Infer tested absence from weak or unrouted coverage.',
+  'Treat NOT_FOUND or UNUSABLE coverage as tested absence or a lower maturity score.',
+  'Recalculate derived bands or infer exact values, team names, or invoice totals from them.'
 ];
 
 const domainForEvidence = (evidence: DerivedAnalyticalEvidence): string | undefined =>
   evidence.targets.map(target => target.criterion_id.charAt(0)).find(Boolean);
+
+const withholdAnalyzedTableRows = (text: string, sourceIds: Set<string>): { text: string; withheld: number } => {
+  if (sourceIds.size === 0) return { text, withheld: 0 };
+  let withheld = 0;
+  const next = text.replace(/<CHUNK\b([^>]*)>([\s\S]*?)<\/CHUNK>/g, (match, attrs: string) => {
+    if (!/\btype="table_row"/.test(attrs)) return match;
+    const sourceId = attrs.match(/\bsource_id="([^"]+)"/)?.[1];
+    if (!sourceId || !sourceIds.has(sourceId)) return match;
+    withheld += 1;
+    return `<CHUNK${attrs}>\n[WITHHELD_CELL_VALUES]\n</CHUNK>`;
+  });
+  return { text: next, withheld };
+};
 
 const modelSafeDerivedEvidence = (items: DerivedAnalyticalEvidence[]): string => JSON.stringify(items.map(item => ({
   schema_version: item.schema_version,
@@ -38,6 +53,28 @@ const modelSafeDerivedEvidence = (items: DerivedAnalyticalEvidence[]): string =>
     eligible_row_count: item.result.eligible_row_count,
     row_scope: item.result.row_scope,
   },
+  coverage: item.result.coverage ? {
+    expected: item.result.coverage.expected,
+    found: item.result.coverage.found,
+    not_found: item.result.coverage.not_found,
+    coverage_band: item.result.coverage.coverage_band,
+    critical_coverage: item.result.coverage.critical_coverage,
+    missing_items: item.result.coverage.missing_items,
+  } : undefined,
+  quality: item.quality,
+  llm_policy: item.llm_policy,
+  result_bands: (item.result.trend || item.result.variation || item.result.concentration || item.result.adoption || item.result.process || item.result.consistency || item.result.exception || item.result.association)
+    ? {
+      trend: item.result.trend,
+      variation: item.result.variation,
+      concentration: item.result.concentration,
+      adoption: item.result.adoption,
+      process: item.result.process,
+      consistency: item.result.consistency,
+      exception: item.result.exception,
+      association: item.result.association,
+    }
+    : undefined,
   summary_lines: item.summary_lines,
   locator: item.locator,
   unit_fingerprint: item.unit_fingerprint,
@@ -153,6 +190,12 @@ export const buildEvidenceLaneStagePackets = (input: {
     const shadowDerivedCount = input.derived_evidence.filter(item =>
       !isDerivedEvidenceApprovedForPacket(item) && domainForEvidence(item) === domainId
     ).length;
+    const withholdSourceIds = new Set(
+      input.derived_evidence
+        .filter(item => isDerivedEvidenceApprovedForPacket(item) && item.result.row_scope === 'full_table')
+        .map(item => item.source_id)
+    );
+    const customerEvidence = withholdAnalyzedTableRows(sourcePacket.text, withholdSourceIds);
     const sourcePacketHash = input.source_packet_hashes[domainId];
     if (!sourcePacketHash) throw new Error(`EVIDENCE_SOURCE_PACKET_HASH_MISSING:${domainId}`);
     if (sourcePacketHash !== hashRoutedSourcePacket(sourcePacket)) {
@@ -168,7 +211,8 @@ export const buildEvidenceLaneStagePackets = (input: {
         ? [`Workbook images from ${input.acquisition_limitations.uninspected_workbook_image_source_count} source(s) remain uninspected and withheld.`] : []),
       ...(input.acquisition_limitations.unsupported_object_codes.length > 0
         ? [`Unsupported workbook object codes: ${input.acquisition_limitations.unsupported_object_codes.join(', ')}.`] : []),
-      ...(sourcePacket.total_candidate_chunks > sourcePacket.included_chunk_count ? ['Relevant routed chunks were omitted by bounded packet limits.'] : [])
+      ...(sourcePacket.total_candidate_chunks > sourcePacket.included_chunk_count ? ['Relevant routed chunks were omitted by bounded packet limits.'] : []),
+      ...(customerEvidence.withheld > 0 ? [`${customerEvidence.withheld} table_row cell chunk(s) withheld after an approved full-table analyzer consumed the sheet.`] : [])
     ];
     const base: Omit<EvidenceLaneStagePacket, 'integrity_hash' | 'text'> = {
       schema_version: 'evidence_lane_stage_packet_v1',
@@ -212,7 +256,7 @@ export const buildEvidenceLaneStagePackets = (input: {
       },
       images: []
     };
-    const roleText = renderPacket(base, sourcePacket.text);
+    const roleText = renderPacket(base, customerEvidence.text);
     return [domainId, {
       ...base,
       integrity_hash: hashString(`${hashable(base)}\n${roleText}`),
