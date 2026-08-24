@@ -190,9 +190,9 @@ export const calculateMetrics = (logs: Phase1AuditLogs): Phase2Validation => {
   const delivery_integrity = Math.round((deliveredItems / totalCriterionCount) * 100);
   const evidence_density = Math.round((itemsWithEvidence / totalCriterionCount) * 100);
 
-  // UNKNOWN / NOT ASSESSED criteria are excluded from score denominators. The
-  // evidence-density quality gate separately prevents sparse coverage from
-  // producing an actionable roadmap or an apparently reliable maturity score.
+  // Capability still excludes unknown from its denominator. Anti-pattern control
+  // does not: only tested absence may raise control, confirmed/partial presence
+  // penalises, and unknown/not-assessed stays neutral in a 30-wide denominator.
   const assessedMaturityCount = Math.max(assessedMaturityItemCount, 1);
   const assessedAntipatternScoreCount = Math.max(scoreEligibleAntipatternCount, 1);
   const maturity_ratio = (maturityCount / assessedMaturityCount) * 100;
@@ -211,8 +211,9 @@ export const calculateMetrics = (logs: Phase1AuditLogs): Phase2Validation => {
       : 'unknown';
 
   const capability_attainment = clampPercent(maturity_depth);
-  const antipattern_control = scoreEligibleAntipatternCount > 0
-    ? clampPercent(100 - antipattern_burden)
+  const antipatternControlDenom = Math.max(antipatternCriterionTotal - antipatternVerificationUnresolved, 0) * 3;
+  const antipattern_control = antipatternControlDenom > 0
+    ? clampPercent(((testedAbsentCount * 3 - antipatternSum) / antipatternControlDenom) * 100)
     : 0;
   const raw_finops_maturity_score = clampPercent((capability_attainment + antipattern_control) / 2);
   const finops_readiness = raw_finops_maturity_score;

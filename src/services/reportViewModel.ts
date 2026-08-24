@@ -56,9 +56,6 @@ export const buildReportViewModel = (result: DiagnosticResult): ReportViewModel 
   const rawMaturityScore = metrics.raw_finops_maturity_score ?? metrics.finops_readiness ?? 0;
   const maturityAssessedCount = metrics.maturity_assessed_count
     ?? scoreGapBreakdown.maturity_full + scoreGapBreakdown.maturity_partial + scoreGapBreakdown.maturity_low_or_absent;
-  const antipatternScoreEligibleCount = metrics.antipattern_score_eligible_count
-    ?? metrics.antipattern_assessed_count
-    ?? scoreGapBreakdown.antipattern_tested_absent + scoreGapBreakdown.antipattern_uncontrolled;
   const evidenceCheck = result.quality_gate.evidence_check;
   const verificationCompleted = evidenceCheck
     ? evidenceCheck.items.filter(item => !item.adjudication_unresolved && !item.verification_unresolved).length
@@ -138,8 +135,8 @@ export const buildReportViewModel = (result: DiagnosticResult): ReportViewModel 
       {
         value: antipatternControl,
         label: 'Anti-Pattern Control',
-        description: 'Inverse of verified harmful-pattern burden. Unknown and not-assessed anti-patterns are excluded.',
-        denominator: `${antipatternScoreEligibleCount} anti-patterns score-eligible · ${Math.max(antiPatternTotal - antipatternScoreEligibleCount, 0)} excluded`,
+        description: 'Only tested absence raises control. Confirmed or partial presence penalises. Unknown anti-patterns are neutral and cannot improve the score.',
+        denominator: `${scoreGapBreakdown.antipattern_tested_absent} tested absent · ${scoreGapBreakdown.antipattern_uncontrolled} present · ${scoreGapBreakdown.antipattern_not_assessed} unknown`,
         trend: 'positive',
         color: '#7c3aed',
       },

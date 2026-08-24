@@ -119,7 +119,7 @@ assert.match(exportSource, /raw values exposed/, 'Master Data should disclose th
 const reportViewModelSource = await readFile(new URL('../src/services/reportViewModel.ts', import.meta.url), 'utf8');
 assert.match(reportViewModelSource, /label: 'FinOps Maturity Score'/, 'report gauges should expose the existing FinOps Maturity Score');
 assert.match(reportViewModelSource, /label: 'Evidence-Based Capability'/, 'report gauges should label the evidence-based capability dimension explicitly');
-assert.match(reportViewModelSource, /Inverse of verified harmful-pattern burden/, 'anti-pattern gauge should explain its high-is-good inversion');
+assert.match(reportViewModelSource, /Only tested absence raises control/, 'anti-pattern gauge should state that only tested absence improves control');
 assert.doesNotMatch(reportViewModelSource, /label: 'Observed Friction'/, 'Observed Friction should no longer occupy a primary report gauge');
 
 const gaugeComponentSource = await readFile(new URL('../src/components/DashboardComponents.tsx', import.meta.url), 'utf8');

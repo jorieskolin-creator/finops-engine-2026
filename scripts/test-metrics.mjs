@@ -168,8 +168,9 @@ const logs = (maturityFactory, antiFactory) => ({
   assert.equal(result.metrics.antipattern_score_eligible_count, 20);
   assert.equal(result.metrics.antipattern_finding_count, 8);
   assert.equal(Math.round(result.metrics.antipattern_finding_ratio * 10) / 10, 26.7, 'finding prevalence must use the complete anti-pattern surface');
-  assert.equal(Math.round(result.metrics.antipattern_control * 10) / 10, 86.7, 'control must invert verified burden without counting unknown criteria');
+  assert.equal(Math.round(result.metrics.antipattern_control * 10) / 10, 31.1, 'only tested absence may raise control; unknown stays in the denominator; partial presence penalises');
   assert.equal(result.metrics.antipattern_clearance, 40, 'only explicitly tested absences count as positive clearance');
+  assert.ok(result.metrics.antipattern_control < result.metrics.antipattern_clearance + 1, 'control must not exceed clearance by treating unknown as inverted burden');
 }
 
 {
@@ -190,8 +191,8 @@ const logs = (maturityFactory, antiFactory) => ({
   assert.equal(result.metrics.antipattern_assessed_count, 15, 'only evidence-covered anti-patterns count as assessed coverage');
   assert.equal(result.metrics.antipattern_score_eligible_count, 13, 'unknown and not-assessed signals must not enter the control denominator');
   assert.equal(Math.round(result.metrics.antipattern_burden * 10) / 10, 38.5);
-  assert.equal(Math.round(result.metrics.antipattern_control * 10) / 10, 61.5);
-  assert.equal(Math.round(result.metrics.finops_readiness * 10) / 10, 30.8);
+  assert.equal(result.metrics.antipattern_control, 0, 'partial findings without tested absence must not raise control');
+  assert.equal(result.metrics.finops_readiness, 0);
   assert.equal(result.crawl_walk_run, 'Crawl');
 }
 
@@ -232,11 +233,36 @@ const logs = (maturityFactory, antiFactory) => ({
         : anti(0, false, 'unknown_absent')
   ));
   assert.equal(Math.round(result.metrics.capability_attainment * 10) / 10, 65.6);
-  assert.equal(Math.round(result.metrics.antipattern_control * 10) / 10, 96);
-  assert.equal(Math.round(result.metrics.finops_readiness * 10) / 10, 80.8, 'unknown items must be excluded and verified question results must contribute linearly');
+  assert.equal(result.metrics.antipattern_control, 70, '22 tested absences credit 66 points and 3 partials penalise 3 on a 90-point surface');
+  assert.equal(Math.round(result.metrics.finops_readiness * 10) / 10, 67.8, 'unknown anti-patterns remain in the control denominator and cannot inflate readiness');
   assert.equal(result.metrics.score_gap_breakdown.maturity_not_demonstrated, 0);
   assert.equal(result.metrics.score_gap_breakdown.antipattern_not_assessed, 5);
   assert.equal(result.score_evidence_gaps.length, 5, 'unknown anti-pattern absence should remain an evidence discussion');
+}
+
+{
+  const result = calculateMetrics(logs(
+    () => item(3, true),
+    (_id, index) => index < 15
+      ? anti(0, false, 'tested_absent')
+      : anti(0, false, 'unknown_absent')
+  ));
+  assert.equal(result.metrics.antipattern_clearance, 50);
+  assert.equal(result.metrics.antipattern_control, 50, 'unknown anti-patterns must not raise control above tested-absence credit');
+  assert.equal(Math.round(result.metrics.finops_readiness * 10) / 10, 75);
+}
+
+{
+  const result = calculateMetrics(logs(
+    (_id, index) => item(index === 0 ? 1 : 0, true),
+    (_id, index) => index < 14
+      ? anti(1, true, 'partially_present')
+      : anti(0, false, 'unknown_absent')
+  ));
+  assert.equal(Math.round(result.metrics.capability_attainment * 10) / 10, 1.1);
+  assert.equal(result.metrics.antipattern_control, 0, 'partial presence without tested absence cannot create Walk-level control');
+  assert.equal(Math.round(result.metrics.finops_readiness * 10) / 10, 0.6);
+  assert.equal(result.crawl_walk_run, 'Crawl');
 }
 
 {
