@@ -43,13 +43,17 @@ const sourceOf = (id, name, headers, rows, text = 'structured evidence') => ({
 const familyOf = (bundle, analyzerId) => bundle.evidence.find(item => item.derivation.analyzer_id === analyzerId);
 const familiesPresent = (bundle) =>
   [...new Set(bundle.evidence.map(item => item.derivation.analyzer_id).filter(id => STAT_FAMILIES.includes(id)))];
+const leaked = (item) => JSON.stringify(item);
 
 assert.equal(THEME_BINDING_FAMILIES.length, 9, 'nine families, no tenth');
 assert.equal(THEME_BINDINGS.some(item => item.family === 'predictive_v1'), false);
-assert.ok(liveThemeBindings().length >= 20, 'F0 moved the live detectors into the catalog');
-assert.equal(liveThemeBindings().every(item => item.phase === 'F0'), true);
-assert.ok(plannedThemeBindings().some(item => item.binding_id === 'A5.unit_cost.trend'));
-assert.equal(plannedThemeBindings().every(item => item.status === 'planned'), true);
+assert.ok(liveThemeBindings().filter(item => item.phase === 'F0').length >= 20);
+assert.equal(liveThemeBindings().filter(item => item.phase === 'F1').every(item => item.priority === 'must' && item.status === 'live'), true);
+assert.ok(liveThemeBindings().some(item => item.binding_id === 'A5.unit_cost.trend'));
+assert.ok(liveThemeBindings().some(item => item.binding_id === 'F2.cost_per_unit.trend'));
+assert.equal(liveThemeBindings('trend_v1').some(item => item.binding_id === 'F2.cost_per_unit.trend' && item.header_patterns.includes('unit_cost')), false, 'F2 must not share unit_cost with A5');
+assert.equal(plannedThemeBindings().every(item => item.phase === 'F2' && item.status === 'planned'), true);
+assert.ok(plannedThemeBindings().some(item => item.binding_id === 'A1.coverage.trend'));
 assert.ok(liveThemeBindings('concentration_v1').some(item => item.criterion_id === 'F3' && item.header_patterns.includes('model')));
 assert.ok(liveThemeBindings('concentration_v1').some(item => item.criterion_id === 'B5' && item.header_patterns.includes('storage_class')));
 assert.ok(liveThemeBindings('concentration_v1').every(item => item.criterion_id !== 'A1' || !item.header_patterns.includes('model')));
@@ -67,7 +71,7 @@ assert.equal(finnishTrend.targets[0].criterion_id, 'C2');
 assert.equal(finnishTrend.result.trend.direction, 'DETERIORATING');
 assert.equal(finnishTrend.llm_policy.may_recalculate, false);
 assert.equal(finnishTrend.llm_policy.causal_authority, 'NONE');
-assert.doesNotMatch(JSON.stringify(finnishTrend), /108|110|"mean"|"slope"/i);
+assert.doesNotMatch(leaked(finnishTrend), /108|110|"mean"|"slope"/i);
 
 const unitCost = deriveAllEvidenceSignals([sourceOf(
   'a5-1',
@@ -76,9 +80,100 @@ const unitCost = deriveAllEvidenceSignals([sourceOf(
   months.map((period, index) => [period, String(0.11 + index * 0.01), String(0.42 + index * 0.02)]),
   'unit economics extract',
 )]);
-assert.equal(familyOf(unitCost, 'trend_v1'), undefined, 'A5 unit_cost must not fire until F1 binds it');
-assert.equal(familyOf(unitCost, 'variation_v1'), undefined);
-assert.equal(unitCost.evidence.some(item => item.targets?.some(target => target.criterion_id === 'A5') && STAT_FAMILIES.includes(item.derivation.analyzer_id)), false);
+const unitCostTrend = familyOf(unitCost, 'trend_v1');
+const unitCostVariation = familyOf(unitCost, 'variation_v1');
+assert.ok(unitCostTrend, 'F1 A5 unit_cost must fire');
+assert.equal(unitCostTrend.targets[0].criterion_id, 'A5');
+assert.notEqual(unitCostTrend.targets[0].criterion_id, 'F2');
+assert.ok(unitCostVariation);
+assert.equal(unitCostVariation.targets[0].criterion_id, 'A5');
+assert.equal(unitCostTrend.llm_policy.causal_authority, 'NONE');
+assert.doesNotMatch(leaked(unitCostTrend), /0\.11|0\.42|"mean"|"slope"/i);
+
+const tokenCost = deriveAllEvidenceSignals([sourceOf(
+  'f2-1',
+  'token-unit.csv',
+  ['Period', 'cost_per_token'],
+  months.map((period, index) => [period, String(0.00012 + index * 0.00001)]),
+  'AI unit cost extract',
+)]);
+const tokenTrend = familyOf(tokenCost, 'trend_v1');
+assert.ok(tokenTrend, 'F1 F2 cost_per_token must fire');
+assert.equal(tokenTrend.targets[0].criterion_id, 'F2');
+assert.notEqual(tokenTrend.targets[0].criterion_id, 'A5');
+assert.doesNotMatch(leaked(tokenTrend), /0\.00012|"mean"|"slope"/i);
+
+const unattributed = familyOf(deriveAllEvidenceSignals([sourceOf(
+  'a2-1',
+  'attribution.csv',
+  ['Resource', 'Unattributed'],
+  [['svc-a', 'yes'], ['svc-b', 'no'], ['svc-c', 'yes'], ['svc-d', 'no']],
+  'unattributed share flags',
+)]), 'adoption_v1');
+assert.ok(unattributed, 'F1 A2 unattributed must fire');
+assert.equal(unattributed.targets[0].criterion_id, 'A2');
+assert.equal(unattributed.result.adoption.practice_presence, 'PRESENT');
+assert.doesNotMatch(leaked(unattributed), /svc-a|svc-b/i);
+
+const unused = familyOf(deriveAllEvidenceSignals([sourceOf(
+  'b1-unused',
+  'unused-ri.csv',
+  ['Instrument', 'Unused RI'],
+  [['ri-1', 'yes'], ['ri-2', 'no'], ['ri-3', 'yes'], ['ri-4', 'yes']],
+  'unused commitment incidence',
+)]), 'exception_v1');
+assert.ok(unused, 'F1 B1 unused instrument must fire');
+assert.equal(unused.targets[0].criterion_id, 'B1');
+assert.doesNotMatch(leaked(unused), /ri-1|ri-2/i);
+
+const eligible = familyOf(deriveAllEvidenceSignals([sourceOf(
+  'd1-1',
+  'eligible.csv',
+  ['Service', 'Architecture Review'],
+  [['api', 'yes'], ['batch', 'yes'], ['etl', 'no'], ['web', 'yes']],
+  'eligible-scope reviews',
+)]), 'adoption_v1');
+assert.ok(eligible, 'F1 D1 eligible-scope must fire');
+assert.equal(eligible.targets[0].criterion_id, 'D1');
+assert.doesNotMatch(leaked(eligible), /\bapi\b|\bbatch\b|\betl\b/i);
+
+const aiAttr = familyOf(deriveAllEvidenceSignals([sourceOf(
+  'f1-1',
+  'ai-attr.csv',
+  ['Workload', 'AI Attributed'],
+  [['chat', 'yes'], ['search', 'no'], ['summarise', 'yes'], ['embed', 'yes']],
+  'AI workload attribution',
+)]), 'adoption_v1');
+assert.ok(aiAttr, 'F1 F1 attribution must fire');
+assert.equal(aiAttr.targets[0].criterion_id, 'F1');
+assert.doesNotMatch(leaked(aiAttr), /chat|search|summarise|embed/i);
+
+const procurement = familyOf(deriveAllEvidenceSignals([sourceOf(
+  'c4-1',
+  'procurement.csv',
+  ['Period', 'Status', 'Vendor'],
+  [
+    ['2026-01-01', 'closed', 'cloud-a'],
+    ['2026-01-08', 'closed', 'cloud-b'],
+    ['2026-01-15', 'open', 'cloud-a'],
+    ['2026-01-22', 'open', 'cloud-c'],
+  ],
+  'procurement cycle',
+)]), 'process_v1');
+assert.ok(procurement, 'F1 C4 procurement must fire over C3 fallback');
+assert.equal(procurement.targets[0].criterion_id, 'C4');
+assert.doesNotMatch(leaked(procurement), /cloud-a|cloud-b|cloud-c/i);
+
+const coverageTrend = deriveAllEvidenceSignals([sourceOf(
+  'f2-blocked',
+  'freshness.csv',
+  ['Dashboard', 'Last Refresh'],
+  [['cost', '2026-01-01'], ['usage', '2026-01-02'], ['commitments', '2026-01-03']],
+  'dashboard freshness listing',
+)]);
+assert.equal(familyOf(coverageTrend, 'process_v1'), undefined, 'A4 freshness stays planned until F2');
+assert.equal(familyOf(coverageTrend, 'trend_v1'), undefined);
+assert.equal(familyOf(coverageTrend, 'adoption_v1'), undefined);
 
 const modelSeg = deriveAllEvidenceSignals([sourceOf(
   'f3-1',
@@ -91,7 +186,7 @@ const modelConcentration = familyOf(modelSeg, 'concentration_v1');
 assert.ok(modelConcentration, 'model segment must still produce concentration');
 assert.equal(modelConcentration.targets[0].criterion_id, 'F3');
 assert.notEqual(modelConcentration.targets[0].criterion_id, 'A1');
-assert.doesNotMatch(JSON.stringify(modelConcentration), /gpt-4o|sonnet/i);
+assert.doesNotMatch(leaked(modelConcentration), /gpt-4o|sonnet/i);
 
 const storageSeg = deriveAllEvidenceSignals([sourceOf(
   'b5-1',
@@ -114,7 +209,7 @@ const envSeg = deriveAllEvidenceSignals([sourceOf(
 const envConcentration = familyOf(envSeg, 'concentration_v1');
 assert.ok(envConcentration);
 assert.equal(envConcentration.targets[0].criterion_id, 'A1');
-assert.doesNotMatch(JSON.stringify(envConcentration), /\bprod\b|\bdev\b|\btest\b/);
+assert.doesNotMatch(leaked(envConcentration), /\bprod\b|\bdev\b|\btest\b/);
 
 const ownerSeg = deriveAllEvidenceSignals([sourceOf(
   'a1-owner',
@@ -126,7 +221,7 @@ const ownerSeg = deriveAllEvidenceSignals([sourceOf(
 const ownerConcentration = familyOf(ownerSeg, 'concentration_v1');
 assert.ok(ownerConcentration, 'tag/owner segments bind to A1');
 assert.equal(ownerConcentration.targets[0].criterion_id, 'A1');
-assert.doesNotMatch(JSON.stringify(ownerConcentration), /Alice|Bob|Cara/);
+assert.doesNotMatch(leaked(ownerConcentration), /Alice|Bob|Cara/);
 
 const teamSeg = deriveAllEvidenceSignals([sourceOf(
   'unbound-team',

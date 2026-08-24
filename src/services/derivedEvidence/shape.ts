@@ -217,6 +217,10 @@ export const encodeFlagOrNumber = (value: string | undefined): number | null => 
   return parseNumber(trimmed);
 };
 
+const GENERIC_PROCESS = /^(?:status|state)$/;
+const isGenericProcess = (binding: ThemeBinding): boolean =>
+  (binding.theme_patterns || binding.header_patterns).every(pattern => GENERIC_PROCESS.test(pattern));
+
 export const detectAdoption = (table: StructuredTableData): {
   percent: number;
   present: boolean;
@@ -226,13 +230,25 @@ export const detectAdoption = (table: StructuredTableData): {
 } | null => {
   const rows = analysisRows(table).filter(row => !totalRow(row));
   const headers = table.headers.map(normalizeHeader);
-  const index = headers.findIndex(header => matchesHeader(header, ADOPTION_PATTERNS));
-  if (index < 0 || rows.length === 0) return null;
-  const header = headers[index];
-  const binding = liveThemeBindings('adoption_v1').find(item =>
-    matchesTheme(header, item.theme_patterns || item.header_patterns)
-  );
-  if (!binding) return null;
+  if (rows.length === 0) return null;
+  const adoptionBindings = liveThemeBindings('adoption_v1');
+  let index = headers.findIndex(header => matchesHeader(header, ADOPTION_PATTERNS));
+  let binding: ThemeBinding | undefined;
+  if (index >= 0) {
+    binding = adoptionBindings.find(item =>
+      matchesTheme(headers[index], item.theme_patterns || item.header_patterns)
+    );
+  }
+  if (!binding) {
+    for (const item of adoptionBindings) {
+      const idx = headers.findIndex(header => matchesHeader(header, item.header_patterns));
+      if (idx < 0) continue;
+      index = idx;
+      binding = item;
+      break;
+    }
+  }
+  if (index < 0 || !binding) return null;
   let present = 0;
   let classified = 0;
   for (const row of rows) {
@@ -268,9 +284,10 @@ export const detectProcess = (table: StructuredTableData): {
   );
   if (statusIdx < 0 && timeIdx < 0) return null;
   const joined = headers.join(' ');
-  const binding = liveThemeBindings('process_v1').find(item =>
+  const processMatches = liveThemeBindings('process_v1').filter(item =>
     matchesTheme(joined, item.theme_patterns || item.header_patterns)
   );
+  const binding = processMatches.find(item => !isGenericProcess(item)) || processMatches[0];
   if (!binding) return null;
   const ownerIdx = headers.findIndex(header => matchesHeader(header, OWNER_PATTERNS));
   const entityIdx = headers.findIndex(header => matchesHeader(header, ENTITY_PATTERNS));
@@ -318,16 +335,30 @@ export const detectException = (table: StructuredTableData): {
 } | null => {
   const rows = analysisRows(table).filter(row => !totalRow(row));
   const headers = table.headers.map(normalizeHeader);
-  const exceptionIdx = headers.findIndex(header => matchesHeader(header, EXCEPTION_PATTERNS));
-  if (exceptionIdx < 0 || rows.length === 0) return null;
-  const column = headers[exceptionIdx];
-  const joined = `${headers.join(' ')} ${column}`;
-  const binding = liveThemeBindings('exception_v1').find(item => {
-    const patterns = item.theme_patterns || item.header_patterns;
-    const haystack = item.match_scope === 'headers_joined' ? joined : column;
-    return matchesTheme(haystack, patterns);
-  });
-  if (!binding) return null;
+  if (rows.length === 0) return null;
+  const exceptionBindings = liveThemeBindings('exception_v1');
+  let exceptionIdx = headers.findIndex(header => matchesHeader(header, EXCEPTION_PATTERNS));
+  let binding: ThemeBinding | undefined;
+  if (exceptionIdx >= 0) {
+    const column = headers[exceptionIdx];
+    const joined = `${headers.join(' ')} ${column}`;
+    binding = exceptionBindings.find(item => {
+      const patterns = item.theme_patterns || item.header_patterns;
+      const haystack = item.match_scope === 'headers_joined' ? joined : column;
+      return matchesTheme(haystack, patterns);
+    });
+  }
+  if (!binding) {
+    for (const item of exceptionBindings) {
+      if (item.match_scope === 'headers_joined') continue;
+      const idx = headers.findIndex(header => matchesHeader(header, item.header_patterns));
+      if (idx < 0) continue;
+      exceptionIdx = idx;
+      binding = item;
+      break;
+    }
+  }
+  if (exceptionIdx < 0 || !binding) return null;
   const statusIdx = headers.findIndex(header => matchesHeader(header, STATUS_PATTERNS));
   const timeIdx = headers.findIndex(header =>
     matchesHeader(header, TIME_PATTERNS) || matchesHeader(header, EVENT_TIME_PATTERNS)
