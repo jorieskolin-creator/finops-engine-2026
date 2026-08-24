@@ -88,17 +88,39 @@ export const parseTime = (value: string | undefined): number | null => {
   return Number.isFinite(ts) ? ts : null;
 };
 
-const TIME_PATTERNS = ['date', 'period', 'month', 'year', 'week', 'timestamp', 'time', 'day'] as const;
-const WEIGHT_PATTERNS = ['count', 'quantity', 'rows'] as const;
-const ADOPTION_PATTERNS = ['enabled', 'adopted', 'implemented', 'compliant', 'active', 'in_use', 'enforced'] as const;
-const STATUS_PATTERNS = ['status', 'state', 'ticket_status', 'item_status'] as const;
-const OWNER_PATTERNS = ['owner', 'assignee', 'omistaja'] as const;
-const EXCEPTION_PATTERNS = ['exception', 'override', 'incident', 'alert', 'anomaly', 'violation', 'breach', 'poikkeama'] as const;
-const ENTITY_PATTERNS = ['resource_id', 'ticket_id', 'item_id', 'id'] as const;
-const EVENT_TIME_PATTERNS = ['created', 'opened', 'updated', 'closed_at', 'last_refresh', 'freshness', 'refreshed'] as const;
+export const TIME_PATTERNS = ['date', 'period', 'month', 'year', 'week', 'timestamp', 'time', 'day'] as const;
+export const WEIGHT_PATTERNS = ['count', 'quantity', 'rows'] as const;
+export const ADOPTION_PATTERNS = ['enabled', 'adopted', 'implemented', 'compliant', 'active', 'in_use', 'enforced'] as const;
+export const STATUS_PATTERNS = ['status', 'state', 'ticket_status', 'item_status'] as const;
+export const OWNER_PATTERNS = ['owner', 'assignee', 'omistaja'] as const;
+export const EXCEPTION_PATTERNS = ['exception', 'override', 'incident', 'alert', 'anomaly', 'violation', 'breach', 'poikkeama'] as const;
+export const ENTITY_PATTERNS = ['resource_id', 'ticket_id', 'item_id', 'id'] as const;
+export const EVENT_TIME_PATTERNS = ['created', 'opened', 'updated', 'closed_at', 'last_refresh', 'freshness', 'refreshed'] as const;
 
-const TRUTHY = /^(?:true|yes|y|1|enabled|adopted|implemented|compliant|active|on|applied|enforced)$/i;
-const FALSY = /^(?:false|no|n|0|disabled|not[_ -]?adopted|inactive|off|missing|absent)$/i;
+export const isStructuralHeader = (header: string): boolean =>
+  isCostHeader(header)
+  || matchesHeader(header, TIME_PATTERNS)
+  || matchesHeader(header, EVENT_TIME_PATTERNS)
+  || matchesHeader(header, STATUS_PATTERNS)
+  || matchesHeader(header, WEIGHT_PATTERNS)
+  || matchesHeader(header, ADOPTION_PATTERNS)
+  || matchesHeader(header, EXCEPTION_PATTERNS)
+  || matchesHeader(header, OWNER_PATTERNS)
+  || matchesHeader(header, ENTITY_PATTERNS);
+
+export const headerIsRecognised = (header: string): boolean => {
+  const normalized = normalizeHeader(header);
+  if (!normalized) return false;
+  if (isStructuralHeader(normalized)) return true;
+  return liveThemeBindings().some(binding =>
+    matchesHeader(normalized, binding.header_patterns)
+    || (binding.left_patterns ? matchesHeader(normalized, binding.left_patterns) : false)
+    || (binding.right_patterns ? matchesHeader(normalized, binding.right_patterns) : false)
+  );
+};
+
+export const TRUTHY = /^(?:true|yes|y|1|enabled|adopted|implemented|compliant|active|on|applied|enforced)$/i;
+export const FALSY = /^(?:false|no|n|0|disabled|not[_ -]?adopted|inactive|off|missing|absent)$/i;
 const CLOSED = /^(?:closed|done|resolved|complete|completed|fixed)$/i;
 const OPEN = /^(?:open|todo|in[_ -]?progress|pending|new|wip)$/i;
 const EXCEPTION_VALUE = /^(?:exception|override|incident|alert|anomaly|violation|breach|escalated|true|yes|y|1)$/i;
@@ -259,8 +281,11 @@ export const detectAdoption = (table: StructuredTableData): {
   }
   if (!binding) {
     for (const item of adoptionBindings) {
-      if (item.phase === 'F0') continue;
-      const idx = headers.findIndex(header => matchesHeader(header, item.header_patterns));
+      const idx = headers.findIndex(header => {
+        if (item.header_patterns.includes(header)) return true;
+        if (item.phase === 'F0') return false;
+        return matchesHeader(header, item.header_patterns);
+      });
       if (idx < 0) continue;
       index = idx;
       binding = item;

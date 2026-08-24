@@ -58,7 +58,7 @@ assert.ok(liveThemeBindings().some(item => item.binding_id === 'A1.coverage.tren
 assert.ok(liveThemeBindings().some(item => item.binding_id === 'A4.freshness.process'));
 assert.ok(liveThemeBindings().some(item => item.binding_id === 'E2.ownerless.process'));
 assert.ok(liveThemeBindings().some(item => item.binding_id === 'F4.usage_vs_budget.association'));
-assert.equal(plannedThemeBindings().length, 0, 'F2 remainder is live; F3 is alias retry, not catalog rows');
+assert.equal(plannedThemeBindings().length, 0, 'F3 is alias retry, not catalog rows');
 assert.ok(liveThemeBindings('concentration_v1').some(item => item.criterion_id === 'F3' && item.header_patterns.includes('model')));
 assert.ok(liveThemeBindings('concentration_v1').some(item => item.criterion_id === 'B5' && item.header_patterns.includes('storage_class')));
 assert.ok(liveThemeBindings('concentration_v1').every(item => item.criterion_id !== 'A1' || !item.header_patterns.includes('model')));
@@ -253,15 +253,92 @@ assert.equal(usageBudget.result.association.causal_authority, 'NONE');
 assert.doesNotMatch(leaked(usageBudget), /100|110|"r"|pearson/i);
 
 const aliasRetryBlocked = deriveAllEvidenceSignals([sourceOf(
-  'f3-blocked',
-  'alias.csv',
+  'f3-numeric-tag',
+  'alias-numeric.csv',
   ['Jakso', 'tunnisteet'],
   months.map((period, index) => [period, String(0.40 + index * 0.01)]),
-  'Finnish tagging alias',
+  'Finnish tagging alias as a numeric series',
 )]);
-assert.equal(familyOf(aliasRetryBlocked, 'trend_v1'), undefined, 'F3 column-alias retry is not live');
-assert.equal(familyOf(aliasRetryBlocked, 'process_v1'), undefined);
+assert.equal(familyOf(aliasRetryBlocked, 'trend_v1'), undefined, 'numeric tunnisteet is not tag coverage');
+assert.equal(familyOf(aliasRetryBlocked, 'concentration_v1'), undefined, 'numeric tunnisteet is not a segment mix');
 assert.equal(familyOf(aliasRetryBlocked, 'adoption_v1'), undefined);
+
+const tunnisteet = familyOf(deriveAllEvidenceSignals([sourceOf(
+  'f3-flags',
+  'flags.csv',
+  ['Resource', 'tunnisteet'],
+  [['svc-a', 'yes'], ['svc-b', 'no'], ['svc-c', 'yes'], ['svc-d', 'yes']],
+  'Finnish tagging flags',
+)]), 'adoption_v1');
+assert.ok(tunnisteet, 'F3 tunnisteet flags retry onto A1 tagging adoption');
+assert.equal(tunnisteet.targets[0].criterion_id, 'A1');
+assert.doesNotMatch(leaked(tunnisteet), /svc-a|tunnisteet/i);
+
+const unitAlias = deriveAllEvidenceSignals([sourceOf(
+  'f3-unit',
+  'unit-alias.csv',
+  ['Period', 'yksikkotalous'],
+  months.map((period, index) => [period, String(0.11 + index * 0.01)]),
+  'Finnish unit-economics alias',
+)]);
+const unitAliasTrend = familyOf(unitAlias, 'trend_v1');
+assert.ok(unitAliasTrend, 'F3 yksikkotalous retries onto A5 unit_cost');
+assert.equal(unitAliasTrend.targets[0].criterion_id, 'A5');
+assert.notEqual(unitAliasTrend.targets[0].criterion_id, 'F2');
+assert.doesNotMatch(leaked(unitAliasTrend), /0\.11|yksikkotalous|"mean"|"slope"/i);
+
+const forecastAlias = familyOf(deriveAllEvidenceSignals([sourceOf(
+  'f3-forecast',
+  'forecast-alias.csv',
+  ['Jakso', 'ennustaminen', 'Actual'],
+  months.map((period, index) => [period, '100', String(108 + index * 2)]),
+  'Finnish forecasting alias',
+)]), 'trend_v1');
+assert.ok(forecastAlias, 'F3 ennustaminen retries onto C2 forecast');
+assert.equal(forecastAlias.targets[0].criterion_id, 'C2');
+assert.doesNotMatch(leaked(forecastAlias), /ennustaminen|"mean"|"slope"/i);
+
+const ownerAlias = familyOf(deriveAllEvidenceSignals([sourceOf(
+  'f3-owner',
+  'owner-alias.csv',
+  ['omistajuus', 'Spend'],
+  [['Aino', '80'], ['Eero', '10'], ['Kai', '10']],
+  'Finnish ownership alias',
+)]), 'concentration_v1');
+assert.ok(ownerAlias, 'F3 omistajuus retries onto A1 owner concentration');
+assert.equal(ownerAlias.targets[0].criterion_id, 'A1');
+assert.doesNotMatch(leaked(ownerAlias), /Aino|Eero|Kai|omistajuus/i);
+
+const bindingAlias = familyOf(deriveAllEvidenceSignals([sourceOf(
+  'f3-binding-alias',
+  'coverage-alias.csv',
+  ['Period', 'tagging coverage over time'],
+  months.map((period, index) => [period, String(0.40 + index * 0.02)]),
+  'binding alias for A1 coverage trend',
+)]), 'trend_v1');
+assert.ok(bindingAlias, 'F3 binding alias retries onto A1 tag_coverage');
+assert.equal(bindingAlias.targets[0].criterion_id, 'A1');
+assert.notEqual(bindingAlias.targets[0].criterion_id, 'B1');
+
+const capTwo = deriveAllEvidenceSignals([sourceOf(
+  'f3-cap',
+  'cap.csv',
+  ['Resource', 'tunnisteet', 'yksikkotalous', 'usage efficiency'],
+  [
+    ['a', 'yes', '0.10', '40'],
+    ['b', 'no', '0.12', '42'],
+    ['c', 'yes', '0.14', '44'],
+    ['d', 'yes', '0.16', '46'],
+    ['e', 'no', '0.18', '48'],
+    ['f', 'yes', '0.20', '50'],
+  ],
+  'three aliasable columns, cap two',
+)]);
+assert.ok(familyOf(capTwo, 'adoption_v1'), 'first aliasable column may retry');
+assert.equal(familyOf(capTwo, 'adoption_v1').targets[0].criterion_id, 'A1');
+assert.ok(familyOf(capTwo, 'trend_v1'), 'second aliasable column may retry');
+assert.equal(familyOf(capTwo, 'trend_v1').targets[0].criterion_id, 'A5');
+assert.notEqual(familyOf(capTwo, 'trend_v1').targets[0].criterion_id, 'B1', 'third aliasable column stays unmatched');
 
 const modelSeg = deriveAllEvidenceSignals([sourceOf(
   'f3-1',

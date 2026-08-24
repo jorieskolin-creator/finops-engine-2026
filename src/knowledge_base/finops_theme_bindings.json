@@ -1,8 +1,8 @@
 {
-  "version": "1.2.0",
-  "phase": "F2",
+  "version": "1.3.0",
+  "phase": "F3",
   "registry_id": "theme_binding_catalog_v1",
-  "description": "Closed map of existing derived-evidence families onto A–F themes. Dispatcher reads only status=live. F0, F1 must-fire, and F2 should-fire rows are live. F3 column-alias retry is not catalog rows. No tenth family. causal_authority is always NONE.",
+  "description": "Closed map of existing derived-evidence families onto A–F themes. Dispatcher reads only status=live. F0–F2 catalog rows are live. F3 is a one-shot column-alias retry (max 2) through finops_term_aliases.json. No tenth family. causal_authority is always NONE.",
   "never_default_criterion": true,
   "families": [
     "crucial_item_coverage_v1",
