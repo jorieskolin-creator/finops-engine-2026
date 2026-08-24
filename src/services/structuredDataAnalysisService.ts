@@ -1,6 +1,7 @@
 import type { DataSignalCoverageReport, DataSignalRegistryEntry, DerivedAnalyticalEvidence, EvidenceAnalysisRegistryEntry, SourceRecord, StructuredTableData } from '../types';
+import { liveThemeBindings } from './derivedEvidence/bindings';
 
-export const DATA_SIGNAL_REGISTRY_VERSION = 'data_signal_registry_v1' as const;
+export const DATA_SIGNAL_REGISTRY_VERSION = 'data_signal_registry_v2' as const;
 export const TAGGING_ALLOCATION_ANALYZER_VERSION = '1.3.0' as const;
 export const EVIDENCE_ANALYSIS_REGISTRY_VERSION = 'evidence_analysis_registry_v1' as const;
 
@@ -72,11 +73,24 @@ export const isDerivedEvidenceApprovedForPacket = (evidence: DerivedAnalyticalEv
 };
 
 export const buildDataSignalCoverageReport=():DataSignalCoverageReport=>{
+  const bindingAnalyzers=new Map<string,Set<string>>();
+  for(const binding of liveThemeBindings()){
+    const set=bindingAnalyzers.get(binding.criterion_id)||new Set<string>();
+    set.add(binding.family);
+    bindingAnalyzers.set(binding.criterion_id,set);
+  }
   const objects:DataSignalCoverageReport['objects']=[];
   for(const domainId of ['A','B','C','D','E','F'])for(let index=1;index<=5;index++)for(const stream of ['maturity','antipattern'] as const){
     const internalId=`${domainId}${index}`;
-    const analyzerIds=[...new Set(DATA_SIGNAL_REGISTRY.filter(entry=>entry.targets.some(target=>target.stream===stream&&target.criterion_id===internalId)).map(entry=>entry.analyzer_id))].sort();
-    objects.push({domain_id:domainId,stream,criterion_id:stream==='antipattern'?`AP-${internalId}`:internalId,status:analyzerIds.length?'AUTHORITATIVE_ANALYZER_AVAILABLE':'NO_AUTHORITATIVE_ANALYZER_SEMANTICS',analyzer_ids:analyzerIds});
+    const analyzerIds=new Set<string>();
+    for(const entry of DATA_SIGNAL_REGISTRY){
+      if(entry.targets.some(target=>target.stream===stream&&target.criterion_id===internalId)) analyzerIds.add(entry.analyzer_id);
+    }
+    if(stream==='maturity'){
+      for(const analyzerId of bindingAnalyzers.get(internalId)||[]) analyzerIds.add(analyzerId);
+    }
+    const sorted=[...analyzerIds].sort();
+    objects.push({domain_id:domainId,stream,criterion_id:stream==='antipattern'?`AP-${internalId}`:internalId,status:sorted.length?'AUTHORITATIVE_ANALYZER_AVAILABLE':'NO_AUTHORITATIVE_ANALYZER_SEMANTICS',analyzer_ids:sorted});
   }
   const analyzerAvailableCount=objects.filter(object=>object.status==='AUTHORITATIVE_ANALYZER_AVAILABLE').length;
   return{schema_version:'data_signal_coverage_v1',registry_version:DATA_SIGNAL_REGISTRY_VERSION,mode:'active',total_object_count:60,analyzer_available_count:analyzerAvailableCount,unsupported_count:60-analyzerAvailableCount,objects};

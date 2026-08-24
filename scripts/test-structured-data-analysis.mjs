@@ -1,12 +1,11 @@
 import assert from 'node:assert/strict';
-import { mkdtemp, readFile, writeFile } from 'node:fs/promises';
+import { mkdtemp } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import ts from '../node_modules/typescript/lib/typescript.js';
+import { emitTypescript } from './ts-emit.mjs';
 
-const source=await readFile(new URL('../src/services/structuredDataAnalysisService.ts',import.meta.url),'utf8');
-const compiled=ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.ES2022,target:ts.ScriptTarget.ES2020,importsNotUsedAsValues:ts.ImportsNotUsedAsValues.Remove}}).outputText;
-const dir=await mkdtemp(join(tmpdir(),'finops-structured-data-'));const path=join(dir,'structuredDataAnalysisService.mjs');await writeFile(path,compiled);
+const dir=await mkdtemp(join(tmpdir(),'finops-structured-data-'));
+const path=await emitTypescript(new URL('../src/services/structuredDataAnalysisService.ts',import.meta.url).pathname, dir);
 const {analyzeTaggingAllocationTable,analyzeStructuredSources,DATA_SIGNAL_REGISTRY,EVIDENCE_ANALYSIS_REGISTRY,isDerivedEvidenceApprovedForPacket}=await import(`file://${path}`);
 const sourceRecord={schema_version:'source_record_v1',source_id:'table-1',source_name:'allocation.csv',kind:'csv',text:'model-visible bounded table',structured_table:{schema_version:'structured_table_v1',headers:['Owner','Cost Center','Tags','Spend'],rows:[['Alice','CC-1','prod','100'],['','unallocated','','50']],total_row_count:2,truncated:false}};
 const evidence=analyzeTaggingAllocationTable(sourceRecord);

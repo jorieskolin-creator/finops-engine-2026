@@ -477,7 +477,7 @@ export interface ShadowTelemetryPersistence {
   retrieval_policy_version: 'bounded_retrieval_policy_v1';
   derived_evidence_schema_version: 'derived_analytical_evidence_v1';
   analyzer_version: 'tagging_allocation_v1@1.3.0';
-  scale_registry_version: 'data_signal_registry_v1';
+  scale_registry_version: 'data_signal_registry_v1' | 'data_signal_registry_v2';
   retrieval_domain_count: number;
   retrieval_triggered_domain_count: number;
   retrieval_pass_1_count: number;
@@ -976,7 +976,7 @@ export interface TableInspectionTrace {
 
 export interface DataSignalCoverageReport {
   schema_version: 'data_signal_coverage_v1';
-  registry_version: 'data_signal_registry_v1';
+  registry_version: 'data_signal_registry_v1' | 'data_signal_registry_v2';
   mode: 'active';
   total_object_count: 60;
   analyzer_available_count: number;
