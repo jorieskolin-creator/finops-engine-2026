@@ -1,6 +1,11 @@
 import type { SourceRecord, StructuredTableData } from '../../types';
 import type { CadenceBand } from './banding';
 import associationsData from '../../knowledge_base/finops_permitted_associations.json';
+import {
+  bindingTarget,
+  liveThemeBindings,
+  type ThemeBinding,
+} from './bindings';
 
 export const normalizeHeader = (value: string): string =>
   value.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
@@ -12,6 +17,9 @@ export const matchesHeader = (header: string, patterns: readonly string[]): bool
     || header.endsWith(`_${pattern}`)
     || header.includes(`_${pattern}_`)
   );
+
+export const matchesTheme = (text: string, patterns: readonly string[]): boolean =>
+  patterns.some(pattern => new RegExp(pattern).test(text));
 
 export const totalRow = (row: string[]): boolean =>
   row.slice(0, 3).some(value => /^(?:grand\s+)?(?:sub)?total$/i.test(value.trim()));
@@ -68,8 +76,19 @@ export const parseTime = (value: string | undefined): number | null => {
 };
 
 const TIME_PATTERNS = ['date', 'period', 'month', 'year', 'week', 'timestamp', 'time', 'day'] as const;
-const FORECAST_PATTERNS = ['forecast', 'ennuste'] as const;
-const ACTUAL_PATTERNS = ['actual', 'actuals', 'realized'] as const;
+const WEIGHT_PATTERNS = ['count', 'quantity', 'rows'] as const;
+const ADOPTION_PATTERNS = ['enabled', 'adopted', 'implemented', 'compliant', 'active', 'in_use', 'enforced'] as const;
+const STATUS_PATTERNS = ['status', 'state', 'ticket_status', 'item_status'] as const;
+const OWNER_PATTERNS = ['owner', 'assignee', 'omistaja'] as const;
+const EXCEPTION_PATTERNS = ['exception', 'override', 'incident', 'alert', 'anomaly', 'violation', 'breach', 'poikkeama'] as const;
+const ENTITY_PATTERNS = ['resource_id', 'ticket_id', 'item_id', 'id'] as const;
+const EVENT_TIME_PATTERNS = ['created', 'opened', 'updated', 'closed_at'] as const;
+
+const TRUTHY = /^(?:true|yes|y|1|enabled|adopted|implemented|compliant|active|on|applied|enforced)$/i;
+const FALSY = /^(?:false|no|n|0|disabled|not[_ -]?adopted|inactive|off|missing|absent)$/i;
+const CLOSED = /^(?:closed|done|resolved|complete|completed|fixed)$/i;
+const OPEN = /^(?:open|todo|in[_ -]?progress|pending|new|wip)$/i;
+const EXCEPTION_VALUE = /^(?:exception|override|incident|alert|anomaly|violation|breach|escalated|true|yes|y|1)$/i;
 
 type Target = { stream: 'maturity' | 'antipattern'; criterion_id: string };
 
@@ -79,14 +98,18 @@ export interface NumericSeries {
   higherIs: 'better' | 'worse';
   targets: Target[];
   points: number[];
+  binding_id?: string;
 }
 
-const RATIO_HINTS: Array<{ patterns: string[]; higherIs: 'better' | 'worse'; targets: Target[]; name: string }> = [
-  { patterns: ['variance', 'budjettipoikkeama'], higherIs: 'worse', targets: [{ stream: 'maturity', criterion_id: 'C2' }], name: 'forecast_variance' },
-  { patterns: ['utilization', 'utilisation', 'kayttoaste'], higherIs: 'better', targets: [{ stream: 'maturity', criterion_id: 'B1' }], name: 'commitment_utilization' },
-  { patterns: ['idle', 'waste'], higherIs: 'worse', targets: [{ stream: 'maturity', criterion_id: 'B3' }], name: 'idle_waste' },
-  { patterns: ['coverage'], higherIs: 'better', targets: [{ stream: 'maturity', criterion_id: 'B1' }], name: 'commitment_coverage' },
-];
+const firstMatchingBinding = (
+  header: string,
+  bindings: ThemeBinding[],
+  patternsOf: (binding: ThemeBinding) => readonly string[] | undefined,
+): ThemeBinding | undefined =>
+  bindings.find(binding => {
+    const patterns = patternsOf(binding);
+    return patterns ? matchesHeader(header, patterns) : false;
+  });
 
 const orderedRows = (table: StructuredTableData): string[][] => {
   const rows = analysisRows(table).filter(row => !totalRow(row));
@@ -100,55 +123,74 @@ const orderedRows = (table: StructuredTableData): string[][] => {
 export const detectTrendSeries = (table: StructuredTableData): NumericSeries | null => {
   const rows = orderedRows(table);
   const headers = table.headers.map(normalizeHeader);
-  const forecastIdx = headers.findIndex(header => matchesHeader(header, FORECAST_PATTERNS));
-  const actualIdx = headers.findIndex(header => matchesHeader(header, ACTUAL_PATTERNS));
-  if (forecastIdx >= 0 && actualIdx >= 0 && forecastIdx !== actualIdx) {
+  const trendBindings = liveThemeBindings('trend_v1');
+
+  for (const binding of trendBindings) {
+    if (binding.detection !== 'paired_ratio') continue;
+    const leftIdx = headers.findIndex(header => matchesHeader(header, binding.left_patterns || []));
+    const rightIdx = headers.findIndex(header => matchesHeader(header, binding.right_patterns || []));
+    if (leftIdx < 0 || rightIdx < 0 || leftIdx === rightIdx) continue;
     const points = rows.flatMap(row => {
-      const forecast = parseNumber(row[forecastIdx]);
-      const actual = parseNumber(row[actualIdx]);
-      if (forecast === null || actual === null || forecast === 0) return [];
-      return [(actual - forecast) / Math.abs(forecast)];
+      const left = parseNumber(row[leftIdx]);
+      const right = parseNumber(row[rightIdx]);
+      if (left === null || right === null || left === 0) return [];
+      return [(right - left) / Math.abs(left)];
     });
     if (points.length === 0) return null;
     return {
-      name: 'forecast_variance',
-      semantic: 'ratio',
-      higherIs: 'worse',
-      targets: [{ stream: 'maturity', criterion_id: 'C2' }],
+      name: binding.series_name || binding.theme.toLowerCase(),
+      semantic: binding.semantic_type || 'ratio',
+      higherIs: binding.higher_is || 'worse',
+      targets: [bindingTarget(binding)],
       points,
+      binding_id: binding.binding_id,
     };
   }
-  for (const hint of RATIO_HINTS) {
-    const index = headers.findIndex(header => matchesHeader(header, hint.patterns) && !isCostHeader(header));
+
+  for (const binding of trendBindings) {
+    if (binding.detection !== 'numeric_series') continue;
+    const index = headers.findIndex(header =>
+      matchesHeader(header, binding.header_patterns)
+      && (binding.allow_cost_header || !isCostHeader(header))
+    );
     if (index < 0) continue;
-    const points = rows.map(row => parseNumber(row[index])).filter((value): value is number => value !== null);
+    const points = rows
+      .map(row => parseNumber(row[index]))
+      .filter((value): value is number => value !== null && (!binding.non_negative || value >= 0));
     if (points.length === 0) continue;
-    return { name: hint.name, semantic: 'ratio', higherIs: hint.higherIs, targets: hint.targets, points };
-  }
-  const durationIdx = headers.findIndex(header => matchesHeader(header, ['aging_days', 'age_days', 'mttr', 'duration_days']));
-  if (durationIdx >= 0) {
-    const points = rows.map(row => parseNumber(row[durationIdx])).filter((value): value is number => value !== null && value >= 0);
-    if (points.length > 0) {
-      return {
-        name: 'duration',
-        semantic: 'duration',
-        higherIs: 'worse',
-        targets: [{ stream: 'maturity', criterion_id: 'C3' }],
-        points,
-      };
-    }
+    return {
+      name: binding.series_name || binding.theme.toLowerCase(),
+      semantic: binding.semantic_type || 'ratio',
+      higherIs: binding.higher_is || 'worse',
+      targets: [bindingTarget(binding)],
+      points,
+      binding_id: binding.binding_id,
+    };
   }
   return null;
 };
 
-const SEGMENT_PATTERNS = ['environment', 'env', 'product', 'application', 'app', 'service', 'region', 'storage_class', 'instance_family', 'model', 'workload_type'];
-
-export const detectConcentration = (table: StructuredTableData): { weights: number[]; eligible: number } | null => {
+export const detectConcentration = (table: StructuredTableData): {
+  weights: number[];
+  eligible: number;
+  targets: Target[];
+  binding_id: string;
+  theme: string;
+} | null => {
   const rows = analysisRows(table).filter(row => !totalRow(row));
   const headers = table.headers.map(normalizeHeader);
-  const segmentIdx = headers.findIndex(header => matchesHeader(header, SEGMENT_PATTERNS));
-  if (segmentIdx < 0) return null;
-  const weightIdx = headers.findIndex(header => isCostHeader(header) || matchesHeader(header, ['count', 'quantity', 'rows']));
+  const bindings = liveThemeBindings('concentration_v1');
+  let segmentIdx = -1;
+  let binding: ThemeBinding | undefined;
+  for (let index = 0; index < headers.length; index += 1) {
+    binding = firstMatchingBinding(headers[index], bindings, item => item.header_patterns);
+    if (binding) {
+      segmentIdx = index;
+      break;
+    }
+  }
+  if (segmentIdx < 0 || !binding) return null;
+  const weightIdx = headers.findIndex(header => isCostHeader(header) || matchesHeader(header, WEIGHT_PATTERNS));
   const groups = new Map<string, number>();
   for (const row of rows) {
     const key = (row[segmentIdx] || '').trim().toLowerCase();
@@ -158,12 +200,14 @@ export const detectConcentration = (table: StructuredTableData): { weights: numb
     groups.set(key, (groups.get(key) || 0) + weight);
   }
   if (groups.size < 3) return null;
-  return { weights: [...groups.values()], eligible: rows.length };
+  return {
+    weights: [...groups.values()],
+    eligible: rows.length,
+    targets: [bindingTarget(binding)],
+    binding_id: binding.binding_id,
+    theme: binding.theme,
+  };
 };
-
-const ADOPTION_PATTERNS = ['enabled', 'adopted', 'implemented', 'compliant', 'active', 'in_use', 'enforced'];
-const TRUTHY = /^(?:true|yes|y|1|enabled|adopted|implemented|compliant|active|on|applied|enforced)$/i;
-const FALSY = /^(?:false|no|n|0|disabled|not[_ -]?adopted|inactive|off|missing|absent)$/i;
 
 export const encodeFlagOrNumber = (value: string | undefined): number | null => {
   if (!value || !value.trim()) return null;
@@ -173,26 +217,22 @@ export const encodeFlagOrNumber = (value: string | undefined): number | null => 
   return parseNumber(trimmed);
 };
 
-const adoptionTargets = (header: string): Target[] | null => {
-  if (/(?:tag|tunniste)/.test(header)) return [{ stream: 'maturity', criterion_id: 'A1' }];
-  if (/(?:showback|chargeback)/.test(header)) return [{ stream: 'maturity', criterion_id: 'A2' }];
-  if (/(?:commitment|ri|sp|cud|sitoumus)/.test(header)) return [{ stream: 'maturity', criterion_id: 'B1' }];
-  if (/(?:rightsiz)/.test(header)) return [{ stream: 'maturity', criterion_id: 'B2' }];
-  if (/(?:idle|shutdown|schedule)/.test(header)) return [{ stream: 'maturity', criterion_id: 'B3' }];
-  if (/(?:spot|preempt)/.test(header)) return [{ stream: 'maturity', criterion_id: 'B4' }];
-  if (/(?:lifecycle)/.test(header)) return [{ stream: 'maturity', criterion_id: 'B5' }];
-  if (/(?:guardrail|iac|policy_as_code|infracost|opa)/.test(header)) return [{ stream: 'maturity', criterion_id: 'D2' }];
-  if (/(?:autoscale|scaling)/.test(header)) return [{ stream: 'maturity', criterion_id: 'D3' }];
-  return null;
-};
-
-export const detectAdoption = (table: StructuredTableData): { percent: number; present: boolean; eligible: number; targets: Target[] } | null => {
+export const detectAdoption = (table: StructuredTableData): {
+  percent: number;
+  present: boolean;
+  eligible: number;
+  targets: Target[];
+  binding_id?: string;
+} | null => {
   const rows = analysisRows(table).filter(row => !totalRow(row));
   const headers = table.headers.map(normalizeHeader);
   const index = headers.findIndex(header => matchesHeader(header, ADOPTION_PATTERNS));
   if (index < 0 || rows.length === 0) return null;
-  const targets = adoptionTargets(headers[index]);
-  if (!targets) return null;
+  const header = headers[index];
+  const binding = liveThemeBindings('adoption_v1').find(item =>
+    matchesTheme(header, item.theme_patterns || item.header_patterns)
+  );
+  if (!binding) return null;
   let present = 0;
   let classified = 0;
   for (const row of rows) {
@@ -201,22 +241,13 @@ export const detectAdoption = (table: StructuredTableData): { percent: number; p
     else if (FALSY.test(value)) classified += 1;
   }
   if (classified === 0) return null;
-  return { percent: Math.round((present / rows.length) * 100), present: present > 0, eligible: rows.length, targets };
-};
-
-const STATUS_PATTERNS = ['status', 'state', 'ticket_status', 'item_status'];
-const OWNER_PATTERNS = ['owner', 'assignee', 'omistaja'];
-const CLOSED = /^(?:closed|done|resolved|complete|completed|fixed)$/i;
-const OPEN = /^(?:open|todo|in[_ -]?progress|pending|new|wip)$/i;
-
-const processTargets = (headers: string[]): Target[] | null => {
-  const joined = headers.join(' ');
-  if (/(?:forecast|budget|variance|ennuste)/.test(joined)) return [{ stream: 'maturity', criterion_id: 'C2' }];
-  if (/(?:anomaly|alert|incident)/.test(joined)) return [{ stream: 'maturity', criterion_id: 'A3' }];
-  if (/(?:rightsiz|recommendation)/.test(joined)) return [{ stream: 'maturity', criterion_id: 'B2' }];
-  if (/(?:campaign)/.test(joined)) return [{ stream: 'maturity', criterion_id: 'E1' }];
-  if (/(?:status|state)/.test(joined)) return [{ stream: 'maturity', criterion_id: 'C3' }];
-  return null;
+  return {
+    percent: Math.round((present / rows.length) * 100),
+    present: present > 0,
+    eligible: rows.length,
+    targets: [bindingTarget(binding)],
+    binding_id: binding.binding_id,
+  };
 };
 
 export const detectProcess = (table: StructuredTableData): {
@@ -227,16 +258,22 @@ export const detectProcess = (table: StructuredTableData): {
   timestamps: number[];
   openAges: number[];
   recurrence: boolean;
+  binding_id?: string;
 } | null => {
   const rows = analysisRows(table).filter(row => !totalRow(row));
   const headers = table.headers.map(normalizeHeader);
   const statusIdx = headers.findIndex(header => matchesHeader(header, STATUS_PATTERNS));
-  const timeIdx = headers.findIndex(header => matchesHeader(header, TIME_PATTERNS) || matchesHeader(header, ['created', 'opened', 'updated', 'closed_at']));
+  const timeIdx = headers.findIndex(header =>
+    matchesHeader(header, TIME_PATTERNS) || matchesHeader(header, EVENT_TIME_PATTERNS)
+  );
   if (statusIdx < 0 && timeIdx < 0) return null;
-  const targets = processTargets(headers);
-  if (!targets) return null;
+  const joined = headers.join(' ');
+  const binding = liveThemeBindings('process_v1').find(item =>
+    matchesTheme(joined, item.theme_patterns || item.header_patterns)
+  );
+  if (!binding) return null;
   const ownerIdx = headers.findIndex(header => matchesHeader(header, OWNER_PATTERNS));
-  const entityIdx = headers.findIndex(header => matchesHeader(header, ['resource_id', 'ticket_id', 'item_id', 'id']));
+  const entityIdx = headers.findIndex(header => matchesHeader(header, ENTITY_PATTERNS));
   let closed = 0;
   let ownerless = 0;
   const timestamps: number[] = [];
@@ -259,25 +296,15 @@ export const detectProcess = (table: StructuredTableData): {
   const asOf = timestamps.length ? Math.max(...timestamps) : null;
   const openAges = asOf === null ? [] : openTimes.map(ts => (asOf - ts) / 86400000);
   return {
-    targets,
+    targets: [bindingTarget(binding)],
     eligible: rows.length,
     closed,
     ownerless: ownerIdx >= 0 ? ownerless : null,
     timestamps: timestamps.sort((a, b) => a - b),
     openAges,
     recurrence: [...openKeys.values()].some(count => count > 1),
+    binding_id: binding.binding_id,
   };
-};
-
-const EXCEPTION_PATTERNS = ['exception', 'override', 'incident', 'alert', 'anomaly', 'violation', 'breach', 'poikkeama'];
-const EXCEPTION_VALUE = /^(?:exception|override|incident|alert|anomaly|violation|breach|escalated|true|yes|y|1)$/i;
-
-const exceptionTargets = (headers: string[], header: string): Target[] => {
-  const joined = `${headers.join(' ')} ${header}`;
-  if (/(?:compliance|residency|audit)/.test(joined)) return [{ stream: 'maturity', criterion_id: 'C5' }];
-  if (/(?:anomaly|alert|incident|poikkeama)/.test(header)) return [{ stream: 'maturity', criterion_id: 'A3' }];
-  if (/(?:override|exception|violation|breach)/.test(header)) return [{ stream: 'maturity', criterion_id: 'C1' }];
-  return [{ stream: 'maturity', criterion_id: 'A3' }];
 };
 
 export const detectException = (table: StructuredTableData): {
@@ -287,14 +314,25 @@ export const detectException = (table: StructuredTableData): {
   recurrence: boolean;
   openAges: number[];
   closed: number | null;
+  binding_id?: string;
 } | null => {
   const rows = analysisRows(table).filter(row => !totalRow(row));
   const headers = table.headers.map(normalizeHeader);
   const exceptionIdx = headers.findIndex(header => matchesHeader(header, EXCEPTION_PATTERNS));
   if (exceptionIdx < 0 || rows.length === 0) return null;
+  const column = headers[exceptionIdx];
+  const joined = `${headers.join(' ')} ${column}`;
+  const binding = liveThemeBindings('exception_v1').find(item => {
+    const patterns = item.theme_patterns || item.header_patterns;
+    const haystack = item.match_scope === 'headers_joined' ? joined : column;
+    return matchesTheme(haystack, patterns);
+  });
+  if (!binding) return null;
   const statusIdx = headers.findIndex(header => matchesHeader(header, STATUS_PATTERNS));
-  const timeIdx = headers.findIndex(header => matchesHeader(header, TIME_PATTERNS) || matchesHeader(header, ['created', 'opened', 'updated', 'closed_at']));
-  const entityIdx = headers.findIndex(header => matchesHeader(header, ['resource_id', 'ticket_id', 'item_id', 'id']));
+  const timeIdx = headers.findIndex(header =>
+    matchesHeader(header, TIME_PATTERNS) || matchesHeader(header, EVENT_TIME_PATTERNS)
+  );
+  const entityIdx = headers.findIndex(header => matchesHeader(header, ENTITY_PATTERNS));
   let exceptionCount = 0;
   let closed = 0;
   let classifiedClosed = 0;
@@ -326,12 +364,13 @@ export const detectException = (table: StructuredTableData): {
   const asOf = allTimes.length ? Math.max(...allTimes) : (exceptionTimes.length ? Math.max(...exceptionTimes) : null);
   const ages = asOf === null ? [] : openTimes.map(ts => (asOf - ts) / 86400000);
   return {
-    targets: exceptionTargets(headers, headers[exceptionIdx]),
+    targets: [bindingTarget(binding)],
     eligible: rows.length,
     exceptionCount,
     recurrence: [...keys.values()].some(count => count > 1),
     openAges: ages,
     closed: classifiedClosed > 0 ? closed : null,
+    binding_id: binding.binding_id,
   };
 };
 
@@ -344,6 +383,9 @@ type AssociationPair = {
 };
 
 const ASSOCIATION_PAIRS = (associationsData.pairs || []) as AssociationPair[];
+const liveAssociationPairIds = new Set(
+  liveThemeBindings('association_v1').map(binding => binding.pair_id).filter((id): id is string => Boolean(id))
+);
 
 export const detectAssociationPairs = (table: StructuredTableData): Array<{
   pair_id: string;
@@ -355,6 +397,7 @@ export const detectAssociationPairs = (table: StructuredTableData): Array<{
   const rows = orderedRows(table);
   const headers = table.headers.map(normalizeHeader);
   return ASSOCIATION_PAIRS.flatMap(pair => {
+    if (liveAssociationPairIds.size > 0 && !liveAssociationPairIds.has(pair.pair_id)) return [];
     const leftIdx = headers.findIndex(header => matchesHeader(header, pair.left_patterns));
     const rightIdx = headers.findIndex(header => matchesHeader(header, pair.right_patterns));
     if (leftIdx < 0 || rightIdx < 0 || leftIdx === rightIdx) return [];
@@ -387,17 +430,17 @@ export const corpusHaystack = (sources: SourceRecord[]): string => sources.map(s
 
 export const detectDeclaredCadences = (sources: SourceRecord[]): Array<{ criterion_id: string; cadence: CadenceBand }> => {
   const haystack = corpusHaystack(sources);
+  const cadenceBindings = liveThemeBindings('consistency_v1').filter(item => item.detection === 'declared_cadence');
   const found: Array<{ criterion_id: string; cadence: CadenceBand }> = [];
   for (const { cadence, re } of CADENCE_PATTERNS) {
     const copy = new RegExp(re.source, 'gi');
     let match: RegExpExecArray | null;
     while ((match = copy.exec(haystack))) {
       const context = haystack.slice(Math.max(0, match.index - 80), match.index + match[0].length + 80);
-      let criterionId: string | null = null;
-      if (/(?:forecast|budget|ennuste|variance|budjetti)/.test(context)) criterionId = 'C2';
-      else if (/(?:policy|approval|guardrail|governance|politiikka)/.test(context)) criterionId = 'C1';
-      else if (/(?:operating|raci|cadence|review)/.test(context)) criterionId = 'C3';
-      if (criterionId) found.push({ criterion_id: criterionId, cadence });
+      const binding = cadenceBindings.find(item =>
+        matchesTheme(context, item.theme_patterns || item.header_patterns)
+      );
+      if (binding) found.push({ criterion_id: binding.criterion_id, cadence });
     }
   }
   const unique = new Map<string, Set<CadenceBand>>();
@@ -410,4 +453,3 @@ export const detectDeclaredCadences = (sources: SourceRecord[]): Array<{ criteri
     cadences.size === 1 ? [{ criterion_id, cadence: [...cadences][0] }] : []
   );
 };
-

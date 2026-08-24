@@ -24,7 +24,7 @@ export const analyzeConcentrationTable = (source: SourceRecord): DerivedAnalytic
       method: 'concentration_analysis',
       calculationIds: ['hhi_band'],
       sourceId: source.source_id,
-      targets: [{ stream: 'maturity', criterion_id: 'A1' }],
+      targets: detected.targets,
       result: baseResult('OBSERVED', table.source_total_row_count ?? table.total_row_count, detected.eligible, scope, truncated, {
         withheld_source_row_count: table.hidden_row_count || 0,
         withheld_source_column_count: table.hidden_column_count || 0,
@@ -40,7 +40,14 @@ export const analyzeConcentrationTable = (source: SourceRecord): DerivedAnalytic
       ],
       locator: locatorFor(table),
       eligibilityReasons: reasons,
-      fingerprintSeed: JSON.stringify({ sheet: table.sheet_name, band, lowest, segments: detected.weights.length }),
+      fingerprintSeed: JSON.stringify({
+        sheet: table.sheet_name,
+        band,
+        lowest,
+        segments: detected.weights.length,
+        criterion: detected.targets[0]?.criterion_id,
+        binding: detected.binding_id,
+      }),
       quality: qualityFor(detected.eligible, !truncated, truncated ? 'Bounded prefix is not full-population evidence.' : null),
     })];
   });

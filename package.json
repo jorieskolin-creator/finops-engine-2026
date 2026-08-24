@@ -47,6 +47,7 @@
     "test:gap-analyzer": "node scripts/test-gap-analyzer.mjs",
     "test:banding": "node scripts/test-banding.mjs",
     "test:derived-families": "node scripts/test-derived-families.mjs",
+    "test:theme-bindings": "node scripts/test-theme-bindings.mjs",
     "test:table-cell-withhold": "node scripts/test-table-cell-withhold.mjs",
     "test:bounded-retrieval": "node scripts/test-bounded-retrieval.mjs",
     "test:semantic-gap-retrieval": "node scripts/test-semantic-gap-retrieval.mjs",
