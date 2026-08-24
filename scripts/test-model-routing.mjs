@@ -57,6 +57,7 @@ for (const stage of MODEL_STAGES) {
 }
 
 assert.equal(STAGE_ROLES.evidence_adjudication, 'REASONER');
+assert.equal(STAGE_ROLES.evidence_gap_analysis, 'WORKHORSE');
 assert.equal(STAGE_ROLES.synthesis_escalation, 'REASONER');
 assert.equal(STAGE_ROLES.roadmap_synthesis, 'REASONER');
 assert.equal(STAGE_ROLES.forensic_audit, 'WORKHORSE');

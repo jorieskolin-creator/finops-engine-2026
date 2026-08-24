@@ -56,6 +56,7 @@ import { planGapRetrieval } from "./gapAnalyzerService";
 import { buildEvidenceLaneStagePackets } from "./evidenceStagePacketService";
 import { applyBoundedRetrieval } from "./boundedRetrievalService";
 import { expandWeakEvidencePacket } from "./semanticGapRetrievalService";
+import { analyzeEvidenceGaps } from "./evidenceGapAnalysisService";
 import { sanitizeEvidenceSources } from "./deterministicPrivacyService";
 import { scrubDiagnosticResultForPrivacy } from "./privacyService";
 import { parseGovernedJsonObject, validateFindingsModePayload } from "./jsonResponseService";
@@ -293,6 +294,7 @@ export const analyzeDocument = async (
   const pipelineStarted = Date.now();
   const actuals: Record<string, string> = {
     forensic_audit: modelRouting.routes.forensic_audit[0].id,
+    evidence_gap_analysis: modelRouting.routes.evidence_gap_analysis[0].id,
     targeted_rescan: modelRouting.routes.targeted_rescan[0].id,
     evidence_check: modelRouting.routes.evidence_check[0].id,
     evidence_adjudication: modelRouting.routes.evidence_adjudication[0].id,
@@ -340,7 +342,9 @@ export const analyzeDocument = async (
       derived: derivedAnalyticalEvidence,
       locations: derivedRun.locations
     });
-    const { packets: sourcePackets, trace: boundedRetrieval } = applyBoundedRetrieval(sourceRegistry, baselineSourcePackets, { gap_plan: gapPlan });
+    const boundedRetrievalResult = applyBoundedRetrieval(sourceRegistry, baselineSourcePackets, { gap_plan: gapPlan });
+    let sourcePackets = boundedRetrievalResult.packets;
+    const boundedRetrieval = boundedRetrievalResult.trace;
     if (boundedRetrieval.domains.some(domain => domain.passes.some(pass => pass.selected_chunk_ids.length > 0))) {
       const privacyAgain = sanitizeEvidenceSources(acquiredSources);
       if (privacyAgain.decision.decision === 'BLOCK') {
@@ -348,19 +352,21 @@ export const analyzeDocument = async (
       }
       derivedAnalyticalEvidence = deriveAllEvidenceSignals(acquiredSources, sourceRegistry).evidence;
     }
-    const weakDomainIds = Object.entries(sourcePackets)
+    let weakDomainIds = Object.entries(sourcePackets)
       .filter(([, packet]) => packet.weak_coverage)
       .map(([domain]) => domain);
     const dlpScan = scanRegistryDlp(sourceRegistry);
     const packetWarnings = Object.values(sourcePackets).filter(packet => packet.weak_coverage).length;
     emitProgress({ stage: 'packetization', status: packetWarnings > 0 ? 'completed_with_warnings' : 'completed' });
     emitProgress({ stage: 'privacy', status: 'in_progress' });
-    const sourceParseWarnings = [
+    const packetCoverageWarnings = (packets: typeof sourcePackets): string[] => Object.entries(packets)
+      .filter(([, packet]) => packet.weak_coverage)
+      .map(([domain, packet]) => `Source packet ${domain} has incomplete deterministic routing coverage (${packet.included_chunk_count}/${packet.total_candidate_chunks} relevant chunks); no broad-source fallback was used.`);
+    let activePacketCoverageWarnings = packetCoverageWarnings(sourcePackets);
+    let sourceParseWarnings = [
       ...sourceRegistry.warnings,
       ...dlpScan.caution_hits.map(hit => `DLP caution: ${hit.kind} detected in ${hit.chunk_ids.length} chunk(s).`),
-      ...Object.entries(sourcePackets)
-        .filter(([, packet]) => packet.weak_coverage)
-        .map(([domain, packet]) => `Source packet ${domain} has incomplete deterministic routing coverage (${packet.included_chunk_count}/${packet.total_candidate_chunks} relevant chunks); no broad-source fallback was used.`)
+      ...activePacketCoverageWarnings,
     ];
     serverLog(runId, 'info', 'source_registry_created', {
       sources: sourceRegistry.source_count,
@@ -395,8 +401,8 @@ export const analyzeDocument = async (
     if (dlpScan.blocked) {
       throw new Error(`Security Alert: high-risk secret material detected in source chunks (${dlpScan.high_risk_hits.map(hit => `${hit.kind}:${hit.count}`).join(', ')}). Remove or redact secrets before running the assessment.`);
     }
-    const evidenceIntegrity = validateEvidenceAcquisition(acquiredSources, sourceRegistry, sourcePackets);
-    const sourceRegistryStatus = sourceRegistryRuntimeStatus(
+    let evidenceIntegrity = validateEvidenceAcquisition(acquiredSources, sourceRegistry, sourcePackets);
+    let sourceRegistryStatus = sourceRegistryRuntimeStatus(
       sourceRegistry,
       sourcePackets,
       0,
@@ -404,7 +410,7 @@ export const analyzeDocument = async (
       privacy.decision,
       evidenceIntegrity
     );
-    const evidenceStagePackets = buildEvidenceLaneStagePackets({
+    let evidenceStagePackets = buildEvidenceLaneStagePackets({
       source_packets: sourcePackets,
       source_packet_hashes: evidenceIntegrity.packet_hashes,
       derived_evidence: derivedAnalyticalEvidence,
@@ -412,20 +418,31 @@ export const analyzeDocument = async (
       privacy_decision: privacy.decision,
       acquisition_readiness: sourceRegistryStatus.acquisition_readiness
     });
+    const baselineEvidenceStagePackets = evidenceStagePackets;
     const semanticPackets = { ...sourcePackets };
-    const expandWeakEvidence = (input: Parameters<NonNullable<import('../orchestrator').Phase1SourcePackets['expandWeakEvidence']>>[0]) => {
+    const expandWeakEvidence = async (input: Parameters<NonNullable<import('../orchestrator').Phase1SourcePackets['expandWeakEvidence']>>[0]) => {
+      const gapAnalysis = await analyzeEvidenceGaps({
+        domainId: input.batchId,
+        items: input.items,
+        pass: input.pass,
+        seenTerms: input.seenTerms,
+        ctx: { runId },
+      });
       const expanded = expandWeakEvidencePacket({
         registry: sourceRegistry,
         packet: semanticPackets[input.batchId],
         items: input.items,
         pass: input.pass,
-        seenTerms: input.seenTerms
+        seenTerms: input.seenTerms,
+        proposedTerms: gapAnalysis.failed ? undefined : gapAnalysis.terms,
+        gapAnalysisModel: gapAnalysis.model_used,
+        gapAnalysisFailed: gapAnalysis.failed,
       });
       semanticPackets[input.batchId] = expanded.packet;
       if (expanded.trace.selected_chunk_ids.length > 0) {
         derivedAnalyticalEvidence = deriveAllEvidenceSignals(acquiredSources, sourceRegistry).evidence;
       }
-      const snapshot = { ...sourcePackets, [input.batchId]: expanded.packet };
+      const snapshot = { ...semanticPackets };
       const integrity = validateEvidenceAcquisition(acquiredSources, sourceRegistry, snapshot);
       const status = sourceRegistryRuntimeStatus(sourceRegistry, snapshot, 0, dlpScan, privacy.decision, integrity);
       const rebuilt = buildEvidenceLaneStagePackets({
@@ -508,6 +525,33 @@ export const analyzeDocument = async (
     if (aggregatedRawData.evidence_adjudication_models_used.length > 0) {
       actuals.evidence_adjudication = aggregatedRawData.evidence_adjudication_models_used.join(',');
     }
+    if (aggregatedRawData.evidence_gap_analysis_models_used.length > 0) {
+      actuals.evidence_gap_analysis = aggregatedRawData.evidence_gap_analysis_models_used.join(',');
+    }
+    sourcePackets = { ...semanticPackets };
+    evidenceIntegrity = validateEvidenceAcquisition(acquiredSources, sourceRegistry, sourcePackets);
+    sourceRegistryStatus = sourceRegistryRuntimeStatus(
+      sourceRegistry,
+      sourcePackets,
+      0,
+      dlpScan,
+      privacy.decision,
+      evidenceIntegrity
+    );
+    evidenceStagePackets = buildEvidenceLaneStagePackets({
+      source_packets: sourcePackets,
+      source_packet_hashes: evidenceIntegrity.packet_hashes,
+      derived_evidence: derivedAnalyticalEvidence,
+      acquisition_limitations: sourceRegistry.acquisition_limitations,
+      privacy_decision: privacy.decision,
+      acquisition_readiness: sourceRegistryStatus.acquisition_readiness
+    });
+    weakDomainIds = Object.entries(sourcePackets)
+      .filter(([, packet]) => packet.weak_coverage)
+      .map(([domain]) => domain);
+    sourceParseWarnings = sourceParseWarnings.filter(warning => !activePacketCoverageWarnings.includes(warning));
+    activePacketCoverageWarnings = packetCoverageWarnings(sourcePackets);
+    sourceParseWarnings.push(...activePacketCoverageWarnings);
     validateEvidenceContinuity(evidenceIntegrity, sourceRegistry, sourcePackets);
     const provenanceReconciliation = reconcileEvidenceProvenance(aggregatedRawData, sourceRegistry, sourcePackets, derivedAnalyticalEvidence);
     aggregatedRawData = provenanceReconciliation.result;
@@ -548,6 +592,9 @@ export const analyzeDocument = async (
       phase_1_audit_logs: auditLogs,
       evidence_check: aggregatedRawData.evidence_check,
       validation: phase1Validation,
+      effective_source_registry_status: sourceRegistryStatus,
+      effective_evidence_integrity: evidenceIntegrity,
+      semantic_gap_retrieval: aggregatedRawData.semantic_gap_retrieval,
     });
     serverLog(runId, 'info', 'stage_complete', {
       stage: 'forensic_audit',
@@ -1548,6 +1595,7 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => unresolve
         }])) as DiagnosticResult['meta']['model_roles'],
         model_config: {
           forensic_audit: actuals.forensic_audit,
+          evidence_gap_analysis: actuals.evidence_gap_analysis,
           targeted_rescan: actuals.targeted_rescan,
           evidence_check: actuals.evidence_check,
           evidence_adjudication: actuals.evidence_adjudication,
@@ -1570,6 +1618,7 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => unresolve
       sourceRegistry,
       sourcePackets,
       evidenceStagePackets,
+      baselineEvidenceStagePackets,
       dlpScan,
       dlpReviewChunkCount: 0,
       referenceKbIndex,

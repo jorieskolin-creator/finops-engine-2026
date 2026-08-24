@@ -14,6 +14,7 @@ export interface ModelProfile {
 
 export type StageId =
   | 'forensic_audit'
+  | 'evidence_gap_analysis'
   | 'targeted_rescan'
   | 'evidence_check'
   | 'evidence_adjudication'

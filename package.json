@@ -51,6 +51,7 @@
     "test:table-cell-withhold": "node scripts/test-table-cell-withhold.mjs",
     "test:bounded-retrieval": "node scripts/test-bounded-retrieval.mjs",
     "test:semantic-gap-retrieval": "node scripts/test-semantic-gap-retrieval.mjs",
+    "test:evidence-gap-analysis": "node scripts/test-evidence-gap-analysis.mjs",
     "test:scenario-boundaries": "node scripts/test-scenario-boundaries.mjs",
     "test:scale-readiness": "node scripts/test-scale-readiness.mjs",
     "test:pipeline-progress": "node scripts/test-pipeline-progress.mjs",

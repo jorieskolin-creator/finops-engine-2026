@@ -64,6 +64,7 @@ assert.deepEqual(first.trace.criterion_ids, ['maturity.D1']);
 assert.equal(first.trace.trigger_status, 'weak');
 assert.deepEqual(first.trace.selected_chunk_ids, ['c2']);
 assert.equal(first.trace.stop_reason, 'NEW_EVIDENCE_SELECTED');
+assert.equal(first.trace.strategy, 'deterministic_semantic_fallback');
 assert.ok(first.trace.proposed_terms.some(term => term.includes('autoscaling')));
 assert.equal('score' in first.trace, false, 'gap retrieval must have no scoring authority or score output');
 
@@ -80,5 +81,13 @@ assert.deepEqual(second.trace.selected_chunk_ids, [], 'terms and chunks must not
 assert.equal(second.trace.stop_reason, 'NO_NEW_CANDIDATES');
 assert.ok(second.trace.proposed_terms.every(term => !second.trace.seen_terms_before.includes(term)), 'terms must not repeat between passes');
 assert.deepEqual(second.packet.manifest.map(item => item.chunk_id), ['c1', 'c2']);
+
+const generated = expandWeakEvidencePacket({
+  registry, packet, items: [weak], pass: 1, seenTerms: new Set(),
+  proposedTerms: ['automatic scaling', 'utilization thresholds'], gapAnalysisModel: 'test-workhorse',
+});
+assert.equal(generated.trace.strategy, 'generative_semantic_expansion');
+assert.equal(generated.trace.gap_analysis_model, 'test-workhorse');
+assert.deepEqual(generated.trace.selected_chunk_ids, ['c2']);
 
 console.log('semantic gap retrieval tests passed');

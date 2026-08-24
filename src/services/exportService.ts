@@ -210,7 +210,7 @@ const renderAcquisitionQuality = (result: DiagnosticResult): string => {
     ['Verified evidence strength', `${density.verified_strength}%`],
     ['Source diversity', `${density.source_diversity}%`],
     ['Evidence-category diversity', `${density.category_diversity}%`],
-    ['Provenance integrity', `${provenance.integrity}% · ${provenance.source_backed_count} source-backed / ${provenance.asserted_count} unresolved`],
+    ['Provenance integrity', `${provenance.integrity}% · ${provenance.source_backed_count} direct / ${provenance.derived_count} derived / ${provenance.asserted_count} unresolved`],
     ['KB completeness', `${quality.knowledge.completeness}% · ${quality.knowledge.loaded_document_count}/${quality.knowledge.expected_document_count} objects`],
     ['Security gate', `${quality.security.status} · ${quality.security.caution_hit_count} caution / ${quality.security.high_risk_hit_count} high-risk hit(s)`]
   ];
@@ -232,7 +232,7 @@ const renderAcquisitionQuality = (result: DiagnosticResult): string => {
           <tbody>
             <tr><td>Evidence Packet</td><td><span class="packet-coverage ${statusClass(quality.readiness.evidence_packet === 'READY')}">${quality.readiness.evidence_packet}</span></td></tr>
             <tr><td>Knowledge Packet</td><td><span class="packet-coverage ${statusClass(quality.readiness.knowledge_packet === 'READY')}">${quality.readiness.knowledge_packet}</span></td></tr>
-            <tr><td>Overall acquisition</td><td><span class="packet-coverage ${statusClass(quality.readiness.acquisition === 'READY')}">${quality.readiness.acquisition}</span></td></tr>
+            <tr><td>Evidence Acquisition</td><td><span class="packet-coverage ${statusClass(quality.readiness.acquisition === 'READY')}">${quality.readiness.acquisition}</span></td></tr>
           </tbody>
         </table>
         ${domainRows.length > 0 ? `

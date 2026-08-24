@@ -199,7 +199,9 @@ export interface SemanticGapRetrievalPassTrace {
   pass: 1 | 2;
   trigger_status: 'weak';
   criterion_ids: string[];
-  strategy: 'verifier_derived_semantic_expansion';
+  strategy: 'generative_semantic_expansion' | 'deterministic_semantic_fallback';
+  gap_analysis_model?: string;
+  gap_analysis_failure?: boolean;
   seen_terms_before: string[];
   proposed_terms: string[];
   new_term_count: number;
@@ -359,6 +361,7 @@ export interface AnalysisMeta {
   }>;
   model_config: {
     forensic_audit: string;
+    evidence_gap_analysis?: string;
     targeted_rescan?: string;
     evidence_check: string;
     evidence_adjudication?: string;
@@ -1228,6 +1231,7 @@ export interface ContextPacketTrace {
   title: string;
   context_packet_hash: string;
   evidence_stage_packet_hash?: string;
+  baseline_evidence_stage_packet_hash?: string;
   evidence_stage_packet_schema?: EvidenceLaneStagePacket['schema_version'];
   acquisition_readiness?: EvidenceLaneStagePacket['acquisition_readiness'];
   acquisition_readiness_reasons?: EvidenceLaneStagePacket['acquisition_readiness_reasons'];
@@ -1276,6 +1280,8 @@ export interface EvidencePathTrace {
   assessment_status?: CriterionAssessmentStatus;
   antipattern_absence_status?: AntiPatternAbsenceStatus;
   source_id?: string;
+  evidence_source?: EvidenceQuote['evidence_source'];
+  derived_evidence_id?: string;
   page_id?: string;
   chunk_id?: string;
   page_number?: number;

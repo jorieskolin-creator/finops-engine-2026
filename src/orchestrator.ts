@@ -40,10 +40,10 @@ export interface Phase1SourcePackets {
     pass: 1 | 2;
     seenTerms: Set<string>;
     packet: EvidenceLaneStagePacket;
-  }) => {
+  }) => Promise<{
     packet: EvidenceLaneStagePacket;
     trace: Omit<SemanticGapRetrievalPassTrace, 'evidence_status_after' | 'verdict_change'>;
-  };
+  }>;
 }
 
 export interface Phase1Result {
@@ -57,6 +57,7 @@ export interface Phase1Result {
   targeted_rescan_models_used: string[];
   evidence_check_models_used: string[];
   evidence_adjudication_models_used: string[];
+  evidence_gap_analysis_models_used: string[];
   semantic_gap_retrieval: SemanticGapRetrievalTrace;
 }
 
@@ -242,6 +243,7 @@ export const runPhase1Audit = async (
     targeted_rescan_models_used: [],
     evidence_check_models_used: [],
     evidence_adjudication_models_used: [],
+    evidence_gap_analysis_models_used: [],
     semantic_gap_retrieval: {
       schema_version: 'semantic_gap_retrieval_trace_v1',
       policy_version: 'weak_evidence_semantic_retrieval_v1',
@@ -257,6 +259,7 @@ export const runPhase1Audit = async (
   const targetedRescanModelsSeen = new Set<string>();
   const evidenceModelsSeen = new Set<string>();
   const evidenceAdjudicationModelsSeen = new Set<string>();
+  const evidenceGapAnalysisModelsSeen = new Set<string>();
   const evidenceResults: EvidenceCheckResult[] = [];
 
   onProgress(0, totalBatches);
@@ -294,8 +297,9 @@ export const runPhase1Audit = async (
         for (let pass = 1 as 1 | 2; pass <= 2; pass = (pass + 1) as 1 | 2) {
           const needsRescan = evidenceItemsNeedingRescan(evidenceCheck);
           if (evidenceCheck.failed || needsRescan.length === 0 || !sourcePackets?.expandWeakEvidence) break;
-          const expansion = sourcePackets.expandWeakEvidence({ batchId, items: needsRescan, pass, seenTerms, packet: currentPacket });
+          const expansion = await sourcePackets.expandWeakEvidence({ batchId, items: needsRescan, pass, seenTerms, packet: currentPacket });
           const trace = expansion.trace;
+          if (trace.gap_analysis_model) evidenceGapAnalysisModelsSeen.add(trace.gap_analysis_model);
           if (trace.selected_chunk_ids.length === 0) {
             aggregated.semantic_gap_retrieval.passes.push({
               ...trace,
@@ -434,10 +438,14 @@ export const runPhase1Audit = async (
   });
 
   await Promise.all(auditPromises);
-  aggregated.models_used = Array.from(modelsSeen);
-  aggregated.targeted_rescan_models_used = Array.from(targetedRescanModelsSeen);
-  aggregated.evidence_check_models_used = Array.from(evidenceModelsSeen);
-  aggregated.evidence_adjudication_models_used = Array.from(evidenceAdjudicationModelsSeen);
+  aggregated.models_used = Array.from(modelsSeen).sort();
+  aggregated.targeted_rescan_models_used = Array.from(targetedRescanModelsSeen).sort();
+  aggregated.evidence_check_models_used = Array.from(evidenceModelsSeen).sort();
+  aggregated.evidence_adjudication_models_used = Array.from(evidenceAdjudicationModelsSeen).sort();
+  aggregated.evidence_gap_analysis_models_used = Array.from(evidenceGapAnalysisModelsSeen).sort();
+  aggregated.semantic_gap_retrieval.passes.sort((a, b) =>
+    a.domain_id.localeCompare(b.domain_id) || a.pass - b.pass
+  );
   aggregated.evidence_check = mergeEvidenceCheckResults(evidenceResults.sort((a, b) => (a.batch_id || '').localeCompare(b.batch_id || '')));
   return aggregated;
 };

@@ -33,6 +33,23 @@ assert.throws(() => validateOutputContractText(OUTPUT_CONTRACT_IDS.evidenceSynth
 assert.throws(() => validateOutputContractText(OUTPUT_CONTRACT_IDS.evidenceSynthesis, JSON.stringify({ phase_3_strategy: {} })), /INVALID_OUTPUT_CONTRACT/);
 assert.throws(() => authorizeOutputContract('roadmap_synthesis', OUTPUT_CONTRACT_IDS.evidenceSynthesis), /INVALID_OUTPUT_CONTRACT/);
 
+const gapQuery = {
+  schema_version: 'finops_evidence_gap_query_v1',
+  domain_id: 'D',
+  queries: [{ criterion_id: 'maturity.D1', themes: ['autoscaling controls'], terms: ['utilization threshold'] }],
+};
+assert.deepEqual(validateOutputContractText(OUTPUT_CONTRACT_IDS.evidenceGapQuery, JSON.stringify(gapQuery)), gapQuery);
+assert.doesNotThrow(() => authorizeOutputContract('evidence_gap_analysis', OUTPUT_CONTRACT_IDS.evidenceGapQuery));
+assert.throws(() => authorizeOutputContract('synthesis', OUTPUT_CONTRACT_IDS.evidenceGapQuery), /INVALID_OUTPUT_CONTRACT/);
+assert.throws(() => validateOutputContractText(OUTPUT_CONTRACT_IDS.evidenceGapQuery, JSON.stringify({
+  ...gapQuery,
+  score: 100,
+})), /INVALID_OUTPUT_CONTRACT/, 'the query planner has no scoring authority');
+assert.throws(() => validateOutputContractText(OUTPUT_CONTRACT_IDS.evidenceGapQuery, JSON.stringify({
+  ...gapQuery,
+  queries: [{ ...gapQuery.queries[0], terms: ['x'.repeat(81)] }],
+})), /INVALID_OUTPUT_CONTRACT/);
+
 const contract = structuredOutputForPacket({ stage: 'synthesis', output_contract: OUTPUT_CONTRACT_IDS.evidenceSynthesis });
 assert.equal(contract.name, OUTPUT_CONTRACT_IDS.evidenceSynthesis);
 assert.equal(contract.schema.additionalProperties, false);

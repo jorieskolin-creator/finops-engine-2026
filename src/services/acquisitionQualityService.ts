@@ -19,6 +19,7 @@ const EVIDENCE_CATEGORY_COUNT = 7;
 const EXPECTED_KB_DOCUMENT_COUNT = 60;
 
 const clampPercent = (value: number): number => Math.min(100, Math.max(0, Math.round(value)));
+const normalizeEvidenceText = (value: string): string => value.toLowerCase().replace(/\s+/g, ' ').trim();
 
 const entries = (logs: Phase1AuditLogs) => [
   ...Object.entries(logs.maturity).map(([id, item]) => ({ id, stream: 'maturity' as const, item })),
@@ -99,16 +100,35 @@ export const buildAcquisitionQualitySnapshot = (input: {
     : 0;
   const density = clampPercent((verifiedStrength * 0.6) + (sourceDiversity * 0.2) + (categoryDiversity * 0.2));
 
-  const sourceBackedCriterionIds = new Set(
+  const directSourceBackedCriterionIds = new Set(
     input.runTrace.evidence_paths
-      .filter(path => Boolean(resolveSource(path)))
+      .filter(path => path.evidence_source !== 'derived' && Boolean(resolveSource(path)))
       .map(path => `${path.stream}:${path.criterion_id}`)
   );
+  const derivedById = new Map((input.runTrace.derived_analytical_evidence || []).map(item => [item.evidence_id, item]));
+  const derivedCriterionIds = new Set(
+    input.runTrace.evidence_paths
+      .filter(path => {
+        if (path.evidence_source !== 'derived' || !path.derived_evidence_id || !path.source_id) return false;
+        const evidence = derivedById.get(path.derived_evidence_id);
+        return Boolean(evidence
+          && evidence.mode === 'authoritative'
+          && evidence.report_eligible
+          && evidence.eligibility.state === 'ELIGIBLE'
+          && evidence.source_id === path.source_id
+          && evidence.targets.some(target => target.stream === path.stream && target.criterion_id === path.criterion_id)
+          && evidence.summary_lines.some(line => normalizeEvidenceText(line) === normalizeEvidenceText(path.quote_snippet)));
+      })
+      .map(path => `${path.stream}:${path.criterion_id}`)
+  );
+  const groundedCriterionIds = new Set([...directSourceBackedCriterionIds, ...derivedCriterionIds]);
   const coveredCriterionKeys = coveredEntries.map(entry => `${entry.stream}:${entry.id}`);
-  const unresolvedCriterionIds = coveredCriterionKeys.filter(key => !sourceBackedCriterionIds.has(key));
-  const sourceBackedCount = coveredCriterionKeys.length - unresolvedCriterionIds.length;
+  const unresolvedCriterionIds = coveredCriterionKeys.filter(key => !groundedCriterionIds.has(key));
+  const sourceBackedCount = coveredCriterionKeys.filter(key => directSourceBackedCriterionIds.has(key)).length;
+  const derivedCount = coveredCriterionKeys.filter(key => derivedCriterionIds.has(key)).length;
+  const groundedCount = coveredCriterionKeys.filter(key => groundedCriterionIds.has(key)).length;
   const provenanceIntegrity = coveredCriterionKeys.length > 0
-    ? clampPercent((sourceBackedCount / coveredCriterionKeys.length) * 100)
+    ? clampPercent((groundedCount / coveredCriterionKeys.length) * 100)
     : 0;
 
   const delivery = input.knowledgeBase.delivery;
@@ -144,9 +164,8 @@ export const buildAcquisitionQualitySnapshot = (input: {
     : input.runTrace.dlp.caution_hit_count > 0
       ? 'WARN' as const
       : 'PASS' as const;
-  const readinessBlockingReasons = [
+  const evidenceAcquisitionBlockingReasons = [
     ...evidenceBlockingReasons,
-    ...knowledgeBlockingReasons,
     ...(securityStatus === 'BLOCK' ? ['Security gate blocked the source packet.'] : [])
   ];
 
@@ -174,7 +193,7 @@ export const buildAcquisitionQualitySnapshot = (input: {
       provenance: {
         integrity: provenanceIntegrity,
         source_backed_count: sourceBackedCount,
-        derived_count: 0,
+        derived_count: derivedCount,
         asserted_count: unresolvedCriterionIds.length,
         unresolved_criterion_ids: unresolvedCriterionIds
       }
@@ -197,8 +216,8 @@ export const buildAcquisitionQualitySnapshot = (input: {
     readiness: {
       evidence_packet: evidenceReady ? 'READY' : 'NOT_READY',
       knowledge_packet: knowledgeReady ? 'READY' : 'NOT_READY',
-      acquisition: readinessBlockingReasons.length === 0 ? 'READY' : 'NOT_READY',
-      blocking_reasons: readinessBlockingReasons
+      acquisition: evidenceAcquisitionBlockingReasons.length === 0 ? 'READY' : 'NOT_READY',
+      blocking_reasons: evidenceAcquisitionBlockingReasons
     }
   };
 };

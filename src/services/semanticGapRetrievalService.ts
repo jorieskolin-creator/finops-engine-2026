@@ -90,6 +90,9 @@ export const expandWeakEvidencePacket = (input: {
   items: EvidenceCheckItem[];
   pass: 1 | 2;
   seenTerms: Set<string>;
+  proposedTerms?: string[];
+  gapAnalysisModel?: string;
+  gapAnalysisFailed?: boolean;
 }): {
   packet: RoutedSourcePacket;
   trace: Omit<SemanticGapRetrievalPassTrace, 'packet_hash_before' | 'packet_hash_after' | 'evidence_status_after' | 'verdict_change'>;
@@ -98,7 +101,12 @@ export const expandWeakEvidencePacket = (input: {
   const domainTerms = routingTermsForDomain(input.packet.domain_id).map(normalize);
   if (input.seenTerms.size === 0) domainTerms.forEach(term => input.seenTerms.add(term));
   const seenTermsBefore = [...input.seenTerms].sort();
-  const proposedTerms = semanticTerms(weakItems, input.seenTerms);
+  const generatedTerms = (input.proposedTerms || []).map(normalize).filter(term =>
+    term && !input.seenTerms.has(term) && term.split(' ').every(meaningful)
+  );
+  const proposedTerms = input.proposedTerms
+    ? [...new Set(generatedTerms)].slice(0, MAX_TERMS_PER_PASS)
+    : semanticTerms(weakItems, input.seenTerms);
   proposedTerms.forEach(term => input.seenTerms.add(term));
   const selected = new Set(input.packet.manifest.map(item => item.chunk_id));
   const candidates = proposedTerms.length === 0 ? [] : input.registry.chunks
@@ -127,7 +135,9 @@ export const expandWeakEvidencePacket = (input: {
       pass: input.pass,
       trigger_status: 'weak',
       criterion_ids: weakItems.map(item => `${item.stream}.${item.id}`).sort(),
-      strategy: 'verifier_derived_semantic_expansion',
+      strategy: input.proposedTerms ? 'generative_semantic_expansion' : 'deterministic_semantic_fallback',
+      gap_analysis_model: input.gapAnalysisModel,
+      gap_analysis_failure: input.gapAnalysisFailed || undefined,
       seen_terms_before: seenTermsBefore,
       proposed_terms: proposedTerms,
       new_term_count: proposedTerms.length,

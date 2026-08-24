@@ -52,6 +52,16 @@ as they are moved to the server-side orchestration boundary.
 5. Any packet-binding mismatch remains fail-closed and is never eligible for
    provider fallback.
 6. Neither semantic retrieval nor stage lineage has scoring authority.
+7. A semantic retrieval revision becomes the effective Evidence Lane packet
+   only after deterministic local matching, packet rebuilding, and integrity
+   validation. Provenance reconciliation, pre-synthesis validation, and the
+   final RunTrace consume the effective packet set, while RunTrace retains the
+   baseline and per-pass packet hashes for lineage.
+8. The `evidence_gap_analysis` model may propose bounded search themes and
+   terms from low-evidence summaries. It cannot search, select evidence, score,
+   classify, or change gates; deterministic orchestration performs local search
+   only within the privacy-approved customer Source Registry. Remote KB bodies
+   are not inputs to this stage.
 
 ## Deferred boundary
 

@@ -119,6 +119,38 @@ assert.equal(futureContractNotReady.knowledge.ready, true, 'future packet diagno
 assert.equal(futureContractNotReady.readiness.knowledge_packet, 'READY');
 assert.equal(futureContractNotReady.readiness.acquisition, 'READY', 'future packet diagnostics must not block current acquisition readiness');
 assert.equal(futureContractNotReady.knowledge.blocking_reasons.length, 0);
+
+const unavailableKnowledge = buildAcquisitionQualitySnapshot({
+  logs,
+  phase2: { metrics: { evidence_density: 100 } },
+  sourceRegistry: { ...sourceRegistry, extraction: { ...extraction, blocking_reasons: [] } },
+  knowledgeBase: { ...knowledgeBase, source: 'built_in', document_count: 0, failure_count: 1 },
+  runTrace,
+});
+assert.equal(unavailableKnowledge.readiness.knowledge_packet, 'NOT_READY');
+assert.equal(unavailableKnowledge.readiness.acquisition, 'READY', 'KB readiness must not change Evidence Acquisition readiness');
+assert.ok(unavailableKnowledge.knowledge.blocking_reasons.length > 0);
+
+const derivedLine = 'owner row coverage: 50%; valid=1/2; state=FIELD_PRESENT_PARTIAL.';
+const derivedSnapshot = buildAcquisitionQualitySnapshot({
+  logs: { maturity: { A1: item('supported', [{ evidence_source: 'derived', quote: derivedLine, source_id: 'table-1', derived_evidence_id: 'EVID-DER-1', category: 'Operational' }]) }, antipattern: {} },
+  phase2: { metrics: { evidence_density: 100 } },
+  sourceRegistry: { ...sourceRegistry, extraction: { ...extraction, blocking_reasons: [] } },
+  knowledgeBase,
+  runTrace: {
+    ...runTrace,
+    input_manifest: [{ source_id: 'table-1', chunk_ids: [] }],
+    evidence_paths: [{ stream: 'maturity', criterion_id: 'A1', evidence_source: 'derived', derived_evidence_id: 'EVID-DER-1', source_id: 'table-1', quote_snippet: derivedLine }],
+    derived_analytical_evidence: [{
+      mode: 'authoritative', evidence_id: 'EVID-DER-1', source_id: 'table-1', report_eligible: true,
+      eligibility: { state: 'ELIGIBLE' }, targets: [{ stream: 'maturity', criterion_id: 'A1' }], summary_lines: [derivedLine],
+    }],
+  },
+});
+assert.equal(derivedSnapshot.evidence.provenance.source_backed_count, 0);
+assert.equal(derivedSnapshot.evidence.provenance.derived_count, 1);
+assert.equal(derivedSnapshot.evidence.provenance.integrity, 100);
+assert.equal(derivedSnapshot.evidence.provenance.asserted_count, 0);
 const persisted = acquisitionQualityPersistence(snapshot, sourceRegistry);
 assert.deepEqual(Object.keys(persisted).sort(), [
   'acquisition_status', 'evidence_coverage', 'evidence_density', 'evidence_packet_status',

@@ -51,6 +51,7 @@ interface BuildRunTraceInput {
   sourceRegistry: SourceRegistry;
   sourcePackets: Record<string, RoutedSourcePacket>;
   evidenceStagePackets?: Record<string, EvidenceLaneStagePacket>;
+  baselineEvidenceStagePackets?: Record<string, EvidenceLaneStagePacket>;
   dlpScan: DlpScanResult;
   dlpReviewChunkCount: number;
   referenceKbIndex: RemoteKnowledgeBaseIndex;
@@ -159,6 +160,8 @@ const evidencePathsFor = (
     assessment_status: item.assessment_status,
     antipattern_absence_status: stream === 'antipattern' && !item.verification_unresolved ? inferAntiPatternAbsenceStatus(item) : undefined,
     source_id: quote.source_id,
+    evidence_source: quote.evidence_source,
+    derived_evidence_id: quote.derived_evidence_id,
     page_id: quote.page_id,
     chunk_id: quote.chunk_id,
     page_number: quote.page_number,
@@ -433,6 +436,7 @@ export const buildRunTrace = (input: BuildRunTraceInput): RunTrace => {
     title: packet.title,
     context_packet_hash: hashString(packet.text),
     evidence_stage_packet_hash: input.evidenceStagePackets?.[domain]?.integrity_hash,
+    baseline_evidence_stage_packet_hash: input.baselineEvidenceStagePackets?.[domain]?.integrity_hash,
     evidence_stage_packet_schema: input.evidenceStagePackets?.[domain]?.schema_version,
     acquisition_readiness: input.evidenceStagePackets?.[domain]?.acquisition_readiness,
     acquisition_readiness_reasons: input.evidenceStagePackets?.[domain]?.acquisition_readiness_reasons,

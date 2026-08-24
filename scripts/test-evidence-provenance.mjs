@@ -36,6 +36,7 @@ const evidenceItems = ids.flatMap(id => ['maturity', 'antipattern'].map(stream =
   stream, id, status: 'supported', original_count: 0, verified_count: 0, rationale: 'No finding.',
 })));
 const chunk = { chunk_id: 'src-001-c001', source_id: 'src-001', text: 'Teams run monthly cloud cost reviews.', type: 'text', routing: [] };
+const semanticGapChunk = { chunk_id: 'src-001-c002', source_id: 'src-001', text: 'Kubernetes autoscaling thresholds are reviewed every month.', type: 'text', routing: [] };
 const manifest = { chunk_id: chunk.chunk_id, source_id: chunk.source_id, type: 'text', relevance: 'high', routed_domains: ['C'] };
 const packets = Object.fromEntries(['A', 'B', 'C', 'D', 'E', 'F'].map(domain => [domain, {
   domain_id: domain, title: domain, text: '', images: [], manifest: domain === 'C' ? [manifest] : [],
@@ -95,5 +96,27 @@ assert.equal(reconciled.result.phase_1_audit_logs.maturity.C3.count, 0, 'a posit
 assert.equal(reconciled.result.phase_1_audit_logs.maturity.C4.count, 1, 'an exact derived citation for its declared target must survive');
 assert.equal(reconciled.result.phase_1_audit_logs.maturity.C5.count, 0, 'a derived citation used for an undeclared target must be rejected');
 assert.equal(phase1.phase_1_audit_logs.maturity.C1.count, 2, 'reconciliation must not mutate the original result');
+
+const semanticGapQuote = { quote: 'autoscaling thresholds are reviewed every month', chunk_id: semanticGapChunk.chunk_id, source_id: semanticGapChunk.source_id };
+const semanticGapPhase1 = {
+  ...phase1,
+  phase_1_audit_logs: {
+    maturity: { ...emptyLogs(), C1: { count: 1, status: 'Partial', evidence_quotes: [semanticGapQuote] } },
+    antipattern: emptyLogs(),
+  },
+};
+const rejectedAgainstBaseline = reconcileEvidenceProvenance(semanticGapPhase1, { chunks: [chunk, semanticGapChunk] }, packets, []);
+assert.equal(rejectedAgainstBaseline.result.phase_1_audit_logs.maturity.C1.count, 0, 'a semantic-gap citation is not valid against the baseline manifest');
+const effectivePackets = {
+  ...packets,
+  C: {
+    ...packets.C,
+    manifest: [...packets.C.manifest, { ...manifest, chunk_id: semanticGapChunk.chunk_id }],
+    included_chunk_count: 2,
+  },
+};
+const retainedAgainstEffective = reconcileEvidenceProvenance(semanticGapPhase1, { chunks: [chunk, semanticGapChunk] }, effectivePackets, []);
+assert.equal(retainedAgainstEffective.result.phase_1_audit_logs.maturity.C1.count, 1, 'a semantic-gap citation must survive reconciliation against the effective revised manifest');
+assert.deepEqual(retainedAgainstEffective.result.phase_1_audit_logs.maturity.C1.evidence_quotes, [semanticGapQuote]);
 
 console.log('evidence provenance reconciliation tests passed');

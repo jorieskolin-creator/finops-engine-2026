@@ -38,7 +38,7 @@ const INTERNAL_RESULT_POLL_INTERVAL_MS = 2_000;
 const INTERNAL_RESULT_MISSING_GRACE_MS = 10_000;
 export class StageExecutionError extends Error { constructor(public code:string,public fallbackAllowed=false){super(code);} }
 
-const STAGES: StageId[] = ['forensic_audit','targeted_rescan','evidence_check','evidence_adjudication','synthesis','roadmap_synthesis','synthesis_escalation','fact_check','fact_check_high','quality_gate'];
+const STAGES: StageId[] = ['forensic_audit','evidence_gap_analysis','targeted_rescan','evidence_check','evidence_adjudication','synthesis','roadmap_synthesis','synthesis_escalation','fact_check','fact_check_high','quality_gate'];
 const ROLES = new Set<AiRole>(['REASONER', 'WORKHORSE', 'QUALITY_CHECKER']);
 const PROVIDERS = new Set<Provider>(['anthropic', 'openai', 'xai']);
 const ROLE_INSTRUCTIONS: Record<AiRole, string> = {
