@@ -271,6 +271,7 @@ export const analyzeDocument = async (
   const runId = authoritativeRun.run_id;
   options.onRunStarted?.(runId);
   let completionIntent = false;
+  let deliveredResult: DiagnosticResult | undefined;
   let hasRecoverableCheckpoint = false;
   let checkpointParentHash: string | undefined;
   const checkpoint = async (kind: CheckpointKind, scope: string, payload: Record<string, unknown>): Promise<void> => {
@@ -1598,6 +1599,7 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => unresolve
     finalResult.meta.acquisition_quality = acquisitionQuality;
     finalResult = scrubDiagnosticResultForPrivacy(finalResult, { redactPersonNames: true }).result;
     await checkpoint('final_report', 'ready_for_delivery', { result: finalResult });
+    deliveredResult = finalResult;
     completionIntent = true;
     await readyRun(
       runId,
@@ -1621,11 +1623,22 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => unresolve
     return finalResult;
 
   } catch (error: any) {
+    const integrityError = error instanceof PipelineIntegrityError ? error : null;
+    const namedCode = typeof error?.code === 'string' ? error.code : typeof error?.message === 'string' ? error.message : '';
+    const errorCode = integrityError?.code
+      || (['SYNTHESIS_OUTPUT_INVALID', 'INVALID_STRUCTURED_TABLE', 'INVALID_REQUEST', 'INVALID_RUN_TRANSITION', 'RUN_INACTIVE'].includes(namedCode) ? namedCode : 'PIPELINE_FAILED');
+    if (completionIntent && deliveredResult) {
+      serverLog(runId, 'warn', 'delivery_mark_failed', {
+        duration_ms: Date.now() - pipelineStarted,
+        error_code: errorCode,
+        quality_gate: deliveredResult.quality_gate?.decision,
+        model_mode: modelRoutingMode,
+      });
+      emitProgress({ stage: 'finalization', status: 'completed_with_warnings' });
+      return deliveredResult;
+    }
     for (const stage of activeProgressStages) onProgress({ stage, status: 'failed' });
     clearStageTraces(runId);
-    const integrityError = error instanceof PipelineIntegrityError ? error : null;
-    const errorCode = integrityError?.code
-      || (['SYNTHESIS_OUTPUT_INVALID', 'INVALID_STRUCTURED_TABLE'].includes(error?.code) ? error.code : 'PIPELINE_FAILED');
     if (!completionIntent) {
       if (hasRecoverableCheckpoint) await suspendRun(runId, errorCode).catch(() => undefined);
       else await failRun(runId, errorCode).catch(() => undefined);
