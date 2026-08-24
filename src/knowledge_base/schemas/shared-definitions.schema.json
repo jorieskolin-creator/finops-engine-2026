@@ -1,0 +1,343 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://finops-engine.local/schemas/shared-definitions.schema.json",
+  "title": "FinOps Engine Knowledge Base Shared Definitions",
+  "description": "Reusable JSON Schema definitions for canonical capability and anti-pattern Knowledge Base objects.",
+  "$defs": {
+    "semver": {
+      "type": "string",
+      "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)(?:-[0-9A-Za-z.-]+)?(?:\\+[0-9A-Za-z.-]+)?$"
+    },
+    "domainId": {
+      "type": "string",
+      "enum": ["A", "B", "C", "D", "E", "F"]
+    },
+    "criterionId": {
+      "type": "string",
+      "pattern": "^[A-F][1-5]$"
+    },
+    "antipatternCriterionId": {
+      "type": "string",
+      "pattern": "^AP-[A-F][1-5]$"
+    },
+    "anyCriterionId": {
+      "type": "string",
+      "pattern": "^(?:[A-F][1-5]|AP-[A-F][1-5])$"
+    },
+    "evidenceCategory": {
+      "type": "string",
+      "enum": [
+        "Policy",
+        "Process",
+        "Operational",
+        "Automation",
+        "Accountability",
+        "Financial-Integration",
+        "Cultural",
+        "Architecture",
+        "Engineering-Telemetry"
+      ]
+    },
+    "useTag": {
+      "type": "string",
+      "pattern": "^[a-z0-9_]+$",
+      "minLength": 2
+    },
+    "status": {
+      "type": "string",
+      "enum": ["draft", "candidate", "canonical", "deprecated"]
+    },
+    "authorityLevel": {
+      "type": "string",
+      "enum": ["foundational", "authoritative", "supporting", "supplemental"]
+    },
+    "confidenceWeight": {
+      "type": "string",
+      "enum": ["very_high", "high", "medium", "low"]
+    },
+    "appliesTo": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["primary_personas", "assessment_type", "dependency_type"],
+      "properties": {
+        "scope": {"type": "string", "minLength": 1},
+        "cloud_scope": {
+          "type": "array",
+          "items": {"type": "string", "minLength": 1},
+          "uniqueItems": true,
+          "minItems": 1
+        },
+        "primary_personas": {
+          "type": "array",
+          "items": {"type": "string", "minLength": 1},
+          "uniqueItems": true,
+          "minItems": 1
+        },
+        "focus_relevance": {
+          "type": "string",
+          "enum": ["high", "medium", "low", "not_applicable"]
+        },
+        "assessment_type": {"type": "string", "minLength": 1},
+        "dependency_type": {"type": "string", "minLength": 1}
+      }
+    },
+    "purpose": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["statement", "evaluates"],
+      "properties": {
+        "statement": {"type": "string", "minLength": 1},
+        "evaluates": {
+          "type": "array",
+          "items": {"type": "string", "minLength": 1},
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "strategic_rationale": {
+          "type": "array",
+          "items": {"type": "string", "minLength": 1},
+          "uniqueItems": true
+        },
+        "consequences": {
+          "type": "array",
+          "items": {"type": "string", "minLength": 1},
+          "uniqueItems": true
+        }
+      }
+    },
+    "canonicalDefinition": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["statement"],
+      "properties": {
+        "statement": {"type": "string", "minLength": 1},
+        "requirements": {
+          "type": "array",
+          "items": {"type": "string", "minLength": 1},
+          "uniqueItems": true
+        },
+        "exclusions": {
+          "type": "array",
+          "items": {"type": "string", "minLength": 1},
+          "uniqueItems": true
+        },
+        "distinctions": {
+          "type": "array",
+          "items": {"type": "string", "minLength": 1},
+          "uniqueItems": true
+        }
+      }
+    },
+    "assessmentQuestion": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["question_id", "question"],
+      "properties": {
+        "question_id": {
+          "type": "string",
+          "pattern": "^(?:[A-F][1-5]|AP-[A-F][1-5])\\.[1-9][0-9]*$"
+        },
+        "legacy_question_id": {"type": "string", "minLength": 1},
+        "question": {"type": "string", "minLength": 1}
+      }
+    },
+    "evidenceClass": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["examples"],
+      "properties": {
+        "examples": {
+          "type": "array",
+          "items": {"type": "string", "minLength": 1},
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "characteristics": {
+          "type": "array",
+          "items": {"type": "string", "minLength": 1},
+          "uniqueItems": true
+        },
+        "evaluation_rule": {"type": "string", "minLength": 1}
+      }
+    },
+    "acceptedEvidenceType": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["evidence_type", "confidence_weight"],
+      "properties": {
+        "evidence_type": {"type": "string", "minLength": 1},
+        "confidence_weight": {"$ref": "#/$defs/confidenceWeight"}
+      }
+    },
+    "relationship": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["criterion_id", "relationship"],
+      "properties": {
+        "criterion_id": {"$ref": "#/$defs/anyCriterionId"},
+        "relationship": {"type": "string", "minLength": 1}
+      }
+    },
+    "providerConcept": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["provider", "concept"],
+      "properties": {
+        "provider": {"type": "string", "minLength": 1},
+        "concept": {"type": "string", "minLength": 1}
+      }
+    },
+    "providerMapping": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["dimension", "provider_concepts", "normalized_interpretation"],
+      "properties": {
+        "dimension": {"type": "string", "minLength": 1},
+        "provider_concepts": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/providerConcept"},
+          "minItems": 1
+        },
+        "normalized_interpretation": {"type": "string", "minLength": 1}
+      }
+    },
+    "normalizationMapping": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["provider_concept", "canonical_interpretation"],
+      "properties": {
+        "provider_concept": {"type": "string", "minLength": 1},
+        "canonical_interpretation": {"type": "string", "minLength": 1}
+      }
+    },
+    "focusNormalization": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["statement", "reasoning_dimensions"],
+      "properties": {
+        "statement": {"type": "string", "minLength": 1},
+        "mappings": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/normalizationMapping"}
+        },
+        "equivalent_provider_concepts": {
+          "type": "array",
+          "items": {"type": "string", "minLength": 1},
+          "uniqueItems": true
+        },
+        "normalized_target": {
+          "type": "array",
+          "items": {"type": "string", "minLength": 1},
+          "uniqueItems": true
+        },
+        "reasoning_dimensions": {
+          "type": "array",
+          "items": {"type": "string", "minLength": 1},
+          "minItems": 1,
+          "uniqueItems": true
+        }
+      }
+    },
+    "interpretationState": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["state", "interpretation"],
+      "properties": {
+        "state": {"type": "string", "minLength": 1},
+        "interpretation": {"type": "string", "minLength": 1}
+      }
+    },
+    "interpretationDimension": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "states"],
+      "properties": {
+        "name": {"type": "string", "minLength": 1},
+        "description": {"type": "string", "minLength": 1},
+        "states": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/interpretationState"},
+          "minItems": 1
+        },
+        "rules": {
+          "type": "array",
+          "items": {"type": "string", "minLength": 1},
+          "uniqueItems": true
+        }
+      }
+    },
+    "falsePositiveGuard": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["signal", "why_invalid"],
+      "properties": {
+        "signal": {"type": "string", "minLength": 1},
+        "why_invalid": {"type": "string", "minLength": 1}
+      }
+    },
+    "detectionHeuristic": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["signal", "interpretation"],
+      "properties": {
+        "signal": {"type": "string", "minLength": 1},
+        "interpretation": {"type": "string", "minLength": 1}
+      }
+    },
+    "riskNotes": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["risks"],
+      "properties": {
+        "risks": {
+          "type": "array",
+          "items": {"type": "string", "minLength": 1},
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "cascades_into": {
+          "type": "array",
+          "items": {"type": "string", "minLength": 1},
+          "uniqueItems": true
+        }
+      }
+    },
+    "remediationDirection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["weakness", "candidate_tactic_direction"],
+      "properties": {
+        "weakness": {"type": "string", "minLength": 1},
+        "candidate_tactic_direction": {"type": "string", "minLength": 1}
+      }
+    },
+    "prohibitedInference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["forbidden_inference", "reason"],
+      "properties": {
+        "forbidden_inference": {"type": "string", "minLength": 1},
+        "reason": {"type": "string", "minLength": 1}
+      }
+    },
+    "stateDefinition": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["meaning", "indicators", "operational_interpretation"],
+      "properties": {
+        "meaning": {"type": "string", "minLength": 1},
+        "indicators": {
+          "type": "array",
+          "items": {"type": "string", "minLength": 1},
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "operational_interpretation": {"type": "string", "minLength": 1}
+      }
+    },
+    "sourceFoundation": {
+      "type": "string",
+      "minLength": 1
+    }
+  }
+}
