@@ -2501,11 +2501,11 @@ OUTPUT RULES:
 
     <div class="metrics-list">
       <div class="metric-item">
-        <div class="metric-name">Evidence-Gated Readiness<span>0–100, capped</span></div>
+        <div class="metric-name">FinOps Maturity Score<span>0–100, Quality Gate capped</span></div>
         <div>
-          <div class="metric-formula">uncapped = maturity_depth - (antipattern_burden * 0.5) + clearance_bonus
-finops_readiness = min(uncapped, evidence_density_cap)</div>
-          <div class="metric-interp">Headline readiness now starts from validated maturity depth, subtracts confirmed anti-pattern burden, and only rewards anti-pattern clearance when coverage is adequate. Sparse source material caps the score.</div>
+          <div class="metric-formula">finops_readiness = (capability_attainment + antipattern_control) / 2
+if Quality Gate = BLOCK: displayed score is capped at 70</div>
+          <div class="metric-interp">Both dimensions use their complete 30-criterion surfaces. Unknown criteria earn no points without being classified as confirmed gaps or findings. Only tested anti-pattern absence earns control; burden remains a separate diagnostic.</div>
         </div>
       </div>
 
@@ -2521,7 +2521,7 @@ finops_readiness = min(uncapped, evidence_density_cap)</div>
         <div class="metric-name">Maturity Depth<span>0–100</span></div>
         <div>
           <div class="metric-formula">maturity_depth = (sum of all maturity scores / 90) * 100</div>
-          <div class="metric-interp">Average maturity score across all 30 criteria on a 0–3 scale, normalized to 0–100%. Captures partial progress that maturity_ratio misses.</div>
+          <div class="metric-interp">Evidence-demonstrated capability across all 30 criteria on a 0–3 scale. Unknown criteria contribute zero to the gauge but remain evidence gaps rather than confirmed capability absences.</div>
         </div>
       </div>
 
@@ -2537,7 +2537,7 @@ finops_readiness = min(uncapped, evidence_density_cap)</div>
         <div class="metric-name">Anti-Pattern Clearance<span>0–100</span></div>
         <div>
           <div class="metric-formula">antipattern_clearance = (tested_absent criteria / 30) * 100</div>
-          <div class="metric-interp">How much of the anti-pattern surface was meaningfully tested and found absent. This is the only way absence becomes positive evidence.</div>
+          <div class="metric-interp">This is also the Anti-Pattern Control gauge: only meaningfully tested absence earns control. Present, partial, and unknown criteria earn zero control points; present and partial findings remain visible in Anti-Pattern Burden.</div>
         </div>
       </div>
 

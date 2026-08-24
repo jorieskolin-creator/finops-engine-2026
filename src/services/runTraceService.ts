@@ -143,8 +143,7 @@ const evidencePathEffect = (stream: 'maturity' | 'antipattern', item: AuditItem)
   }
   const status = inferAntiPatternAbsenceStatus(item);
   if (status === 'tested_absent') return 'verified_absence_adds_one_control_point';
-  if (status === 'partially_present' && item.count === 1) return 'one_harmful_subcriterion_adds_half_control_point';
-  if (status === 'confirmed_present' || status === 'partially_present') return 'material_antipattern_adds_zero_control_points';
+  if (status === 'confirmed_present' || status === 'partially_present') return 'verified_antipattern_adds_burden_and_zero_control_points';
   return 'unknown_absence_adds_zero_without_proving_control';
 };
 

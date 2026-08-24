@@ -168,9 +168,9 @@ const logs = (maturityFactory, antiFactory) => ({
   assert.equal(result.metrics.antipattern_score_eligible_count, 20);
   assert.equal(result.metrics.antipattern_finding_count, 8);
   assert.equal(Math.round(result.metrics.antipattern_finding_ratio * 10) / 10, 26.7, 'finding prevalence must use the complete anti-pattern surface');
-  assert.equal(Math.round(result.metrics.antipattern_control * 10) / 10, 31.1, 'only tested absence may raise control; unknown stays in the denominator; partial presence penalises');
+  assert.equal(result.metrics.antipattern_control, 40, 'only tested absence may raise control; findings do not erase control demonstrated elsewhere');
   assert.equal(result.metrics.antipattern_clearance, 40, 'only explicitly tested absences count as positive clearance');
-  assert.ok(result.metrics.antipattern_control < result.metrics.antipattern_clearance + 1, 'control must not exceed clearance by treating unknown as inverted burden');
+  assert.equal(result.metrics.antipattern_control, result.metrics.antipattern_clearance, 'control and clearance share the same tested-absence scale');
 }
 
 {
@@ -205,8 +205,8 @@ const logs = (maturityFactory, antiFactory) => ({
       ? { ...anti(3, true, 'confirmed_present'), original_count: 3, verified_count: null, verification_unresolved: true }
       : anti(0, false, 'tested_absent')
   ));
-  assert.equal(result.metrics.capability_attainment, 100, 'unresolved scanner candidates must not depress or improve the verified capability score');
-  assert.equal(result.metrics.antipattern_control, 100, 'unresolved scanner candidates must be excluded from the anti-pattern score denominator');
+  assert.equal(Math.round(result.metrics.capability_attainment * 10) / 10, 66.7, 'unresolved capability candidates earn no points on the complete framework surface');
+  assert.equal(Math.round(result.metrics.antipattern_control * 10) / 10, 66.7, 'unresolved anti-pattern candidates earn no control points on the complete framework surface');
   assert.equal(result.metrics.score_gap_breakdown.maturity_verification_unresolved, 10);
   assert.equal(result.metrics.score_gap_breakdown.antipattern_verification_unresolved, 10);
   assert.equal(result.verification_unresolved.length, 20);
@@ -233,8 +233,8 @@ const logs = (maturityFactory, antiFactory) => ({
         : anti(0, false, 'unknown_absent')
   ));
   assert.equal(Math.round(result.metrics.capability_attainment * 10) / 10, 65.6);
-  assert.equal(result.metrics.antipattern_control, 70, '22 tested absences credit 66 points and 3 partials penalise 3 on a 90-point surface');
-  assert.equal(Math.round(result.metrics.finops_readiness * 10) / 10, 67.8, 'unknown anti-patterns remain in the control denominator and cannot inflate readiness');
+  assert.equal(Math.round(result.metrics.antipattern_control * 10) / 10, 73.3, '22 tested absences earn 66 of 90 control points; findings and unknowns earn none');
+  assert.equal(Math.round(result.metrics.finops_readiness * 10) / 10, 69.4, 'the composite averages the two full-framework dimensions');
   assert.equal(result.metrics.score_gap_breakdown.maturity_not_demonstrated, 0);
   assert.equal(result.metrics.score_gap_breakdown.antipattern_not_assessed, 5);
   assert.equal(result.score_evidence_gaps.length, 5, 'unknown anti-pattern absence should remain an evidence discussion');
@@ -263,6 +263,31 @@ const logs = (maturityFactory, antiFactory) => ({
   assert.equal(result.metrics.antipattern_control, 0, 'partial presence without tested absence cannot create Walk-level control');
   assert.equal(Math.round(result.metrics.finops_readiness * 10) / 10, 0.6);
   assert.equal(result.crawl_walk_run, 'Crawl');
+}
+
+{
+  const result = calculateMetrics(logs(
+    (_id, index) => item(index === 0 ? 3 : 0, index === 0),
+    () => anti(0, false, 'unknown_absent')
+  ));
+  assert.equal(Math.round(result.metrics.capability_attainment * 10) / 10, 3.3, 'one demonstrated capability and 29 unknowns must not report 100% capability');
+  assert.equal(result.metrics.antipattern_control, 0);
+  assert.equal(Math.round(result.metrics.finops_readiness * 10) / 10, 1.7);
+  assert.equal(result.crawl_walk_run, 'Insufficient evidence');
+}
+
+{
+  const result = calculateMetrics(logs(
+    () => item(3, true),
+    (_id, index) => index < 15
+      ? anti(0, false, 'tested_absent')
+      : anti(3, true, 'confirmed_present')
+  ));
+  assert.equal(result.metrics.antipattern_control, 50, '15 tested absences and 15 confirmed findings must yield 50% demonstrated control');
+  assert.equal(result.metrics.antipattern_clearance, 50);
+  assert.equal(result.metrics.antipattern_burden, 50);
+  assert.equal(result.metrics.finops_readiness, 75);
+  assert.equal(result.crawl_walk_run, 'Run');
 }
 
 {

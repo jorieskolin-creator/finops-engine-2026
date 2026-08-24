@@ -127,15 +127,15 @@ export const buildReportViewModel = (result: DiagnosticResult): ReportViewModel 
       {
         value: capabilityAttainment,
         label: 'Evidence-Based Capability',
-        description: 'Supported capability questions across assessed criteria. Unknown criteria are excluded.',
-        denominator: `${result.phase_2_validation.raw_counts.maturity_sub_criteria_met} of ${maturityAssessedCount * 3} assessed questions supported`,
+        description: 'Supported capability questions across the complete 30-criterion surface. Unknown criteria earn no points but are not confirmed gaps.',
+        denominator: `${result.phase_2_validation.raw_counts.maturity_sub_criteria_met} of ${maturityTotal * 3} framework questions supported · ${maturityAssessedCount} criteria assessed`,
         trend: 'positive',
         color: '#0891b2',
       },
       {
         value: antipatternControl,
         label: 'Anti-Pattern Control',
-        description: 'Only tested absence raises control. Confirmed or partial presence penalises. Unknown anti-patterns are neutral and cannot improve the score.',
+        description: 'Only tested absence raises control across the complete 30-criterion surface. Present, partial, and unknown criteria earn no control points; findings remain visible as burden.',
         denominator: `${scoreGapBreakdown.antipattern_tested_absent} tested absent · ${scoreGapBreakdown.antipattern_uncontrolled} present · ${scoreGapBreakdown.antipattern_not_assessed} unknown`,
         trend: 'positive',
         color: '#7c3aed',

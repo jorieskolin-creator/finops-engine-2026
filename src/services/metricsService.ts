@@ -190,20 +190,21 @@ export const calculateMetrics = (logs: Phase1AuditLogs): Phase2Validation => {
   const delivery_integrity = Math.round((deliveredItems / totalCriterionCount) * 100);
   const evidence_density = Math.round((itemsWithEvidence / totalCriterionCount) * 100);
 
-  // Capability still excludes unknown from its denominator. Anti-pattern control
-  // does not: only tested absence may raise control, confirmed/partial presence
-  // penalises, and unknown/not-assessed stays neutral in a 30-wide denominator.
-  const assessedMaturityCount = Math.max(assessedMaturityItemCount, 1);
+  // Both headline dimensions use their complete 30-criterion surfaces. Unknown
+  // capability and anti-pattern criteria earn no points without being reported
+  // as confirmed gaps or findings. Only tested absence earns anti-pattern control;
+  // harmful findings are reported separately as burden and do not erase control
+  // demonstrated for other criteria.
   const assessedAntipatternScoreCount = Math.max(scoreEligibleAntipatternCount, 1);
-  const maturity_ratio = (maturityCount / assessedMaturityCount) * 100;
-  const maturity_depth = (maturitySum / (assessedMaturityCount * 3)) * 100;
+  const maturity_ratio = (maturityCount / maturityCriterionTotal) * 100;
+  const maturity_depth = (maturitySum / (maturityCriterionTotal * 3)) * 100;
   const antipattern_ratio = scoreEligibleAntipatternCount > 0
     ? (scoreEligibleAntipatternFindingCount / assessedAntipatternScoreCount) * 100
     : 0;
   const antipattern_burden = scoreEligibleAntipatternCount > 0
     ? (antipatternSum / (assessedAntipatternScoreCount * 3)) * 100
     : 0;
-  const antipattern_clearance = Math.round((testedAbsentCount / antipatternCriterionTotal) * 100);
+  const antipattern_clearance = clampPercent((testedAbsentCount / antipatternCriterionTotal) * 100);
   const antipattern_coverage = Math.round((assessedAntipatternCount / antipatternCriterionTotal) * 100);
   const antipattern_burden_confidence =
     antipatternSum > 0 || antipattern_coverage >= EVIDENCE_DENSITY_WARN
@@ -211,10 +212,7 @@ export const calculateMetrics = (logs: Phase1AuditLogs): Phase2Validation => {
       : 'unknown';
 
   const capability_attainment = clampPercent(maturity_depth);
-  const antipatternControlDenom = Math.max(antipatternCriterionTotal - antipatternVerificationUnresolved, 0) * 3;
-  const antipattern_control = antipatternControlDenom > 0
-    ? clampPercent(((testedAbsentCount * 3 - antipatternSum) / antipatternControlDenom) * 100)
-    : 0;
+  const antipattern_control = antipattern_clearance;
   const raw_finops_maturity_score = clampPercent((capability_attainment + antipattern_control) / 2);
   const finops_readiness = raw_finops_maturity_score;
 
