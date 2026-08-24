@@ -18,6 +18,19 @@ export const matchesHeader = (header: string, patterns: readonly string[]): bool
     || header.includes(`_${pattern}_`)
   );
 
+export const headerPatternScore = (header: string, pattern: string): number => {
+  if (header === pattern) return 1000 + pattern.length;
+  if (
+    header.startsWith(`${pattern}_`)
+    || header.endsWith(`_${pattern}`)
+    || header.includes(`_${pattern}_`)
+  ) return pattern.length;
+  return 0;
+};
+
+export const bestHeaderScore = (header: string, patterns: readonly string[]): number =>
+  patterns.reduce((max, pattern) => Math.max(max, headerPatternScore(header, pattern)), 0);
+
 export const matchesTheme = (text: string, patterns: readonly string[]): boolean =>
   patterns.some(pattern => new RegExp(pattern).test(text));
 
@@ -82,7 +95,7 @@ const STATUS_PATTERNS = ['status', 'state', 'ticket_status', 'item_status'] as c
 const OWNER_PATTERNS = ['owner', 'assignee', 'omistaja'] as const;
 const EXCEPTION_PATTERNS = ['exception', 'override', 'incident', 'alert', 'anomaly', 'violation', 'breach', 'poikkeama'] as const;
 const ENTITY_PATTERNS = ['resource_id', 'ticket_id', 'item_id', 'id'] as const;
-const EVENT_TIME_PATTERNS = ['created', 'opened', 'updated', 'closed_at'] as const;
+const EVENT_TIME_PATTERNS = ['created', 'opened', 'updated', 'closed_at', 'last_refresh', 'freshness', 'refreshed'] as const;
 
 const TRUTHY = /^(?:true|yes|y|1|enabled|adopted|implemented|compliant|active|on|applied|enforced)$/i;
 const FALSY = /^(?:false|no|n|0|disabled|not[_ -]?adopted|inactive|off|missing|absent)$/i;
@@ -147,27 +160,32 @@ export const detectTrendSeries = (table: StructuredTableData): NumericSeries | n
     };
   }
 
+  let best: { binding: ThemeBinding; index: number; score: number } | undefined;
   for (const binding of trendBindings) {
     if (binding.detection !== 'numeric_series') continue;
-    const index = headers.findIndex(header =>
-      matchesHeader(header, binding.header_patterns)
-      && (binding.allow_cost_header || !isCostHeader(header))
-    );
-    if (index < 0) continue;
-    const points = rows
-      .map(row => parseNumber(row[index]))
-      .filter((value): value is number => value !== null && (!binding.non_negative || value >= 0));
-    if (points.length === 0) continue;
-    return {
-      name: binding.series_name || binding.theme.toLowerCase(),
-      semantic: binding.semantic_type || 'ratio',
-      higherIs: binding.higher_is || 'worse',
-      targets: [bindingTarget(binding)],
-      points,
-      binding_id: binding.binding_id,
-    };
+    for (let index = 0; index < headers.length; index += 1) {
+      const header = headers[index];
+      if (!binding.allow_cost_header && isCostHeader(header)) continue;
+      const score = bestHeaderScore(header, binding.header_patterns);
+      if (score > 0 && (!best || score > best.score)) {
+        best = { binding, index, score };
+      }
+    }
   }
-  return null;
+  if (!best) return null;
+  const selected = best;
+  const points = rows
+    .map(row => parseNumber(row[selected.index]))
+    .filter((value): value is number => value !== null && (!selected.binding.non_negative || value >= 0));
+  if (points.length === 0) return null;
+  return {
+    name: selected.binding.series_name || selected.binding.theme.toLowerCase(),
+    semantic: selected.binding.semantic_type || 'ratio',
+    higherIs: selected.binding.higher_is || 'worse',
+    targets: [bindingTarget(selected.binding)],
+    points,
+    binding_id: selected.binding.binding_id,
+  };
 };
 
 export const detectConcentration = (table: StructuredTableData): {
@@ -241,7 +259,7 @@ export const detectAdoption = (table: StructuredTableData): {
   }
   if (!binding) {
     for (const item of adoptionBindings) {
-      if (item.phase !== 'F1') continue;
+      if (item.phase === 'F0') continue;
       const idx = headers.findIndex(header => matchesHeader(header, item.header_patterns));
       if (idx < 0) continue;
       index = idx;
@@ -279,16 +297,35 @@ export const detectProcess = (table: StructuredTableData): {
 } | null => {
   const rows = analysisRows(table).filter(row => !totalRow(row));
   const headers = table.headers.map(normalizeHeader);
+  const processBindings = liveThemeBindings('process_v1');
   const statusIdx = headers.findIndex(header => matchesHeader(header, STATUS_PATTERNS));
-  const timeIdx = headers.findIndex(header =>
+  let timeIdx = headers.findIndex(header =>
     matchesHeader(header, TIME_PATTERNS) || matchesHeader(header, EVENT_TIME_PATTERNS)
   );
-  if (statusIdx < 0 && timeIdx < 0) return null;
+  const ownerlessBinding = processBindings.find(item => item.binding_id === 'E2.ownerless.process');
+  const ownerlessFlagIdx = ownerlessBinding
+    ? headers.findIndex(header => matchesHeader(header, ownerlessBinding.header_patterns))
+    : -1;
+  let forcedBinding: ThemeBinding | undefined;
+  if (statusIdx < 0 && timeIdx < 0) {
+    for (const item of processBindings) {
+      if (item.phase !== 'F2') continue;
+      const idx = headers.findIndex(header => matchesHeader(header, item.header_patterns));
+      if (idx < 0) continue;
+      const timeHits = rows.filter(row => parseTime(row[idx]) !== null).length;
+      if (timeHits > 0) timeIdx = idx;
+      forcedBinding = item;
+      break;
+    }
+  }
+  if (statusIdx < 0 && timeIdx < 0 && ownerlessFlagIdx < 0) return null;
   const joined = headers.join(' ');
-  const processMatches = liveThemeBindings('process_v1').filter(item =>
+  const processMatches = processBindings.filter(item =>
     matchesTheme(joined, item.theme_patterns || item.header_patterns)
   );
-  const binding = processMatches.find(item => !isGenericProcess(item)) || processMatches[0];
+  const binding = forcedBinding
+    || processMatches.find(item => !isGenericProcess(item))
+    || processMatches[0];
   if (!binding) return null;
   const ownerIdx = headers.findIndex(header => matchesHeader(header, OWNER_PATTERNS));
   const entityIdx = headers.findIndex(header => matchesHeader(header, ENTITY_PATTERNS));
@@ -300,7 +337,11 @@ export const detectProcess = (table: StructuredTableData): {
   for (const row of rows) {
     const status = (row[statusIdx] || '').trim();
     if (CLOSED.test(status)) closed += 1;
-    if (ownerIdx >= 0 && !(row[ownerIdx] || '').trim()) ownerless += 1;
+    if (ownerlessFlagIdx >= 0) {
+      if (TRUTHY.test((row[ownerlessFlagIdx] || '').trim())) ownerless += 1;
+    } else if (ownerIdx >= 0 && !(row[ownerIdx] || '').trim()) {
+      ownerless += 1;
+    }
     const ts = timeIdx >= 0 ? parseTime(row[timeIdx]) : null;
     if (ts !== null) {
       timestamps.push(ts);
@@ -317,7 +358,7 @@ export const detectProcess = (table: StructuredTableData): {
     targets: [bindingTarget(binding)],
     eligible: rows.length,
     closed,
-    ownerless: ownerIdx >= 0 ? ownerless : null,
+    ownerless: ownerlessFlagIdx >= 0 || ownerIdx >= 0 ? ownerless : null,
     timestamps: timestamps.sort((a, b) => a - b),
     openAges,
     recurrence: [...openKeys.values()].some(count => count > 1),
@@ -351,7 +392,7 @@ export const detectException = (table: StructuredTableData): {
   }
   if (!binding) {
     for (const item of exceptionBindings) {
-      if (item.phase !== 'F1' || item.match_scope === 'headers_joined') continue;
+      if (item.phase === 'F0' || item.match_scope === 'headers_joined') continue;
       const idx = headers.findIndex(header => matchesHeader(header, item.header_patterns));
       if (idx < 0) continue;
       exceptionIdx = idx;
@@ -419,6 +460,15 @@ const liveAssociationPairIds = new Set(
   liveThemeBindings('association_v1').map(binding => binding.pair_id).filter((id): id is string => Boolean(id))
 );
 
+const exactLiveHeader = (header: string): boolean =>
+  liveThemeBindings().some(binding => binding.header_patterns.includes(header));
+
+const matchesPairSide = (header: string, patterns: readonly string[]): boolean => {
+  if (patterns.includes(header)) return true;
+  if (exactLiveHeader(header)) return false;
+  return matchesHeader(header, patterns);
+};
+
 export const detectAssociationPairs = (table: StructuredTableData): Array<{
   pair_id: string;
   targets: Target[];
@@ -430,8 +480,8 @@ export const detectAssociationPairs = (table: StructuredTableData): Array<{
   const headers = table.headers.map(normalizeHeader);
   return ASSOCIATION_PAIRS.flatMap(pair => {
     if (liveAssociationPairIds.size > 0 && !liveAssociationPairIds.has(pair.pair_id)) return [];
-    const leftIdx = headers.findIndex(header => matchesHeader(header, pair.left_patterns));
-    const rightIdx = headers.findIndex(header => matchesHeader(header, pair.right_patterns));
+    const leftIdx = headers.findIndex(header => matchesPairSide(header, pair.left_patterns));
+    const rightIdx = headers.findIndex(header => matchesPairSide(header, pair.right_patterns));
     if (leftIdx < 0 || rightIdx < 0 || leftIdx === rightIdx) return [];
     const left: number[] = [];
     const right: number[] = [];

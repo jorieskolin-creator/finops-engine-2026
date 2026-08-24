@@ -52,8 +52,13 @@ assert.equal(liveThemeBindings().filter(item => item.phase === 'F1').every(item 
 assert.ok(liveThemeBindings().some(item => item.binding_id === 'A5.unit_cost.trend'));
 assert.ok(liveThemeBindings().some(item => item.binding_id === 'F2.cost_per_unit.trend'));
 assert.equal(liveThemeBindings('trend_v1').some(item => item.binding_id === 'F2.cost_per_unit.trend' && item.header_patterns.includes('unit_cost')), false, 'F2 must not share unit_cost with A5');
-assert.equal(plannedThemeBindings().every(item => item.phase === 'F2' && item.status === 'planned'), true);
-assert.ok(plannedThemeBindings().some(item => item.binding_id === 'A1.coverage.trend'));
+assert.equal(liveThemeBindings().filter(item => item.phase === 'F2').length, 4);
+assert.equal(liveThemeBindings().filter(item => item.phase === 'F2').every(item => item.priority === 'should' && item.status === 'live'), true);
+assert.ok(liveThemeBindings().some(item => item.binding_id === 'A1.coverage.trend'));
+assert.ok(liveThemeBindings().some(item => item.binding_id === 'A4.freshness.process'));
+assert.ok(liveThemeBindings().some(item => item.binding_id === 'E2.ownerless.process'));
+assert.ok(liveThemeBindings().some(item => item.binding_id === 'F4.usage_vs_budget.association'));
+assert.equal(plannedThemeBindings().length, 0, 'F2 remainder is live; F3 is alias retry, not catalog rows');
 assert.ok(liveThemeBindings('concentration_v1').some(item => item.criterion_id === 'F3' && item.header_patterns.includes('model')));
 assert.ok(liveThemeBindings('concentration_v1').some(item => item.criterion_id === 'B5' && item.header_patterns.includes('storage_class')));
 assert.ok(liveThemeBindings('concentration_v1').every(item => item.criterion_id !== 'A1' || !item.header_patterns.includes('model')));
@@ -166,16 +171,97 @@ assert.ok(procurement, 'F1 C4 procurement must fire over C3 fallback');
 assert.equal(procurement.targets[0].criterion_id, 'C4');
 assert.doesNotMatch(leaked(procurement), /cloud-a|cloud-b|cloud-c/i);
 
-const coverageTrend = deriveAllEvidenceSignals([sourceOf(
-  'f2-blocked',
+const tagCoverage = deriveAllEvidenceSignals([sourceOf(
+  'a1-cov',
+  'tag-coverage.csv',
+  ['Period', 'tag_coverage'],
+  months.map((period, index) => [period, String(0.40 + index * 0.02)]),
+  'tagging coverage over time',
+)]);
+const tagCoverageTrend = familyOf(tagCoverage, 'trend_v1');
+assert.ok(tagCoverageTrend, 'F2 A1 tag_coverage must fire');
+assert.equal(tagCoverageTrend.targets[0].criterion_id, 'A1');
+assert.notEqual(tagCoverageTrend.targets[0].criterion_id, 'B1', 'tag_coverage must not be stolen by commitment coverage');
+assert.equal(tagCoverageTrend.result.trend.direction, 'IMPROVING');
+assert.doesNotMatch(leaked(tagCoverageTrend), /0\.40|0\.42|"mean"|"slope"/i);
+
+const commitmentCoverage = familyOf(deriveAllEvidenceSignals([sourceOf(
+  'b1-cov',
+  'commitment-coverage.csv',
+  ['Period', 'Coverage'],
+  months.map((period, index) => [period, String(40 + index)]),
+  'commitment coverage over time',
+)]), 'trend_v1');
+assert.ok(commitmentCoverage, 'bare Coverage still binds B1');
+assert.equal(commitmentCoverage.targets[0].criterion_id, 'B1');
+
+const freshness = familyOf(deriveAllEvidenceSignals([sourceOf(
+  'a4-1',
   'freshness.csv',
   ['Dashboard', 'Last Refresh'],
-  [['cost', '2026-01-01'], ['usage', '2026-01-02'], ['commitments', '2026-01-03']],
+  [
+    ['cost', '2026-01-01'],
+    ['usage', '2026-01-08'],
+    ['commitments', '2026-01-15'],
+    ['unit', '2026-01-22'],
+  ],
   'dashboard freshness listing',
+)]), 'process_v1');
+assert.ok(freshness, 'F2 A4 freshness must fire');
+assert.equal(freshness.targets[0].criterion_id, 'A4');
+assert.notEqual(freshness.targets[0].criterion_id, 'C3');
+assert.doesNotMatch(leaked(freshness), /\bcost\b|\busage\b|commitments/i);
+
+const ownerless = familyOf(deriveAllEvidenceSignals([sourceOf(
+  'e2-1',
+  'ownerless.csv',
+  ['Item', 'Status', 'Ownerless'],
+  [
+    ['t-1', 'closed', 'yes'],
+    ['t-2', 'closed', 'no'],
+    ['t-3', 'open', 'yes'],
+    ['t-4', 'open', 'yes'],
+  ],
+  'ownerless item listing',
+)]), 'process_v1');
+assert.ok(ownerless, 'F2 E2 ownerless must fire over C3 fallback');
+assert.equal(ownerless.targets[0].criterion_id, 'E2');
+assert.doesNotMatch(leaked(ownerless), /t-1|t-2|t-3|t-4/i);
+
+const ownerlessFlags = familyOf(deriveAllEvidenceSignals([sourceOf(
+  'e2-flags',
+  'ownerless-flags.csv',
+  ['Item', 'Ownerless'],
+  [['alpha', 'yes'], ['beta', 'no'], ['gamma', 'yes'], ['delta', 'yes']],
+  'ownerless flags without status',
+)]), 'process_v1');
+assert.ok(ownerlessFlags, 'F2 E2 ownerless flags fire without a status column');
+assert.equal(ownerlessFlags.targets[0].criterion_id, 'E2');
+assert.doesNotMatch(leaked(ownerlessFlags), /alpha|beta|gamma|delta/i);
+
+const usageBudget = familyOf(deriveAllEvidenceSignals([sourceOf(
+  'f4-1',
+  'ai-budget.csv',
+  ['Period', 'ai_usage', 'ai_budget'],
+  months.map((period, index) => [period, String(100 + index * 4), String(110 + index * 3)]),
+  'AI usage versus budget',
+)]), 'association_v1');
+assert.ok(usageBudget, 'F2 F4 usage-vs-budget must fire');
+assert.equal(usageBudget.targets[0].criterion_id, 'F4');
+assert.equal(usageBudget.result.association.pair_id, 'ai_usage_vs_budget');
+assert.equal(usageBudget.result.association.causal_authority, 'NONE');
+assert.doesNotMatch(leaked(usageBudget), /100|110|"r"|pearson/i);
+
+const aliasRetryBlocked = deriveAllEvidenceSignals([sourceOf(
+  'f3-blocked',
+  'alias.csv',
+  ['Jakso', 'tunnisteet'],
+  months.map((period, index) => [period, String(0.40 + index * 0.01)]),
+  'Finnish tagging alias',
 )]);
-assert.equal(familyOf(coverageTrend, 'process_v1'), undefined, 'A4 freshness stays planned until F2');
-assert.equal(familyOf(coverageTrend, 'trend_v1'), undefined);
-assert.equal(familyOf(coverageTrend, 'adoption_v1'), undefined);
+assert.equal(familyOf(aliasRetryBlocked, 'trend_v1'), undefined, 'F3 column-alias retry is not live');
+assert.equal(familyOf(aliasRetryBlocked, 'process_v1'), undefined);
+assert.equal(familyOf(aliasRetryBlocked, 'adoption_v1'), undefined);
 
 const modelSeg = deriveAllEvidenceSignals([sourceOf(
   'f3-1',

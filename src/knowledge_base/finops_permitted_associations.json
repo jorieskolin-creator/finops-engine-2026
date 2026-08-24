@@ -23,6 +23,13 @@
       "right_patterns": ["exception", "override", "violation"],
       "min_observations": 6,
       "targets": [{ "stream": "maturity", "criterion_id": "D2" }]
+    },
+    {
+      "pair_id": "ai_usage_vs_budget",
+      "left_patterns": ["ai_usage"],
+      "right_patterns": ["ai_budget"],
+      "min_observations": 6,
+      "targets": [{ "stream": "maturity", "criterion_id": "F4" }]
     }
   ]
 }
