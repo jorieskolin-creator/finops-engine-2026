@@ -151,7 +151,7 @@ Batch ${batchId}: ${definitions.title}
 ${referenceKbContext}
 
 <source_material>
-${text.substring(0, 50000)}
+${text}
 </source_material>
 
 <batch_definitions>
@@ -244,7 +244,7 @@ You are a senior FinOps evidence adjudicator. A first evidence-check found dispu
 </rules>
 
 <source_material>
-${text.substring(0, 50000)}
+${text}
 </source_material>
 
 <scanner_output>
@@ -797,6 +797,7 @@ export const reconcileEvidenceProvenance = <T extends ProvenancePhase1Result>(
         if (count === 0) {
           logs[stream][id] = {
             ...logs[stream][id],
+            evidence_check_status: 'unsupported',
             assessment_status: 'not_assessed',
             question_results: ['unknown', 'unknown', 'unknown'],
             is_silent: true,
@@ -805,6 +806,22 @@ export const reconcileEvidenceProvenance = <T extends ProvenancePhase1Result>(
               coverage_reason: 'No source-bound criterion evidence remained, so the anti-pattern was not assessed.',
             } : {}),
           };
+          const key = `${stream}.${id}`;
+          const verdict = evidenceItemsByKey.get(key);
+          if (verdict) {
+            Object.assign(verdict, {
+              status: 'unsupported',
+              assessment_status: 'not_assessed',
+              verified_count: 0,
+              rationale: 'Deterministic provenance validation removed the assessment because no source-bound criterion evidence remained.',
+              quote_supported: false,
+              rescan_recommended: false,
+              ...(stream === 'antipattern' ? {
+                antipattern_absence_status: 'unknown_absent',
+                coverage_reason: 'No source-bound criterion evidence remained, so the anti-pattern was not assessed.',
+              } : {}),
+            });
+          }
           continue;
         }
 

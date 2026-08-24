@@ -63,6 +63,15 @@ export const resolveAntiPatternAbsenceStatus = (input: {
   if (verified >= 3) return 'confirmed_present';
   if (verified > 0) return 'partially_present';
 
+  // Evidence Check cannot create a harmful finding that the scanner did not
+  // identify. For a zero-score scanner result, only a governed tested-absence
+  // verdict may become positive control; every other absence remains unknown.
+  if (original === 0) {
+    return explicit === 'tested_absent' && (status === undefined || status === 'supported')
+      ? 'tested_absent'
+      : 'unknown_absent';
+  }
+
   const weakScoredSignal = original > 0 && status === 'weak';
   const explicitPresenceSignal = explicit === 'confirmed_present' || explicit === 'partially_present';
   const textualPresenceSignal = hasAntiPatternPresenceSignal(combinedText);

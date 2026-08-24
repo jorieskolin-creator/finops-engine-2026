@@ -115,6 +115,7 @@ export const buildAcquisitionQualitySnapshot = (input: {
           && evidence.mode === 'authoritative'
           && evidence.report_eligible
           && evidence.eligibility.state === 'ELIGIBLE'
+          && evidence.derivation?.analyzer_id !== 'crucial_item_coverage_v1'
           && evidence.source_id === path.source_id
           && evidence.targets.some(target => target.stream === path.stream && target.criterion_id === path.criterion_id)
           && evidence.summary_lines.some(line => normalizeEvidenceText(line) === normalizeEvidenceText(path.quote_snippet)));

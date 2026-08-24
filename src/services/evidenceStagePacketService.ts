@@ -7,7 +7,10 @@ import type {
   SourceRegistryRuntimeStatus
 } from '../types';
 import { hashString } from './runTraceService';
-import { isDerivedEvidenceApprovedForPacket } from './structuredDataAnalysisService';
+import {
+  isDerivedEvidenceAcquisitionDiagnostic,
+  isDerivedEvidenceApprovedForPacket
+} from './structuredDataAnalysisService';
 import { hashRoutedSourcePacket } from './pipelineIntegrityService';
 
 const PERMITTED_USES = [
@@ -27,19 +30,6 @@ const FORBIDDEN_USES = [
 
 const domainForEvidence = (evidence: DerivedAnalyticalEvidence): string | undefined =>
   evidence.targets.map(target => target.criterion_id.charAt(0)).find(Boolean);
-
-const withholdAnalyzedTableRows = (text: string, sourceIds: Set<string>): { text: string; withheld: number } => {
-  if (sourceIds.size === 0) return { text, withheld: 0 };
-  let withheld = 0;
-  const next = text.replace(/<CHUNK\b([^>]*)>([\s\S]*?)<\/CHUNK>/g, (match, attrs: string) => {
-    if (!/\btype="table_row"/.test(attrs)) return match;
-    const sourceId = attrs.match(/\bsource_id="([^"]+)"/)?.[1];
-    if (!sourceId || !sourceIds.has(sourceId)) return match;
-    withheld += 1;
-    return `<CHUNK${attrs}>\n[WITHHELD_CELL_VALUES]\n</CHUNK>`;
-  });
-  return { text: next, withheld };
-};
 
 const modelSafeDerivedEvidence = (items: DerivedAnalyticalEvidence[]): string => JSON.stringify(items.map(item => ({
   schema_version: item.schema_version,
@@ -91,6 +81,7 @@ const renderPacket = (
 evidence[] contains sanitized customer textual/table evidence manifests.
 sanitized_visual_evidence[] contains local-OCR text evidence with region provenance; it is not graph or image interpretation.
 derived_evidence[] contains only registry-approved, report-eligible deterministic calculations.
+acquisition_diagnostics[] is retained in the governed packet for coverage lineage and retrieval only; it is excluded from this forensic model context and cannot support findings or scores.
 knowledge_context[] is intentionally empty in the Customer Evidence lane. Knowledge is supplied separately and is never customer proof.
 </ROLE_BOUNDARY>
 <ACQUISITION_STATE privacy_decision="${packet.privacy_decision}" readiness="${packet.acquisition_readiness}">
@@ -115,12 +106,12 @@ ${JSON.stringify(packet.evidence)}
 <SANITIZED_VISUAL_EVIDENCE_MANIFEST count="${packet.sanitized_visual_evidence.length}">
 ${JSON.stringify(packet.sanitized_visual_evidence)}
 </SANITIZED_VISUAL_EVIDENCE_MANIFEST>
-<DERIVED_EVIDENCE count="${packet.derived_evidence.length}">
-${packet.derived_evidence.length > 0 ? modelSafeDerivedEvidence(packet.derived_evidence) : 'No report-eligible deterministic analytical evidence is approved for this domain.'}
-</DERIVED_EVIDENCE>
 <CUSTOMER_EVIDENCE>
 ${sourceText}
 </CUSTOMER_EVIDENCE>
+<DERIVED_EVIDENCE count="${packet.derived_evidence.length}">
+${packet.derived_evidence.length > 0 ? modelSafeDerivedEvidence(packet.derived_evidence) : 'No report-eligible deterministic analytical evidence is approved for this domain.'}
+</DERIVED_EVIDENCE>
 </EVIDENCE_LANE_STAGE_PACKET>`;
 
 export const buildEvidenceLaneStagePackets = (input: {
@@ -185,17 +176,18 @@ export const buildEvidenceLaneStagePackets = (input: {
     }
     const withheldVisualRegionCount = [...withheldVisualRegionsByUnit.values()].reduce((sum, count) => sum + count, 0);
     const domainDerived = input.derived_evidence.filter(item =>
-      isDerivedEvidenceApprovedForPacket(item) && domainForEvidence(item) === domainId
+      isDerivedEvidenceApprovedForPacket(item)
+      && !isDerivedEvidenceAcquisitionDiagnostic(item)
+      && domainForEvidence(item) === domainId
+    );
+    const acquisitionDiagnostics = input.derived_evidence.filter(item =>
+      isDerivedEvidenceApprovedForPacket(item)
+      && isDerivedEvidenceAcquisitionDiagnostic(item)
+      && domainForEvidence(item) === domainId
     );
     const shadowDerivedCount = input.derived_evidence.filter(item =>
       !isDerivedEvidenceApprovedForPacket(item) && domainForEvidence(item) === domainId
     ).length;
-    const withholdSourceIds = new Set(
-      input.derived_evidence
-        .filter(item => isDerivedEvidenceApprovedForPacket(item) && item.result.row_scope === 'full_table')
-        .map(item => item.source_id)
-    );
-    const customerEvidence = withholdAnalyzedTableRows(sourcePacket.text, withholdSourceIds);
     const sourcePacketHash = input.source_packet_hashes[domainId];
     if (!sourcePacketHash) throw new Error(`EVIDENCE_SOURCE_PACKET_HASH_MISSING:${domainId}`);
     if (sourcePacketHash !== hashRoutedSourcePacket(sourcePacket)) {
@@ -211,16 +203,16 @@ export const buildEvidenceLaneStagePackets = (input: {
         ? [`Workbook images from ${input.acquisition_limitations.uninspected_workbook_image_source_count} source(s) remain uninspected and withheld.`] : []),
       ...(input.acquisition_limitations.unsupported_object_codes.length > 0
         ? [`Unsupported workbook object codes: ${input.acquisition_limitations.unsupported_object_codes.join(', ')}.`] : []),
-      ...(sourcePacket.total_candidate_chunks > sourcePacket.included_chunk_count ? ['Relevant routed chunks were omitted by bounded packet limits.'] : []),
-      ...(customerEvidence.withheld > 0 ? [`${customerEvidence.withheld} table_row cell chunk(s) withheld after an approved full-table analyzer consumed the sheet.`] : [])
+      ...(sourcePacket.total_candidate_chunks > sourcePacket.included_chunk_count ? ['Relevant routed chunks were omitted by bounded packet limits.'] : [])
     ];
     const base: Omit<EvidenceLaneStagePacket, 'integrity_hash' | 'text'> = {
-      schema_version: 'evidence_lane_stage_packet_v1',
+      schema_version: 'evidence_lane_stage_packet_v2',
       domain_id: domainId,
       source_role: 'CUSTOMER_EVIDENCE',
       evidence,
       sanitized_visual_evidence: sanitizedVisualEvidence,
       derived_evidence: domainDerived,
+      acquisition_diagnostics: acquisitionDiagnostics,
       knowledge_context: [],
       coverage: {
         weak: sourcePacket.weak_coverage,
@@ -256,7 +248,7 @@ export const buildEvidenceLaneStagePackets = (input: {
       },
       images: []
     };
-    const roleText = renderPacket(base, customerEvidence.text);
+    const roleText = renderPacket(base, sourcePacket.text);
     return [domainId, {
       ...base,
       integrity_hash: hashString(`${hashable(base)}\n${roleText}`),
@@ -267,7 +259,7 @@ export const buildEvidenceLaneStagePackets = (input: {
 
 export const assertEvidenceLaneStagePacket = (packet: EvidenceLaneStagePacket): void => {
   const { integrity_hash, text, ...base } = packet;
-  if (packet.schema_version !== 'evidence_lane_stage_packet_v1'
+  if (packet.schema_version !== 'evidence_lane_stage_packet_v2'
     || packet.source_role !== 'CUSTOMER_EVIDENCE'
     || packet.knowledge_context.length !== 0
     || packet.images.length !== 0
@@ -297,6 +289,11 @@ export const assertEvidenceLaneStagePacket = (packet: EvidenceLaneStagePacket): 
     || !packet.acquisition_binding.source_packet_hash
     || !packet.acquisition_binding.privacy_decision_hash
     || packet.derived_evidence.some(item => item.report_eligible !== true || item.mode !== 'authoritative')
+    || packet.derived_evidence.some(isDerivedEvidenceAcquisitionDiagnostic)
+    || packet.acquisition_diagnostics.some(item =>
+      item.report_eligible !== true
+      || item.mode !== 'authoritative'
+      || !isDerivedEvidenceAcquisitionDiagnostic(item))
     || !text.includes(`<CUSTOMER_EVIDENCE>`) || !text.includes(packet.acquisition_binding.source_packet_hash)
     || integrity_hash !== hashString(`${hashable(base)}\n${text}`)) {
     throw new Error('EVIDENCE_LANE_STAGE_PACKET_INTEGRITY_FAILED');

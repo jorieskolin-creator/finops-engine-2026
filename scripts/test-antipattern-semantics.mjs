@@ -101,6 +101,18 @@ assert.equal(
   resolveAntiPatternAbsenceStatus({
     verifiedCount: 0,
     originalCount: 0,
+    explicitStatus: 'partially_present',
+    evidenceStatus: 'supported',
+    rationale: 'The source does not contain criterion-specific evidence, but coverage is weak.',
+  }),
+  'unknown_absent',
+  'the verifier must not create a partial finding when the scanner found no harmful criterion'
+);
+
+assert.equal(
+  resolveAntiPatternAbsenceStatus({
+    verifiedCount: 0,
+    originalCount: 0,
     explicitStatus: 'tested_absent',
     evidenceStatus: 'supported',
     coverageReason: 'Relevant coverage was reviewed and the anti-pattern was not found.',

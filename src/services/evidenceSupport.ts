@@ -52,6 +52,7 @@ export const isEvidenceQuoteBoundToDerivedEvidence = (
   && evidence.mode === 'authoritative'
   && evidence.report_eligible
   && evidence.eligibility.state === 'ELIGIBLE'
+  && evidence.derivation?.analyzer_id !== 'crucial_item_coverage_v1'
   && quote.derived_evidence_id === evidence.evidence_id
   && quote.source_id === evidence.source_id
   && evidence.targets.some(target => target.stream === stream && target.criterion_id === criterionId)
@@ -76,6 +77,11 @@ export const isValidEvidenceVerifierItem = (input: {
   if (stream === 'maturity') return true;
   if (!ANTIPATTERN_ABSENCE_STATUSES.includes(raw.antipattern_absence_status)) return false;
   if (raw.antipattern_absence_status === 'confirmed_present' && raw.verified_count === 0) return false;
+  if (
+    (raw.antipattern_absence_status === 'confirmed_present' || raw.antipattern_absence_status === 'partially_present')
+    && scannerCount > 0
+    && (raw.assessment_status !== 'assessed' || raw.quote_supported !== true)
+  ) return false;
   if (raw.antipattern_absence_status === 'tested_absent' && (scannerCount !== 0 || raw.verified_count !== 0 || raw.status !== 'supported')) return false;
   if (raw.antipattern_absence_status === 'unknown_absent' && raw.verified_count !== 0) return false;
   if (

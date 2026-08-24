@@ -76,10 +76,11 @@ const withAnalyzer = buildEvidenceLaneStagePacketsRaw({
   derived_evidence: [approvedDerived], privacy_decision: privacyDecision,
   acquisition_readiness: readiness, acquisition_limitations: acquisitionLimitations
 }).A;
-assert.match(withAnalyzer.text, /WITHHELD_CELL_VALUES/);
-assert.doesNotMatch(withAnalyzer.text, /Alice|\b150\b/);
-assert.match(withAnalyzer.text, /table_row cell chunk\(s\) withheld/);
+assert.match(withAnalyzer.text, /Owner: Alice \| Spend: 150/);
+assert.doesNotMatch(withAnalyzer.text, /WITHHELD_CELL_VALUES/);
+assert.doesNotMatch(withAnalyzer.text, /table_row cell chunk\(s\) withheld/);
 assert.match(withAnalyzer.text, /Headers: Owner \| Spend/);
+assert.match(withAnalyzer.text, /owner row coverage: 50%/);
 
 const withoutAnalyzer = buildEvidenceLaneStagePacketsRaw({
   source_packets: { A: sourcePacket }, source_packet_hashes: sourcePacketHashes,
@@ -89,4 +90,8 @@ const withoutAnalyzer = buildEvidenceLaneStagePacketsRaw({
 assert.match(withoutAnalyzer.text, /Owner: Alice \| Spend: 150/);
 assert.doesNotMatch(withoutAnalyzer.text, /WITHHELD_CELL_VALUES/);
 
-console.log('table cell withhold tests passed');
+const directEvidence = sourcePacket.manifest.map(item => item.chunk_id);
+assert.deepEqual(withAnalyzer.evidence.map(item => item.chunk_id), directEvidence, 'adding derived analysis must preserve every direct evidence manifest entry');
+assert.deepEqual(withoutAnalyzer.evidence.map(item => item.chunk_id), directEvidence);
+
+console.log('table evidence preservation tests passed');

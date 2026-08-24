@@ -58,14 +58,25 @@ maturity.C2 = { count: 1, status: 'Partial', evidence_quotes: [validQuote, forge
 maturity.C3 = { count: 1, status: 'Partial', evidence_quotes: [] };
 maturity.C4 = { count: 1, status: 'Partial', evidence_quotes: [derivedQuote] };
 maturity.C5 = { count: 1, status: 'Partial', evidence_quotes: [derivedQuote] };
+const antipattern = emptyLogs();
+antipattern.C1 = {
+  count: 0, status: 'OK', assessment_status: 'assessed', question_results: ['not_supported', 'not_supported', 'not_supported'],
+  evidence_quotes: [forgedQuote], antipattern_absence_status: 'tested_absent', coverage_reason: 'Relevant coverage was reviewed.'
+};
 for (const item of evidenceItems) {
   if (item.stream === 'maturity' && ['C1', 'C2', 'C3', 'C4', 'C5'].includes(item.id)) {
     item.original_count = item.id === 'C1' ? 2 : 1;
     item.verified_count = item.original_count;
   }
+  if (item.stream === 'antipattern' && item.id === 'C1') {
+    item.assessment_status = 'assessed';
+    item.antipattern_absence_status = 'tested_absent';
+    item.coverage_reason = 'Relevant coverage was reviewed.';
+    item.quote_supported = true;
+  }
 }
 const phase1 = {
-  phase_1_audit_logs: { maturity, antipattern: emptyLogs() },
+  phase_1_audit_logs: { maturity, antipattern },
   evidence_check: {
     total_items: 60, supported_count: 60, weak_count: 0, unsupported_count: 0, missing_count: 0,
     downgraded_count: 0, rescan_count: 0, items: evidenceItems, adjustments: [],
@@ -85,7 +96,7 @@ assert.equal(unavailable.items.find(item => item.stream === 'antipattern' && ite
 
 const reconciled = reconcileEvidenceProvenance(phase1, { chunks: [chunk] }, packets, [derivedEvidence]);
 assert.deepEqual(reconciled.adjustedCriteria, ['C1', 'C2', 'C3', 'C5']);
-assert.equal(reconciled.removedQuoteCount, 3);
+assert.equal(reconciled.removedQuoteCount, 4);
 assert.equal(reconciled.result.phase_1_audit_logs.maturity.C1.count, 0, 'unsupported positive score must be downgraded');
 assert.deepEqual(reconciled.result.phase_1_audit_logs.maturity.C1.evidence_quotes, []);
 assert.equal(reconciled.result.evidence_check.items.find(item => item.stream === 'maturity' && item.id === 'C1').status, 'unsupported');
@@ -95,6 +106,12 @@ assert.deepEqual(reconciled.result.phase_1_audit_logs.maturity.C2.evidence_quote
 assert.equal(reconciled.result.phase_1_audit_logs.maturity.C3.count, 0, 'a positive finding without any quote must be downgraded');
 assert.equal(reconciled.result.phase_1_audit_logs.maturity.C4.count, 1, 'an exact derived citation for its declared target must survive');
 assert.equal(reconciled.result.phase_1_audit_logs.maturity.C5.count, 0, 'a derived citation used for an undeclared target must be rejected');
+assert.equal(reconciled.result.phase_1_audit_logs.antipattern.C1.assessment_status, 'not_assessed', 'an assessed zero without bound evidence must become unknown');
+assert.equal(reconciled.result.phase_1_audit_logs.antipattern.C1.antipattern_absence_status, 'unknown_absent');
+const reconciledZeroVerdict = reconciled.result.evidence_check.items.find(item => item.stream === 'antipattern' && item.id === 'C1');
+assert.equal(reconciledZeroVerdict.status, 'unsupported', 'exported Evidence Check must match the provenance-reconciled audit log');
+assert.equal(reconciledZeroVerdict.assessment_status, 'not_assessed');
+assert.equal(reconciledZeroVerdict.antipattern_absence_status, 'unknown_absent');
 assert.equal(phase1.phase_1_audit_logs.maturity.C1.count, 2, 'reconciliation must not mutate the original result');
 
 const semanticGapQuote = { quote: 'autoscaling thresholds are reviewed every month', chunk_id: semanticGapChunk.chunk_id, source_id: semanticGapChunk.source_id };

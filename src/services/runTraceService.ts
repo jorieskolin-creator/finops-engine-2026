@@ -442,6 +442,8 @@ export const buildRunTrace = (input: BuildRunTraceInput): RunTrace => {
     acquisition_readiness_reasons: input.evidenceStagePackets?.[domain]?.acquisition_readiness_reasons,
     privacy_decision: input.evidenceStagePackets?.[domain]?.privacy_decision,
     withheld_content: input.evidenceStagePackets?.[domain]?.withheld_content,
+    derived_evidence_count: input.evidenceStagePackets?.[domain]?.derived_evidence?.length,
+    acquisition_diagnostic_count: input.evidenceStagePackets?.[domain]?.acquisition_diagnostics?.length,
     included_chunk_ids: packet.manifest.map(item => item.chunk_id),
     included_chunk_count: packet.included_chunk_count,
     total_candidate_chunks: packet.total_candidate_chunks,

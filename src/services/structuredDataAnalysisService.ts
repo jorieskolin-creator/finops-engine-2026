@@ -73,6 +73,9 @@ export const isDerivedEvidenceApprovedForPacket = (evidence: DerivedAnalyticalEv
   return tagging || registered;
 };
 
+export const isDerivedEvidenceAcquisitionDiagnostic = (evidence: DerivedAnalyticalEvidence): boolean =>
+  evidence.derivation.analyzer_id === 'crucial_item_coverage_v1';
+
 export const buildDataSignalCoverageReport=():DataSignalCoverageReport=>{
   const bindingAnalyzers=new Map<string,Set<string>>();
   for(const binding of liveThemeBindings()){

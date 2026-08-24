@@ -93,7 +93,7 @@ const trace = buildRunTrace({
     warnings: [], source_acquisition: [],
   },
   sourcePackets: { D: effectivePacket },
-  evidenceStagePackets: { D: { schema_version: 'evidence_lane_stage_packet_v1', integrity_hash: 'effective-stage-hash' } },
+  evidenceStagePackets: { D: { schema_version: 'evidence_lane_stage_packet_v2', integrity_hash: 'effective-stage-hash' } },
   baselineEvidenceStagePackets: { D: { integrity_hash: 'baseline-stage-hash' } },
   dlpScan: { scanned_chunk_count: 0, high_risk_hits: [], caution_hits: [], blocked: false, warnings: [] },
   dlpReviewChunkCount: 0,

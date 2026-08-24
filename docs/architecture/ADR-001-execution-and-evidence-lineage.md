@@ -62,6 +62,17 @@ as they are moved to the server-side orchestration boundary.
    classify, or change gates; deterministic orchestration performs local search
    only within the privacy-approved customer Source Registry. Remote KB bodies
    are not inputs to this stage.
+9. Derived analysis is additive. Enabling a deterministic analyzer must not
+   remove, replace, reorder out of reach, or truncate a routed direct-evidence
+   chunk. The scanner, verifier, adjudicator, provenance reconciler, final
+   Evidence Package, and RunTrace consume the same bounded effective packet.
+10. Derived acquisition diagnostics and substantive analytical evidence are
+    distinct. Coverage diagnostics are retained for lineage and retrieval but
+    excluded from forensic model context and cannot support scores. Only an
+    approved substantive observation may be cited by exact summary line.
+11. A verifier or adjudicator receives the complete governed domain packet.
+    Prefix truncation is not an accepted context-bounding mechanism because it
+    can remove source units cited by the scanner.
 
 ## Deferred boundary
 

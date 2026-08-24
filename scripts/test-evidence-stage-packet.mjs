@@ -78,6 +78,19 @@ const approvedDerived = {
   eligibility: { state: 'ELIGIBLE', reasons: [] },
   report_eligible: true
 };
+const acquisitionDiagnostic = {
+  ...approvedDerived,
+  evidence_id: 'EVID-DER-87654321',
+  derivation: {
+    analyzer_id: 'crucial_item_coverage_v1', analyzer_version: '1.0.0',
+    registry_version: 'evidence_analysis_registry_v2', method: 'crucial_item_coverage_analysis',
+    calculation_ids: ['expected_vs_found']
+  },
+  result: { ...approvedDerived.result, row_scope: 'acquired_corpus' },
+  summary_lines: ['TAGGING crucial-item coverage: 1/3 found; critical=PARTIAL.'],
+  llm_policy: { may_use_as_evidence: true, may_recalculate: false, may_infer_exact_values: false, causal_authority: 'NONE' },
+  unit_fingerprint: '87654321'
+};
 const privacyDecision = {
   schema_version: 'evidence_privacy_decision_v1', policy_version: 'deterministic_evidence_privacy_v1', decision: 'PASS_WITH_REDACTIONS',
   scanned_source_count: 2, scanned_text_unit_count: 2, scanned_table_cell_count: 4, redaction_count: 1,
@@ -105,13 +118,14 @@ const packets = buildEvidenceLaneStagePackets({
   derived_evidence: [shadowDerived], privacy_decision: privacyDecision, acquisition_readiness: readiness
 });
 const packet = packets.A;
-assert.equal(packet.schema_version, 'evidence_lane_stage_packet_v1');
+assert.equal(packet.schema_version, 'evidence_lane_stage_packet_v2');
 assert.equal(packet.source_role, 'CUSTOMER_EVIDENCE');
 assert.deepEqual(packet.knowledge_context, []);
 assert.deepEqual(packet.images, []);
 assert.deepEqual(packet.evidence, [textualManifest]);
 assert.deepEqual(packet.sanitized_visual_evidence, [visualManifest]);
 assert.deepEqual(packet.derived_evidence, [], 'shadow-only deterministic metrics must not reach model context');
+assert.deepEqual(packet.acquisition_diagnostics, []);
 assert.equal(packet.coverage.signal_state, 'ROUTED_EVIDENCE');
 assert.equal(packet.acquisition_binding.source_packet_hash, sourcePacketHash);
 assert.deepEqual(packet.acquisition_readiness_reasons, readiness.reasons);
@@ -142,6 +156,16 @@ assert.equal(approvedPacket.derived_evidence.length, 1, 'approved full-populatio
 assert.match(approvedPacket.text, /owner row coverage: 50%/);
 assert.doesNotMatch(approvedPacket.text, /calculated_total|declared_total|difference|\b150\b/, 'model-visible projection must omit absolute monetary values');
 assert.doesNotThrow(() => assertEvidenceLaneStagePacket(approvedPacket));
+
+const diagnosticPacket = buildEvidenceLaneStagePackets({
+  source_packets: { A: sourcePacket }, source_packet_hashes: sourcePacketHashes,
+  derived_evidence: [acquisitionDiagnostic], privacy_decision: privacyDecision, acquisition_readiness: readiness
+}).A;
+assert.deepEqual(diagnosticPacket.derived_evidence, [], 'coverage diagnostics must not become score-supporting derived evidence');
+assert.equal(diagnosticPacket.acquisition_diagnostics.length, 1, 'coverage diagnostics remain in the governed package for lineage and retrieval');
+assert.doesNotMatch(diagnosticPacket.text, /TAGGING crucial-item coverage/, 'coverage diagnostics must not enter forensic model context');
+assert.match(diagnosticPacket.text, /acquisition_diagnostics\[\].*excluded from this forensic model context/);
+assert.doesNotThrow(() => assertEvidenceLaneStagePacket(diagnosticPacket));
 assert.throws(() => assertEvidenceLaneStagePacket({ ...packet, text: `${packet.text} tampered` }), /INTEGRITY_FAILED/);
 assert.throws(() => assertEvidenceLaneStagePacket({
   ...packet,

@@ -833,12 +833,17 @@ export interface RoutedSourcePacket {
 }
 
 export interface EvidenceLaneStagePacket {
-  schema_version: 'evidence_lane_stage_packet_v1';
+  schema_version: 'evidence_lane_stage_packet_v2';
   domain_id: string;
   source_role: 'CUSTOMER_EVIDENCE';
   evidence: SourcePacketManifestItem[];
   sanitized_visual_evidence: SourcePacketManifestItem[];
+  // Score-supporting deterministic observations that the forensic scanner may
+  // cite by exact summary line.
   derived_evidence: DerivedAnalyticalEvidence[];
+  // Coverage/search diagnostics retained in the governed package for lineage
+  // and retrieval, but deliberately excluded from forensic model context.
+  acquisition_diagnostics: DerivedAnalyticalEvidence[];
   knowledge_context: [];
   coverage: {
     weak: boolean;
@@ -1237,6 +1242,8 @@ export interface ContextPacketTrace {
   acquisition_readiness_reasons?: EvidenceLaneStagePacket['acquisition_readiness_reasons'];
   privacy_decision?: EvidenceLaneStagePacket['privacy_decision'];
   withheld_content?: EvidenceLaneStagePacket['withheld_content'];
+  derived_evidence_count?: number;
+  acquisition_diagnostic_count?: number;
   included_chunk_ids: string[];
   included_chunk_count: number;
   total_candidate_chunks: number;
