@@ -193,6 +193,7 @@ const roadmapHygieneSanitized = sanitizeStrategyAfterFactCheck({
     source_location: 'roadmap',
     failure_type: 'other',
     severity: 'WARN_TACTIC_HYGIENE',
+    tactic_disposition: 'contraindicated',
     rationale: 'The action is grounded, but this tactic assumes cost-blind architecture decisions that the locked findings contradict.'
   }]
 });
@@ -201,6 +202,7 @@ assert.deepEqual(roadmapHygieneSanitized.strategyData.phase_3_strategy.remediati
   'Retain this independently grounded action.'
 ]);
 assert.equal(roadmapHygieneSanitized.sanitized[0].action, 'rewritten');
+assert.equal(roadmapHygieneSanitized.sanitized[0].tactic_disposition, 'contraindicated', 'sanitation must preserve the explicit tactic disposition');
 
 const sanitized = sanitizeStrategyAfterFactCheck(strategyData, factCheck);
 assert.equal(sanitized.sanitized.length, 2);

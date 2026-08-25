@@ -182,21 +182,35 @@ assert.deepEqual(findRoadmapActionsMissingCriterionReferences({ phase_3_strategy
 const missingStrategy = structuredClone(strategyData);
 missingStrategy.phase_3_strategy.remediation_roadmap[0].actions = missingStrategy.phase_3_strategy.remediation_roadmap[0].actions.filter(action => !action.includes('TAC-GOV-002'));
 assert.deepEqual(findMissingRequiredTacticIds(missingStrategy, plan), ['TAC-GOV-002']);
-assert.deepEqual(classifyFinalRequiredTactics(missingStrategy, plan), {
-  contraindicated: [],
-  missing: ['TAC-GOV-002'],
-});
-assert.deepEqual(classifyFinalRequiredTactics(missingStrategy, plan, [{
+const missingContract = classifyFinalRequiredTactics(missingStrategy, plan);
+assert.deepEqual(missingContract.contraindicated, []);
+assert.deepEqual(missingContract.citation_rejected, []);
+assert.deepEqual(missingContract.missing, ['TAC-GOV-002']);
+assert.equal(missingContract.dispositions.find(item => item.tactic_id === 'TAC-GOV-002').disposition, 'missing');
+const contraindicatedContract = classifyFinalRequiredTactics(missingStrategy, plan, [{
   action: 'quarantined',
   claim: '[TAC-GOV-002] Create a new account-vending control.',
   rationale: 'The Playbook do-not-use condition is established by the locked findings.',
   source_location: 'roadmap',
   failure_type: 'other',
   severity: 'WARN_TACTIC_HYGIENE',
-}]), {
-  contraindicated: ['TAC-GOV-002'],
-  missing: [],
-});
+  tactic_disposition: 'contraindicated',
+}]);
+assert.deepEqual(contraindicatedContract.contraindicated, ['TAC-GOV-002']);
+assert.deepEqual(contraindicatedContract.citation_rejected, []);
+assert.deepEqual(contraindicatedContract.missing, []);
+assert.equal(contraindicatedContract.dispositions.find(item => item.tactic_id === 'TAC-GOV-002').disposition, 'contraindicated');
+const rejectedContract = classifyFinalRequiredTactics(missingStrategy, plan, [{
+  action: 'rewritten',
+  claim: '[TAC-GOV-002] Create a new account-vending control.',
+  rationale: 'The citation does not support this action.',
+  source_location: 'roadmap',
+  failure_type: 'other',
+  severity: 'WARN_TACTIC_HYGIENE',
+  tactic_disposition: 'citation_rejected',
+}]);
+assert.deepEqual(rejectedContract.citation_rejected, ['TAC-GOV-002']);
+assert.deepEqual(rejectedContract.missing, []);
 
 const result = sanitizeRoadmapTacticGrounding(strategyData, phase2, ['F']);
 assert.equal(result.adjustments.length, 0);

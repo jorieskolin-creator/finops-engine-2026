@@ -1,10 +1,12 @@
 
-import { AuditItem, FactCheckClaim, FactCheckResult, Phase1AuditLogs, Phase2Validation, ClaimFailureType, ClaimSeverity, ClaimSourceLocation, StrategicTactic, TacticActivityPlaybookEntry } from '../types';
+import { AuditItem, FactCheckClaim, FactCheckResult, Phase1AuditLogs, Phase2Validation, ClaimFailureType, ClaimSeverity, ClaimSourceLocation, StrategicTactic, TacticActivityPlaybookEntry, TacticReviewDisposition } from '../types';
 
 const VALID_FAILURE_TYPES: ClaimFailureType[] = ['fabricated_number', 'unverifiable_entity', 'unsupported_org_claim', 'out_of_scope', 'other'];
 const VALID_SEVERITIES: ClaimSeverity[] = ['BLOCKING_UNSUPPORTED_FACT', 'BLOCKING_UNSAFE_ROADMAP', 'WARN_MISCLASSIFIED_BUT_REAL', 'WARN_TACTIC_HYGIENE', 'SUPPORTED'];
 const VALID_SOURCE_LOCATIONS: ClaimSourceLocation[] = ['finops_lead', 'cfo', 'engineering_lead', 'diagnosis', 'planning_decision', 'roadmap'];
 const VALID_CLASSIFICATIONS = ['supported_by_source', 'supported_by_audit', 'supported_by_tactics_db', 'unsupported'] as const;
+const VALID_TACTIC_DISPOSITIONS: TacticReviewDisposition[] = ['contraindicated', 'citation_rejected'];
+const TACTIC_REFERENCE_RX = /\[TAC-[A-Z]+-\d+(?:-[A-Z]+)?\]/;
 
 export interface FactCheckParseContract {
   allowedClassifications: readonly string[];
@@ -280,12 +282,16 @@ export const parseFactCheckResponse = (
       if (typeof c.rationale !== 'string' || c.rationale.trim().length === 0) return true;
       if (typeof c.source_location !== 'string' || !contract.allowedSourceLocations.includes(c.source_location)) return true;
       if (c.classification !== 'unsupported') return c.severity != null && c.severity !== 'SUPPORTED';
+      const requiresTacticDisposition = c.source_location === 'roadmap'
+        && c.severity === 'WARN_TACTIC_HYGIENE'
+        && TACTIC_REFERENCE_RX.test(c.claim);
       return typeof c.failure_type !== 'string'
         || !VALID_FAILURE_TYPES.includes(c.failure_type)
         || typeof c.severity !== 'string'
         || !contract.allowedUnsupportedSeverities.includes(c.severity)
         || typeof c.missing_material !== 'string'
-        || c.missing_material.trim().length === 0;
+        || c.missing_material.trim().length === 0
+        || (requiresTacticDisposition && !VALID_TACTIC_DISPOSITIONS.includes(c.tactic_disposition));
     });
     if (invalidIndex >= 0) {
       return {
@@ -307,6 +313,7 @@ export const parseFactCheckResponse = (
       ...(c.classification === 'unsupported' ? {
         failure_type: c.failure_type,
         missing_material: c.missing_material.trim(),
+        ...(VALID_TACTIC_DISPOSITIONS.includes(c.tactic_disposition) ? { tactic_disposition: c.tactic_disposition } : {}),
       } : {})
     }));
     const unsupported = validClaims.filter(c => c.classification === 'unsupported');
@@ -499,6 +506,7 @@ ROADMAP GROUNDING:
 - If the action is grounded but the output uses a wrong label/category for the finding, classify unsupported with severity "WARN_MISCLASSIFIED_BUT_REAL".
 - If a criterion is unsupported, verification_unresolved, or not_assessed, the roadmap may collect evidence for it but may not describe it as a confirmed weak/partial control or prescribe deficiency remediation without another assessed locked finding.
 - Evaluate each required tactic's supplied use and do-not-use conditions. If locked findings establish a do-not-use condition, classify the tactic action as unsupported with severity "WARN_TACTIC_HYGIENE" so it can be recorded as contraindicated rather than forced into the final roadmap.
+- Every unsupported roadmap claim with severity "WARN_TACTIC_HYGIENE" that contains a tactic ID MUST set "tactic_disposition": use "contraindicated" only when a supplied Playbook do-not-use condition is established by locked findings; otherwise use "citation_rejected" for a misplaced, mismatched, or unsupported tactic reference.
 - WHY and WHAT may summarize context and intended change, but they may not invent new current-state claims, unsupported financial impacts, or claim that a gap is fully closed unless LOCKED_FINDINGS provide acceptance criteria proving closure.
 - Maximum 15 claims per pass — focus on consequential grounding errors.
 - For every unsupported claim, emit failure_type, severity, and missing_material.
@@ -516,6 +524,7 @@ ROADMAP GROUNDING:
       "source_location": "planning_decision | roadmap",
       "failure_type": "fabricated_number | unverifiable_entity | unsupported_org_claim | out_of_scope | other | not_applicable",
       "severity": "BLOCKING_UNSUPPORTED_FACT | BLOCKING_UNSAFE_ROADMAP | WARN_MISCLASSIFIED_BUT_REAL | WARN_TACTIC_HYGIENE | SUPPORTED",
+      "tactic_disposition": "contraindicated | citation_rejected (REQUIRED for unsupported roadmap WARN_TACTIC_HYGIENE claims containing a tactic ID; otherwise omit)",
       "missing_material": "what evidence or locked finding would make this supportable (REQUIRED when unsupported)"
     }
   ]

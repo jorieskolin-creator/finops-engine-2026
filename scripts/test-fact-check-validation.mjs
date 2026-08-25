@@ -60,6 +60,30 @@ const wrongRoadmapLocation = parseFactCheckResponse(JSON.stringify({ claims: [{
 }] }), 1, ROADMAP_FACT_CHECK_CONTRACT);
 assert.equal(wrongRoadmapLocation.failed, true, 'roadmap verdicts must not claim persona or diagnosis coverage');
 
+const tacticHygieneClaim = {
+  claim: 'Apply [TAC-GOV-002] despite the conflicting prerequisite [C3].',
+  classification: 'unsupported',
+  rationale: 'The supplied locked finding does not support this tactic use.',
+  source_location: 'roadmap',
+  failure_type: 'other',
+  severity: 'WARN_TACTIC_HYGIENE',
+  missing_material: 'A locked finding establishing the tactic prerequisite.',
+};
+assert.equal(parseFactCheckResponse(JSON.stringify({ claims: [tacticHygieneClaim] }), 1, ROADMAP_FACT_CHECK_CONTRACT).failed, true,
+  'tactic hygiene verdicts must state an explicit disposition');
+const contraindicated = parseFactCheckResponse(JSON.stringify({ claims: [{
+  ...tacticHygieneClaim,
+  tactic_disposition: 'contraindicated',
+}] }), 1, ROADMAP_FACT_CHECK_CONTRACT);
+assert.equal(contraindicated.failed, false);
+assert.equal(contraindicated.unsupported_claims[0].tactic_disposition, 'contraindicated');
+const citationRejected = parseFactCheckResponse(JSON.stringify({ claims: [{
+  ...tacticHygieneClaim,
+  tactic_disposition: 'citation_rejected',
+}] }), 1, ROADMAP_FACT_CHECK_CONTRACT);
+assert.equal(citationRejected.failed, false);
+assert.equal(citationRejected.unsupported_claims[0].tactic_disposition, 'citation_rejected');
+
 const failedSubcheck = {
   attempts: 1,
   total_claims: 0,
@@ -90,5 +114,9 @@ assert.match(analysisSource, /callPhase3Validated\([\s\S]*requestedScope, strate
 assert.match(analysisSource, /requestedScope,\s*acceptedFactChecks/, 'fact-check must reuse the verdict for the unchanged contract scope');
 assert.match(analysisSource, /FACT_CHECK_NOT_IMPROVED/, 'a regenerated candidate that does not improve the scoped defect profile must be rejected');
 assert.match(analysisSource, /findRoadmapActionsMissingCriterionReferences/, 'roadmap output validation must require explicit action-to-finding references');
+assert.match(analysisSource, /repairedChecks\.merged\.sanitized_claims = \[/, 'bounded tactic repair must preserve prior sanitation lineage');
+assert.match(analysisSource, /repairedChecks\.merged\.trajectory = \[/, 'bounded tactic repair must preserve fact-check trajectory');
+assert.match(analysisSource, /highFactCheck\.sanitized_claims = \[/, 'fact-check escalation must preserve prior sanitation lineage');
+assert.match(analysisSource, /'fact_check',\s*'roadmap',\s*acceptedFactChecks/, 'post-sanitation repair must re-check only the roadmap');
 
 console.log('fact-check validation tests passed');

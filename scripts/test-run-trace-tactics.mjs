@@ -129,6 +129,23 @@ const trace = buildRunTrace({
   },
   qualityGate: { decision: 'GO', blocking_reasons: [], warnings: [], notes: [], thresholds: {} },
   tacticGroundingAdjustments: [],
+  tacticSelectionPlan: {
+    required: [{ tactic_id: 'TAC-VIS-001', canonical_name: 'Tagging', category: 'A', activated_by: ['A1'] }],
+    optional: [],
+    active_criteria: ['A1'],
+    active_categories: ['A'],
+  },
+  requiredTacticDispositions: [{ tactic_id: 'TAC-VIS-001', activated_by: ['A1'], disposition: 'citation_rejected', rationale: 'Citation mismatch.' }],
+  requiredTacticSanitationHistory: [{
+    action: 'rewritten',
+    claim: 'Enforce tags [TAC-VIS-001].',
+    rationale: 'Citation mismatch.',
+    source_location: 'roadmap',
+    severity: 'WARN_TACTIC_HYGIENE',
+    tactic_disposition: 'citation_rejected',
+  }],
+  requiredTacticRepairAttempted: true,
+  requiredTacticRepairSucceeded: false,
   gapRetrieval: {
     schema_version: 'gap_retrieval_plan_v1',
     generative: false,
@@ -171,6 +188,12 @@ assert.equal(trace.resolution_maturity.scoring_authority, true);
 assert.equal(trace.resolution_maturity.overall.adjusted_maturity, 41.8);
 assert.equal(trace.resolution_maturity.formula_version, 'resolution_based_maturity_formula_v1');
 assert.equal(trace.resolution_maturity.assessment_sufficiency.decision, 'PASS');
+assert.deepEqual(trace.required_tactic_contract.selection_plan.required.map(item => item.tactic_id), ['TAC-VIS-001']);
+assert.equal(trace.required_tactic_contract.sanitation_history[0].tactic_disposition, 'citation_rejected');
+assert.equal(trace.required_tactic_contract.dispositions[0].disposition, 'citation_rejected');
+assert.deepEqual(trace.required_tactic_contract.missing_ids, []);
+assert.deepEqual(trace.required_tactic_contract.unresolved_ids, ['TAC-VIS-001']);
+assert.deepEqual(trace.required_tactic_contract.repair, { attempted: true, succeeded: false });
 assert.doesNotMatch(JSON.stringify(trace.resolution_maturity), /criterion_resolutions|pair_results|quote|source_id|chunk_id/,
   'RunTrace must contain aggregate active model values only');
 

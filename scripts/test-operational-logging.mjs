@@ -22,6 +22,9 @@ assert.deepEqual(filterOperationalMetadata('checkpoint_save_failed', {
 assert.deepEqual(filterOperationalMetadata('synthesis_candidate_rejected', {
   attempt: 2, reason_code: 'FACT_CHECK_FAILED', response_body: 'private model output',
 }), { attempt: 2, reason_code: 'FACT_CHECK_FAILED' });
+assert.deepEqual(filterOperationalMetadata('required_tactic_repair_result', {
+  repaired: false, requested_count: 7, unresolved_count: 2, reason_code: 'OUTCOME_UNKNOWN', response_body: 'private model output',
+}), { repaired: false, requested_count: 7, unresolved_count: 2, reason_code: 'OUTCOME_UNKNOWN' });
 assert.deepEqual(filterOperationalMetadata('pipeline_integrity_failed', {
   gate: 'pre_synthesis', error_code: 'DOMAIN_ANALYSIS_FAILED', domains: 'F', source_text: 'private source content',
 }), { gate: 'pre_synthesis', error_code: 'DOMAIN_ANALYSIS_FAILED', domains: 'F' });

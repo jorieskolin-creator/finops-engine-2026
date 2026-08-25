@@ -1,4 +1,4 @@
-import type { Phase1AuditLogs, Phase2Validation, StrategicTactic, StrategySanitationItem, TacticActivityPlaybookEntry } from '../types';
+import type { Phase1AuditLogs, Phase2Validation, RequiredTacticDisposition, StrategicTactic, StrategySanitationItem, TacticActivityPlaybookEntry } from '../types';
 import { FINOPS_TACTIC_ACTIVITY_PLAYBOOK, FINOPS_TACTICS_LOCAL } from '../knowledge_base';
 import { inferAntiPatternAbsenceStatus } from './antiPatternSemantics';
 import { hasVerifiedSourceCoverage } from './metricsService';
@@ -211,16 +211,33 @@ export const classifyFinalRequiredTactics = (
   strategyData: any,
   plan: TacticSelectionPlan,
   sanitizedClaims: StrategySanitationItem[] = []
-): { contraindicated: string[]; missing: string[] } => {
+): { dispositions: RequiredTacticDisposition[]; contraindicated: string[]; citation_rejected: string[]; missing: string[] } => {
   const absent = findMissingRequiredTacticIds(strategyData, plan);
-  const reviewedContraindications = new Set(sanitizedClaims
+  const reviewedByTactic = new Map<string, StrategySanitationItem>();
+  sanitizedClaims
     .filter(claim => claim.source_location === 'roadmap'
       && claim.severity === 'WARN_TACTIC_HYGIENE'
+      && claim.tactic_disposition != null
       && ['quarantined', 'removed', 'rewritten'].includes(claim.action))
-    .flatMap(claim => Array.from(claim.claim.matchAll(TACTIC_RX), match => match[1])));
+    .forEach(claim => Array.from(claim.claim.matchAll(TACTIC_RX), match => match[1])
+      .forEach(tacticId => reviewedByTactic.set(tacticId, claim)));
+  const dispositions = plan.required.map(candidate => {
+    if (!absent.includes(candidate.tactic_id)) {
+      return { tactic_id: candidate.tactic_id, activated_by: candidate.activated_by, disposition: 'accepted' as const };
+    }
+    const review = reviewedByTactic.get(candidate.tactic_id);
+    return {
+      tactic_id: candidate.tactic_id,
+      activated_by: candidate.activated_by,
+      disposition: review?.tactic_disposition || 'missing',
+      ...(review?.rationale ? { rationale: review.rationale } : {}),
+    } as RequiredTacticDisposition;
+  });
   return {
-    contraindicated: absent.filter(id => reviewedContraindications.has(id)),
-    missing: absent.filter(id => !reviewedContraindications.has(id)),
+    dispositions,
+    contraindicated: dispositions.filter(item => item.disposition === 'contraindicated').map(item => item.tactic_id),
+    citation_rejected: dispositions.filter(item => item.disposition === 'citation_rejected').map(item => item.tactic_id),
+    missing: dispositions.filter(item => item.disposition === 'missing').map(item => item.tactic_id),
   };
 };
 

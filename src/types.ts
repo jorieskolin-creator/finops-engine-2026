@@ -968,6 +968,33 @@ export interface RunTrace {
   evidence_paths: EvidencePathTrace[];
   score_paths: ScorePathTrace[];
   tactic_paths: TacticPathTrace[];
+  required_tactic_contract: {
+    schema_version: 'required_tactic_contract_trace_v1';
+    selection_plan: {
+      required: Array<{
+        tactic_id: string;
+        canonical_name: string;
+        category: string;
+        activated_by: string[];
+      }>;
+      optional: Array<{
+        tactic_id: string;
+        canonical_name: string;
+        category: string;
+        activated_by: string[];
+      }>;
+      active_criteria: string[];
+      active_categories: string[];
+    };
+    sanitation_history: StrategySanitationItem[];
+    dispositions: RequiredTacticDisposition[];
+    missing_ids: string[];
+    unresolved_ids: string[];
+    repair: {
+      attempted: boolean;
+      succeeded: boolean;
+    };
+  };
   quality_gate: QualityGateTrace;
   usage_summary: ModelUsageSummary;
   privacy: {
@@ -1455,6 +1482,7 @@ export type ClaimSeverity =
   | 'SUPPORTED';
 
 export type ClaimSourceLocation = PersonaId | 'diagnosis' | 'planning_decision' | 'roadmap';
+export type TacticReviewDisposition = 'contraindicated' | 'citation_rejected';
 
 export interface FactCheckClaim {
   claim: string;
@@ -1464,6 +1492,7 @@ export interface FactCheckClaim {
   severity?: ClaimSeverity;
   missing_material?: string;
   source_location?: ClaimSourceLocation;
+  tactic_disposition?: TacticReviewDisposition;
 }
 
 export interface FactCheckPassSnapshot {
@@ -1485,6 +1514,16 @@ export interface StrategySanitationItem {
   source_location?: ClaimSourceLocation;
   failure_type?: ClaimFailureType;
   severity?: ClaimSeverity;
+  tactic_disposition?: TacticReviewDisposition;
+}
+
+export type RequiredTacticDispositionStatus = 'accepted' | 'contraindicated' | 'citation_rejected' | 'missing';
+
+export interface RequiredTacticDisposition {
+  tactic_id: string;
+  activated_by: string[];
+  disposition: RequiredTacticDispositionStatus;
+  rationale?: string;
 }
 
 export interface FactCheckResult {

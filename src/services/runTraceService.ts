@@ -13,6 +13,7 @@ import {
   Phase2Validation,
   QualityGateResult,
   RemoteKnowledgeBaseIndex,
+  RequiredTacticDisposition,
   ResolutionBasedMaturityRunTrace,
   RoutedSourcePacket,
   RunTrace,
@@ -22,6 +23,7 @@ import {
   SourceManifestTrace,
   SourceRegistry,
   StageTrace,
+  StrategySanitationItem,
   TableInspectionTrace,
   TacticPathTrace
 } from '../types';
@@ -63,6 +65,16 @@ interface BuildRunTraceInput {
   strategy: DiagnosticResult['phase_3_strategy'];
   qualityGate: QualityGateResult;
   tacticGroundingAdjustments: TacticGroundingTraceAdjustment[];
+  tacticSelectionPlan: {
+    required: Array<{ tactic_id: string; canonical_name: string; category: string; activated_by: string[] }>;
+    optional: Array<{ tactic_id: string; canonical_name: string; category: string; activated_by: string[] }>;
+    active_criteria: string[];
+    active_categories: string[];
+  };
+  requiredTacticDispositions: RequiredTacticDisposition[];
+  requiredTacticSanitationHistory: StrategySanitationItem[];
+  requiredTacticRepairAttempted: boolean;
+  requiredTacticRepairSucceeded: boolean;
   derivedAnalyticalEvidence?: DerivedAnalyticalEvidence[];
   tableInspections?: TableInspectionTrace[];
   dataSignalCoverage?: DataSignalCoverageReport;
@@ -501,6 +513,31 @@ export const buildRunTrace = (input: BuildRunTraceInput): RunTrace => {
     evidence_paths: evidencePaths,
     score_paths: scorePaths,
     tactic_paths: tacticPathsFor(input.strategy, input.auditLogs, input.tacticGroundingAdjustments, qualityGate),
+    required_tactic_contract: {
+      schema_version: 'required_tactic_contract_trace_v1',
+      selection_plan: {
+        required: input.tacticSelectionPlan.required.map(({ tactic_id, canonical_name, category, activated_by }) => ({
+          tactic_id, canonical_name, category, activated_by,
+        })),
+        optional: input.tacticSelectionPlan.optional.map(({ tactic_id, canonical_name, category, activated_by }) => ({
+          tactic_id, canonical_name, category, activated_by,
+        })),
+        active_criteria: input.tacticSelectionPlan.active_criteria,
+        active_categories: input.tacticSelectionPlan.active_categories,
+      },
+      sanitation_history: input.requiredTacticSanitationHistory,
+      dispositions: input.requiredTacticDispositions,
+      missing_ids: input.requiredTacticDispositions
+        .filter(item => item.disposition === 'missing')
+        .map(item => item.tactic_id),
+      unresolved_ids: input.requiredTacticDispositions
+        .filter(item => item.disposition === 'missing' || item.disposition === 'citation_rejected')
+        .map(item => item.tactic_id),
+      repair: {
+        attempted: input.requiredTacticRepairAttempted,
+        succeeded: input.requiredTacticRepairSucceeded,
+      },
+    },
     quality_gate: {
       decision: qualityGate.decision,
       blocking_reasons: qualityGate.blocking_reasons,

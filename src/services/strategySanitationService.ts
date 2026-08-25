@@ -24,6 +24,7 @@ const makeItem = (claim: FactCheckClaim, action: StrategySanitationItem['action'
   source_location: claim.source_location,
   failure_type: claim.failure_type,
   severity: claim.severity,
+  tactic_disposition: claim.tactic_disposition,
 });
 
 const isAntipatternBurdenSpendMisuse = (claim: FactCheckClaim): boolean => {

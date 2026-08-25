@@ -38,7 +38,8 @@ import {
   findMissingRequiredTacticIds,
   findRoadmapActionsMissingCriterionReferences,
   sanitizeRoadmapTacticGrounding,
-  TacticGroundingAdjustment
+  TacticGroundingAdjustment,
+  TacticSelectionPlan
 } from "./tacticGroundingService";
 import { sanitizeBlockedStrategy, sanitizeEvidenceSummaryUncertainty, sanitizeStrategyAfterFactCheck } from "./strategySanitationService";
 import {
@@ -869,7 +870,11 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => unresolve
       });
     };
 
-    const callRoadmapSynthesis = async (lockedStrategy: any, correctionAppendix?: string): Promise<any> => {
+    const callRoadmapSynthesis = async (
+      lockedStrategy: any,
+      correctionAppendix?: string,
+      requiredPlan: TacticSelectionPlan = tacticSelectionPlan,
+    ): Promise<any> => {
       return callStructuredSynthesis({
         stage: 'roadmap_synthesis',
         substage: 'roadmap',
@@ -877,7 +882,7 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => unresolve
         systemInstruction: ROADMAP_SYNTHESIS_SYSTEM_INSTRUCTION,
         regenerated: Boolean(correctionAppendix),
         recordModel: model => { actuals.roadmap_synthesis = model; },
-        validate: value => findMissingRequiredTacticIds(value, tacticSelectionPlan).length === 0
+        validate: value => findMissingRequiredTacticIds(value, requiredPlan).length === 0
           && findRoadmapActionsMissingCriterionReferences(value).length === 0,
         buildUserText: formatRetry => [
           ROADMAP_SYNTHESIS_USER_PROMPT,
@@ -885,7 +890,7 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => unresolve
           confidenceBracket !== 'LOW' ? `\n\n### THE GOLDEN STANDARD (SSOT)\nYou may ONLY prescribe solutions found in this Knowledge Base. Use it for roadmap actions only; never alter locked findings from it:\n\n${fullSSOT}` : '',
           `\n\n### LOCKED FINDINGS JSON (IMMUTABLE)\n${compactLockedFindings(lockedStrategy)}`,
           `\n\n### DIAGNOSTIC FINDINGS (Phase 1 & 2)\n${handoffSummary}`,
-          `\n\n${tacticSelectionContext}`,
+          `\n\n${requiredPlan === tacticSelectionPlan ? tacticSelectionContext : buildTacticSelectionContext(requiredPlan)}`,
           correctionAppendix || '',
           formatRetry ? '\n\n### OUTPUT CONTRACT CORRECTION\nThe previous provider chain did not satisfy the complete roadmap contract. Return only the schema-compliant roadmap object, include every REQUIRED tactic from the governed selection plan, include at least one exact bracketed finding reference in every action, and add no commentary.' : '',
         ].join(''),
@@ -1430,21 +1435,86 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => unresolve
     strategyData = sanitation.strategyData;
     factCheck = sanitation.factCheck;
 
-
-    let groundingValidation = validatePhase3Grounding(strategyData, validationData, text);
-    const finalRequiredTactics = classifyFinalRequiredTactics(
+    let requiredTacticRepairAttempted = false;
+    let requiredTacticRepairSucceeded = false;
+    let requiredTacticContract = classifyFinalRequiredTactics(
       strategyData,
       tacticSelectionPlan,
       factCheck.sanitized_claims || []
     );
-    if (finalRequiredTactics.contraindicated.length > 0) {
+    const repairableTacticIds = [...requiredTacticContract.citation_rejected, ...requiredTacticContract.missing];
+    if (confidenceBracket !== 'LOW' && repairableTacticIds.length > 0) {
+      requiredTacticRepairAttempted = true;
+      try {
+        const repairPlan: TacticSelectionPlan = {
+          ...tacticSelectionPlan,
+          required: tacticSelectionPlan.required.filter(candidate => !requiredTacticContract.contraindicated.includes(candidate.tactic_id)),
+        };
+        const correction = [
+          buildMissingRequiredTacticAppendix(repairableTacticIds, tacticSelectionPlan),
+          requiredTacticContract.contraindicated.length > 0
+            ? `Do not restore Quality Checker-confirmed contraindicated tactic IDs: ${requiredTacticContract.contraindicated.join(', ')}.`
+            : '',
+          'This is the single bounded post-sanitation roadmap repair. Preserve the locked evidence summary and diagnosis.',
+        ].filter(Boolean).join('\n\n');
+        const repairedRoadmap = await callRoadmapSynthesis(strategyData, correction, repairPlan);
+        let repairedStrategy = normalizeStrategy(mergePhase3Outputs(strategyData, repairedRoadmap));
+        const repairedChecks = await runFactCheck(
+          repairedStrategy,
+          factCheck.attempts + 1,
+          'fact_check',
+          'roadmap',
+          acceptedFactChecks,
+        );
+        if (!repairedChecks.merged.failed) {
+          repairedChecks.merged.trajectory = [
+            ...(factCheck.trajectory || []),
+            snapshot(repairedChecks.merged),
+          ];
+          repairedChecks.merged.sanitized_claims = [
+            ...(factCheck.sanitized_claims || []),
+            ...(repairedChecks.merged.sanitized_claims || []),
+          ];
+          sanitation = applySanitation(repairedStrategy, repairedChecks.merged, 'required_tactic_repair_sanitized');
+          repairedStrategy = sanitation.strategyData;
+          strategyData = repairedStrategy;
+          factCheck = sanitation.factCheck;
+          acceptedFactChecks = repairedChecks;
+          requiredTacticContract = classifyFinalRequiredTactics(
+            strategyData,
+            tacticSelectionPlan,
+            factCheck.sanitized_claims || []
+          );
+          requiredTacticRepairSucceeded = requiredTacticContract.citation_rejected.length === 0
+            && requiredTacticContract.missing.length === 0;
+          await checkpoint('synthesis', 'accepted', { phase_3_strategy: strategyData.phase_3_strategy });
+          await checkpoint('fact_check', 'required_tactic_repair', { fact_check: factCheck });
+        }
+        serverLog(runId, requiredTacticRepairSucceeded ? 'info' : 'warn', 'required_tactic_repair_result', {
+          repaired: requiredTacticRepairSucceeded,
+          requested_count: repairableTacticIds.length,
+          unresolved_count: requiredTacticContract.citation_rejected.length + requiredTacticContract.missing.length,
+        });
+      } catch (error: any) {
+        serverLog(runId, 'warn', 'required_tactic_repair_result', {
+          repaired: false,
+          requested_count: repairableTacticIds.length,
+          unresolved_count: repairableTacticIds.length,
+          reason_code: typeof error?.code === 'string' ? error.code : 'REPAIR_UNAVAILABLE',
+        });
+      }
+    }
+
+    let groundingValidation = validatePhase3Grounding(strategyData, validationData, text);
+    if (requiredTacticContract.contraindicated.length > 0) {
       groundingValidation.warnings.push(
-        `Required tactic evaluation withheld ${finalRequiredTactics.contraindicated.join(', ')} after Quality Checker-confirmed Playbook contraindication.`
+        `Required tactic evaluation withheld ${requiredTacticContract.contraindicated.join(', ')} after Quality Checker-confirmed Playbook contraindication.`
       );
     }
-    if (finalRequiredTactics.missing.length > 0) {
+    const unresolvedRequiredTactics = [...requiredTacticContract.citation_rejected, ...requiredTacticContract.missing];
+    if (unresolvedRequiredTactics.length > 0) {
       groundingValidation.errors.push(
-        `Required tactic contract is incomplete after final sanitation: ${finalRequiredTactics.missing.join(', ')}.`
+        `Required tactic contract is incomplete after final sanitation and bounded repair: ${unresolvedRequiredTactics.join(', ')}.`
       );
     }
     groundingValidation.warnings.push(...tacticGroundingWarnings);
@@ -1471,23 +1541,28 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => unresolve
       await checkpoint('fact_check', 'escalated', { fact_check: highFactCheck });
       if (!highFactCheck.failed) {
         highFactCheck.trajectory = [...(factCheck.trajectory || []), snapshot(highFactCheck)];
+        highFactCheck.sanitized_claims = [
+          ...(factCheck.sanitized_claims || []),
+          ...(highFactCheck.sanitized_claims || []),
+        ];
         sanitation = applySanitation(strategyData, highFactCheck, 'claims_quarantined');
         strategyData = sanitation.strategyData;
         factCheck = sanitation.factCheck;
         groundingValidation = validatePhase3Grounding(strategyData, validationData, text);
-        const escalatedRequiredTactics = classifyFinalRequiredTactics(
+        requiredTacticContract = classifyFinalRequiredTactics(
           strategyData,
           tacticSelectionPlan,
           factCheck.sanitized_claims || []
         );
-        if (escalatedRequiredTactics.contraindicated.length > 0) {
+        if (requiredTacticContract.contraindicated.length > 0) {
           groundingValidation.warnings.push(
-            `Required tactic evaluation withheld ${escalatedRequiredTactics.contraindicated.join(', ')} after Quality Checker-confirmed Playbook contraindication.`
+            `Required tactic evaluation withheld ${requiredTacticContract.contraindicated.join(', ')} after Quality Checker-confirmed Playbook contraindication.`
           );
         }
-        if (escalatedRequiredTactics.missing.length > 0) {
+        const escalatedUnresolvedTactics = [...requiredTacticContract.citation_rejected, ...requiredTacticContract.missing];
+        if (escalatedUnresolvedTactics.length > 0) {
           groundingValidation.errors.push(
-            `Required tactic contract is incomplete after final sanitation: ${escalatedRequiredTactics.missing.join(', ')}.`
+            `Required tactic contract is incomplete after final sanitation and bounded repair: ${escalatedUnresolvedTactics.join(', ')}.`
           );
         }
         groundingValidation.warnings.push(...tacticGroundingWarnings);
@@ -1661,6 +1736,11 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => unresolve
       strategy: finalResult.phase_3_strategy,
       qualityGate,
       tacticGroundingAdjustments,
+      tacticSelectionPlan,
+      requiredTacticDispositions: requiredTacticContract.dispositions,
+      requiredTacticSanitationHistory: factCheck.sanitized_claims || [],
+      requiredTacticRepairAttempted,
+      requiredTacticRepairSucceeded,
       derivedAnalyticalEvidence,
       tableInspections,
       dataSignalCoverage,
