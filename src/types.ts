@@ -1563,6 +1563,26 @@ export interface ValidationResult {
 export type KnowledgeStream = 'maturity' | 'antipattern';
 export type DomainId = 'A' | 'B' | 'C' | 'D' | 'E' | 'F';
 export type CapabilityId = `${DomainId}${1 | 2 | 3 | 4 | 5}`;
+export type MaturityPairRelationship = 'DIRECT_INVERSE' | 'STRONGLY_RELATED' | 'CONTEXTUAL';
+
+export interface MaturityPairRegistryEntry {
+  pair_id: `PAIR-${CapabilityId}`;
+  capability_id: CapabilityId;
+  antipattern_id: CapabilityId;
+  domain_id: DomainId;
+  relationship_type: MaturityPairRelationship;
+  interaction_strength: number;
+  weight: number;
+  rationale: string;
+}
+
+export interface MaturityPairRegistry {
+  schema_version: 'finops_maturity_pair_registry_v1';
+  registry_version: '1.0.0';
+  status: 'SHADOW_NOT_ACTIVE';
+  description: string;
+  pairs: MaturityPairRegistryEntry[];
+}
 
 export interface KnowledgeDomain {
   id: DomainId;

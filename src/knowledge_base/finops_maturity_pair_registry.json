@@ -1,0 +1,308 @@
+{
+  "schema_version": "finops_maturity_pair_registry_v1",
+  "registry_version": "1.0.0",
+  "status": "SHADOW_NOT_ACTIVE",
+  "description": "Canonical capability and anti-pattern relationships for the evidence-resolution maturity model. Pairing is explicit and must never be inferred from matching identifiers.",
+  "pairs": [
+    {
+      "pair_id": "PAIR-A1",
+      "capability_id": "A1",
+      "antipattern_id": "A1",
+      "domain_id": "A",
+      "relationship_type": "DIRECT_INVERSE",
+      "interaction_strength": 1,
+      "weight": 1,
+      "rationale": "Enforced allocation tagging directly counters missing and inconsistent tags."
+    },
+    {
+      "pair_id": "PAIR-A2",
+      "capability_id": "A2",
+      "antipattern_id": "A2",
+      "domain_id": "A",
+      "relationship_type": "STRONGLY_RELATED",
+      "interaction_strength": 0.75,
+      "weight": 1,
+      "rationale": "Accepted showback or chargeback strongly reduces black-box spend, while visibility may also exist without formal allocation."
+    },
+    {
+      "pair_id": "PAIR-A3",
+      "capability_id": "A3",
+      "antipattern_id": "A3",
+      "domain_id": "A",
+      "relationship_type": "DIRECT_INVERSE",
+      "interaction_strength": 1,
+      "weight": 1,
+      "rationale": "Timely automated anomaly detection directly counters delayed cost reporting and discovery."
+    },
+    {
+      "pair_id": "PAIR-A4",
+      "capability_id": "A4",
+      "antipattern_id": "A4",
+      "domain_id": "A",
+      "relationship_type": "STRONGLY_RELATED",
+      "interaction_strength": 0.75,
+      "weight": 1,
+      "rationale": "Unified cost dashboards strongly counter siloed views, although reporting can remain fragmented outside the dashboard surface."
+    },
+    {
+      "pair_id": "PAIR-A5",
+      "capability_id": "A5",
+      "antipattern_id": "A5",
+      "domain_id": "A",
+      "relationship_type": "STRONGLY_RELATED",
+      "interaction_strength": 0.75,
+      "weight": 1,
+      "rationale": "Governed unit economics strongly counters vanity metrics, but either condition can be partially present independently."
+    },
+    {
+      "pair_id": "PAIR-B1",
+      "capability_id": "B1",
+      "antipattern_id": "B1",
+      "domain_id": "B",
+      "relationship_type": "DIRECT_INVERSE",
+      "interaction_strength": 1,
+      "weight": 1,
+      "rationale": "Evidence-based commitment management directly counters systematic commitment avoidance."
+    },
+    {
+      "pair_id": "PAIR-B2",
+      "capability_id": "B2",
+      "antipattern_id": "B2",
+      "domain_id": "B",
+      "relationship_type": "DIRECT_INVERSE",
+      "interaction_strength": 1,
+      "weight": 1,
+      "rationale": "Operational right-sizing directly counters chronic over-provisioning."
+    },
+    {
+      "pair_id": "PAIR-B3",
+      "capability_id": "B3",
+      "antipattern_id": "B3",
+      "domain_id": "B",
+      "relationship_type": "DIRECT_INVERSE",
+      "interaction_strength": 1,
+      "weight": 1,
+      "rationale": "Governed waste elimination directly counters resource hoarding and zombie resources."
+    },
+    {
+      "pair_id": "PAIR-B4",
+      "capability_id": "B4",
+      "antipattern_id": "B4",
+      "domain_id": "B",
+      "relationship_type": "STRONGLY_RELATED",
+      "interaction_strength": 0.75,
+      "weight": 1,
+      "rationale": "An automated spot strategy is strong optimization evidence against manual-only practices, but does not cover every optimization workflow."
+    },
+    {
+      "pair_id": "PAIR-B5",
+      "capability_id": "B5",
+      "antipattern_id": "B5",
+      "domain_id": "B",
+      "relationship_type": "CONTEXTUAL",
+      "interaction_strength": 0.25,
+      "weight": 1,
+      "rationale": "Storage lifecycle discipline and discount-stacking awareness are separate optimization controls with only domain-level contextual corroboration."
+    },
+    {
+      "pair_id": "PAIR-C1",
+      "capability_id": "C1",
+      "antipattern_id": "C1",
+      "domain_id": "C",
+      "relationship_type": "STRONGLY_RELATED",
+      "interaction_strength": 0.75,
+      "weight": 1,
+      "rationale": "A financial policy framework strongly constrains shadow accounts, while account enforcement also depends on identity and platform governance."
+    },
+    {
+      "pair_id": "PAIR-C2",
+      "capability_id": "C2",
+      "antipattern_id": "C2",
+      "domain_id": "C",
+      "relationship_type": "DIRECT_INVERSE",
+      "interaction_strength": 1,
+      "weight": 1,
+      "rationale": "Governed budgeting and forecasting directly counters tolerance of repeated budget blowouts."
+    },
+    {
+      "pair_id": "PAIR-C3",
+      "capability_id": "C3",
+      "antipattern_id": "C3",
+      "domain_id": "C",
+      "relationship_type": "STRONGLY_RELATED",
+      "interaction_strength": 0.75,
+      "weight": 1,
+      "rationale": "An empowered operating model strongly counters process-only FinOps theater, but effectiveness also requires demonstrated outcomes."
+    },
+    {
+      "pair_id": "PAIR-C4",
+      "capability_id": "C4",
+      "antipattern_id": "C4",
+      "domain_id": "C",
+      "relationship_type": "DIRECT_INVERSE",
+      "interaction_strength": 1,
+      "weight": 1,
+      "rationale": "Active procurement and vendor management directly counters unexamined vendor lock-in."
+    },
+    {
+      "pair_id": "PAIR-C5",
+      "capability_id": "C5",
+      "antipattern_id": "C5",
+      "domain_id": "C",
+      "relationship_type": "DIRECT_INVERSE",
+      "interaction_strength": 1,
+      "weight": 1,
+      "rationale": "Integrated compliance cost controls directly counter treating compliance cost as an afterthought."
+    },
+    {
+      "pair_id": "PAIR-D1",
+      "capability_id": "D1",
+      "antipattern_id": "D1",
+      "domain_id": "D",
+      "relationship_type": "DIRECT_INVERSE",
+      "interaction_strength": 1,
+      "weight": 1,
+      "rationale": "Cost-aware architecture decisions directly counter unoptimized lift-and-shift delivery."
+    },
+    {
+      "pair_id": "PAIR-D2",
+      "capability_id": "D2",
+      "antipattern_id": "D2",
+      "domain_id": "D",
+      "relationship_type": "STRONGLY_RELATED",
+      "interaction_strength": 0.75,
+      "weight": 1,
+      "rationale": "Infrastructure-as-code cost guardrails strongly constrain cost-blind architecture but do not replace design-time economic decisions."
+    },
+    {
+      "pair_id": "PAIR-D3",
+      "capability_id": "D3",
+      "antipattern_id": "D3",
+      "domain_id": "D",
+      "relationship_type": "DIRECT_INVERSE",
+      "interaction_strength": 1,
+      "weight": 1,
+      "rationale": "Bounded automated scaling directly counters scaling without limits."
+    },
+    {
+      "pair_id": "PAIR-D4",
+      "capability_id": "D4",
+      "antipattern_id": "D4",
+      "domain_id": "D",
+      "relationship_type": "DIRECT_INVERSE",
+      "interaction_strength": 1,
+      "weight": 1,
+      "rationale": "Evidence-based multi-cloud and hybrid management directly counters single-cloud tunnel vision."
+    },
+    {
+      "pair_id": "PAIR-D5",
+      "capability_id": "D5",
+      "antipattern_id": "D5",
+      "domain_id": "D",
+      "relationship_type": "DIRECT_INVERSE",
+      "interaction_strength": 1,
+      "weight": 1,
+      "rationale": "Appropriate container and serverless optimization directly counters persistent monolith tax."
+    },
+    {
+      "pair_id": "PAIR-E1",
+      "capability_id": "E1",
+      "antipattern_id": "E1",
+      "domain_id": "E",
+      "relationship_type": "STRONGLY_RELATED",
+      "interaction_strength": 0.75,
+      "weight": 1,
+      "rationale": "A cross-functional FinOps team strongly counters treating cost as only IT's problem, but participation must also extend beyond the team."
+    },
+    {
+      "pair_id": "PAIR-E2",
+      "capability_id": "E2",
+      "antipattern_id": "E2",
+      "domain_id": "E",
+      "relationship_type": "DIRECT_INVERSE",
+      "interaction_strength": 1,
+      "weight": 1,
+      "rationale": "Enabled engineering accountability directly counters blame-based cost management."
+    },
+    {
+      "pair_id": "PAIR-E3",
+      "capability_id": "E3",
+      "antipattern_id": "E3",
+      "domain_id": "E",
+      "relationship_type": "DIRECT_INVERSE",
+      "interaction_strength": 1,
+      "weight": 1,
+      "rationale": "Active executive sponsorship directly counters FinOps lip service."
+    },
+    {
+      "pair_id": "PAIR-E4",
+      "capability_id": "E4",
+      "antipattern_id": "E4",
+      "domain_id": "E",
+      "relationship_type": "DIRECT_INVERSE",
+      "interaction_strength": 1,
+      "weight": 1,
+      "rationale": "Sustained cross-functional collaboration directly counters the finance-engineering wall."
+    },
+    {
+      "pair_id": "PAIR-E5",
+      "capability_id": "E5",
+      "antipattern_id": "E5",
+      "domain_id": "E",
+      "relationship_type": "DIRECT_INVERSE",
+      "interaction_strength": 1,
+      "weight": 1,
+      "rationale": "Measured continuous improvement directly counters a static maturity assumption."
+    },
+    {
+      "pair_id": "PAIR-F1",
+      "capability_id": "F1",
+      "antipattern_id": "F1",
+      "domain_id": "F",
+      "relationship_type": "DIRECT_INVERSE",
+      "interaction_strength": 1,
+      "weight": 1,
+      "rationale": "Token and model spend visibility directly counters invisible token spend."
+    },
+    {
+      "pair_id": "PAIR-F2",
+      "capability_id": "F2",
+      "antipattern_id": "F2",
+      "domain_id": "F",
+      "relationship_type": "STRONGLY_RELATED",
+      "interaction_strength": 0.75,
+      "weight": 1,
+      "rationale": "AI allocation and unit economics strongly expose playground-to-production cost drift, while lifecycle controls are also required."
+    },
+    {
+      "pair_id": "PAIR-F3",
+      "capability_id": "F3",
+      "antipattern_id": "F3",
+      "domain_id": "F",
+      "relationship_type": "DIRECT_INVERSE",
+      "interaction_strength": 1,
+      "weight": 1,
+      "rationale": "Governed model routing and prompt efficiency directly counters premium-model overuse."
+    },
+    {
+      "pair_id": "PAIR-F4",
+      "capability_id": "F4",
+      "antipattern_id": "F4",
+      "domain_id": "F",
+      "relationship_type": "STRONGLY_RELATED",
+      "interaction_strength": 0.75,
+      "weight": 1,
+      "rationale": "AI budget guardrails strongly constrain unbounded context growth, while technical context controls remain independently necessary."
+    },
+    {
+      "pair_id": "PAIR-F5",
+      "capability_id": "F5",
+      "antipattern_id": "F5",
+      "domain_id": "F",
+      "relationship_type": "DIRECT_INVERSE",
+      "interaction_strength": 1,
+      "weight": 1,
+      "rationale": "Measured AI value realization and governance directly counters AI value theater."
+    }
+  ]
+}

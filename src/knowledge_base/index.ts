@@ -1,7 +1,8 @@
 
-import type { KnowledgePacketStage, KnowledgeTaxonomyRegistry, RemoteKnowledgeBaseDocument, RemoteKnowledgeBaseIndex, ShadowKnowledgePacket, StrategicTactic, TacticActivityPlaybookEntry } from '../types';
+import type { KnowledgePacketStage, KnowledgeTaxonomyRegistry, MaturityPairRegistry, RemoteKnowledgeBaseDocument, RemoteKnowledgeBaseIndex, ShadowKnowledgePacket, StrategicTactic, TacticActivityPlaybookEntry } from '../types';
 import criteriaData from './finops_criteria.json';
 import antipatternData from './finops_antipatterns.json';
+import maturityPairRegistryData from './finops_maturity_pair_registry.json';
 import keywordsData from './finops_preflight_keywords.json';
 import taxonomyData from './finops_evidence_taxonomy.json';
 import personasData from './finops_personas.json';
@@ -26,6 +27,7 @@ export const FINOPS_TACTICS_LOCAL = (tacticsData.tactics as StrategicTactic[]).m
 export const FINOPS_TACTIC_ACTIVITY_PLAYBOOK = tacticActivityPlaybookData.tactics as TacticActivityPlaybookEntry[];
 export const FINOPS_VALIDATION_RULES = validationData;
 export const FINOPS_TAXONOMY_REGISTRY = taxonomyRegistryData as KnowledgeTaxonomyRegistry;
+export const FINOPS_MATURITY_PAIR_REGISTRY = maturityPairRegistryData as MaturityPairRegistry;
 
 // Extract the primary case-study company from a tactic. The DB uses the
 // convention "COMPANY: prose..." for each case_study; we pull the leading
