@@ -3,7 +3,15 @@ import { STRATEGY_GUARDRAILS, FINOPS_PERSONAS } from './knowledge_base';
 
 export const METRIC_DESCRIPTIONS: Record<string, string> = {
   finops_readiness:
-    'Evidence-sensitive FinOps Maturity Score. Equal-weight average of evidence-demonstrated capability and anti-pattern control across their complete 30-criterion surfaces. Unknown material earns no points without being classified as a confirmed gap or finding.',
+    'Compatibility alias for Adjusted FinOps Maturity: Observed Maturity multiplied by the square root of assessment resolution. It drives CRAWL/WALK/RUN only when Assessment Sufficiency passes.',
+  corroborated_maturity:
+    'Paired maturity using only capability/anti-pattern pairs where both sides are resolved. Unknown pairs are excluded, not scored as zero.',
+  observed_maturity:
+    'Evidence-weighted paired maturity across fully and partially resolved pairs. A pair with only one resolved side receives half resolution credit.',
+  assessment_resolution:
+    'Weighted share of the configured pair surface resolved: full pairs receive 1.0 credit, one-sided pairs 0.5, unresolved pairs 0.',
+  adjusted_maturity:
+    'Observed Maturity multiplied by the square root of assessment resolution. This is the active maturity score when Assessment Sufficiency passes.',
   maturity_ratio:
     'Share of maturity criteria that scored as fully embedded (3 of 3 sub-criteria met).',
   maturity_depth:
@@ -149,7 +157,7 @@ ${STRATEGY_PERSONAS_BLOCK}
 2. **Draft Evidence Summaries (One per Persona — Three Total):**
    For EACH persona (finops_lead, cfo, engineering_lead), write a fact-only summary using exactly this 3-paragraph structure, adapted to that persona's vocabulary and emphasis:
 
-   **1. Current-State Snapshot:** State the evidence-sensitive FinOps Maturity Score, capability attainment, anti-pattern control, classification, anti-pattern burden/coverage, delivery integrity, and evidence density. Explain that missing material contributes zero but does not prove a capability is absent.
+   **1. Current-State Snapshot:** State Corroborated Maturity, Observed Maturity, Assessment Resolution, Adjusted FinOps Maturity, Assessment Sufficiency, and the maturity classification. Keep anti-pattern burden/coverage, delivery integrity, and evidence density as diagnostics. Explain that unknown evidence is excluded from observed values and reduces resolution; it does not prove capability absence or anti-pattern presence.
 
    **2. Evidence-Backed Findings:** Summarize confirmed FinOps maturity strengths, confirmed gaps, confirmed anti-pattern findings, verified anti-pattern absences, anti-patterns not assessable from source, and silent areas. Reference domains and scores only when present in Phase 2 or Phase 1. If source material has generic process facts but no FinOps evidence, describe them as source observations outside FinOps scope.
 
@@ -264,7 +272,7 @@ ${STRATEGY_PERSONAS_BLOCK}
 
 <task>
 1. Draft persona evidence summaries using this 3-paragraph structure:
-   **1. Current-State Snapshot:** evidence-sensitive FinOps Maturity Score, capability attainment, anti-pattern control, classification, anti-pattern burden/coverage, delivery integrity, and evidence density. Explain that missing material contributes zero but does not prove a capability is absent.
+   **1. Current-State Snapshot:** Corroborated Maturity, Observed Maturity, Assessment Resolution, Adjusted FinOps Maturity, Assessment Sufficiency, and classification. Keep anti-pattern burden/coverage, delivery integrity, and evidence density as diagnostics. Explain that unknown evidence is excluded from observed values and reduces resolution; it does not prove capability absence or anti-pattern presence.
    **2. Evidence-Backed Findings:** confirmed FinOps strengths, confirmed gaps, confirmed anti-pattern findings, verified anti-pattern absences, anti-patterns not assessable from source, and silent areas with domain scores where present. If the source has generic process facts but no FinOps evidence, describe them as source observations outside FinOps scope.
    **3. Source Confidence & Boundaries:** what the evidence can and cannot prove. No recommendations.
 2. Populate evidence_summary with concise fact-only bullets.

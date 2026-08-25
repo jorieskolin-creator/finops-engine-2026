@@ -6,7 +6,7 @@ export const escapeXml = (s: string): string =>
   s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
 export interface GaugeSpec {
-  value: number;
+  value: number | null;
   label: string;
   color: string;
   description: string;
@@ -16,7 +16,8 @@ export interface GaugeSpec {
 }
 
 export const svgGaugeCard = (g: GaugeSpec): string => {
-  const v = Math.max(0, Math.min(100, g.value));
+  const available = typeof g.value === 'number' && Number.isFinite(g.value);
+  const v = available ? Math.max(0, Math.min(100, g.value!)) : 0;
   const isLarge = g.size === 'large';
   const w = isLarge ? 240 : 180;
   const r = isLarge ? 80 : 56;
@@ -36,10 +37,10 @@ export const svgGaugeCard = (g: GaugeSpec): string => {
             fill="none" stroke="#e2e8f0" stroke-width="${stroke}" stroke-linecap="round" />
       <path d="M ${cx - r} ${cy} A ${r} ${r} 0 0 1 ${cx + r} ${cy}"
             fill="none" stroke="${g.color}" stroke-width="${stroke}" stroke-linecap="round"
-            stroke-dasharray="${filled.toFixed(2)} ${empty.toFixed(2)}" />
+            stroke-dasharray="${filled.toFixed(2)} ${empty.toFixed(2)}" opacity="${available ? 1 : 0}" />
       <text x="${cx}" y="${cy - 4}" text-anchor="middle"
             font-family="system-ui, -apple-system, sans-serif" font-weight="800"
-            font-size="${isLarge ? 40 : 28}" fill="#0f172a">${Math.round(v)}<tspan font-size="${isLarge ? 20 : 14}" font-weight="500" fill="#64748b" dx="2">%</tspan></text>
+            font-size="${isLarge ? 40 : 28}" fill="#0f172a">${available ? Math.round(v) : 'N/A'}${available ? `<tspan font-size="${isLarge ? 20 : 14}" font-weight="500" fill="#64748b" dx="2">%</tspan>` : ''}</text>
     </svg>
     <h3 class="gauge-label">${escapeXml(g.label)}</h3>
     <p class="gauge-desc">${escapeXml(g.description)}</p>

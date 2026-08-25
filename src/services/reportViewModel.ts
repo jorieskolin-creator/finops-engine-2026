@@ -3,7 +3,7 @@ import { FINOPS_ANTIPATTERNS, FINOPS_CRITERIA } from '../knowledge_base';
 import { inferAntiPatternAbsenceStatus } from './antiPatternSemantics';
 
 export interface ReportMetricCard {
-  value: number;
+  value: number | null;
   label: string;
   description: string;
   denominator: string;
@@ -12,6 +12,11 @@ export interface ReportMetricCard {
 }
 
 export interface ReportViewModel {
+  sufficiency: {
+    decision: 'PASS' | 'BLOCK';
+    statement: string;
+    reasons: string[];
+  };
   actionability: {
     gate: DiagnosticResult['quality_gate']['decision'];
     planningDecision: string;
@@ -29,37 +34,10 @@ export interface ReportViewModel {
   };
 }
 
-const percent = (numerator: number, denominator: number): number =>
-  denominator > 0 ? Math.round((numerator / denominator) * 100) : 0;
-
 export const buildReportViewModel = (result: DiagnosticResult): ReportViewModel => {
   const maturityTotal = FINOPS_CRITERIA.length;
-  const antiPatternTotal = FINOPS_ANTIPATTERNS.length;
-  const criterionTotal = maturityTotal + antiPatternTotal;
   const metrics = result.phase_2_validation.metrics;
-  const scoreGapBreakdown = metrics.score_gap_breakdown || {
-    maturity_full: 0,
-    maturity_partial: 0,
-    maturity_low_or_absent: 0,
-    maturity_not_demonstrated: maturityTotal,
-    maturity_verification_unresolved: 0,
-    antipattern_tested_absent: 0,
-    antipattern_partial_control: 0,
-    antipattern_uncontrolled: 0,
-    antipattern_not_assessed: antiPatternTotal,
-    antipattern_verification_unresolved: 0,
-  };
-  const overallScoreAvailable = scoreGapBreakdown.maturity_verification_unresolved === 0
-    && scoreGapBreakdown.antipattern_verification_unresolved === 0;
-  const capabilityAttainment = metrics.capability_attainment ?? metrics.maturity_ratio ?? 0;
-  const antipatternControl = metrics.antipattern_control ?? metrics.antipattern_clearance ?? 0;
-  const rawMaturityScore = metrics.raw_finops_maturity_score ?? metrics.finops_readiness ?? 0;
-  const maturityAssessedCount = metrics.maturity_assessed_count
-    ?? scoreGapBreakdown.maturity_full + scoreGapBreakdown.maturity_partial + scoreGapBreakdown.maturity_low_or_absent;
   const evidenceCheck = result.quality_gate.evidence_check;
-  const verificationCompleted = evidenceCheck
-    ? evidenceCheck.items.filter(item => !item.adjudication_unresolved && !item.verification_unresolved).length
-    : 0;
   const unresolvedAntiPatternIds = new Set(
     evidenceCheck?.items
       .filter(item => item.stream === 'antipattern' && (item.adjudication_unresolved || item.verification_unresolved))
@@ -98,8 +76,17 @@ export const buildReportViewModel = (result: DiagnosticResult): ReportViewModel 
     : gate === 'WARN'
       ? 'The assessment is usable with the listed evidence and strategy limitations.'
       : 'The validated evidence supports the reported planning decision.';
+  const sufficiency = result.phase_2_validation.assessment_sufficiency;
+  const maturityModel = result.phase_2_validation.resolution_maturity;
 
   return {
+    sufficiency: {
+      decision: sufficiency.decision,
+      statement: sufficiency.decision === 'PASS'
+        ? `Assessment Sufficiency passed. The adjusted score can publish a ${result.phase_2_validation.crawl_walk_run} classification.`
+        : 'Assessment Sufficiency blocked CRAWL/WALK/RUN publication. Model values remain visible for calibration, but are not a maturity classification.',
+      reasons: sufficiency.blocking_reasons,
+    },
     actionability: {
       gate,
       planningDecision,
@@ -109,48 +96,29 @@ export const buildReportViewModel = (result: DiagnosticResult): ReportViewModel 
     },
     metrics: [
       {
-        value: metrics.evidence_density,
-        label: 'Evidence Coverage',
-        description: 'Share of the 60-criterion assessment surface supported by relevant, verified source evidence.',
-        denominator: `${Math.round((metrics.evidence_density / 100) * criterionTotal)} of ${criterionTotal} criteria evidenced`,
-        trend: 'positive',
-        color: '#475569',
-      },
-      {
-        value: percent(verificationCompleted, criterionTotal),
-        label: 'Verification Completion',
-        description: 'Share of required criterion-level evidence decisions that completed with a valid verdict.',
-        denominator: `${verificationCompleted} of ${criterionTotal} decisions complete`,
-        trend: 'positive',
-        color: '#7c3aed',
-      },
-      {
-        value: capabilityAttainment,
-        label: 'Evidence-Based Capability',
-        description: 'Supported capability questions across the complete 30-criterion surface. Unknown criteria earn no points but are not confirmed gaps.',
-        denominator: `${result.phase_2_validation.raw_counts.maturity_sub_criteria_met} of ${maturityTotal * 3} framework questions supported · ${maturityAssessedCount} criteria assessed`,
+        value: metrics.corroborated_maturity,
+        label: 'Corroborated Maturity',
+        description: 'Maturity from pairs where both the capability and its related anti-pattern are resolved. Unknown pairs are excluded rather than scored as zero.',
+        denominator: `${maturityModel.overall.fully_resolved_pair_count} of ${maturityTotal} pairs fully resolved`,
         trend: 'positive',
         color: '#0891b2',
       },
       {
-        value: antipatternControl,
-        label: 'Anti-Pattern Control',
-        description: 'Only tested absence raises control across the complete 30-criterion surface. Present, partial, and unknown criteria earn no control points; findings remain visible as burden.',
-        denominator: `${scoreGapBreakdown.antipattern_tested_absent} tested absent · ${scoreGapBreakdown.antipattern_uncontrolled} present · ${scoreGapBreakdown.antipattern_not_assessed} unknown`,
+        value: metrics.observed_maturity,
+        label: 'Observed Maturity',
+        description: 'Evidence-weighted maturity across fully and partially resolved pairs. Partial pairs contribute with half resolution credit.',
+        denominator: `${metrics.assessment_resolution.toFixed(1)}% resolution · ${maturityModel.overall.partially_resolved_pair_count} partially resolved pairs`,
         trend: 'positive',
         color: '#7c3aed',
       },
-      ...(overallScoreAvailable ? [{
-        value: metrics.finops_readiness,
-        label: 'FinOps Maturity Score',
-        description: metrics.quality_gate_score_cap_reason
-          || 'Equal-weight average of Evidence-Based Capability and Anti-Pattern Control.',
-        denominator: metrics.quality_gate_score_cap_reason
-          ? `${Math.round(rawMaturityScore)} calculated · capped at 70 because Quality Gate BLOCKED`
-          : `${Math.round(capabilityAttainment)} capability · ${Math.round(antipatternControl)} anti-pattern control`,
+      {
+        value: metrics.adjusted_maturity,
+        label: 'Adjusted FinOps Maturity',
+        description: 'Observed Maturity adjusted by the square root of assessment resolution. This score drives CRAWL/WALK/RUN only when Assessment Sufficiency passes.',
+        denominator: `${metrics.observed_maturity === null ? 'N/A' : metrics.observed_maturity.toFixed(1)} observed × √${(metrics.assessment_resolution / 100).toFixed(3)} resolution · sufficiency ${sufficiency.decision}`,
         trend: 'positive',
         color: '#059669',
-      } as ReportMetricCard] : []),
+      },
     ],
     antipatternDisposition: {
       confirmed,

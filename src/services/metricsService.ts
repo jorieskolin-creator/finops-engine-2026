@@ -1,6 +1,7 @@
 import type { AuditItem, EvidenceCategory, Phase1AuditLogs, Phase2Validation } from '../types';
 import { BATCH_TITLES, FINOPS_ANTIPATTERNS, FINOPS_CRITERIA } from '../knowledge_base';
 import { inferAntiPatternAbsenceStatus } from './antiPatternSemantics';
+import { calculateResolutionBasedMaturity, evaluateAssessmentSufficiency } from './maturityModelService';
 
 export const EVIDENCE_DENSITY_BLOCK = 30;
 export const EVIDENCE_DENSITY_WARN = 60;
@@ -28,33 +29,10 @@ export const hasVerifiedSourceCoverage = (item: AuditItem, stream: 'maturity' | 
   return false;
 };
 
-const QUALITY_GATE_BLOCK_SCORE_CAP = 70;
-
-export const applyQualityGateScoreCap = (
-  phase2: Phase2Validation,
-  decision: 'GO' | 'WARN' | 'BLOCK'
+export const calculateMetrics = (
+  logs: Phase1AuditLogs,
+  options: { evidencePacketReady?: boolean } = {},
 ): Phase2Validation => {
-  const metrics = phase2.metrics;
-  const rawScore = metrics.raw_finops_maturity_score ?? metrics.uncapped_readiness ?? metrics.finops_readiness;
-  metrics.raw_finops_maturity_score = rawScore;
-  metrics.uncapped_readiness = rawScore;
-  metrics.readiness_cap = decision === 'BLOCK' ? QUALITY_GATE_BLOCK_SCORE_CAP : 100;
-  if (decision === 'BLOCK' && rawScore > QUALITY_GATE_BLOCK_SCORE_CAP) {
-    metrics.finops_readiness = QUALITY_GATE_BLOCK_SCORE_CAP;
-    metrics.quality_gate_score_cap = QUALITY_GATE_BLOCK_SCORE_CAP;
-    metrics.quality_gate_score_cap_reason =
-      `The calculated score was ${Math.round(rawScore)}%, but a BLOCKED assessment cannot report a FinOps Maturity Score above ${QUALITY_GATE_BLOCK_SCORE_CAP}%.`;
-    metrics.readiness_cap_reason = metrics.quality_gate_score_cap_reason;
-  } else {
-    metrics.finops_readiness = rawScore;
-    delete metrics.quality_gate_score_cap;
-    delete metrics.quality_gate_score_cap_reason;
-    delete metrics.readiness_cap_reason;
-  }
-  return phase2;
-};
-
-export const calculateMetrics = (logs: Phase1AuditLogs): Phase2Validation => {
   let maturityCount = 0; let maturitySum = 0; const maturityGaps: string[] = [];
   let antipatternCount = 0; let antipatternSum = 0; const antipatternFindings: string[] = [];
   let testedAbsentCount = 0;
@@ -213,21 +191,29 @@ export const calculateMetrics = (logs: Phase1AuditLogs): Phase2Validation => {
 
   const capability_attainment = clampPercent(maturity_depth);
   const antipattern_control = antipattern_clearance;
-  const raw_finops_maturity_score = clampPercent((capability_attainment + antipattern_control) / 2);
+  const resolution_maturity = calculateResolutionBasedMaturity(logs);
+  const assessment_sufficiency = evaluateAssessmentSufficiency(resolution_maturity, options);
+  const corroborated_maturity = resolution_maturity.overall.corroborated_maturity;
+  const observed_maturity = resolution_maturity.overall.observed_maturity;
+  const assessment_resolution = resolution_maturity.overall.resolution;
+  const adjusted_maturity = resolution_maturity.overall.adjusted_maturity;
+  const raw_finops_maturity_score = adjusted_maturity ?? 0;
   const finops_readiness = raw_finops_maturity_score;
 
   let crawl_walk_run: Phase2Validation['crawl_walk_run'];
-  if (evidence_density < EVIDENCE_DENSITY_BLOCK) {
+  if (assessment_sufficiency.decision === 'BLOCK' || adjusted_maturity === null) {
     crawl_walk_run = 'Insufficient evidence';
   } else if (finops_readiness < 33) {
     crawl_walk_run = 'Crawl';
   } else if (finops_readiness < 66) {
-    crawl_walk_run = antipattern_burden > 50 ? 'Walk with significant friction' : 'Walk';
+    crawl_walk_run = 'Walk';
   } else {
     crawl_walk_run = 'Run';
   }
 
   return {
+    resolution_maturity,
+    assessment_sufficiency,
     metrics: {
       maturity_ratio,
       antipattern_ratio,
@@ -239,8 +225,11 @@ export const calculateMetrics = (logs: Phase1AuditLogs): Phase2Validation => {
       antipattern_control,
       raw_finops_maturity_score,
       finops_readiness,
+      corroborated_maturity,
+      observed_maturity,
+      assessment_resolution,
+      adjusted_maturity,
       uncapped_readiness: raw_finops_maturity_score,
-      readiness_cap: 100,
       score_gap_breakdown: {
         maturity_full: maturityFull,
         maturity_partial: maturityPartial,

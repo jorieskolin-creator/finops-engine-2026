@@ -19,6 +19,15 @@ try {
   const dir = await mkdtemp(join(tmpdir(), 'finops-report-rendering-'));
   const modulePath = join(dir, 'reportTextService.mjs');
   await writeFile(modulePath, compiled, 'utf8');
+  const svgSource = (await readFile(new URL('../src/services/svgChartService.ts', import.meta.url), 'utf8'))
+    .replace("import { BATCH_TITLES } from '../knowledge_base';", "const BATCH_TITLES = { A: 'A', B: 'B', C: 'C', D: 'D', E: 'E', F: 'F' };");
+  await writeFile(join(dir, 'svgChartService.mjs'), ts.default.transpileModule(svgSource, {
+    compilerOptions: {
+      module: ts.default.ModuleKind.ES2022,
+      target: ts.default.ScriptTarget.ES2020,
+      importsNotUsedAsValues: ts.default.ImportsNotUsedAsValues.Remove,
+    },
+  }).outputText, 'utf8');
 
   const {
     isInsufficientEvidenceReport,
@@ -28,6 +37,7 @@ try {
     renderMarkdownSummaryHtml,
     strengthsSectionTitle,
   } = await import(`file://${modulePath}`);
+  const { svgGaugeCard } = await import(`file://${join(dir, 'svgChartService.mjs')}`);
 
   assert.equal(strengthsSectionTitle(false), 'Confirmed strengths');
   assert.equal(strengthsSectionTitle(true), 'Source observations outside FinOps scope');
@@ -60,6 +70,9 @@ try {
   assert.ok(html.includes('class="summary-paragraph"'), 'summary should render as paragraph blocks');
   assert.equal(html.includes('**'), false, 'raw bold markdown should not leak into exported HTML');
   assert.equal(html.includes('*project cost*'), false, 'raw italic markdown should not leak into exported HTML');
+  const unavailableGauge = svgGaugeCard({ value: null, label: 'Corroborated Maturity', color: '#000', description: 'Unavailable fixture.', trend: 'positive' });
+  assert.match(unavailableGauge, />N\/A</, 'an unavailable maturity value must render as N/A');
+  assert.doesNotMatch(unavailableGauge, />0<tspan/, 'an unavailable maturity value must never render as 0%');
   functionalChecksRan = true;
 } catch (error) {
   if (error?.code !== 'ERR_MODULE_NOT_FOUND') throw error;
@@ -97,10 +110,10 @@ assert.doesNotMatch(exportSource, /<h2>Executive Summary<\/h2>/, 'HTML exports s
 assert.doesNotMatch(exportSource, /Evidence summary for the/, 'HTML exports should not render repetitive persona summaries');
 assert.match(exportSource, /Candidate inclusion measures/, 'Master Data should distinguish retrieval candidate inclusion from evidence sufficiency');
 assert.doesNotMatch(exportSource, /How the maturity score is measured/, 'HTML exports should rely on the concise explanation attached to each gauge');
-assert.match(exportSource, /Assessment BLOCKED/, 'HTML exports should show blocked actionability ahead of maturity classification');
+assert.match(exportSource, /Roadmap actionability BLOCKED/, 'HTML exports should distinguish blocked actionability from maturity classification');
 assert.match(exportSource, /FinOps Engine v\.\$\{escapeHtml\(result\.meta\.engine_version\)\}/, 'HTML exports should render the current FinOps Engine product version');
 assert.doesNotMatch(exportSource, /Engine \$\{escapeHtml\(result\.meta\.engine_version\)\}/, 'HTML exports should not expose the internal version value without the product label');
-assert.equal((exportSource.match(/grid-template-columns: repeat\(5, minmax\(0, 1fr\)\)/g) || []).length, 2, 'both HTML reports should keep all five gauges on one desktop row');
+assert.equal((exportSource.match(/grid-template-columns: repeat\(3, minmax\(0, 1fr\)\)/g) || []).length, 2, 'both HTML reports should keep all three active gauges on one desktop row');
 assert.doesNotMatch(exportSource, /Anti-pattern disposition|renderAntiPatternDisposition/, 'HTML reports should omit the redundant anti-pattern disposition card');
 assert.doesNotMatch(summaryExportSource, /renderScoreEvidenceGaps/, 'Summary Report should leave detailed evidence questions to Master Data');
 assert.match(exportSource, /renderScoreEvidenceGaps\(result\)/, 'Master Data should show all deterministic evidence questions');
@@ -117,9 +130,10 @@ assert.match(exportSource, /Shadow deterministic A1\/AP-A1 observations/, 'Maste
 assert.match(exportSource, /raw values exposed/, 'Master Data should disclose the derived-evidence privacy boundary');
 
 const reportViewModelSource = await readFile(new URL('../src/services/reportViewModel.ts', import.meta.url), 'utf8');
-assert.match(reportViewModelSource, /label: 'FinOps Maturity Score'/, 'report gauges should expose the existing FinOps Maturity Score');
-assert.match(reportViewModelSource, /label: 'Evidence-Based Capability'/, 'report gauges should label the evidence-based capability dimension explicitly');
-assert.match(reportViewModelSource, /Only tested absence raises control/, 'anti-pattern gauge should state that only tested absence improves control');
+assert.match(reportViewModelSource, /label: 'Corroborated Maturity'/, 'report gauges should expose corroborated paired maturity');
+assert.match(reportViewModelSource, /label: 'Observed Maturity'/, 'report gauges should expose observed paired maturity');
+assert.match(reportViewModelSource, /label: 'Adjusted FinOps Maturity'/, 'report gauges should expose resolution-adjusted maturity');
+assert.match(reportViewModelSource, /Assessment Sufficiency/, 'active gauge explanation should disclose the publication gate');
 assert.doesNotMatch(reportViewModelSource, /label: 'Observed Friction'/, 'Observed Friction should no longer occupy a primary report gauge');
 
 const gaugeComponentSource = await readFile(new URL('../src/components/DashboardComponents.tsx', import.meta.url), 'utf8');

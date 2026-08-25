@@ -12,18 +12,18 @@ const transpile = source => ts.transpileModule(source, {
   },
 }).outputText;
 
-const dir = await mkdtemp(join(tmpdir(), 'finops-maturity-shadow-'));
+const dir = await mkdtemp(join(tmpdir(), 'finops-maturity-model-'));
 const registry = JSON.parse(await readFile(new URL('../src/knowledge_base/finops_maturity_pair_registry.json', import.meta.url), 'utf8'));
 const semanticsSource = await readFile(new URL('../src/services/antiPatternSemantics.ts', import.meta.url), 'utf8');
 await writeFile(join(dir, 'antiPatternSemantics.mjs'), transpile(semanticsSource), 'utf8');
-const serviceSource = (await readFile(new URL('../src/services/maturityShadowService.ts', import.meta.url), 'utf8'))
+const serviceSource = (await readFile(new URL('../src/services/maturityModelService.ts', import.meta.url), 'utf8'))
   .replace(
     "import { FINOPS_MATURITY_PAIR_REGISTRY } from '../knowledge_base';",
     `const FINOPS_MATURITY_PAIR_REGISTRY = ${JSON.stringify(registry)};`
   )
   .replace('./antiPatternSemantics', './antiPatternSemantics.mjs');
-await writeFile(join(dir, 'maturityShadowService.mjs'), transpile(serviceSource), 'utf8');
-const { calculateResolutionBasedMaturityShadow } = await import(`file://${join(dir, 'maturityShadowService.mjs')}`);
+await writeFile(join(dir, 'maturityModelService.mjs'), transpile(serviceSource), 'utf8');
+const { calculateResolutionBasedMaturity } = await import(`file://${join(dir, 'maturityModelService.mjs')}`);
 const analysisSource = await readFile(new URL('../src/services/analysisService.ts', import.meta.url), 'utf8');
 
 const ids = ['A', 'B', 'C', 'D', 'E', 'F'].flatMap(domain => [1, 2, 3, 4, 5].map(index => `${domain}${index}`));
@@ -53,7 +53,7 @@ const logs = (capabilityFactory, antipatternFactory) => ({
 });
 
 {
-  const result = calculateResolutionBasedMaturityShadow(logs(
+  const result = calculateResolutionBasedMaturity(logs(
     () => capability(0, null),
     () => antipattern(0, 'unknown_absent', null),
   ));
@@ -66,7 +66,7 @@ const logs = (capabilityFactory, antipatternFactory) => ({
 }
 
 {
-  const result = calculateResolutionBasedMaturityShadow(logs(
+  const result = calculateResolutionBasedMaturity(logs(
     () => capability(3),
     (_id, index) => index < 15 ? antipattern(0, 'tested_absent', null) : antipattern(3, 'confirmed_present'),
   ));
@@ -95,7 +95,7 @@ const logs = (capabilityFactory, antipatternFactory) => ({
             ? antipattern(3, 'confirmed_present')
             : antipattern(0, 'unknown_absent', null),
   );
-  const result = calculateResolutionBasedMaturityShadow(fixture);
+  const result = calculateResolutionBasedMaturity(fixture);
   const health = result.criterion_resolutions
     .filter(record => record.stream === 'antipattern')
     .slice(0, 4)
@@ -104,7 +104,7 @@ const logs = (capabilityFactory, antipatternFactory) => ({
 }
 
 {
-  const result = calculateResolutionBasedMaturityShadow(logs(
+  const result = calculateResolutionBasedMaturity(logs(
     () => capability(3),
     () => antipattern(0, 'unknown_absent', null),
   ));
@@ -120,7 +120,7 @@ const logs = (capabilityFactory, antipatternFactory) => ({
     (id) => id === 'A1' ? capability(2, derivedQuote) : capability(0, null),
     () => antipattern(0, 'unknown_absent', null),
   );
-  const result = calculateResolutionBasedMaturityShadow(fixture);
+  const result = calculateResolutionBasedMaturity(fixture);
   const derived = result.criterion_resolutions.find(record => record.stream === 'maturity' && record.criterion_id === 'A1');
   assert.equal(derived.state, 'RESOLVED');
   assert.equal(derived.evidence_basis, 'DERIVED');
@@ -133,7 +133,7 @@ const logs = (capabilityFactory, antipatternFactory) => ({
     (id) => id === 'A1' ? capability(3, unboundQuote) : capability(0, null),
     () => antipattern(0, 'unknown_absent', null),
   );
-  const result = calculateResolutionBasedMaturityShadow(fixture);
+  const result = calculateResolutionBasedMaturity(fixture);
   const unbound = result.criterion_resolutions.find(record => record.stream === 'maturity' && record.criterion_id === 'A1');
   assert.equal(unbound.state, 'UNKNOWN', 'an unbound quote must not resolve maturity even if the candidate count is 3/3');
   assert.equal(unbound.normalized_value, null);
@@ -145,19 +145,19 @@ const logs = (capabilityFactory, antipatternFactory) => ({
     () => antipattern(0, 'unknown_absent', null),
   );
   const before = structuredClone(fixture);
-  const result = calculateResolutionBasedMaturityShadow(fixture);
+  const result = calculateResolutionBasedMaturity(fixture);
   const unresolved = result.criterion_resolutions.find(record => record.stream === 'maturity' && record.criterion_id === 'A1');
   assert.equal(unresolved.state, 'VERIFICATION_UNRESOLVED');
   assert.equal(unresolved.normalized_value, null);
-  assert.deepEqual(fixture, before, 'the shadow calculator must not mutate authoritative logs');
+  assert.deepEqual(fixture, before, 'the maturity calculator must not mutate authoritative logs');
 }
 
 {
   const reconciliationIndex = analysisSource.indexOf('reconcileEvidenceProvenance(');
   const sanitationIndex = analysisSource.indexOf('const auditLogs = validateAndSanitizeLogs(');
-  const shadowIndex = analysisSource.indexOf('calculateResolutionBasedMaturityShadow(auditLogs)');
-  assert.ok(reconciliationIndex >= 0 && reconciliationIndex < sanitationIndex && sanitationIndex < shadowIndex,
-    'runtime shadow calculation must remain downstream of provenance reconciliation and final sanitation');
+  const calculationIndex = analysisSource.indexOf('calculateMetrics(auditLogs');
+  assert.ok(reconciliationIndex >= 0 && reconciliationIndex < sanitationIndex && sanitationIndex < calculationIndex,
+    'runtime maturity calculation must remain downstream of provenance reconciliation and final sanitation');
 }
 
-console.log('resolution-based maturity shadow tests passed');
+console.log('active resolution-based maturity model tests passed');

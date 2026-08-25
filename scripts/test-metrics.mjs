@@ -15,15 +15,22 @@ const compile = (source) => ts.transpileModule(source, {
 const dir = await mkdtemp(join(tmpdir(), 'finops-metrics-'));
 const semanticsSource = await readFile(new URL('../src/services/antiPatternSemantics.ts', import.meta.url), 'utf8');
 await writeFile(join(dir, 'antiPatternSemantics.mjs'), compile(semanticsSource), 'utf8');
+const registry = JSON.parse(await readFile(new URL('../src/knowledge_base/finops_maturity_pair_registry.json', import.meta.url), 'utf8'));
+const maturityModelSource = (await readFile(new URL('../src/services/maturityModelService.ts', import.meta.url), 'utf8'))
+  .replace("import { FINOPS_MATURITY_PAIR_REGISTRY } from '../knowledge_base';", `const FINOPS_MATURITY_PAIR_REGISTRY = ${JSON.stringify(registry)};`)
+  .replace('./antiPatternSemantics', './antiPatternSemantics.mjs');
+await writeFile(join(dir, 'maturityModelService.mjs'), compile(maturityModelSource), 'utf8');
 const sourcePath = new URL('../src/services/metricsService.ts', import.meta.url);
 const source = (await readFile(sourcePath, 'utf8')).replace(
   "import { BATCH_TITLES, FINOPS_ANTIPATTERNS, FINOPS_CRITERIA } from '../knowledge_base';",
   "const BATCH_TITLES = { A: '', B: '', C: '', D: '', E: '', F: '' }; const FINOPS_ANTIPATTERNS = Array(30); const FINOPS_CRITERIA = Array(30);"
 );
 const modulePath = join(dir, 'metricsService.mjs');
-await writeFile(modulePath, compile(source).replace('./antiPatternSemantics', './antiPatternSemantics.mjs'), 'utf8');
+await writeFile(modulePath, compile(source)
+  .replace('./antiPatternSemantics', './antiPatternSemantics.mjs')
+  .replace('./maturityModelService', './maturityModelService.mjs'), 'utf8');
 
-const { applyQualityGateScoreCap, calculateMetrics } = await import(`file://${modulePath}`);
+const { calculateMetrics } = await import(`file://${modulePath}`);
 
 const reportViewSource = (await readFile(new URL('../src/services/reportViewModel.ts', import.meta.url), 'utf8'))
   .replace(
@@ -40,7 +47,8 @@ const item = (count, withEvidence = false) => ({
   count,
   status: count === 3 ? 'OK' : count === 0 ? 'NOK' : 'Partial',
   evidence: withEvidence ? 'Validated source evidence for this criterion.' : 'Document is silent.',
-  evidence_quotes: withEvidence ? [{ quote: 'Validated source evidence', category: 'Operational', evidence_source: 'text' }] : [],
+  evidence_quotes: withEvidence ? [{ quote: 'Validated source evidence', category: 'Operational', evidence_source: 'text', source_id: 'SRC-1', chunk_id: 'CHK-1' }] : [],
+  evidence_check_status: withEvidence ? 'supported' : 'missing',
   assessment_status: withEvidence ? 'assessed' : 'not_assessed',
   question_results: withEvidence
     ? Array.from({ length: 3 }, (_, index) => index < count ? 'supported' : 'not_supported')
@@ -53,7 +61,7 @@ const anti = (count, withEvidence = false, absenceStatus = undefined) => ({
   count,
   status: count === 0 ? 'OK' : count === 3 ? 'NOK' : 'Partial',
   evidence: withEvidence ? 'Confirmed anti-pattern evidence.' : 'No confirmed anti-pattern evidence.',
-  evidence_quotes: withEvidence ? [{ quote: 'Confirmed anti-pattern evidence', category: 'Operational', evidence_source: 'text' }] : [],
+  evidence_quotes: withEvidence ? [{ quote: 'Confirmed anti-pattern evidence', category: 'Operational', evidence_source: 'text', source_id: 'SRC-1', chunk_id: 'CHK-1' }] : [],
   assessment_status: withEvidence || absenceStatus === 'tested_absent' ? 'assessed' : 'not_assessed',
   question_results: withEvidence
     ? Array.from({ length: 3 }, (_, index) => index < count ? 'supported' : 'not_supported')
@@ -62,7 +70,7 @@ const anti = (count, withEvidence = false, absenceStatus = undefined) => ({
   is_silent: count === 0 && absenceStatus !== 'tested_absent',
   antipattern_absence_status: absenceStatus,
   coverage_reason: absenceStatus === 'tested_absent' ? 'Relevant source coverage reviewed; anti-pattern was not found.' : undefined,
-  evidence_check_status: absenceStatus === 'tested_absent' ? 'supported' : undefined
+  evidence_check_status: withEvidence || absenceStatus === 'tested_absent' ? 'supported' : 'missing'
 });
 
 const logs = (maturityFactory, antiFactory) => ({
@@ -192,8 +200,8 @@ const logs = (maturityFactory, antiFactory) => ({
   assert.equal(result.metrics.antipattern_score_eligible_count, 13, 'unknown and not-assessed signals must not enter the control denominator');
   assert.equal(Math.round(result.metrics.antipattern_burden * 10) / 10, 38.5);
   assert.equal(result.metrics.antipattern_control, 0, 'partial findings without tested absence must not raise control');
-  assert.equal(result.metrics.finops_readiness, 0);
-  assert.equal(result.crawl_walk_run, 'Crawl');
+  assert.equal(result.metrics.finops_readiness, 3, 'active paired model retains observed partial anti-pattern health');
+  assert.equal(result.crawl_walk_run, 'Insufficient evidence', 'resolution below 65% blocks classification');
 }
 
 {
@@ -234,7 +242,7 @@ const logs = (maturityFactory, antiFactory) => ({
   ));
   assert.equal(Math.round(result.metrics.capability_attainment * 10) / 10, 65.6);
   assert.equal(Math.round(result.metrics.antipattern_control * 10) / 10, 73.3, '22 tested absences earn 66 of 90 control points; findings and unknowns earn none');
-  assert.equal(Math.round(result.metrics.finops_readiness * 10) / 10, 69.4, 'the composite averages the two full-framework dimensions');
+  assert.equal(Math.round(result.metrics.finops_readiness * 10) / 10, 75.2, 'the active pair model preserves partial anti-pattern health and applies resolution adjustment');
   assert.equal(result.metrics.score_gap_breakdown.maturity_not_demonstrated, 0);
   assert.equal(result.metrics.score_gap_breakdown.antipattern_not_assessed, 5);
   assert.equal(result.score_evidence_gaps.length, 5, 'unknown anti-pattern absence should remain an evidence discussion');
@@ -249,7 +257,7 @@ const logs = (maturityFactory, antiFactory) => ({
   ));
   assert.equal(result.metrics.antipattern_clearance, 50);
   assert.equal(result.metrics.antipattern_control, 50, 'unknown anti-patterns must not raise control above tested-absence credit');
-  assert.equal(Math.round(result.metrics.finops_readiness * 10) / 10, 75);
+  assert.equal(Math.round(result.metrics.finops_readiness * 10) / 10, 86.6, 'unknown anti-pattern pairs contribute only resolved capability with half resolution credit');
 }
 
 {
@@ -261,7 +269,7 @@ const logs = (maturityFactory, antiFactory) => ({
   ));
   assert.equal(Math.round(result.metrics.capability_attainment * 10) / 10, 1.1);
   assert.equal(result.metrics.antipattern_control, 0, 'partial presence without tested absence cannot create Walk-level control');
-  assert.equal(Math.round(result.metrics.finops_readiness * 10) / 10, 0.6);
+  assert.equal(Math.round(result.metrics.finops_readiness * 10) / 10, 4.8);
   assert.equal(result.crawl_walk_run, 'Crawl');
 }
 
@@ -272,7 +280,7 @@ const logs = (maturityFactory, antiFactory) => ({
   ));
   assert.equal(Math.round(result.metrics.capability_attainment * 10) / 10, 3.3, 'one demonstrated capability and 29 unknowns must not report 100% capability');
   assert.equal(result.metrics.antipattern_control, 0);
-  assert.equal(Math.round(result.metrics.finops_readiness * 10) / 10, 1.7);
+  assert.equal(Math.round(result.metrics.finops_readiness * 10) / 10, 12.9, 'a sparse perfect observation remains visible but cannot pass sufficiency');
   assert.equal(result.crawl_walk_run, 'Insufficient evidence');
 }
 
@@ -286,74 +294,31 @@ const logs = (maturityFactory, antiFactory) => ({
   assert.equal(result.metrics.antipattern_control, 50, '15 tested absences and 15 confirmed findings must yield 50% demonstrated control');
   assert.equal(result.metrics.antipattern_clearance, 50);
   assert.equal(result.metrics.antipattern_burden, 50);
-  assert.equal(result.metrics.finops_readiness, 75);
-  assert.equal(result.crawl_walk_run, 'Run');
+  assert.equal(result.metrics.finops_readiness, 51.7, 'paired interaction model reflects the contradiction between high capabilities and confirmed anti-patterns');
+  assert.equal(result.crawl_walk_run, 'Walk');
 }
 
 {
-  const result = calculateMetrics(logs(
+  const phase2 = calculateMetrics(logs(
     () => item(3, true),
-    () => anti(0, false, 'tested_absent')
+    () => anti(0, false, 'tested_absent'),
   ));
-  applyQualityGateScoreCap(result, 'BLOCK');
-  assert.equal(result.metrics.raw_finops_maturity_score, 100);
-  assert.equal(result.metrics.finops_readiness, 70, 'BLOCKED report score must never exceed 70%');
-  assert.equal(result.metrics.quality_gate_score_cap, 70);
-  assert.match(result.metrics.quality_gate_score_cap_reason, /calculated score was 100%/);
-  applyQualityGateScoreCap(result, 'GO');
-  assert.equal(result.metrics.finops_readiness, 100, 'GO must preserve the calculated score');
-  assert.equal(result.metrics.quality_gate_score_cap, undefined);
-}
-
-{
-  const antiLogs = Object.fromEntries(Array.from({ length: 30 }, (_, index) => [`A${index + 1}`, {
-    count: 0,
-    status: 'OK',
-    evidence: 'No supported finding.',
-    evidence_quotes: [],
-    reasoning: 'Not assessed.',
-    antipattern_absence_status: 'unknown_absent',
-  }]));
-  const evidenceItems = Array.from({ length: 60 }, (_, index) => ({
-    stream: index < 30 ? 'maturity' : 'antipattern',
-    id: index < 30 ? `M${index + 1}` : `A${index - 29}`,
-    status: index === 59 ? 'missing' : 'supported',
-    original_count: 0,
-    verified_count: 0,
-    rationale: 'Fixture verdict.',
-    adjudication_unresolved: index === 59,
-  }));
   const view = buildReportViewModel({
-    phase_1_audit_logs: { maturity: {}, antipattern: antiLogs },
-    phase_2_validation: {
-      metrics: { evidence_density: 43, maturity_depth: 10 },
-      raw_counts: { maturity_sub_criteria_met: 9, antipattern_sub_criteria_met: 0 },
-    },
+    phase_1_audit_logs: logs(() => item(3, true), () => anti(0, false, 'tested_absent')),
+    phase_2_validation: phase2,
     phase_3_strategy: {
       diagnosis: { confidence: 'low' },
       planning_decision: { decision: 'NO_GO' },
     },
     quality_gate: {
       decision: 'BLOCK',
-      blocking_reasons: ['Unresolved adjudication.'],
-      evidence_check: {
-        total_items: 60,
-        supported_count: 59,
-        weak_count: 0,
-        unsupported_count: 0,
-        missing_count: 1,
-        downgraded_count: 0,
-        rescan_count: 0,
-        items: evidenceItems,
-        adjustments: [],
-        failed: true,
-      },
+      blocking_reasons: ['Roadmap actionability fixture.'],
     },
   });
-  assert.equal(view.metrics.length, 5, 'report summary should expose evidence, verification, both score dimensions, and the composite score');
-  assert.equal(view.metrics[1].label, 'Verification Completion');
-  assert.equal(view.metrics[1].value, 98, 'one unresolved decision should produce 59/60 completion');
-  assert.equal(view.antipatternDisposition.unresolved, 1);
+  assert.equal(view.metrics.length, 3, 'report summary should expose only the three active maturity gauges');
+  assert.deepEqual(view.metrics.map(metric => metric.label), ['Corroborated Maturity', 'Observed Maturity', 'Adjusted FinOps Maturity']);
+  assert.equal(view.sufficiency.decision, 'PASS', 'Quality Gate BLOCK must not alter Assessment Sufficiency');
+  assert.equal(view.antipatternDisposition.unresolved, 0);
   assert.equal(
     Object.values(view.antipatternDisposition).reduce((sum, value) => sum + value, 0),
     30,

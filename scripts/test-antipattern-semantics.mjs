@@ -16,13 +16,19 @@ const dir = await mkdtemp(join(tmpdir(), 'finops-antipattern-semantics-'));
 
 const antiPatternSource = await readFile(new URL('../src/services/antiPatternSemantics.ts', import.meta.url), 'utf8');
 await writeFile(join(dir, 'antiPatternSemantics.mjs'), transpile(antiPatternSource), 'utf8');
+const registry = JSON.parse(await readFile(new URL('../src/knowledge_base/finops_maturity_pair_registry.json', import.meta.url), 'utf8'));
+const maturityModelSource = (await readFile(new URL('../src/services/maturityModelService.ts', import.meta.url), 'utf8'))
+  .replace("import { FINOPS_MATURITY_PAIR_REGISTRY } from '../knowledge_base';", `const FINOPS_MATURITY_PAIR_REGISTRY = ${JSON.stringify(registry)};`)
+  .replace('./antiPatternSemantics', './antiPatternSemantics.mjs');
+await writeFile(join(dir, 'maturityModelService.mjs'), transpile(maturityModelSource), 'utf8');
 
 const metricsSource = (await readFile(new URL('../src/services/metricsService.ts', import.meta.url), 'utf8'))
   .replace(
     "import { BATCH_TITLES, FINOPS_ANTIPATTERNS, FINOPS_CRITERIA } from '../knowledge_base';",
     "const BATCH_TITLES = { A: '', B: '', C: '', D: '', E: '', F: '' }; const FINOPS_ANTIPATTERNS = Array(30); const FINOPS_CRITERIA = Array(30);"
   )
-  .replace('./antiPatternSemantics', './antiPatternSemantics.mjs');
+  .replace('./antiPatternSemantics', './antiPatternSemantics.mjs')
+  .replace('./maturityModelService', './maturityModelService.mjs');
 await writeFile(join(dir, 'metricsService.mjs'), transpile(metricsSource), 'utf8');
 
 const {

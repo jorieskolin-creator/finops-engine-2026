@@ -71,7 +71,6 @@ const buildFindingCorpus = (phase2: Phase2Validation): string => [
   ...phase2.maturity_gaps,
   ...phase2.antipattern_findings,
   ...phase2.silent_areas,
-  phase2.metrics.readiness_cap_reason || ''
 ].join('\n').toLowerCase();
 
 const tacticById = new Map<string, StrategicTactic>(FINOPS_TACTICS_LOCAL.map(tactic => [tactic.id, tactic]));

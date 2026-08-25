@@ -8,10 +8,13 @@ export type ReportImportResult =
 export const isDiagnosticResultPayload = (payload: unknown): payload is DiagnosticResult => {
   if (!payload || typeof payload !== 'object') return false;
   const value = payload as Partial<DiagnosticResult>;
+  const phase2 = value.phase_2_validation;
   return Boolean(
     value.meta &&
     value.phase_1_audit_logs &&
-    value.phase_2_validation &&
+    phase2?.resolution_maturity?.mode === 'ACTIVE' &&
+    phase2?.assessment_sufficiency?.scoring_authority === true &&
+    typeof phase2?.metrics?.assessment_resolution === 'number' &&
     value.phase_3_strategy &&
     value.quality_gate
   );
@@ -38,7 +41,7 @@ export const parseDiagnosticResultJson = (jsonText: string): ReportImportResult 
   try {
     const parsed = JSON.parse(jsonText);
     if (!isDiagnosticResultPayload(parsed)) {
-      return { kind: 'invalid_report', error: 'The embedded FinOps report payload is incomplete or incompatible.' };
+      return { kind: 'invalid_report', error: 'The embedded FinOps report payload is incomplete or uses an inactive historical maturity contract.' };
     }
     return { kind: 'report', result: parsed };
   } catch {

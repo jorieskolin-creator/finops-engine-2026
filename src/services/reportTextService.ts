@@ -7,9 +7,8 @@ export const confirmedStrengthsLabel = 'Confirmed strengths';
 export const isInsufficientEvidenceReport = (
   maturityClassification?: string,
   evidenceDensity?: number,
-  qualityGateDecision?: QualityGateDecision
+  _qualityGateDecision?: QualityGateDecision
 ): boolean => {
-  if (qualityGateDecision === 'BLOCK') return true;
   if (typeof evidenceDensity === 'number' && evidenceDensity < 30) return true;
   return (maturityClassification || '').toLowerCase().includes('insufficient');
 };

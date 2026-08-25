@@ -1,6 +1,5 @@
 import type { DiagnosticResult } from '../types';
 import { listCheckpoints, loadCheckpoint, type CheckpointKind, type CheckpointMetadata } from './checkpointService';
-import { applyQualityGateScoreCap } from './metricsService';
 
 const latest = (manifest: CheckpointMetadata[], kind: CheckpointKind, scope?: string): CheckpointMetadata | null => {
   const hashes = new Set(manifest.map(item => item.payload_hash));
@@ -16,11 +15,14 @@ const read = async (runId: string, metadata: CheckpointMetadata | null): Promise
 const recoveredStrategy = (phase2: any): any => {
   const metrics = phase2?.metrics || {};
   const density = Math.round(Number(metrics.evidence_density) || 0);
-  const readiness = Math.round(Number(metrics.finops_readiness) || 0);
+  const adjusted = metrics.adjusted_maturity === null || metrics.adjusted_maturity === undefined
+    ? 'N/A'
+    : `${Math.round(Number(metrics.adjusted_maturity))}/100`;
+  const sufficiency = phase2?.assessment_sufficiency?.decision || 'BLOCK';
   const silent = Array.isArray(phase2?.silent_areas) ? phase2.silent_areas : [];
   const gaps = Array.isArray(phase2?.maturity_gaps) ? phase2.maturity_gaps : [];
   const antipatterns = Array.isArray(phase2?.antipattern_findings) ? phase2.antipattern_findings : [];
-  const summary = `The accepted analysis was recovered from temporary storage after pipeline interruption. Evidence density was ${density}% and the evidence-sensitive FinOps Maturity Score was ${readiness}/100. A full summary and roadmap cannot be safely reconstructed without a validated synthesis, so this recovery report is BLOCK / NO_GO.`;
+  const summary = `The accepted analysis was recovered from temporary storage after pipeline interruption. Evidence density was ${density}%, adjusted maturity was ${adjusted}, and Assessment Sufficiency was ${sufficiency}. A full summary and roadmap cannot be safely reconstructed without a validated synthesis, so roadmap actionability is BLOCK / NO_GO.`;
   return {
     executive_summary: summary,
     executive_summaries: { finops_lead: summary, cfo: summary, engineering_lead: summary },
@@ -28,7 +30,7 @@ const recoveredStrategy = (phase2: any): any => {
     evidence_summary: {
       headline: 'Recovered analysis — insufficient validated synthesis',
       maturity_classification: phase2?.crawl_walk_run || 'Insufficient Evidence',
-      key_metrics: [`FinOps Maturity Score: ${readiness}/100`, `Evidence density: ${density}%`],
+      key_metrics: [`Adjusted FinOps Maturity: ${adjusted}`, `Assessment Sufficiency: ${sufficiency}`, `Evidence density: ${density}%`],
       confirmed_strengths: [],
       confirmed_gaps: gaps.slice(0, 8),
       confirmed_antipatterns: antipatterns.slice(0, 8),
@@ -47,7 +49,7 @@ const recoveredStrategy = (phase2: any): any => {
       safe_to_act_on: ['Review the recovered findings and provide missing evidence before rerunning.'],
       evidence_needed_before_action: silent.slice(0, 8),
     },
-    visual_scorecard: { headline: 'Recovered — Findings Only', maturity_score: `${readiness}/100`, burden_score: `${Math.round(Number(metrics.antipattern_burden) || 0)}%` },
+    visual_scorecard: { headline: 'Recovered — Findings Only', maturity_score: adjusted, burden_score: `${Math.round(Number(metrics.antipattern_burden) || 0)}% diagnostic burden` },
     remediation_roadmap: [],
     confidence_bracket: 'LOW',
     effective_bracket: 'LOW',
@@ -67,7 +69,6 @@ export async function recoverCheckpointResult(runId: string): Promise<{ result: 
   const synthesisPayload = await read(runId, latest(manifest, 'synthesis', 'accepted'));
   const qualityPayload = await read(runId, latest(manifest, 'quality_gate', 'accepted'));
   const phase2 = phase2Payload.phase_2_validation;
-  applyQualityGateScoreCap(phase2, 'BLOCK');
   const strategy = synthesisPayload?.phase_3_strategy
     ? JSON.parse(JSON.stringify(synthesisPayload.phase_3_strategy))
     : recoveredStrategy(phase2);

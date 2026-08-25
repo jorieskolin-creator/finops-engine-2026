@@ -6,7 +6,7 @@ import { antiPatternStatusLabel, inferAntiPatternAbsenceStatus } from '../servic
 import { displayQualityGateDiagnostic, scannerEvidenceCheckDisagreementTitle, splitQualityGateDiagnostics } from '../services/reportDiagnosticsService';
 
 interface GaugeProps {
-  value: number;
+  value: number | null;
   label: string;
   color: string;
   trend?: 'positive' | 'negative';
@@ -489,7 +489,8 @@ export const QualityGateBanner: React.FC<{ gate: QualityGateResult }> = ({ gate 
 export const GaugeCard: React.FC<GaugeProps> = ({ value, label, color, trend = 'positive', size = 'small', subLabel, description }) => {
   const radius = size === 'large' ? 60 : 36;
   const stroke = size === 'large' ? 8 : 5;
-  const normalizedValue = Math.min(Math.max(value, 0), 100);
+  const available = typeof value === 'number' && Number.isFinite(value);
+  const normalizedValue = available ? Math.min(Math.max(value, 0), 100) : 0;
   const circumference = radius * Math.PI;
   const strokeDashoffset = circumference - (normalizedValue / 100) * circumference;
 
@@ -500,11 +501,11 @@ export const GaugeCard: React.FC<GaugeProps> = ({ value, label, color, trend = '
         <svg className={`${size === 'large' ? 'w-64 h-64' : 'w-40 h-40'} transform origin-bottom`} viewBox="0 0 140 140">
           <defs><linearGradient id={`grad-${label.replace(/\s/g, '')}`} x1="0%" y1="0%" x2="100%" y2="0%"><stop offset="0%" style={{ stopColor: color, stopOpacity: 0.2 }} /><stop offset="50%" style={{ stopColor: color, stopOpacity: 0.8 }} /><stop offset="100%" style={{ stopColor: color, stopOpacity: 1 }} /></linearGradient><filter id="glow"><feGaussianBlur stdDeviation="3.5" result="coloredBlur"/><feMerge><feMergeNode in="coloredBlur"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>
           <circle cx="70" cy="70" r={radius} fill="none" stroke="#1e293b" strokeWidth={stroke} strokeLinecap="round" className="opacity-50"/>
-          <circle cx="70" cy="70" r={radius} fill="none" stroke={`url(#grad-${label.replace(/\s/g, '')})`} strokeWidth={stroke} strokeDasharray={circumference} strokeDashoffset={strokeDashoffset} strokeLinecap="round" className="transition-all duration-[2000ms] cubic-bezier(0.2, 0.8, 0.2, 1)" transform="rotate(180 70 70)" filter="url(#glow)"/>
+          {available && <circle cx="70" cy="70" r={radius} fill="none" stroke={`url(#grad-${label.replace(/\s/g, '')})`} strokeWidth={stroke} strokeDasharray={circumference} strokeDashoffset={strokeDashoffset} strokeLinecap="round" className="transition-all duration-[2000ms] cubic-bezier(0.2, 0.8, 0.2, 1)" transform="rotate(180 70 70)" filter="url(#glow)"/>}
         </svg>
         <div className="absolute bottom-0 w-full text-center flex flex-col items-center">
-          <span className={`${size === 'large' ? 'text-7xl' : 'text-4xl'} font-black font-display tracking-tighter text-white drop-shadow-md`}>{Math.round(value)}</span>
-          <span className="text-xs font-bold text-slate-400 -mt-1">%</span>
+          <span className={`${size === 'large' ? 'text-7xl' : 'text-4xl'} font-black font-display tracking-tighter text-white drop-shadow-md`}>{available ? Math.round(value) : 'N/A'}</span>
+          {available && <span className="text-xs font-bold text-slate-400 -mt-1">%</span>}
         </div>
       </div>
       <h3 className={`uppercase tracking-widest text-slate-400 font-bold border-t border-white/5 pt-4 w-full text-center ${size === 'large' ? 'text-sm mt-2' : 'text-[10px]'}`}>{label}</h3>

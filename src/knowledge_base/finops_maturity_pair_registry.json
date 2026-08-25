@@ -1,7 +1,7 @@
 {
   "schema_version": "finops_maturity_pair_registry_v1",
   "registry_version": "1.0.0",
-  "status": "SHADOW_NOT_ACTIVE",
+  "status": "ACTIVE",
   "description": "Canonical capability and anti-pattern relationships for the evidence-resolution maturity model. Pairing is explicit and must never be inferred from matching identifiers.",
   "pairs": [
     {

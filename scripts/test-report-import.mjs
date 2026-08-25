@@ -27,7 +27,12 @@ const payload = {
   meta: { engine_version: 'test', timestamp: '2026-05-22', model_config: {} },
   phase_1_audit_logs: { maturity: {}, antipattern: {} },
   evidence_check: { batch_id: 'all', items: [], adjustments: [] },
-  phase_2_validation: { metrics: {}, crawl_walk_run: 'Run' },
+  phase_2_validation: {
+    metrics: { assessment_resolution: 100 },
+    resolution_maturity: { mode: 'ACTIVE' },
+    assessment_sufficiency: { scoring_authority: true, decision: 'PASS' },
+    crawl_walk_run: 'Run',
+  },
   phase_3_strategy: { executive_summary: 'safe </script> text', remediation_roadmap: [] },
   quality_gate: { decision: 'GO', blocking_reasons: [], warnings: [], notes: [], thresholds: {} },
 };

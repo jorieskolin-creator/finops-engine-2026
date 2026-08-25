@@ -19,14 +19,14 @@ await writeFile(
   transpile(await readFile(new URL('../src/services/antiPatternSemantics.ts', import.meta.url), 'utf8')),
   'utf8'
 );
-const serviceSource = (await readFile(new URL('../src/services/maturityShadowService.ts', import.meta.url), 'utf8'))
+const serviceSource = (await readFile(new URL('../src/services/maturityModelService.ts', import.meta.url), 'utf8'))
   .replace(
     "import { FINOPS_MATURITY_PAIR_REGISTRY } from '../knowledge_base';",
     `const FINOPS_MATURITY_PAIR_REGISTRY = ${JSON.stringify(registry)};`
   )
   .replace('./antiPatternSemantics', './antiPatternSemantics.mjs');
-await writeFile(join(dir, 'maturityShadowService.mjs'), transpile(serviceSource), 'utf8');
-const { calculateResolutionBasedMaturityShadow } = await import(`file://${join(dir, 'maturityShadowService.mjs')}`);
+await writeFile(join(dir, 'maturityModelService.mjs'), transpile(serviceSource), 'utf8');
+const { calculateResolutionBasedMaturity } = await import(`file://${join(dir, 'maturityModelService.mjs')}`);
 
 const ids = ['A', 'B', 'C', 'D', 'E', 'F'].flatMap(domain => [1, 2, 3, 4, 5].map(index => `${domain}${index}`));
 const quote = { quote: 'Governed calibration evidence.', evidence_source: 'text', source_id: 'SRC-CAL', chunk_id: 'CHK-CAL' };
@@ -48,7 +48,7 @@ const antipattern = (count, resolved = true) => ({
   antipattern_absence_status: resolved ? count === 0 ? 'tested_absent' : count === 3 ? 'confirmed_present' : 'partially_present' : 'unknown_absent',
   coverage_reason: resolved && count === 0 ? 'Relevant criterion coverage was reviewed and the anti-pattern was not found.' : undefined,
 });
-const scenario = (capabilityFactory, antipatternFactory) => calculateResolutionBasedMaturityShadow({
+const scenario = (capabilityFactory, antipatternFactory) => calculateResolutionBasedMaturity({
   maturity: Object.fromEntries(ids.map((id, index) => [id, capabilityFactory(id, index)])),
   antipattern: Object.fromEntries(ids.map((id, index) => [id, antipatternFactory(id, index)])),
 });

@@ -1,5 +1,6 @@
 import type {
   AntiPatternAbsenceStatus,
+  AssessmentSufficiencyResult,
   AuditItem,
   CapabilityId,
   DomainId,
@@ -9,11 +10,11 @@ import type {
   MaturityCriterionResolutionRecord,
   MaturityPairRegistry,
   MaturityPairRegistryEntry,
-  MaturityPairShadowResult,
-  MaturityShadowAggregate,
+  MaturityPairResult,
+  MaturityAggregate,
   Phase1AuditLogs,
   ResolutionBasedMaturityRunTrace,
-  ResolutionBasedMaturityShadow,
+  ResolutionBasedMaturityModel,
 } from '../types';
 import { FINOPS_MATURITY_PAIR_REGISTRY } from '../knowledge_base';
 import { inferAntiPatternAbsenceStatus } from './antiPatternSemantics';
@@ -139,7 +140,7 @@ const pairResult = (
   pair: MaturityPairRegistryEntry,
   capability: MaturityCriterionResolutionRecord,
   antipattern: MaturityCriterionResolutionRecord,
-): MaturityPairShadowResult => {
+): MaturityPairResult => {
   const capabilityValue = capability.normalized_value;
   const antipatternHealth = antipattern.normalized_value;
   const capabilityResolved = capabilityValue !== null;
@@ -179,7 +180,7 @@ const pairResult = (
   };
 };
 
-const aggregate = (pairs: MaturityPairShadowResult[]): MaturityShadowAggregate => {
+const aggregate = (pairs: MaturityPairResult[]): MaturityAggregate => {
   const configuredWeight = pairs.reduce((sum, pair) => sum + pair.weight, 0);
   const corroboratedPairs = pairs.filter(pair => pair.corroborated_pair_value !== null);
   const corroboratedWeight = corroboratedPairs.reduce((sum, pair) => sum + pair.weight, 0);
@@ -204,11 +205,11 @@ const aggregate = (pairs: MaturityPairShadowResult[]): MaturityShadowAggregate =
   };
 };
 
-export const calculateResolutionBasedMaturityShadow = (
+export const calculateResolutionBasedMaturity = (
   logs: Phase1AuditLogs,
   registry: MaturityPairRegistry = FINOPS_MATURITY_PAIR_REGISTRY,
-): ResolutionBasedMaturityShadow => {
-  if (registry.status !== 'SHADOW_NOT_ACTIVE') throw new Error('MATURITY_SHADOW_REGISTRY_NOT_SHADOW');
+): ResolutionBasedMaturityModel => {
+  if (registry.status !== 'ACTIVE') throw new Error('MATURITY_MODEL_REGISTRY_NOT_ACTIVE');
   const criterionResolutions = buildMaturityCriterionResolutions(logs, registry);
   const byKey = new Map(criterionResolutions.map(record => [`${record.stream}.${record.criterion_id}`, record]));
   const pairs = registry.pairs.map(pair => pairResult(
@@ -222,7 +223,7 @@ export const calculateResolutionBasedMaturityShadow = (
   }));
 
   return {
-    schema_version: 'resolution_based_maturity_shadow_v1',
+    schema_version: 'resolution_based_maturity_model_v1',
     formula_version: 'resolution_based_maturity_formula_v1',
     registry_version: registry.registry_version,
     mode: registry.status,
@@ -234,15 +235,70 @@ export const calculateResolutionBasedMaturityShadow = (
   };
 };
 
-export const maturityShadowRunTraceProjection = (
-  shadow: ResolutionBasedMaturityShadow,
+const SUFFICIENCY_THRESHOLDS = {
+  criterion_evidence_density: 60,
+  overall_resolution: 65,
+  per_domain_resolution: 40,
+  provenance_integrity: 100,
+} as const;
+
+export const evaluateAssessmentSufficiency = (
+  model: ResolutionBasedMaturityModel,
+  options: { evidencePacketReady?: boolean } = {},
+): AssessmentSufficiencyResult => {
+  const resolvedCriteria = model.criterion_resolutions.filter(record => record.state === 'RESOLVED');
+  const criterionEvidenceDensity = Math.round((resolvedCriteria.length / Math.max(model.criterion_resolutions.length, 1)) * 1000) / 10;
+  const verificationUnresolvedCount = model.criterion_resolutions.filter(record => record.state === 'VERIFICATION_UNRESOLVED').length;
+  const provenanceIntegrity = resolvedCriteria.every(record => record.evidence_basis !== 'NONE') ? 100 : 0;
+  const domainResolution = Object.fromEntries(model.domains.map(domain => [domain.domain_id, domain.resolution])) as Record<DomainId, number>;
+  const evidencePacketReady = options.evidencePacketReady !== false;
+  const blockingReasons: string[] = [];
+  if (criterionEvidenceDensity < SUFFICIENCY_THRESHOLDS.criterion_evidence_density) {
+    blockingReasons.push(`Criterion evidence density ${criterionEvidenceDensity}% is below ${SUFFICIENCY_THRESHOLDS.criterion_evidence_density}%.`);
+  }
+  if (model.overall.resolution < SUFFICIENCY_THRESHOLDS.overall_resolution) {
+    blockingReasons.push(`Overall assessment resolution ${model.overall.resolution}% is below ${SUFFICIENCY_THRESHOLDS.overall_resolution}%.`);
+  }
+  const weakDomains = model.domains.filter(domain => domain.resolution < SUFFICIENCY_THRESHOLDS.per_domain_resolution);
+  if (weakDomains.length > 0) {
+    blockingReasons.push(`Required domain resolution is below ${SUFFICIENCY_THRESHOLDS.per_domain_resolution}% for ${weakDomains.map(domain => domain.domain_id).join(', ')}.`);
+  }
+  if (provenanceIntegrity < SUFFICIENCY_THRESHOLDS.provenance_integrity) {
+    blockingReasons.push('Resolved maturity inputs are not fully provenance-bound.');
+  }
+  if (verificationUnresolvedCount > 0) {
+    blockingReasons.push(`${verificationUnresolvedCount} criterion verification decision(s) remain unresolved.`);
+  }
+  if (!evidencePacketReady) blockingReasons.push('The effective Evidence Package is not ready.');
+
+  return {
+    schema_version: 'assessment_sufficiency_v1',
+    policy_version: 'assessment_sufficiency_policy_v1',
+    decision: blockingReasons.length === 0 ? 'PASS' : 'BLOCK',
+    scoring_authority: true,
+    thresholds: SUFFICIENCY_THRESHOLDS,
+    criterion_evidence_density: criterionEvidenceDensity,
+    overall_resolution: model.overall.resolution,
+    domain_resolution: domainResolution,
+    provenance_integrity: provenanceIntegrity,
+    evidence_packet_status: evidencePacketReady ? 'READY' : 'NOT_READY',
+    verification_unresolved_count: verificationUnresolvedCount,
+    blocking_reasons: blockingReasons,
+    kb_completeness_excluded: true,
+  };
+};
+
+export const maturityRunTraceProjection = (
+  model: ResolutionBasedMaturityModel,
+  assessmentSufficiency: AssessmentSufficiencyResult,
 ): ResolutionBasedMaturityRunTrace => ({
   schema_version: 'resolution_based_maturity_run_trace_v1',
-  formula_version: shadow.formula_version,
-  registry_version: shadow.registry_version,
-  mode: shadow.mode,
-  scoring_authority: false,
-  gamma: shadow.gamma,
-  overall: { ...shadow.overall },
-  domains: shadow.domains.map(domain => ({ ...domain })),
+  formula_version: model.formula_version,
+  registry_version: model.registry_version,
+  mode: model.mode,
+  scoring_authority: true,
+  gamma: model.gamma,
+  overall: { ...model.overall },
+  domains: model.domains.map(domain => ({ ...domain })),
+  assessment_sufficiency: assessmentSufficiency,
 });

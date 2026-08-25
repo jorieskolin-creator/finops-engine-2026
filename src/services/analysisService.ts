@@ -13,7 +13,7 @@ import { knowledgeBaseService, BATCH_DEFINITIONS, FINOPS_TACTICS_LOCAL, FINOPS_T
 import { DiagnosticResult, Phase1AuditLogs, Phase2Validation, AuditItem, EvidenceQuote, EvidenceCategory, EVIDENCE_CATEGORIES, PersonaId, PERSONA_IDS, PipelineProgressStage, PipelineProgressUpdate, SourceRecord } from "../types";
 import { validatePhase1Output, validatePhase3Grounding } from "./validatorService";
 import { EVIDENCE_DENSITY_BLOCK, runQualityGate, runQualityGateExplanation } from "./qualityGateService";
-import { applyQualityGateScoreCap, calculateMetrics } from "./metricsService";
+import { calculateMetrics } from "./metricsService";
 import {
   buildRegenerateAppendix,
   buildRoadmapFactCheckPrompt,
@@ -61,7 +61,7 @@ import { sanitizeEvidenceSources } from "./deterministicPrivacyService";
 import { scrubDiagnosticResultForPrivacy } from "./privacyService";
 import { parseGovernedJsonObject, validateFindingsModePayload } from "./jsonResponseService";
 import { reconcileEvidenceProvenance } from "./evidenceCheckService";
-import { calculateResolutionBasedMaturityShadow, maturityShadowRunTraceProjection } from "./maturityShadowService";
+import { maturityRunTraceProjection } from "./maturityModelService";
 // @ts-expect-error Pure JS contracts are also consumed by the server-side worker.
 import { OUTPUT_CONTRACT_IDS, withOneOutputRegeneration } from "../../lib/outputContracts.js";
 import {
@@ -609,26 +609,26 @@ export const analyzeDocument = async (
 
     emitProgress({ stage: 'calculation', status: 'in_progress' });
     await new Promise(r => setTimeout(r, 600));
-    const validationData = calculateMetrics(auditLogs);
-    const maturityModelShadow = calculateResolutionBasedMaturityShadow(auditLogs);
-    const unresolvedDomainIds = new Set(validationData.verification_unresolved.map(item => item.charAt(1)));
-    const overallScoreAvailable = validationData.verification_unresolved.length === 0;
-    await checkpoint('phase2', 'accepted', {
-      phase_2_validation: validationData,
-      maturity_model_shadow: maturityModelShadow,
+    const validationData = calculateMetrics(auditLogs, {
+      evidencePacketReady: sourceRegistryStatus.acquisition_readiness.status !== 'BLOCKED',
     });
-    serverLog(runId, 'info', 'maturity_model_shadow_calculated', {
-      formula_version: maturityModelShadow.formula_version,
-      registry_version: maturityModelShadow.registry_version,
-      corroborated_maturity: maturityModelShadow.overall.corroborated_maturity,
-      observed_maturity: maturityModelShadow.overall.observed_maturity,
-      resolution: maturityModelShadow.overall.resolution,
-      adjusted_maturity: maturityModelShadow.overall.adjusted_maturity,
-      fully_resolved_pairs: maturityModelShadow.overall.fully_resolved_pair_count,
-      partially_resolved_pairs: maturityModelShadow.overall.partially_resolved_pair_count,
-      unresolved_pairs: maturityModelShadow.overall.unresolved_pair_count,
-      contradictions: maturityModelShadow.overall.contradiction_count,
-      scoring_authority: false,
+    const unresolvedDomainIds = new Set(validationData.verification_unresolved.map(item => item.charAt(1)));
+    const overallScoreAvailable = validationData.assessment_sufficiency.decision === 'PASS'
+      && validationData.metrics.adjusted_maturity !== null;
+    await checkpoint('phase2', 'accepted', { phase_2_validation: validationData });
+    serverLog(runId, 'info', 'maturity_model_calculated', {
+      formula_version: validationData.resolution_maturity.formula_version,
+      registry_version: validationData.resolution_maturity.registry_version,
+      corroborated_maturity: validationData.metrics.corroborated_maturity,
+      observed_maturity: validationData.metrics.observed_maturity,
+      resolution: validationData.metrics.assessment_resolution,
+      adjusted_maturity: validationData.metrics.adjusted_maturity,
+      fully_resolved_pairs: validationData.resolution_maturity.overall.fully_resolved_pair_count,
+      partially_resolved_pairs: validationData.resolution_maturity.overall.partially_resolved_pair_count,
+      unresolved_pairs: validationData.resolution_maturity.overall.unresolved_pair_count,
+      contradictions: validationData.resolution_maturity.overall.contradiction_count,
+      sufficiency: validationData.assessment_sufficiency.decision,
+      scoring_authority: true,
     });
     emitProgress({ stage: 'calculation', status: 'completed' });
 
@@ -720,9 +720,11 @@ ${tacticsContext}`;
     const handoffSummary = `
 FINOPS DIAGNOSTIC REPORT SUMMARY (Computed by System):
 -------------------------------------------------------
-FinOps Maturity Score: ${overallScoreAvailable ? `${Math.round(validationData.metrics.finops_readiness)}/100` : 'UNAVAILABLE — required criterion verification is unresolved'}
-Capability Attainment: ${Math.round(validationData.metrics.capability_attainment)}%
-Anti-Pattern Control: ${Math.round(validationData.metrics.antipattern_control)}%
+Adjusted FinOps Maturity: ${validationData.metrics.adjusted_maturity === null ? 'N/A' : `${Math.round(validationData.metrics.adjusted_maturity)}/100`}${overallScoreAvailable ? '' : ' — diagnostic only; Assessment Sufficiency BLOCK'}
+Corroborated Maturity: ${validationData.metrics.corroborated_maturity === null ? 'N/A' : `${Math.round(validationData.metrics.corroborated_maturity)}%`}
+Observed Maturity: ${validationData.metrics.observed_maturity === null ? 'N/A' : `${Math.round(validationData.metrics.observed_maturity)}%`}
+Assessment Resolution: ${Math.round(validationData.metrics.assessment_resolution)}%
+Assessment Sufficiency: ${validationData.assessment_sufficiency.decision}
 Maturity Classification: ${validationData.crawl_walk_run}
 Maturity Depth Index: ${Math.round(validationData.metrics.maturity_depth)}%
 Anti-Pattern Burden: ${Math.round(validationData.metrics.antipattern_burden)}%
@@ -733,7 +735,6 @@ Delivery Integrity: ${validationData.metrics.delivery_integrity}% (criteria the 
 Evidence Density: ${validationData.metrics.evidence_density}% (criteria with verified source coverage, including quote-backed gaps)
 Capability 0/3 Concentration: ${validationData.metrics.maturity_zero_ratio || 0}% (${validationData.metrics.maturity_zero_count || 0} of ${validationData.metrics.maturity_assessed_count || 0} assessed maturity criteria; an evidence-backed low-maturity signal, not missing evidence)
 Anti-Pattern Findings: ${validationData.metrics.antipattern_finding_count || 0} of 30 anti-patterns have confirmed or partial signals (${validationData.metrics.antipattern_finding_ratio || 0}%); ${validationData.metrics.score_gap_breakdown?.antipattern_tested_absent || 0} tested absences raise control, unknown absence does not
-${validationData.metrics.readiness_cap_reason ? `Readiness Cap: ${validationData.metrics.readiness_cap_reason}` : ''}
 Verified Anti-Pattern Absences: ${validationData.verified_antipattern_absences.length}
 Unknown / Not-Assessable Anti-Pattern Absences: ${validationData.unknown_antipattern_absences.length}
 Maturity Gaps: ${validationData.maturity_gaps.length}
@@ -742,7 +743,7 @@ Silent Areas: ${validationData.silent_areas.length}
 UNRESOLVED REQUIRED VERIFICATION:
 ${validationData.verification_unresolved.join('\n') || 'None'}
 
-SCORE EVIDENCE GAPS (zero score contribution; not proof a capability is absent):
+SCORE EVIDENCE GAPS (unknown in maturity arithmetic and reducing resolution; not proof a capability is absent):
 ${validationData.score_evidence_gaps.join('\n') || 'None'}
 
 DOMAINS WITH INCOMPLETE SOURCE COVERAGE:
@@ -1047,22 +1048,23 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => unresolve
 
     const buildFallbackEvidenceSummary = () => ({
       headline: overallScoreAvailable
-        ? `${validationData.crawl_walk_run} FinOps maturity with a ${Math.round(validationData.metrics.finops_readiness)}/100 evidence-sensitive score`
-        : 'Overall FinOps maturity score unavailable because required verification is unresolved',
+        ? `${validationData.crawl_walk_run} FinOps maturity with a ${Math.round(validationData.metrics.adjusted_maturity!)}/100 resolution-adjusted score`
+        : 'Maturity classification unavailable because Assessment Sufficiency did not pass',
       maturity_classification: validationData.crawl_walk_run,
       key_metrics: [
         overallScoreAvailable
-          ? `FinOps Maturity Score: ${Math.round(validationData.metrics.finops_readiness)}/100`
-          : 'FinOps Maturity Score: unavailable — required verification is unresolved',
-        `Capability attainment: ${Math.round(validationData.metrics.capability_attainment)}%`,
-        `Anti-pattern control: ${Math.round(validationData.metrics.antipattern_control)}%`,
+          ? `Adjusted FinOps Maturity: ${Math.round(validationData.metrics.adjusted_maturity!)}/100`
+          : `Adjusted FinOps Maturity: ${validationData.metrics.adjusted_maturity === null ? 'N/A' : `${Math.round(validationData.metrics.adjusted_maturity)}/100 (diagnostic only)`}`,
+        `Corroborated maturity: ${validationData.metrics.corroborated_maturity === null ? 'N/A' : `${Math.round(validationData.metrics.corroborated_maturity)}%`}`,
+        `Observed maturity: ${validationData.metrics.observed_maturity === null ? 'N/A' : `${Math.round(validationData.metrics.observed_maturity)}%`}`,
+        `Assessment resolution: ${Math.round(validationData.metrics.assessment_resolution)}%`,
+        `Assessment sufficiency: ${validationData.assessment_sufficiency.decision}`,
         `Maturity depth: ${Math.round(validationData.metrics.maturity_depth)}%`,
         `Anti-pattern burden: ${Math.round(validationData.metrics.antipattern_burden)}% (${validationData.metrics.antipattern_burden_confidence || 'unknown'} confidence)`,
         `Anti-pattern clearance: ${Math.round(validationData.metrics.antipattern_clearance)}%`,
         `Anti-pattern coverage: ${Math.round(validationData.metrics.antipattern_coverage)}%`,
         `Delivery integrity: ${Math.round(validationData.metrics.delivery_integrity)}%`,
         `Evidence density: ${Math.round(validationData.metrics.evidence_density)}%`,
-        ...(validationData.metrics.readiness_cap_reason ? [validationData.metrics.readiness_cap_reason] : [])
       ],
       confirmed_strengths: Object.entries(validationData.category_scores)
         .filter(([cat, score]) => !unresolvedDomainIds.has(cat) && score >= 10)
@@ -1142,8 +1144,8 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => unresolve
           visual_scorecard: {
             headline: 'Insufficient Evidence — Findings Only',
             maturity_score: overallScoreAvailable
-              ? `${Math.round(validationData.metrics.finops_readiness)}/100 evidence-sensitive maturity`
-              : 'Unavailable — required verification is unresolved',
+              ? `${Math.round(validationData.metrics.adjusted_maturity!)}/100 adjusted maturity`
+              : `${validationData.metrics.adjusted_maturity === null ? 'N/A' : `${Math.round(validationData.metrics.adjusted_maturity)}/100 diagnostic`} — Assessment Sufficiency BLOCK`,
             burden_score: `${Math.round(validationData.metrics.antipattern_burden)}% anti-pattern burden`,
           },
           remediation_roadmap: [],
@@ -1497,11 +1499,7 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => unresolve
         ...qualityGate.warnings.filter(warning => warning.startsWith('Source routing coverage')),
       ]));
     }
-    applyQualityGateScoreCap(validationData, qualityGate.decision);
-    await checkpoint('phase2', 'accepted', {
-      phase_2_validation: validationData,
-      maturity_model_shadow: maturityModelShadow,
-    });
+    await checkpoint('phase2', 'accepted', { phase_2_validation: validationData });
 
     // LLM-augmented explanation only when the deterministic gate flagged
     // something. GO results don't need narrative — the metrics speak for them.
@@ -1539,22 +1537,21 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => unresolve
     if (strategyData?.phase_3_strategy?.visual_scorecard) {
       strategyData.phase_3_strategy.visual_scorecard.maturity_score =
         overallScoreAvailable
-          ? `${Math.round(validationData.metrics.finops_readiness)}/100 evidence-sensitive maturity`
-          : 'Unavailable — required verification is unresolved';
+          ? `${Math.round(validationData.metrics.adjusted_maturity!)}/100 adjusted maturity`
+          : `${validationData.metrics.adjusted_maturity === null ? 'N/A' : `${Math.round(validationData.metrics.adjusted_maturity)}/100 diagnostic`} — Assessment Sufficiency BLOCK`;
     }
     if (qualityGate.decision === 'BLOCK' && strategyData?.phase_3_strategy?.evidence_summary) {
       const summary = strategyData.phase_3_strategy.evidence_summary;
       summary.headline = overallScoreAvailable
-        ? `BLOCKED assessment · FinOps Maturity Score ${Math.round(validationData.metrics.finops_readiness)}/100`
-        : 'BLOCKED assessment · Overall FinOps Maturity Score unavailable because required verification is unresolved';
+        ? `Roadmap actionability BLOCKED · ${validationData.crawl_walk_run} · Adjusted FinOps Maturity ${Math.round(validationData.metrics.adjusted_maturity!)}/100`
+        : 'Roadmap actionability BLOCKED · maturity classification unavailable because Assessment Sufficiency did not pass';
       summary.key_metrics = [
         overallScoreAvailable
-          ? `FinOps Maturity Score: ${Math.round(validationData.metrics.finops_readiness)}/100`
-          : 'FinOps Maturity Score: unavailable — required verification is unresolved',
-        `Capability attainment: ${Math.round(validationData.metrics.capability_attainment)}%`,
-        `Anti-pattern control: ${Math.round(validationData.metrics.antipattern_control)}%`,
-        ...(validationData.metrics.quality_gate_score_cap_reason ? [validationData.metrics.quality_gate_score_cap_reason] : []),
-        ...((summary.key_metrics || []).filter((metric: string) => !/maturity score|readiness|capability attainment|anti-pattern control/i.test(metric))),
+          ? `Adjusted FinOps Maturity: ${Math.round(validationData.metrics.adjusted_maturity!)}/100`
+          : `Adjusted FinOps Maturity: ${validationData.metrics.adjusted_maturity === null ? 'N/A' : `${Math.round(validationData.metrics.adjusted_maturity)}/100 (diagnostic only)`}`,
+        `Assessment resolution: ${Math.round(validationData.metrics.assessment_resolution)}%`,
+        `Assessment sufficiency: ${validationData.assessment_sufficiency.decision}`,
+        ...((summary.key_metrics || []).filter((metric: string) => !/maturity score|adjusted finops maturity|assessment resolution|assessment sufficiency|readiness|capability attainment|anti-pattern control/i.test(metric))),
       ];
     }
     if (effectiveBracket !== confidenceBracket) {
@@ -1656,7 +1653,10 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => unresolve
       boundedRetrieval,
       semanticGapRetrieval: aggregatedRawData.semantic_gap_retrieval,
       gapRetrieval: gapPlan,
-      resolutionMaturityShadow: maturityShadowRunTraceProjection(maturityModelShadow),
+      resolutionMaturity: maturityRunTraceProjection(
+        validationData.resolution_maturity,
+        validationData.assessment_sufficiency,
+      ),
     });
     finalResult.meta.run_trace = runTrace;
     finalResult.meta.run_trace_summary = summarizeRunTrace(runTrace);

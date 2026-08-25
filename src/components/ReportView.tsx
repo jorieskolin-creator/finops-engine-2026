@@ -592,8 +592,7 @@ interface ReportViewProps {
 export const ReportView: React.FC<ReportViewProps> = ({ result, onBack, onDownloadSummary, onDownloadMaster, onDownloadTrace }) => {
   const m = result.phase_2_validation.metrics;
   const reportView = buildReportViewModel(result);
-  const isBlocked = result.quality_gate.decision === 'BLOCK';
-  const isInsufficientEvidence = isBlocked || m.evidence_density < 30 || m.antipattern_coverage < 60;
+  const isInsufficientEvidence = reportView.sufficiency.decision === 'BLOCK';
   const gauges = reportView.metrics;
 
   return (
@@ -638,6 +637,16 @@ export const ReportView: React.FC<ReportViewProps> = ({ result, onBack, onDownlo
           effective={result.phase_3_strategy.effective_bracket ?? result.phase_3_strategy.confidence_bracket}
         />
         <EvidenceCheckSummaryBlock result={result} />
+
+        <div className={`mb-8 p-4 rounded-xl border ${reportView.sufficiency.decision === 'PASS' ? 'bg-emerald-50 border-emerald-200 text-emerald-900' : 'bg-amber-50 border-amber-200 text-amber-900'}`}>
+          <p className="text-xs font-bold uppercase tracking-wider">Assessment Sufficiency: {reportView.sufficiency.decision}</p>
+          <p className="text-sm mt-1">{reportView.sufficiency.statement}</p>
+          {reportView.sufficiency.reasons.length > 0 && (
+            <ul className="list-disc pl-5 mt-2 text-xs space-y-1">
+              {reportView.sufficiency.reasons.map(reason => <li key={reason}>{reason}</li>)}
+            </ul>
+          )}
+        </div>
 
         <div className="mb-12">
           <h2 className="text-2xl font-display font-bold text-slate-900 mb-6 pb-3 border-b border-slate-200">Assessment Metrics</h2>

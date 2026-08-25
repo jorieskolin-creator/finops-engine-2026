@@ -137,12 +137,13 @@ const trace = buildRunTrace({
     chunk_ids_by_domain: {},
     reasons: [{ domain_id: 'A', reason: 'packet weak_coverage' }],
   },
-  resolutionMaturityShadow: {
+  resolutionMaturity: {
     schema_version: 'resolution_based_maturity_run_trace_v1',
     formula_version: 'resolution_based_maturity_formula_v1',
-    registry_version: '1.0.0', mode: 'SHADOW_NOT_ACTIVE', scoring_authority: false, gamma: 0.5,
+    registry_version: '1.0.0', mode: 'ACTIVE', scoring_authority: true, gamma: 0.5,
     overall: { corroborated_maturity: 42.3, observed_maturity: 50, resolution: 70, adjusted_maturity: 41.8, fully_resolved_pair_count: 15, partially_resolved_pair_count: 12, unresolved_pair_count: 3, contradiction_count: 2 },
     domains: [],
+    assessment_sufficiency: { decision: 'PASS' },
   },
 });
 
@@ -166,10 +167,11 @@ assert.equal(trace.bounded_retrieval, undefined);
 assert.deepEqual(trace.context_packets[0].included_chunk_ids, ['chunk-1', 'chunk-2']);
 assert.equal(trace.context_packets[0].evidence_stage_packet_hash, 'effective-stage-hash');
 assert.equal(trace.context_packets[0].baseline_evidence_stage_packet_hash, 'baseline-stage-hash');
-assert.equal(trace.resolution_maturity_shadow.scoring_authority, false);
-assert.equal(trace.resolution_maturity_shadow.overall.adjusted_maturity, 41.8);
-assert.equal(trace.resolution_maturity_shadow.formula_version, 'resolution_based_maturity_formula_v1');
-assert.doesNotMatch(JSON.stringify(trace.resolution_maturity_shadow), /criterion_resolutions|pair_results|quote|source_id|chunk_id/,
-  'calibration RunTrace must contain aggregate shadow values only');
+assert.equal(trace.resolution_maturity.scoring_authority, true);
+assert.equal(trace.resolution_maturity.overall.adjusted_maturity, 41.8);
+assert.equal(trace.resolution_maturity.formula_version, 'resolution_based_maturity_formula_v1');
+assert.equal(trace.resolution_maturity.assessment_sufficiency.decision, 'PASS');
+assert.doesNotMatch(JSON.stringify(trace.resolution_maturity), /criterion_resolutions|pair_results|quote|source_id|chunk_id/,
+  'RunTrace must contain aggregate active model values only');
 
 console.log('RunTrace action-specific tactic provenance tests passed');

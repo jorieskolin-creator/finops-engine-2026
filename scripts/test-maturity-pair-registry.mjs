@@ -8,7 +8,7 @@ const antipatterns = (await readJson('../src/knowledge_base/finops_antipatterns.
 
 assert.equal(registry.schema_version, 'finops_maturity_pair_registry_v1');
 assert.equal(registry.registry_version, '1.0.0');
-assert.equal(registry.status, 'SHADOW_NOT_ACTIVE', 'the first registry phase must not silently activate a new gauge formula');
+assert.equal(registry.status, 'ACTIVE', 'the governed registry must be the active gauge formula source');
 assert.equal(registry.pairs.length, 30, 'v1 requires one reviewed pair for every capability and anti-pattern criterion');
 
 const validCapabilities = new Set(criteria.map(item => item.id));

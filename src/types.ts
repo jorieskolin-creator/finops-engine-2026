@@ -85,11 +85,11 @@ export interface Metrics {
   antipattern_control: number;
   raw_finops_maturity_score: number;
   finops_readiness: number;
+  corroborated_maturity: number | null;
+  observed_maturity: number | null;
+  assessment_resolution: number;
+  adjusted_maturity: number | null;
   uncapped_readiness?: number;
-  readiness_cap?: number;
-  readiness_cap_reason?: string;
-  quality_gate_score_cap?: number;
-  quality_gate_score_cap_reason?: string;
   score_gap_breakdown: {
     maturity_full: number;
     maturity_partial: number;
@@ -125,6 +125,8 @@ export interface RawCounts {
 
 export interface Phase2Validation {
   metrics: Metrics;
+  resolution_maturity: ResolutionBasedMaturityModel;
+  assessment_sufficiency: AssessmentSufficiencyResult;
   raw_counts: RawCounts;
   maturity_gaps: string[];
   antipattern_findings: string[];
@@ -953,7 +955,7 @@ export interface RunTrace {
   semantic_gap_retrieval?: SemanticGapRetrievalTrace;
   bounded_retrieval?: BoundedRetrievalTrace;
   gap_retrieval?: GapRetrievalPlan;
-  resolution_maturity_shadow?: ResolutionBasedMaturityRunTrace;
+  resolution_maturity?: ResolutionBasedMaturityRunTrace;
   dlp: {
     scanned_chunk_count: number;
     model_review_chunk_count: number;
@@ -1580,7 +1582,7 @@ export interface MaturityPairRegistryEntry {
 export interface MaturityPairRegistry {
   schema_version: 'finops_maturity_pair_registry_v1';
   registry_version: '1.0.0';
-  status: 'SHADOW_NOT_ACTIVE';
+  status: 'ACTIVE';
   description: string;
   pairs: MaturityPairRegistryEntry[];
 }
@@ -1610,7 +1612,7 @@ export interface MaturityCriterionResolutionRecord {
 export type MaturityPairResolutionState = 'BOTH_RESOLVED' | 'CAPABILITY_ONLY' | 'ANTIPATTERN_ONLY' | 'UNRESOLVED';
 export type MaturityPairContradictionStatus = 'DETECTED' | 'NONE' | 'NOT_EVALUABLE';
 
-export interface MaturityPairShadowResult {
+export interface MaturityPairResult {
   pair_id: `PAIR-${CapabilityId}`;
   domain_id: DomainId;
   relationship_type: MaturityPairRelationship;
@@ -1625,7 +1627,7 @@ export interface MaturityPairShadowResult {
   contradiction_status: MaturityPairContradictionStatus;
 }
 
-export interface MaturityShadowAggregate {
+export interface MaturityAggregate {
   corroborated_maturity: number | null;
   observed_maturity: number | null;
   resolution: number;
@@ -1636,27 +1638,49 @@ export interface MaturityShadowAggregate {
   contradiction_count: number;
 }
 
-export interface ResolutionBasedMaturityShadow {
-  schema_version: 'resolution_based_maturity_shadow_v1';
+export interface ResolutionBasedMaturityModel {
+  schema_version: 'resolution_based_maturity_model_v1';
   formula_version: 'resolution_based_maturity_formula_v1';
   registry_version: '1.0.0';
-  mode: 'SHADOW_NOT_ACTIVE';
+  mode: 'ACTIVE';
   gamma: 0.5;
   criterion_resolutions: MaturityCriterionResolutionRecord[];
-  pair_results: MaturityPairShadowResult[];
-  overall: MaturityShadowAggregate;
-  domains: Array<MaturityShadowAggregate & { domain_id: DomainId }>;
+  pair_results: MaturityPairResult[];
+  overall: MaturityAggregate;
+  domains: Array<MaturityAggregate & { domain_id: DomainId }>;
+}
+
+export interface AssessmentSufficiencyResult {
+  schema_version: 'assessment_sufficiency_v1';
+  policy_version: 'assessment_sufficiency_policy_v1';
+  decision: 'PASS' | 'BLOCK';
+  scoring_authority: true;
+  thresholds: {
+    criterion_evidence_density: 60;
+    overall_resolution: 65;
+    per_domain_resolution: 40;
+    provenance_integrity: 100;
+  };
+  criterion_evidence_density: number;
+  overall_resolution: number;
+  domain_resolution: Record<DomainId, number>;
+  provenance_integrity: number;
+  evidence_packet_status: 'READY' | 'NOT_READY';
+  verification_unresolved_count: number;
+  blocking_reasons: string[];
+  kb_completeness_excluded: true;
 }
 
 export interface ResolutionBasedMaturityRunTrace {
   schema_version: 'resolution_based_maturity_run_trace_v1';
   formula_version: 'resolution_based_maturity_formula_v1';
   registry_version: '1.0.0';
-  mode: 'SHADOW_NOT_ACTIVE';
-  scoring_authority: false;
+  mode: 'ACTIVE';
+  scoring_authority: true;
   gamma: 0.5;
-  overall: MaturityShadowAggregate;
-  domains: Array<MaturityShadowAggregate & { domain_id: DomainId }>;
+  overall: MaturityAggregate;
+  domains: Array<MaturityAggregate & { domain_id: DomainId }>;
+  assessment_sufficiency: AssessmentSufficiencyResult;
 }
 
 export interface KnowledgeDomain {

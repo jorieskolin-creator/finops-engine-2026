@@ -1,7 +1,7 @@
 # ADR-002: Resolution-based FinOps maturity model
 
-Status: Accepted for incremental implementation; registry is shadow-only until
-the activation gate in this ADR is satisfied.
+Status: Active. The resolution-based model and Assessment Sufficiency gate are
+the authoritative maturity calculation as of 2026-08-25.
 
 ## Context
 
@@ -13,9 +13,8 @@ assessment completeness, and roadmap actionability.
 
 ## Decision
 
-The replacement model will keep unknown evidence out of maturity arithmetic and
-represent it through explicit resolution. It will be implemented and reviewed
-in versioned phases before replacing the live formula.
+The active model keeps unknown evidence out of maturity arithmetic and
+represents it through explicit resolution.
 
 The three target headline views are:
 
@@ -87,26 +86,22 @@ actionability. It must not mutate a calculated maturity score. An
 assessment-integrity blocker may block both decisions; a strategy-only blocker
 must not rewrite evidence-based maturity.
 
-Illustrative initial sufficiency thresholds for shadow evaluation are criterion
-evidence density 60%, overall resolution 65%, and every required domain at
-least 40%. They are not active production thresholds until calibrated against
-test runs.
+The active initial sufficiency thresholds are criterion evidence density 60%,
+overall resolution 65%, every required domain at least 40%, provenance
+integrity 100%, no unresolved verification, and a ready effective Evidence
+Package. These thresholds are expected to be refined from test-run evidence.
 
 ## Incremental activation
 
-1. **Implemented:** publish and validate the canonical registry without runtime
-   score changes.
-2. **Implemented:** build provenance-reconciled criterion resolution records.
-3. **Implemented for checkpointed shadow evaluation:** calculate the new model
-   in shadow mode and record formula/registry versions. It has no scoring,
-   classification, prompt, report, Quality Gate, or roadmap authority.
-4. **Synthetic baseline implemented; real-run review pending:** calibrate
-   against synthetic scenarios and real test runs. Aggregate-only shadow values
-   are exported in RunTrace to enable that review.
-5. Add the authoritative Assessment Sufficiency gate.
-6. Update reports, prompts, RunTrace, checkpoints, imports, and persistence.
-7. Remove the legacy average and 70-point score cap only when all consumers use
-   the versioned replacement contract.
+1. **Implemented:** canonical active pair registry.
+2. **Implemented:** provenance-reconciled criterion resolution records.
+3. **Implemented:** active model calculation and versioned Phase 2 contract.
+4. **Implemented:** synthetic calibration baseline and aggregate RunTrace data.
+5. **Implemented:** authoritative Assessment Sufficiency gate.
+6. **Implemented:** three active gauges in the Engine, Summary Report, and
+   Master Data report, plus prompt, fact-check, checkpoint, and recovery use.
+7. **Implemented:** removal of the legacy average as scoring authority and of
+   the Quality Gate 70-point score cap. Legacy dimensions remain diagnostics.
 
 Historical scores retain their original formula version and are not silently
 recomputed or treated as directly comparable with the replacement formula.

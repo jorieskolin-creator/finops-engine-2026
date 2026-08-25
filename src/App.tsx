@@ -1753,8 +1753,16 @@ const App: React.FC = () => {
                 )}
 
 
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-                  {buildReportViewModel(result).metrics.map(metric => (
+                {(() => {
+                  const reportView = buildReportViewModel(result);
+                  return <>
+                    <div className={`rounded-2xl border p-5 ${reportView.sufficiency.decision === 'PASS' ? 'border-emerald-500/30 bg-emerald-950/20' : 'border-amber-500/30 bg-amber-950/20'}`}>
+                      <p className="text-xs font-bold uppercase tracking-wider text-slate-300">Assessment Sufficiency: {reportView.sufficiency.decision}</p>
+                      <p className="mt-1 text-sm text-slate-400">{reportView.sufficiency.statement}</p>
+                      {reportView.sufficiency.reasons.length > 0 && <ul className="mt-2 list-disc pl-5 text-xs text-slate-500">{reportView.sufficiency.reasons.map(reason => <li key={reason}>{reason}</li>)}</ul>}
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  {reportView.metrics.map(metric => (
                     <div key={metric.label} className="md:col-span-1">
                       <GaugeCard
                         value={metric.value}
@@ -1766,7 +1774,9 @@ const App: React.FC = () => {
                       />
                     </div>
                   ))}
-                </div>
+                    </div>
+                  </>;
+                })()}
 
                 <div className="grid grid-cols-1 lg:grid-cols-5 gap-6 h-full items-stretch">
                   <div className="h-full lg:col-span-3">

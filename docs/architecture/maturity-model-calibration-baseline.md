@@ -1,4 +1,4 @@
-# Resolution-based maturity shadow calibration baseline
+# Resolution-based maturity model calibration baseline
 
 Status: Synthetic baseline implemented. Real-run calibration is pending.
 
@@ -28,7 +28,7 @@ Sufficiency gate must test both overall and per-domain resolution. The initial
 65% overall and 40% per-required-domain thresholds remain hypotheses until real
 test runs are reviewed.
 
-RunTrace now exports aggregate-only shadow results under
-`resolution_maturity_shadow`. It excludes criterion records, pair records,
-quotes, source identifiers, and chunk identifiers. This is calibration
-telemetry only and has `scoring_authority: false`.
+RunTrace exports aggregate-only active results under `resolution_maturity`. It
+excludes criterion records, pair records, quotes, source identifiers, and chunk
+identifiers. It includes the Assessment Sufficiency decision and has
+`scoring_authority: true`.

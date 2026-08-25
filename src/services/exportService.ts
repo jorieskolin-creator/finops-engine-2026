@@ -495,6 +495,14 @@ const renderActionability = (result: DiagnosticResult): string => {
     </section>`;
 };
 
+const renderAssessmentSufficiency = (result: DiagnosticResult): string => {
+  const sufficiency = buildReportViewModel(result).sufficiency;
+  return `<section class="actionability actionability-${sufficiency.decision === 'PASS' ? 'go' : 'warn'}">
+    <div><span class="actionability-label">Assessment Sufficiency</span><strong>${escapeHtml(sufficiency.decision)}</strong></div>
+    <div><p>${escapeHtml(sufficiency.statement)}</p>${sufficiency.reasons.length > 0 ? `<ul>${sufficiency.reasons.map(reason => `<li>${escapeHtml(reason)}</li>`).join('')}</ul>` : ''}</div>
+  </section>`;
+};
+
 const renderScoreEvidenceGaps = (result: DiagnosticResult, limit?: number): string => {
   const gaps = result.phase_2_validation.score_evidence_gaps || [];
   if (gaps.length === 0) return '';
@@ -837,7 +845,7 @@ export const generateSummaryReportHtml = (unsafeResult: DiagnosticResult): strin
     .summary-prose p:last-child, .summary-paragraph:last-child { margin-bottom: 0; }
     .summary-prose strong { color: #0f172a; }
     .summary-prose em { color: #047857; font-style: normal; font-weight: 700; }
-    .gauge-grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 1.25rem; align-items: stretch; }
+    .gauge-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1.25rem; align-items: stretch; }
     .gauge-grid > .gauge-large { grid-column: span 1; }
     .gauge-denominator { color: #334155; font-size: 0.76rem; font-weight: 700; margin-top: 8px; }
     .chart-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 18px; }
@@ -958,7 +966,7 @@ export const generateSummaryReportHtml = (unsafeResult: DiagnosticResult): strin
       <p>A shareable view of the validated assessment: executive interpretation, evidence-gated maturity, diagnosis, planning decision, roadmap, and heatmap. Detailed forensic evidence remains in the Master Data report.</p>
       <div class="hero-meta">
         <span class="pill">Generated ${escapeHtml(result.meta.timestamp)}</span>
-        <span class="pill pill-${qgTone}">${result.quality_gate.decision === 'BLOCK' ? 'Assessment BLOCKED' : `Maturity band ${escapeHtml(cwrClass)}`}</span>
+        <span class="pill pill-${qgTone}">${result.quality_gate.decision === 'BLOCK' ? 'Roadmap actionability BLOCKED' : `Maturity band ${escapeHtml(cwrClass)}`}</span>
         ${result.quality_gate.decision === 'BLOCK' ? `<span class="pill">Observed maturity band ${escapeHtml(cwrClass)}</span>` : ''}
         <span class="pill pill-${qgTone}">Quality Gate ${escapeHtml(result.quality_gate.decision)}</span>
         <span class="pill">Evidence ${Math.round(m.evidence_density)}%</span>
@@ -968,6 +976,7 @@ export const generateSummaryReportHtml = (unsafeResult: DiagnosticResult): strin
     </header>
 
     ${renderActionability(result)}
+    ${renderAssessmentSufficiency(result)}
 
     <section class="summary-section">
       <h2>Assessment Metrics</h2>
@@ -1036,7 +1045,7 @@ export const generateReportHtml = (unsafeResult: DiagnosticResult): string => {
     .metric-value.rose { color: #e11d48; }
     .metric-value.violet { color: #7c3aed; }
     .metric-desc { font-size: 0.8rem; color: #64748b; margin-top: 0.5rem; line-height: 1.45; }
-    .gauge-grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 1.25rem; margin: 1.5rem 0 2rem; align-items: stretch; }
+    .gauge-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1.25rem; margin: 1.5rem 0 2rem; align-items: stretch; }
     .gauge-grid > .gauge-large { grid-column: span 1; }
     .gauge-denominator { color: #334155; font-size: 0.76rem; font-weight: 700; margin-top: 0.5rem; }
     .actionability { display: grid; grid-template-columns: minmax(160px, 0.35fr) 1fr; gap: 1rem 1.5rem; align-items: center; background: #fff; border: 1px solid #e2e8f0; border-left: 5px solid #94a3b8; border-radius: 1rem; padding: 1.4rem; margin: 1.5rem 0 2rem; }
@@ -1229,6 +1238,7 @@ export const generateReportHtml = (unsafeResult: DiagnosticResult): string => {
   </div>
 
   ${renderActionability(result)}
+  ${renderAssessmentSufficiency(result)}
 
   <h2>Assessment Metrics</h2>
   <div class="gauge-grid">
