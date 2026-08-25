@@ -41,6 +41,7 @@
     "test:tactic-activity-playbook": "node scripts/test-tactic-activity-playbook.mjs",
     "test:maturity-pair-registry": "node scripts/test-maturity-pair-registry.mjs",
     "test:maturity-shadow": "node scripts/test-maturity-shadow.mjs",
+    "test:maturity-calibration": "node scripts/test-maturity-calibration.mjs",
     "test:run-trace-tactics": "node scripts/test-run-trace-tactics.mjs",
     "test:kb-index": "node scripts/test-kb-index.mjs",
     "test:acquisition-quality": "node scripts/test-acquisition-quality.mjs",

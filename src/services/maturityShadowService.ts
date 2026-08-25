@@ -12,6 +12,7 @@ import type {
   MaturityPairShadowResult,
   MaturityShadowAggregate,
   Phase1AuditLogs,
+  ResolutionBasedMaturityRunTrace,
   ResolutionBasedMaturityShadow,
 } from '../types';
 import { FINOPS_MATURITY_PAIR_REGISTRY } from '../knowledge_base';
@@ -232,3 +233,16 @@ export const calculateResolutionBasedMaturityShadow = (
     domains,
   };
 };
+
+export const maturityShadowRunTraceProjection = (
+  shadow: ResolutionBasedMaturityShadow,
+): ResolutionBasedMaturityRunTrace => ({
+  schema_version: 'resolution_based_maturity_run_trace_v1',
+  formula_version: shadow.formula_version,
+  registry_version: shadow.registry_version,
+  mode: shadow.mode,
+  scoring_authority: false,
+  gamma: shadow.gamma,
+  overall: { ...shadow.overall },
+  domains: shadow.domains.map(domain => ({ ...domain })),
+});

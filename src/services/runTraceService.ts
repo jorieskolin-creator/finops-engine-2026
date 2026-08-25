@@ -13,6 +13,7 @@ import {
   Phase2Validation,
   QualityGateResult,
   RemoteKnowledgeBaseIndex,
+  ResolutionBasedMaturityRunTrace,
   RoutedSourcePacket,
   RunTrace,
   RunTraceSummary,
@@ -68,6 +69,7 @@ interface BuildRunTraceInput {
   boundedRetrieval?: BoundedRetrievalTrace;
   semanticGapRetrieval?: SemanticGapRetrievalTrace;
   gapRetrieval?: GapRetrievalPlan;
+  resolutionMaturityShadow?: ResolutionBasedMaturityRunTrace;
 }
 
 const stageTraceBuffer = new Map<string, StageTrace[]>();
@@ -486,6 +488,7 @@ export const buildRunTrace = (input: BuildRunTraceInput): RunTrace => {
     semantic_gap_retrieval: input.semanticGapRetrieval,
     bounded_retrieval: input.boundedRetrieval,
     gap_retrieval: input.gapRetrieval,
+    resolution_maturity_shadow: input.resolutionMaturityShadow,
     dlp: {
       scanned_chunk_count: input.dlpScan.scanned_chunk_count,
       model_review_chunk_count: input.dlpReviewChunkCount,

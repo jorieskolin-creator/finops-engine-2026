@@ -953,6 +953,7 @@ export interface RunTrace {
   semantic_gap_retrieval?: SemanticGapRetrievalTrace;
   bounded_retrieval?: BoundedRetrievalTrace;
   gap_retrieval?: GapRetrievalPlan;
+  resolution_maturity_shadow?: ResolutionBasedMaturityRunTrace;
   dlp: {
     scanned_chunk_count: number;
     model_review_chunk_count: number;
@@ -1643,6 +1644,17 @@ export interface ResolutionBasedMaturityShadow {
   gamma: 0.5;
   criterion_resolutions: MaturityCriterionResolutionRecord[];
   pair_results: MaturityPairShadowResult[];
+  overall: MaturityShadowAggregate;
+  domains: Array<MaturityShadowAggregate & { domain_id: DomainId }>;
+}
+
+export interface ResolutionBasedMaturityRunTrace {
+  schema_version: 'resolution_based_maturity_run_trace_v1';
+  formula_version: 'resolution_based_maturity_formula_v1';
+  registry_version: '1.0.0';
+  mode: 'SHADOW_NOT_ACTIVE';
+  scoring_authority: false;
+  gamma: 0.5;
   overall: MaturityShadowAggregate;
   domains: Array<MaturityShadowAggregate & { domain_id: DomainId }>;
 }

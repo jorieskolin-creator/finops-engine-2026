@@ -100,7 +100,9 @@ test runs.
 3. **Implemented for checkpointed shadow evaluation:** calculate the new model
    in shadow mode and record formula/registry versions. It has no scoring,
    classification, prompt, report, Quality Gate, or roadmap authority.
-4. Calibrate against synthetic scenarios and real test runs.
+4. **Synthetic baseline implemented; real-run review pending:** calibrate
+   against synthetic scenarios and real test runs. Aggregate-only shadow values
+   are exported in RunTrace to enable that review.
 5. Add the authoritative Assessment Sufficiency gate.
 6. Update reports, prompts, RunTrace, checkpoints, imports, and persistence.
 7. Remove the legacy average and 70-point score cap only when all consumers use

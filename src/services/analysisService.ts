@@ -61,7 +61,7 @@ import { sanitizeEvidenceSources } from "./deterministicPrivacyService";
 import { scrubDiagnosticResultForPrivacy } from "./privacyService";
 import { parseGovernedJsonObject, validateFindingsModePayload } from "./jsonResponseService";
 import { reconcileEvidenceProvenance } from "./evidenceCheckService";
-import { calculateResolutionBasedMaturityShadow } from "./maturityShadowService";
+import { calculateResolutionBasedMaturityShadow, maturityShadowRunTraceProjection } from "./maturityShadowService";
 // @ts-expect-error Pure JS contracts are also consumed by the server-side worker.
 import { OUTPUT_CONTRACT_IDS, withOneOutputRegeneration } from "../../lib/outputContracts.js";
 import {
@@ -1655,7 +1655,8 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => unresolve
       dataSignalCoverage,
       boundedRetrieval,
       semanticGapRetrieval: aggregatedRawData.semantic_gap_retrieval,
-      gapRetrieval: gapPlan
+      gapRetrieval: gapPlan,
+      resolutionMaturityShadow: maturityShadowRunTraceProjection(maturityModelShadow),
     });
     finalResult.meta.run_trace = runTrace;
     finalResult.meta.run_trace_summary = summarizeRunTrace(runTrace);
