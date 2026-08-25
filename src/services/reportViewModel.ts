@@ -16,6 +16,7 @@ export interface ReportViewModel {
     decision: 'PASS' | 'BLOCK';
     statement: string;
     reasons: string[];
+    warnings: string[];
   };
   actionability: {
     gate: DiagnosticResult['quality_gate']['decision'];
@@ -83,9 +84,10 @@ export const buildReportViewModel = (result: DiagnosticResult): ReportViewModel 
     sufficiency: {
       decision: sufficiency.decision,
       statement: sufficiency.decision === 'PASS'
-        ? `Assessment Sufficiency passed. The adjusted score can publish a ${result.phase_2_validation.crawl_walk_run} classification.`
+        ? `${sufficiency.warning_reasons?.length ? 'Assessment Sufficiency passed with evidence warnings.' : 'Assessment Sufficiency passed.'} The adjusted score can publish a ${result.phase_2_validation.crawl_walk_run} classification.`
         : 'Assessment Sufficiency blocked CRAWL/WALK/RUN publication. Model values remain visible for calibration, but are not a maturity classification.',
       reasons: sufficiency.blocking_reasons,
+      warnings: sufficiency.warning_reasons || [],
     },
     actionability: {
       gate,

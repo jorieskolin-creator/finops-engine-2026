@@ -1652,22 +1652,26 @@ export interface ResolutionBasedMaturityModel {
 
 export interface AssessmentSufficiencyResult {
   schema_version: 'assessment_sufficiency_v1';
-  policy_version: 'assessment_sufficiency_policy_v1';
+  policy_version: 'assessment_sufficiency_policy_v2';
   decision: 'PASS' | 'BLOCK';
   scoring_authority: true;
   thresholds: {
-    criterion_evidence_density: 60;
-    overall_resolution: 65;
-    per_domain_resolution: 40;
+    criterion_evidence_density: 30;
+    overall_resolution: 30;
+    evidence_warning_below: 60;
+    silent_domain_density_below: 10;
     provenance_integrity: 100;
   };
   criterion_evidence_density: number;
   overall_resolution: number;
   domain_resolution: Record<DomainId, number>;
+  domain_criterion_evidence_density: Record<DomainId, number>;
+  silent_domain_ids: DomainId[];
   provenance_integrity: number;
   evidence_packet_status: 'READY' | 'NOT_READY';
   verification_unresolved_count: number;
   blocking_reasons: string[];
+  warning_reasons: string[];
   kb_completeness_excluded: true;
 }
 

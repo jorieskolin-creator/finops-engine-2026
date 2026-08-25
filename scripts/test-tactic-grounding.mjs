@@ -150,7 +150,7 @@ assert.equal(buildTacticSelectionPlan({ maturity: { C3: item('C3', 3) }, antipat
 assert.equal(buildTacticSelectionPlan({ maturity: { C3: item('C3', 0, { assessment_status: 'not_assessed' }) }, antipattern: {} }).required.length, 0, 'not-assessed maturity must not activate remediation');
 assert.equal(buildTacticSelectionPlan({ maturity: { C3: item('C3', 0, { verification_unresolved: true }) }, antipattern: {} }).required.length, 0, 'unresolved maturity must not activate remediation');
 assert.equal(buildTacticSelectionPlan({ maturity: { C3: item('C3', 0, { evidence_quotes: [] }) }, antipattern: {} }).required.length, 0, 'evidence-silent maturity must not activate remediation');
-assert.equal(buildTacticSelectionPlan({ maturity: { C3: item('C3', 0) }, antipattern: {} }, ['C']).required.length, 0, 'weak-domain maturity must not activate remediation');
+assert.equal(buildTacticSelectionPlan({ maturity: { C3: item('C3', 0) }, antipattern: {} }, ['C']).required.length, 0, 'silent-domain maturity must not activate remediation');
 assert.ok(buildTacticSelectionPlan({ maturity: {}, antipattern: { C1: item('AP-C1', 1, { antipattern_absence_status: 'partially_present' }) } }).required.some(candidate => candidate.tactic_id === 'TAC-GOV-002'), 'partial anti-pattern presence must activate PRIMARY');
 assert.equal(buildTacticSelectionPlan({ maturity: {}, antipattern: { C1: item('AP-C1', 0, { antipattern_absence_status: 'tested_absent', coverage_reason: 'Relevant controls tested' }) } }).required.length, 0, 'tested-absent anti-pattern must not activate remediation');
 assert.equal(buildTacticSelectionPlan({ maturity: { A1: item('A1', 0, { reasoning: 'Create a TAC-GOV-003 register and policy' }) }, antipattern: {} }).optional.length, 0, 'artifact wording alone must not create a cross-category candidate');
@@ -202,12 +202,12 @@ const result = sanitizeRoadmapTacticGrounding(strategyData, phase2, ['F']);
 assert.equal(result.adjustments.length, 0);
 assert.ok(result.strategyData.phase_3_strategy.remediation_roadmap[0].actions.some(action => action.includes('[TAC-OPT-005]')), 'authoritative binding must not be removed by an unrelated keyword table');
 
-const weakDomainResult = sanitizeRoadmapTacticGrounding({ phase_3_strategy: { remediation_roadmap: [{
+const silentDomainResult = sanitizeRoadmapTacticGrounding({ phase_3_strategy: { remediation_roadmap: [{
   phase: '1. Crawl',
-  actions: ['Implement AI cost attribution [TAC-AI-001]'],
+  actions: ['Implement AI cost attribution [TAC-AI-001]', 'Collect domain F billing exports and ownership records [F1]'],
 }], planning_decision: { safe_to_act_on: ['Implement AI cost attribution [TAC-AI-001]'] } } }, phase2, ['F']);
-assert.deepEqual(weakDomainResult.strategyData.phase_3_strategy.remediation_roadmap, []);
-assert.deepEqual(weakDomainResult.strategyData.phase_3_strategy.planning_decision.safe_to_act_on, []);
-assert.ok(weakDomainResult.warnings.some(warning => /incomplete source coverage/.test(warning)));
+assert.deepEqual(silentDomainResult.strategyData.phase_3_strategy.remediation_roadmap[0].actions, ['Collect domain F billing exports and ownership records [F1]'], 'silent-domain evidence collection must survive while remediation is withheld');
+assert.deepEqual(silentDomainResult.strategyData.phase_3_strategy.planning_decision.safe_to_act_on, []);
+assert.ok(silentDomainResult.warnings.some(warning => /less than 10% verified criterion evidence/.test(warning)));
 
 console.log('tactic grounding and selection unit tests passed');

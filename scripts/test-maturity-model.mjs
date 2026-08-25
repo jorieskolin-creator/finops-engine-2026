@@ -23,7 +23,7 @@ const serviceSource = (await readFile(new URL('../src/services/maturityModelServ
   )
   .replace('./antiPatternSemantics', './antiPatternSemantics.mjs');
 await writeFile(join(dir, 'maturityModelService.mjs'), transpile(serviceSource), 'utf8');
-const { calculateResolutionBasedMaturity } = await import(`file://${join(dir, 'maturityModelService.mjs')}`);
+const { calculateResolutionBasedMaturity, evaluateAssessmentSufficiency } = await import(`file://${join(dir, 'maturityModelService.mjs')}`);
 const analysisSource = await readFile(new URL('../src/services/analysisService.ts', import.meta.url), 'utf8');
 
 const ids = ['A', 'B', 'C', 'D', 'E', 'F'].flatMap(domain => [1, 2, 3, 4, 5].map(index => `${domain}${index}`));
@@ -150,6 +150,86 @@ const logs = (capabilityFactory, antipatternFactory) => ({
   assert.equal(unresolved.state, 'VERIFICATION_UNRESOLVED');
   assert.equal(unresolved.normalized_value, null);
   assert.deepEqual(fixture, before, 'the maturity calculator must not mutate authoritative logs');
+}
+
+const emptyModel = calculateResolutionBasedMaturity(logs(
+  () => capability(0, null),
+  () => antipattern(0, 'unknown_absent', null),
+));
+const sufficiencyFixture = (resolvedCount, overallResolution, options = {}) => {
+  const criterion_resolutions = emptyModel.criterion_resolutions.map((record, index) => index < resolvedCount
+    ? { ...record, state: 'RESOLVED', evidence_basis: 'DIRECT', normalized_value: 0 }
+    : { ...record });
+  return evaluateAssessmentSufficiency({
+    ...emptyModel,
+    criterion_resolutions,
+    overall: { ...emptyModel.overall, resolution: overallResolution },
+  }, options);
+};
+
+{
+  const belowFloor = sufficiencyFixture(17, 29.9);
+  assert.equal(belowFloor.decision, 'BLOCK', 'evidence and resolution below 30% must block classification');
+  assert.equal(belowFloor.policy_version, 'assessment_sufficiency_policy_v2');
+
+  const boundary = sufficiencyFixture(18, 30);
+  assert.equal(boundary.decision, 'PASS', 'the 30% hard-floor boundary must publish a classification');
+  assert.ok(boundary.warning_reasons.some(reason => /confidence target/.test(reason)), '30% must retain calibration warnings below 60%');
+
+  const reviewedRun = sufficiencyFixture(19, 31.7);
+  assert.equal(reviewedRun.decision, 'PASS', 'the reviewed 31.7% run must pass Assessment Sufficiency');
+  assert.ok(reviewedRun.warning_reasons.length >= 2);
+
+  const warningBoundary = sufficiencyFixture(36, 60);
+  assert.equal(warningBoundary.decision, 'PASS');
+  assert.equal(warningBoundary.warning_reasons.some(reason => /confidence target/.test(reason)), false, '60% must clear threshold warnings');
+}
+
+{
+  const recordsOutsideA = emptyModel.criterion_resolutions.map(record => record.domain_id !== 'A'
+    ? { ...record, state: 'RESOLVED', evidence_basis: 'DIRECT', normalized_value: 0 }
+    : { ...record });
+  const silentA = evaluateAssessmentSufficiency({
+    ...emptyModel,
+    criterion_resolutions: recordsOutsideA,
+    overall: { ...emptyModel.overall, resolution: 83.3 },
+  });
+  assert.equal(silentA.decision, 'PASS', 'a silent domain must not globally block classification');
+  assert.deepEqual(silentA.silent_domain_ids, ['A']);
+  assert.equal(silentA.domain_criterion_evidence_density.A, 0);
+
+  const oneResolvedA = recordsOutsideA.map((record, index) => index === 0
+    ? { ...record, state: 'RESOLVED', evidence_basis: 'DIRECT', normalized_value: 0 }
+    : record);
+  const tenPercentA = evaluateAssessmentSufficiency({
+    ...emptyModel,
+    criterion_resolutions: oneResolvedA,
+    overall: { ...emptyModel.overall, resolution: 85 },
+  });
+  assert.equal(tenPercentA.domain_criterion_evidence_density.A, 10);
+  assert.equal(tenPercentA.silent_domain_ids.includes('A'), false, 'exactly 10% is not silent under the strict <10% rule');
+}
+
+{
+  const provenanceRecords = emptyModel.criterion_resolutions.map((record, index) => index < 36
+    ? { ...record, state: 'RESOLVED', evidence_basis: index === 0 ? 'NONE' : 'DIRECT', normalized_value: 0 }
+    : record);
+  const provenanceFailure = evaluateAssessmentSufficiency({
+    ...emptyModel,
+    criterion_resolutions: provenanceRecords,
+    overall: { ...emptyModel.overall, resolution: 60 },
+  });
+  assert.equal(provenanceFailure.decision, 'BLOCK', 'provenance integrity remains a hard blocker');
+  const unresolved = emptyModel.criterion_resolutions.map((record, index) => index === 0
+    ? { ...record, state: 'VERIFICATION_UNRESOLVED' }
+    : record);
+  const verificationFailure = evaluateAssessmentSufficiency({
+    ...emptyModel,
+    criterion_resolutions: unresolved,
+    overall: { ...emptyModel.overall, resolution: 60 },
+  });
+  assert.equal(verificationFailure.decision, 'BLOCK', 'unresolved verification remains a hard blocker');
+  assert.equal(sufficiencyFixture(36, 60, { evidencePacketReady: false }).decision, 'BLOCK', 'packet readiness remains a hard blocker');
 }
 
 {

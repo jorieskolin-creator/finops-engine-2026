@@ -499,7 +499,7 @@ const renderAssessmentSufficiency = (result: DiagnosticResult): string => {
   const sufficiency = buildReportViewModel(result).sufficiency;
   return `<section class="actionability actionability-${sufficiency.decision === 'PASS' ? 'go' : 'warn'}">
     <div><span class="actionability-label">Assessment Sufficiency</span><strong>${escapeHtml(sufficiency.decision)}</strong></div>
-    <div><p>${escapeHtml(sufficiency.statement)}</p>${sufficiency.reasons.length > 0 ? `<ul>${sufficiency.reasons.map(reason => `<li>${escapeHtml(reason)}</li>`).join('')}</ul>` : ''}</div>
+    <div><p>${escapeHtml(sufficiency.statement)}</p>${sufficiency.reasons.length > 0 ? `<ul>${sufficiency.reasons.map(reason => `<li>${escapeHtml(reason)}</li>`).join('')}</ul>` : ''}${sufficiency.warnings.length > 0 ? `<ul>${sufficiency.warnings.map(warning => `<li>${escapeHtml(warning)}</li>`).join('')}</ul>` : ''}</div>
   </section>`;
 };
 
@@ -560,6 +560,7 @@ const renderCanonicalDomainDiagnosis = (result: DiagnosticResult): string =>
     <li>
       <strong>${escapeHtml(row.domain)} · ${escapeHtml(row.title)}:</strong>
       Evidence coverage ${row.evidencePercent}%; observed maturity ${row.maturityAvailable ? `${row.maturityPercent}%` : 'unresolved'}; anti-pattern finding rate ${row.antiPatternAvailable ? `${row.antiPatternPercent}%` : 'unresolved'}.
+      ${row.isSilent ? 'Silent domain: evidence collection only; no maturity conclusion or remediation prescription.' : ''}
       ${row.antiPatternNotAssessed > 0 ? `${row.antiPatternNotAssessed} anti-pattern criterion${row.antiPatternNotAssessed === 1 ? ' was' : ' were'} not assessed.` : ''}
     </li>`).join('');
 
@@ -754,7 +755,7 @@ const renderDomainSignalOverview = (result: DiagnosticResult): string => {
               <span class="domain-signal-id">${escapeHtml(row.domain)}</span>
               <h3>${escapeHtml(row.title)}</h3>
             </div>
-            ${row.coverageNote ? `<span class="domain-signal-chip">Coverage note</span>` : ''}
+            ${row.coverageNote ? `<span class="domain-signal-chip">${row.isSilent ? 'Silent domain' : 'Coverage note'}</span>` : ''}
           </div>
           <div class="domain-signal-metrics">
             <div class="domain-signal-metric">

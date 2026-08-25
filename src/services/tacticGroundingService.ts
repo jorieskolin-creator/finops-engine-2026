@@ -122,12 +122,12 @@ const candidateFor = (
 
 export const buildTacticSelectionPlan = (
   auditLogs: Phase1AuditLogs,
-  weakDomains: string[] = []
+  silentDomains: string[] = []
 ): TacticSelectionPlan => {
   const findingByCriterion = confirmedCriterionFindings(auditLogs);
-  const weakDomainSet = new Set(weakDomains);
+  const silentDomainSet = new Set(silentDomains);
   const activeCriteria = Array.from(findingByCriterion.keys())
-    .filter(criterion => !weakDomainSet.has(criterion.replace(/^AP-/, '').charAt(0)));
+    .filter(criterion => !silentDomainSet.has(criterion.replace(/^AP-/, '').charAt(0)));
   const activeCriterionSet = new Set(activeCriteria);
   const activeCategories = new Set(activeCriteria.map(criterion => criterion.replace(/^AP-/, '').charAt(0)));
 
@@ -260,7 +260,7 @@ const removeUnsupportedActionIfNeeded = (
 export const sanitizeRoadmapTacticGrounding = (
   strategyData: any,
   phase2: Phase2Validation,
-  weakDomains: string[] = []
+  silentDomains: string[] = []
 ): TacticGroundingResult => {
   const strategy = strategyData?.phase_3_strategy;
   const roadmap = strategy?.remediation_roadmap;
@@ -272,11 +272,11 @@ export const sanitizeRoadmapTacticGrounding = (
   const clonedRoadmap = data.phase_3_strategy.remediation_roadmap;
   const findingCorpus = buildFindingCorpus(phase2);
   const adjustments: TacticGroundingAdjustment[] = [];
-  const weakDomainSet = new Set(weakDomains);
-  const weakOnlyTacticFor = (action: string): string | undefined =>
+  const silentDomainSet = new Set(silentDomains);
+  const silentOnlyTacticFor = (action: string): string | undefined =>
     Array.from(action.matchAll(TACTIC_RX)).map(match => match[1]).find(id => {
       const domains = tacticDomainsById.get(id);
-      return domains && domains.size > 0 && Array.from(domains).every(domain => weakDomainSet.has(domain));
+      return domains && domains.size > 0 && Array.from(domains).every(domain => silentDomainSet.has(domain));
     });
 
   for (const phase of clonedRoadmap) {
@@ -285,13 +285,13 @@ export const sanitizeRoadmapTacticGrounding = (
       const action = typeof rawAction === 'string' ? rawAction : String(rawAction ?? '');
       const groundedAction = removeUnsupportedActionIfNeeded(action, findingCorpus, adjustments);
       if (groundedAction === undefined) return '';
-      const weakOnlyTactic = weakOnlyTacticFor(groundedAction);
-      if (!weakOnlyTactic) return groundedAction.trim().replace(/\s{2,}/g, ' ');
+      const silentOnlyTactic = silentOnlyTacticFor(groundedAction);
+      if (!silentOnlyTactic) return groundedAction.trim().replace(/\s{2,}/g, ' ');
       adjustments.push({
         action_before: groundedAction,
         action_after: '',
-        tactic_id: weakOnlyTactic,
-        reason: `${weakOnlyTactic} was withheld because all mapped domains have incomplete source coverage. Collect domain evidence before prescribing remediation.`,
+        tactic_id: silentOnlyTactic,
+        reason: `${silentOnlyTactic} was withheld because all mapped domains have less than 10% verified criterion evidence. Collect domain evidence before prescribing remediation.`,
       });
       return '';
     }).filter((action: string) => action.length > 0);
@@ -304,13 +304,13 @@ export const sanitizeRoadmapTacticGrounding = (
   if (Array.isArray(safeToActOn)) {
     data.phase_3_strategy.planning_decision.safe_to_act_on = safeToActOn.filter((rawAction: unknown) => {
       const action = typeof rawAction === 'string' ? rawAction : String(rawAction ?? '');
-      const weakOnlyTactic = weakOnlyTacticFor(action);
-      if (!weakOnlyTactic) return true;
+      const silentOnlyTactic = silentOnlyTacticFor(action);
+      if (!silentOnlyTactic) return true;
       adjustments.push({
         action_before: action,
         action_after: '',
-        tactic_id: weakOnlyTactic,
-        reason: `${weakOnlyTactic} was withheld from Safe To Act On because all mapped domains have incomplete source coverage.`,
+        tactic_id: silentOnlyTactic,
+        reason: `${silentOnlyTactic} was withheld from Safe To Act On because all mapped domains have less than 10% verified criterion evidence.`,
       });
       return false;
     });

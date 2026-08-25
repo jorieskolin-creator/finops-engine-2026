@@ -10,7 +10,7 @@ import {
 import { bracketFromValidation, explainBracket } from "./confidenceBracket";
 import { runPhase1Audit } from "../orchestrator";
 import { knowledgeBaseService, BATCH_DEFINITIONS, FINOPS_TACTICS_LOCAL, FINOPS_TACTIC_ACTIVITY_PLAYBOOK, FINOPS_TAXONOMY_REGISTRY, buildTacticIdTable, validTacticIdSet } from "../knowledge_base";
-import { DiagnosticResult, Phase1AuditLogs, Phase2Validation, AuditItem, EvidenceQuote, EvidenceCategory, EVIDENCE_CATEGORIES, PersonaId, PERSONA_IDS, PipelineProgressStage, PipelineProgressUpdate, SourceRecord } from "../types";
+import { DiagnosticResult, Phase1AuditLogs, Phase2Validation, AuditItem, EvidenceQuote, EvidenceCategory, EVIDENCE_CATEGORIES, PersonaId, PERSONA_IDS, PipelineProgressStage, PipelineProgressUpdate, SourceRecord, DomainId } from "../types";
 import { validatePhase1Output, validatePhase3Grounding } from "./validatorService";
 import { EVIDENCE_DENSITY_BLOCK, runQualityGate, runQualityGateExplanation } from "./qualityGateService";
 import { calculateMetrics } from "./metricsService";
@@ -353,7 +353,7 @@ export const analyzeDocument = async (
       }
       derivedAnalyticalEvidence = deriveAllEvidenceSignals(acquiredSources, sourceRegistry).evidence;
     }
-    let weakDomainIds = Object.entries(sourcePackets)
+    let packetWeakDomainIds = Object.entries(sourcePackets)
       .filter(([, packet]) => packet.weak_coverage)
       .map(([domain]) => domain);
     const dlpScan = scanRegistryDlp(sourceRegistry);
@@ -547,7 +547,7 @@ export const analyzeDocument = async (
       privacy_decision: privacy.decision,
       acquisition_readiness: sourceRegistryStatus.acquisition_readiness
     });
-    weakDomainIds = Object.entries(sourcePackets)
+    packetWeakDomainIds = Object.entries(sourcePackets)
       .filter(([, packet]) => packet.weak_coverage)
       .map(([domain]) => domain);
     sourceParseWarnings = sourceParseWarnings.filter(warning => !activePacketCoverageWarnings.includes(warning));
@@ -612,6 +612,7 @@ export const analyzeDocument = async (
     const validationData = calculateMetrics(auditLogs, {
       evidencePacketReady: sourceRegistryStatus.acquisition_readiness.status !== 'BLOCKED',
     });
+    const silentDomainIds = validationData.assessment_sufficiency.silent_domain_ids;
     const unresolvedDomainIds = new Set(validationData.verification_unresolved.map(item => item.charAt(1)));
     const overallScoreAvailable = validationData.assessment_sufficiency.decision === 'PASS'
       && validationData.metrics.adjusted_maturity !== null;
@@ -725,6 +726,7 @@ Corroborated Maturity: ${validationData.metrics.corroborated_maturity === null ?
 Observed Maturity: ${validationData.metrics.observed_maturity === null ? 'N/A' : `${Math.round(validationData.metrics.observed_maturity)}%`}
 Assessment Resolution: ${Math.round(validationData.metrics.assessment_resolution)}%
 Assessment Sufficiency: ${validationData.assessment_sufficiency.decision}
+Assessment Sufficiency Warnings: ${validationData.assessment_sufficiency.warning_reasons.join(' ') || 'None'}
 Maturity Classification: ${validationData.crawl_walk_run}
 Maturity Depth Index: ${Math.round(validationData.metrics.maturity_depth)}%
 Anti-Pattern Burden: ${Math.round(validationData.metrics.antipattern_burden)}%
@@ -746,15 +748,19 @@ ${validationData.verification_unresolved.join('\n') || 'None'}
 SCORE EVIDENCE GAPS (unknown in maturity arithmetic and reducing resolution; not proof a capability is absent):
 ${validationData.score_evidence_gaps.join('\n') || 'None'}
 
-DOMAINS WITH INCOMPLETE SOURCE COVERAGE:
-${weakDomainIds.join(', ') || 'None'}
-Do not prescribe remediation for these domains. Limit them to evidence-collection steps under Safe To Act On.
+PACKET RETRIEVAL WARNINGS (acquisition telemetry only; not a finding or roadmap restriction):
+${packetWeakDomainIds.join(', ') || 'None'}
+
+VERIFIED SILENT DOMAINS (<10% criterion evidence density):
+${silentDomainIds.join(', ') || 'None'}
+Criterion evidence density by domain: ${Object.entries(validationData.assessment_sufficiency.domain_criterion_evidence_density).map(([domain, density]) => `${domain}=${density}%`).join(', ')}
+For silent domains, do not make broad maturity conclusions or prescribe remediation tactics. Provide only bounded evidence-collection actions. Continue normal diagnosis and remediation for non-silent domains.
 
 CATEGORY BREAKDOWN:
 ${Object.entries(validationData.category_scores).map(([cat, score]) => unresolvedDomainIds.has(cat) ? `  ${cat}: verification unavailable (no validated domain score)` : `  ${cat}: ${score}/15`).join('\n')}
 `;
 
-    const activatedTacticSelectionPlan = buildTacticSelectionPlan(auditLogs, weakDomainIds);
+    const activatedTacticSelectionPlan = buildTacticSelectionPlan(auditLogs, silentDomainIds);
     const tacticSelectionPlan = confidenceBracket === 'LOW'
       ? { ...activatedTacticSelectionPlan, required: [], optional: [] }
       : activatedTacticSelectionPlan;
@@ -1067,7 +1073,7 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => unresolve
         `Evidence density: ${Math.round(validationData.metrics.evidence_density)}%`,
       ],
       confirmed_strengths: Object.entries(validationData.category_scores)
-        .filter(([cat, score]) => !unresolvedDomainIds.has(cat) && score >= 10)
+        .filter(([cat, score]) => !unresolvedDomainIds.has(cat) && !silentDomainIds.includes(cat as DomainId) && score >= 10)
         .map(([cat, score]) => `Domain ${cat} shows relatively strong maturity signal (${score}/15).`),
       confirmed_gaps: validationData.maturity_gaps.slice(0, 8),
       confirmed_antipatterns: validationData.antipattern_findings.slice(0, 8),
@@ -1085,9 +1091,11 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => unresolve
         ...validationData.antipattern_findings.slice(0, 3)
       ].slice(0, 5),
       domain_diagnosis: Object.fromEntries(
-        Object.entries(validationData.category_scores).map(([cat, score]) => [cat, unresolvedDomainIds.has(cat)
-          ? `Verification was unavailable in domain ${cat}; scanner candidates were excluded and no validated domain score is reported.`
-          : `Maturity signal ${score}/15 in domain ${cat}.`])
+        Object.entries(validationData.category_scores).map(([cat, score]) => [cat, silentDomainIds.includes(cat as DomainId)
+          ? `Domain ${cat} is silent below 10% verified criterion evidence; no broad maturity conclusion or remediation is supported. Collect domain evidence.`
+          : unresolvedDomainIds.has(cat)
+            ? `Verification was unavailable in domain ${cat}; scanner candidates were excluded and no validated domain score is reported.`
+            : `Maturity signal ${score}/15 in domain ${cat}.`])
       ),
       confidence: confidenceBracket === 'HIGH' ? 'high' : confidenceBracket === 'MEDIUM' ? 'medium' : 'low',
       confidence_rationale: bracketDetail
@@ -1181,6 +1189,12 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => unresolve
           ? raw.phase_3_strategy.findings_mode || buildFallbackFindingsMode()
           : raw.phase_3_strategy.findings_mode
       };
+      const domainDiagnosis = raw.phase_3_strategy.diagnosis?.domain_diagnosis;
+      if (domainDiagnosis && typeof domainDiagnosis === 'object') {
+        for (const domainId of silentDomainIds) {
+          domainDiagnosis[domainId] = `Domain ${domainId} is silent below 10% verified criterion evidence; no broad maturity conclusion or remediation is supported. Collect domain evidence.`;
+        }
+      }
       return sanitizeEvidenceSummaryUncertainty(raw);
     };
 
@@ -1219,7 +1233,7 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => unresolve
           invalid_count: invalid.length,
         });
       }
-      let grounding = sanitizeRoadmapTacticGrounding(data, validationData, weakDomainIds);
+      let grounding = sanitizeRoadmapTacticGrounding(data, validationData, silentDomainIds);
       let missingRequired = findMissingRequiredTacticIds(grounding.strategyData, tacticSelectionPlan);
       if (missingRequired.length > 0) {
         serverLog(runId, 'warn', 'required_tactic_ids_missing', {
@@ -1233,7 +1247,7 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => unresolve
         if (invalid.length > 0) {
           throw Object.assign(new Error('INVALID_OUTPUT_CONTRACT'), { code: 'INVALID_OUTPUT_CONTRACT' });
         }
-        grounding = sanitizeRoadmapTacticGrounding(data, validationData, weakDomainIds);
+        grounding = sanitizeRoadmapTacticGrounding(data, validationData, silentDomainIds);
         missingRequired = findMissingRequiredTacticIds(grounding.strategyData, tacticSelectionPlan);
       }
       if (missingRequired.length > 0) {

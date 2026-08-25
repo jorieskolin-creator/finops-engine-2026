@@ -236,9 +236,10 @@ export const calculateResolutionBasedMaturity = (
 };
 
 const SUFFICIENCY_THRESHOLDS = {
-  criterion_evidence_density: 60,
-  overall_resolution: 65,
-  per_domain_resolution: 40,
+  criterion_evidence_density: 30,
+  overall_resolution: 30,
+  evidence_warning_below: 60,
+  silent_domain_density_below: 10,
   provenance_integrity: 100,
 } as const;
 
@@ -251,17 +252,33 @@ export const evaluateAssessmentSufficiency = (
   const verificationUnresolvedCount = model.criterion_resolutions.filter(record => record.state === 'VERIFICATION_UNRESOLVED').length;
   const provenanceIntegrity = resolvedCriteria.every(record => record.evidence_basis !== 'NONE') ? 100 : 0;
   const domainResolution = Object.fromEntries(model.domains.map(domain => [domain.domain_id, domain.resolution])) as Record<DomainId, number>;
+  const domainCriterionEvidenceDensity = Object.fromEntries((['A', 'B', 'C', 'D', 'E', 'F'] as DomainId[]).map(domainId => {
+    const records = model.criterion_resolutions.filter(record => record.domain_id === domainId);
+    const resolved = records.filter(record => record.state === 'RESOLVED').length;
+    return [domainId, Math.round((resolved / Math.max(records.length, 1)) * 1000) / 10];
+  })) as Record<DomainId, number>;
+  const silentDomainIds = (Object.entries(domainCriterionEvidenceDensity) as Array<[DomainId, number]>)
+    .filter(([, density]) => density < SUFFICIENCY_THRESHOLDS.silent_domain_density_below)
+    .map(([domainId]) => domainId);
   const evidencePacketReady = options.evidencePacketReady !== false;
   const blockingReasons: string[] = [];
+  const warningReasons: string[] = [];
   if (criterionEvidenceDensity < SUFFICIENCY_THRESHOLDS.criterion_evidence_density) {
     blockingReasons.push(`Criterion evidence density ${criterionEvidenceDensity}% is below ${SUFFICIENCY_THRESHOLDS.criterion_evidence_density}%.`);
   }
   if (model.overall.resolution < SUFFICIENCY_THRESHOLDS.overall_resolution) {
     blockingReasons.push(`Overall assessment resolution ${model.overall.resolution}% is below ${SUFFICIENCY_THRESHOLDS.overall_resolution}%.`);
   }
-  const weakDomains = model.domains.filter(domain => domain.resolution < SUFFICIENCY_THRESHOLDS.per_domain_resolution);
-  if (weakDomains.length > 0) {
-    blockingReasons.push(`Required domain resolution is below ${SUFFICIENCY_THRESHOLDS.per_domain_resolution}% for ${weakDomains.map(domain => domain.domain_id).join(', ')}.`);
+  if (criterionEvidenceDensity >= SUFFICIENCY_THRESHOLDS.criterion_evidence_density
+    && criterionEvidenceDensity < SUFFICIENCY_THRESHOLDS.evidence_warning_below) {
+    warningReasons.push(`Criterion evidence density ${criterionEvidenceDensity}% is below the ${SUFFICIENCY_THRESHOLDS.evidence_warning_below}% confidence target.`);
+  }
+  if (model.overall.resolution >= SUFFICIENCY_THRESHOLDS.overall_resolution
+    && model.overall.resolution < SUFFICIENCY_THRESHOLDS.evidence_warning_below) {
+    warningReasons.push(`Overall assessment resolution ${model.overall.resolution}% is below the ${SUFFICIENCY_THRESHOLDS.evidence_warning_below}% confidence target.`);
+  }
+  if (silentDomainIds.length > 0) {
+    warningReasons.push(`Domain evidence is silent below ${SUFFICIENCY_THRESHOLDS.silent_domain_density_below}% for ${silentDomainIds.join(', ')}; collect evidence instead of prescribing domain remediation.`);
   }
   if (provenanceIntegrity < SUFFICIENCY_THRESHOLDS.provenance_integrity) {
     blockingReasons.push('Resolved maturity inputs are not fully provenance-bound.');
@@ -273,17 +290,20 @@ export const evaluateAssessmentSufficiency = (
 
   return {
     schema_version: 'assessment_sufficiency_v1',
-    policy_version: 'assessment_sufficiency_policy_v1',
+    policy_version: 'assessment_sufficiency_policy_v2',
     decision: blockingReasons.length === 0 ? 'PASS' : 'BLOCK',
     scoring_authority: true,
     thresholds: SUFFICIENCY_THRESHOLDS,
     criterion_evidence_density: criterionEvidenceDensity,
     overall_resolution: model.overall.resolution,
     domain_resolution: domainResolution,
+    domain_criterion_evidence_density: domainCriterionEvidenceDensity,
+    silent_domain_ids: silentDomainIds,
     provenance_integrity: provenanceIntegrity,
     evidence_packet_status: evidencePacketReady ? 'READY' : 'NOT_READY',
     verification_unresolved_count: verificationUnresolvedCount,
     blocking_reasons: blockingReasons,
+    warning_reasons: warningReasons,
     kb_completeness_excluded: true,
   };
 };

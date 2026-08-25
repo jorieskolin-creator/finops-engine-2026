@@ -201,7 +201,7 @@ const logs = (maturityFactory, antiFactory) => ({
   assert.equal(Math.round(result.metrics.antipattern_burden * 10) / 10, 38.5);
   assert.equal(result.metrics.antipattern_control, 0, 'partial findings without tested absence must not raise control');
   assert.equal(result.metrics.finops_readiness, 3, 'active paired model retains observed partial anti-pattern health');
-  assert.equal(result.crawl_walk_run, 'Insufficient evidence', 'resolution below 65% blocks classification');
+  assert.equal(result.crawl_walk_run, 'Crawl', 'resolution at or above 30% permits adjusted-maturity classification');
 }
 
 {

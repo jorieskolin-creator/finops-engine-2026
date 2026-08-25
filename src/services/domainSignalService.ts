@@ -1,4 +1,4 @@
-import type { AuditItem, DiagnosticResult } from '../types';
+import type { AuditItem, DiagnosticResult, DomainId } from '../types';
 import { BATCH_TITLES, MASTER_BINGO_FINOPS } from '../knowledge_base';
 import { inferAntiPatternAbsenceStatus } from './antiPatternSemantics';
 
@@ -22,10 +22,11 @@ export interface DomainSignalRow {
   antiPatternTestedAbsent: number;
   antiPatternNotAssessed: number;
   evidencePercent: number;
+  isSilent: boolean;
   coverageNote?: string;
 }
 
-const BATCHES = Object.keys(BATCH_TITLES);
+const BATCHES = Object.keys(BATCH_TITLES) as DomainId[];
 
 const clampScore = (value: unknown): number => {
   if (typeof value !== 'number' || !Number.isFinite(value)) return 0;
@@ -99,9 +100,12 @@ export const computeDomainSignalRows = (result: DiagnosticResult): DomainSignalR
       ? Math.round((antiPatternFindingWeight / antiPatternTotal) * 100)
       : 0;
     const notAssessedShare = antiPatternTotal > 0 ? antiPatternNotAssessed / antiPatternTotal : 0;
-    const evidencePercent = maturityTotal + antiPatternTotal > 0
+    const calculatedEvidencePercent = maturityTotal + antiPatternTotal > 0
       ? Math.round(((maturityAssessed + antiPatternTotal - antiPatternNotAssessed) / (maturityTotal + antiPatternTotal)) * 100)
       : 0;
+    const sufficiency = result.phase_2_validation.assessment_sufficiency;
+    const evidencePercent = sufficiency.domain_criterion_evidence_density?.[domain] ?? calculatedEvidencePercent;
+    const isSilent = sufficiency.silent_domain_ids?.includes(domain) ?? evidencePercent < 10;
 
     return {
       domain,
@@ -121,8 +125,11 @@ export const computeDomainSignalRows = (result: DiagnosticResult): DomainSignalR
       antiPatternTestedAbsent,
       antiPatternNotAssessed,
       evidencePercent,
+      isSilent,
       coverageNote: verificationUnresolved
         ? 'Required verification was unresolved; no validated domain signal is available.'
+        : isSilent
+          ? 'Silent domain: less than 10% of criteria have verified evidence. Collect evidence; do not infer maturity or prescribe remediation.'
         : !maturityAvailable || notAssessedShare >= 0.4
           ? 'Anti-pattern absence is not fully assessable from source coverage.'
         : undefined

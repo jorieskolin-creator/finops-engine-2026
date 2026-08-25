@@ -1760,6 +1760,7 @@ const App: React.FC = () => {
                       <p className="text-xs font-bold uppercase tracking-wider text-slate-300">Assessment Sufficiency: {reportView.sufficiency.decision}</p>
                       <p className="mt-1 text-sm text-slate-400">{reportView.sufficiency.statement}</p>
                       {reportView.sufficiency.reasons.length > 0 && <ul className="mt-2 list-disc pl-5 text-xs text-slate-500">{reportView.sufficiency.reasons.map(reason => <li key={reason}>{reason}</li>)}</ul>}
+                      {reportView.sufficiency.warnings.length > 0 && <ul className="mt-2 list-disc pl-5 text-xs text-slate-500">{reportView.sufficiency.warnings.map(warning => <li key={warning}>{warning}</li>)}</ul>}
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                   {reportView.metrics.map(metric => (

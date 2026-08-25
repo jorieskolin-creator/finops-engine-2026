@@ -77,19 +77,28 @@ remain visible even when the pair formula is numerically low.
 ## Gate separation
 
 **Assessment Sufficiency** (`PASS | BLOCK`) owns score publication and
-CRAWL/WALK/RUN availability. It uses evidence-lane inputs such as overall and
-per-domain resolution, criterion evidence density, provenance integrity,
-verification status, and packet readiness. KB completeness is not an input.
+CRAWL/WALK/RUN availability. It uses evidence-lane inputs such as overall
+resolution, criterion evidence density, provenance integrity, verification
+status, and packet readiness. KB completeness is not an input.
 
 The existing **Quality Gate** (`GO | WARN | BLOCK`) continues to own roadmap
 actionability. It must not mutate a calculated maturity score. An
 assessment-integrity blocker may block both decisions; a strategy-only blocker
 must not rewrite evidence-based maturity.
 
-The active initial sufficiency thresholds are criterion evidence density 60%,
-overall resolution 65%, every required domain at least 40%, provenance
-integrity 100%, no unresolved verification, and a ready effective Evidence
-Package. These thresholds are expected to be refined from test-run evidence.
+Assessment Sufficiency policy v2 uses hard publication floors of 30% criterion
+evidence density and 30% overall resolution, provenance integrity 100%, no
+unresolved verification, and a ready effective Evidence Package. Density and
+resolution from 30% through less than 60% pass with explicit evidence warnings.
+
+Per-domain resolution is telemetry, not a global blocker. The engine separately
+calculates verified criterion evidence density for each domain. A domain with
+strictly less than 10% density is `silent`: it cannot support a broad domain
+maturity conclusion or remediation tactics, but it must produce bounded
+evidence-collection guidance and does not prevent supported domains from being
+assessed. Exactly 10% is not silent. Source packet `weak_coverage` remains an
+acquisition and retrieval warning; it cannot suppress findings or roadmap
+actions after verified criterion evidence has been established.
 
 ## Incremental activation
 

@@ -192,7 +192,7 @@ const DomainSignalOverview: React.FC<{ result: DiagnosticResult }> = ({ result }
               </div>
               {row.coverageNote && (
                 <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[0.65rem] font-bold uppercase tracking-wider text-slate-500">
-                  Coverage note
+                  {row.isSilent ? 'Silent domain' : 'Coverage note'}
                 </span>
               )}
             </div>
@@ -646,6 +646,11 @@ export const ReportView: React.FC<ReportViewProps> = ({ result, onBack, onDownlo
               {reportView.sufficiency.reasons.map(reason => <li key={reason}>{reason}</li>)}
             </ul>
           )}
+          {reportView.sufficiency.warnings.length > 0 && (
+            <ul className="list-disc pl-5 mt-2 text-xs space-y-1">
+              {reportView.sufficiency.warnings.map(warning => <li key={warning}>{warning}</li>)}
+            </ul>
+          )}
         </div>
 
         <div className="mb-12">
@@ -763,7 +768,7 @@ export const ReportView: React.FC<ReportViewProps> = ({ result, onBack, onDownlo
                 <div>
                   <p className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-2">Domain diagnosis</p>
                   <ul className="space-y-1.5">
-                    {computeDomainSignalRows(result).map(row => <li key={row.domain} className="text-sm text-slate-700"><span className="font-bold">{row.domain} · {row.title}:</span> Evidence {row.evidencePercent}%; maturity {row.maturityAvailable ? `${row.maturityPercent}%` : 'unresolved'}; anti-pattern finding rate {row.antiPatternAvailable ? `${row.antiPatternPercent}%` : 'unresolved'}.</li>)}
+                    {computeDomainSignalRows(result).map(row => <li key={row.domain} className="text-sm text-slate-700"><span className="font-bold">{row.domain} · {row.title}:</span> Evidence {row.evidencePercent}%; maturity {row.maturityAvailable ? `${row.maturityPercent}%` : 'unresolved'}; anti-pattern finding rate {row.antiPatternAvailable ? `${row.antiPatternPercent}%` : 'unresolved'}{row.isSilent ? '; silent—evidence collection only' : ''}.</li>)}
                   </ul>
                 </div>
               </div>
