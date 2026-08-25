@@ -3,6 +3,7 @@ import { mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import ts from '../node_modules/typescript/lib/typescript.js';
+import { OUTPUT_CONTRACT_IDS, validateOutputContractText } from '../lib/outputContracts.js';
 
 const source = await readFile(new URL('../src/services/factCheckService.ts', import.meta.url), 'utf8');
 const compiled = ts.transpileModule(source, {
@@ -83,6 +84,38 @@ const citationRejected = parseFactCheckResponse(JSON.stringify({ claims: [{
 }] }), 1, ROADMAP_FACT_CHECK_CONTRACT);
 assert.equal(citationRejected.failed, false);
 assert.equal(citationRejected.unsupported_claims[0].tactic_disposition, 'citation_rejected');
+const contractCompatibleRoadmapResponse = { claims: [{
+  claim: 'Apply [TAC-GOV-002] after validating the governed account prerequisite [C3].',
+  classification: 'supported_by_tactics_db',
+  rationale: 'The tactic and use condition exist in the supplied Playbook.',
+  source_location: 'roadmap',
+  failure_type: 'not_applicable',
+  severity: 'SUPPORTED',
+  tactic_disposition: 'not_applicable',
+  missing_material: '',
+}] };
+const contractCompatibleText = JSON.stringify(contractCompatibleRoadmapResponse);
+assert.deepEqual(
+  validateOutputContractText(OUTPUT_CONTRACT_IDS.roadmapFactCheck, contractCompatibleText),
+  contractCompatibleRoadmapResponse,
+);
+assert.equal(
+  parseFactCheckResponse(contractCompatibleText, 1, ROADMAP_FACT_CHECK_CONTRACT).failed,
+  false,
+  'every response accepted by the strict roadmap schema must satisfy the application parser',
+);
+assert.equal(parseFactCheckResponse(JSON.stringify({ claims: [{
+  ...contractCompatibleRoadmapResponse.claims[0],
+  tactic_disposition: 'contraindicated',
+}] }), 1, ROADMAP_FACT_CHECK_CONTRACT).failed, false,
+  'every strict-schema disposition value must remain parseable; irrelevant dispositions are discarded');
+const unresolvedDisposition = parseFactCheckResponse(JSON.stringify({ claims: [{
+  ...tacticHygieneClaim,
+  tactic_disposition: 'not_applicable',
+}] }), 1, ROADMAP_FACT_CHECK_CONTRACT);
+assert.equal(unresolvedDisposition.failed, false, 'a schema-valid unresolved disposition must not make the entire fact-check unavailable');
+assert.equal(unresolvedDisposition.unsupported_claims[0].tactic_disposition, undefined,
+  'not_applicable must never become a valid required-tactic exception');
 
 const failedSubcheck = {
   attempts: 1,

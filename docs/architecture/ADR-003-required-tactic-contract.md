@@ -22,6 +22,13 @@ Every required tactic ends with exactly one disposition:
 - `missing`: the final roadmap omits the ID without a valid reviewed
   disposition.
 
+The governed roadmap fact-check transport uses
+`finops_roadmap_fact_check_v2`. Because provider structured output is strict,
+every claim emits `tactic_disposition`: `not_applicable` for ordinary claims,
+or `contraindicated`/`citation_rejected` for an unsupported roadmap tactic
+citation. `not_applicable` is discarded at the application boundary and can
+never satisfy a required-tactic exception.
+
 Only `contraindicated` satisfies the required-tactic contract without the
 tactic appearing in the roadmap. Sanitation items and their explicit
 dispositions are accumulated across scoped repair and fact-check escalation;

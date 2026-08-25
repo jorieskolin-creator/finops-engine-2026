@@ -78,6 +78,39 @@ assert.throws(
   () => authorizeOutputContract('synthesis', OUTPUT_CONTRACT_IDS.summaryFactCheck),
   /INVALID_OUTPUT_CONTRACT/,
 );
+const roadmapFactCheck = {
+  claims: [{
+    claim: 'Apply [TAC-GOV-002] after validating the governed account prerequisite [C3].',
+    classification: 'supported_by_tactics_db',
+    rationale: 'The tactic and its use condition exist in the supplied Playbook.',
+    source_location: 'roadmap',
+    failure_type: 'not_applicable',
+    severity: 'SUPPORTED',
+    tactic_disposition: 'not_applicable',
+    missing_material: '',
+  }, {
+    claim: 'Apply [TAC-GOV-003] despite a verified do-not-use condition [C2].',
+    classification: 'unsupported',
+    rationale: 'The locked finding establishes the Playbook contraindication.',
+    source_location: 'roadmap',
+    failure_type: 'other',
+    severity: 'WARN_TACTIC_HYGIENE',
+    tactic_disposition: 'contraindicated',
+    missing_material: 'Evidence that the do-not-use condition no longer applies.',
+  }],
+};
+assert.equal(OUTPUT_CONTRACT_IDS.roadmapFactCheck, 'finops_roadmap_fact_check_v2');
+assert.deepEqual(
+  validateOutputContractText(OUTPUT_CONTRACT_IDS.roadmapFactCheck, JSON.stringify(roadmapFactCheck)),
+  roadmapFactCheck,
+);
+assert.throws(
+  () => validateOutputContractText(OUTPUT_CONTRACT_IDS.roadmapFactCheck, JSON.stringify({
+    claims: roadmapFactCheck.claims.map(({ tactic_disposition, ...claim }) => claim),
+  })),
+  /INVALID_OUTPUT_CONTRACT/,
+  'strict roadmap output must require the parser-required tactic disposition field',
+);
 const anthropicFactCheck = structuredOutputForPacket({
   stage: 'fact_check',
   provider: 'anthropic',
