@@ -136,15 +136,17 @@ const auditLogs = {
 };
 
 const plan = buildTacticSelectionPlan(auditLogs, ['F']);
-assert.deepEqual(plan.required.map(candidate => candidate.tactic_id).sort(), ['TAC-GOV-002', 'TAC-GOV-003', 'TAC-GOV-004', 'TAC-OPT-005']);
+assert.deepEqual(plan.required.map(candidate => candidate.tactic_id).sort(), ['TAC-GOV-002', 'TAC-GOV-003']);
 assert.ok(plan.optional.some(item => item.tactic_id === 'TAC-GOV-001'), 'same-category tactic should be evaluated optionally');
+assert.ok(plan.optional.some(item => item.tactic_id === 'TAC-GOV-004'), 'maturity-bound tactic should be evaluated optionally');
+assert.ok(plan.optional.some(item => item.tactic_id === 'TAC-OPT-005'), 'verified capability gap should produce an optional tactic candidate');
 assert.ok(!plan.required.some(item => item.tactic_id === 'TAC-AI-001'), 'weak/not-demonstrated domain must not activate remediation');
-assert.deepEqual(plan.required.find(candidate => candidate.tactic_id === 'TAC-GOV-002').activated_by.sort(), ['AP-C1', 'C3']);
-assert.ok(plan.required.some(candidate => candidate.tactic_id === 'TAC-GOV-004'), 'all PRIMARY tactics for one criterion must be required');
+assert.deepEqual(plan.required.find(candidate => candidate.tactic_id === 'TAC-GOV-002').activated_by, ['AP-C1']);
 
 for (const count of [0, 1, 2]) {
   const maturityPlan = buildTacticSelectionPlan({ maturity: { C3: item('C3', count) }, antipattern: {} });
-  assert.ok(maturityPlan.required.some(candidate => candidate.tactic_id === 'TAC-GOV-002'), `verified maturity ${count}/3 must activate PRIMARY`);
+  assert.equal(maturityPlan.required.length, 0, `verified maturity ${count}/3 must not force a tactic without a confirmed use condition`);
+  assert.ok(maturityPlan.optional.some(candidate => candidate.tactic_id === 'TAC-GOV-002'), `verified maturity ${count}/3 should retain its PRIMARY tactic as a candidate`);
 }
 assert.equal(buildTacticSelectionPlan({ maturity: { C3: item('C3', 3) }, antipattern: {} }).required.length, 0, 'maturity 3/3 must not activate remediation');
 assert.equal(buildTacticSelectionPlan({ maturity: { C3: item('C3', 0, { assessment_status: 'not_assessed' }) }, antipattern: {} }).required.length, 0, 'not-assessed maturity must not activate remediation');

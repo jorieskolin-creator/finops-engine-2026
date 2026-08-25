@@ -151,5 +151,6 @@ assert.match(analysisSource, /repairedChecks\.merged\.sanitized_claims = \[/, 'b
 assert.match(analysisSource, /repairedChecks\.merged\.trajectory = \[/, 'bounded tactic repair must preserve fact-check trajectory');
 assert.match(analysisSource, /highFactCheck\.sanitized_claims = \[/, 'fact-check escalation must preserve prior sanitation lineage');
 assert.match(analysisSource, /'fact_check',\s*'roadmap',\s*acceptedFactChecks/, 'post-sanitation repair must re-check only the roadmap');
+assert.match(analysisSource, /const summaryStrategy = summary\?\.phase_3_strategy \|\| summary \|\| \{\}/, 'roadmap repair merge must preserve locked summaries when given the full strategy wrapper');
 
 console.log('fact-check validation tests passed');

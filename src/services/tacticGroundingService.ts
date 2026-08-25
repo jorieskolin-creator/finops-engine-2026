@@ -132,8 +132,8 @@ export const buildTacticSelectionPlan = (
   const activeCategories = new Set(activeCriteria.map(criterion => criterion.replace(/^AP-/, '').charAt(0)));
 
   const required = FINOPS_TACTIC_ACTIVITY_PLAYBOOK.flatMap(entry => {
-    const activatedBy = [...entry.maturity_bindings, ...entry.antipattern_bindings]
-      .filter(binding => binding.relationship === 'PRIMARY' && activeCriterionSet.has(binding.criterion_id))
+    const activatedBy = entry.antipattern_bindings
+      .filter(binding => binding.mandatory_when_activated === true && activeCriterionSet.has(binding.criterion_id))
       .map(binding => binding.criterion_id);
     return activatedBy.length > 0 ? [candidateFor(entry, activatedBy)] : [];
   });

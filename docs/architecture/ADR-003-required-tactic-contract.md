@@ -5,10 +5,14 @@ Status: Accepted
 ## Context
 
 The governed tactic selection plan can require roadmap tactics for verified
-findings. Fact-check sanitation may remove or rewrite a tactic citation. A
-later fact-check escalation previously replaced the sanitation lineage, making
-the final contract unable to distinguish a verified contraindication from a
-rejected citation or an unexplained omission.
+findings. A capability criterion below 3/3 identifies a remediation candidate,
+but does not by itself prove that a particular tactic's use condition is met.
+Only a confirmed or partially present anti-pattern with a Playbook binding
+marked `mandatory_when_activated` makes a tactic required. Fact-check
+sanitation may remove or rewrite a tactic citation. A later fact-check
+escalation previously replaced the sanitation lineage, making the final
+contract unable to distinguish a verified contraindication from a rejected
+citation or an unexplained omission.
 
 ## Decision
 
@@ -59,3 +63,7 @@ attempted and succeeded under `required_tactic_contract`.
    diagnosis, maturity scores, or the governed activation plan.
 6. Silent domains do not activate remediation tactics. Packet weakness alone
    does not deactivate tactics for otherwise verified findings.
+7. Capability gaps activate candidate tactics for semantic evaluation; they do
+   not force every PRIMARY-bound tactic into the roadmap.
+8. Required activation is limited to confirmed or partially present
+   anti-patterns whose Playbook binding is explicitly mandatory.

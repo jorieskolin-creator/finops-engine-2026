@@ -917,13 +917,14 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => unresolve
     };
 
     const mergePhase3Outputs = (summary: any, roadmapData: any): any => {
+      const summaryStrategy = summary?.phase_3_strategy || summary || {};
       const roadmap = roadmapData?.phase_3_strategy || {};
       return {
         phase_3_strategy: {
-          ...summary,
+          ...summaryStrategy,
           planning_decision: roadmap.planning_decision,
           remediation_roadmap: Array.isArray(roadmap.remediation_roadmap) ? roadmap.remediation_roadmap : [],
-          findings_mode: summary.findings_mode || roadmap.findings_mode,
+          findings_mode: summaryStrategy.findings_mode || roadmap.findings_mode,
         }
       };
     };
