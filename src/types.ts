@@ -1584,6 +1584,69 @@ export interface MaturityPairRegistry {
   pairs: MaturityPairRegistryEntry[];
 }
 
+export type MaturityCriterionResolutionState = 'RESOLVED' | 'UNKNOWN' | 'VERIFICATION_UNRESOLVED';
+export type MaturityCriterionEvidenceBasis = 'DIRECT' | 'DERIVED' | 'DIRECT_AND_DERIVED' | 'TESTED_ABSENCE' | 'NONE';
+export type MaturityCriterionResolutionReason =
+  | 'PROVENANCE_BOUND_EVIDENCE'
+  | 'GOVERNED_TESTED_ABSENCE'
+  | 'NO_GOVERNED_EVIDENCE'
+  | 'VERIFICATION_UNRESOLVED'
+  | 'INCONSISTENT_DISPOSITION';
+
+export interface MaturityCriterionResolutionRecord {
+  schema_version: 'maturity_criterion_resolution_v1';
+  stream: KnowledgeStream;
+  criterion_id: CapabilityId;
+  domain_id: DomainId;
+  state: MaturityCriterionResolutionState;
+  reason: MaturityCriterionResolutionReason;
+  evidence_basis: MaturityCriterionEvidenceBasis;
+  score_count: number | null;
+  normalized_value: number | null;
+  antipattern_absence_status?: AntiPatternAbsenceStatus;
+}
+
+export type MaturityPairResolutionState = 'BOTH_RESOLVED' | 'CAPABILITY_ONLY' | 'ANTIPATTERN_ONLY' | 'UNRESOLVED';
+export type MaturityPairContradictionStatus = 'DETECTED' | 'NONE' | 'NOT_EVALUABLE';
+
+export interface MaturityPairShadowResult {
+  pair_id: `PAIR-${CapabilityId}`;
+  domain_id: DomainId;
+  relationship_type: MaturityPairRelationship;
+  interaction_strength: number;
+  weight: number;
+  state: MaturityPairResolutionState;
+  resolution_credit: 0 | 0.5 | 1;
+  capability_value: number | null;
+  antipattern_health: number | null;
+  observed_pair_value: number | null;
+  corroborated_pair_value: number | null;
+  contradiction_status: MaturityPairContradictionStatus;
+}
+
+export interface MaturityShadowAggregate {
+  corroborated_maturity: number | null;
+  observed_maturity: number | null;
+  resolution: number;
+  adjusted_maturity: number | null;
+  fully_resolved_pair_count: number;
+  partially_resolved_pair_count: number;
+  unresolved_pair_count: number;
+  contradiction_count: number;
+}
+
+export interface ResolutionBasedMaturityShadow {
+  schema_version: 'resolution_based_maturity_shadow_v1';
+  formula_version: 'resolution_based_maturity_formula_v1';
+  registry_version: '1.0.0';
+  mode: 'SHADOW_NOT_ACTIVE';
+  gamma: 0.5;
+  criterion_resolutions: MaturityCriterionResolutionRecord[];
+  pair_results: MaturityPairShadowResult[];
+  overall: MaturityShadowAggregate;
+  domains: Array<MaturityShadowAggregate & { domain_id: DomainId }>;
+}
+
 export interface KnowledgeDomain {
   id: DomainId;
   name: string;

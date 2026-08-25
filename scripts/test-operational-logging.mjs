@@ -31,6 +31,18 @@ assert.deepEqual(filterOperationalMetadata('source_packet_used', {
 assert.deepEqual(filterOperationalMetadata('finding_provenance_adjusted', {
   domains: 'A,C', criteria_count: 2, removed_quotes: 3, quote_text: 'private source content',
 }), { domains: 'A,C', criteria_count: 2, removed_quotes: 3 });
+assert.deepEqual(filterOperationalMetadata('maturity_model_shadow_calculated', {
+  formula_version: 'resolution_based_maturity_formula_v1', registry_version: '1.0.0',
+  corroborated_maturity: 42.3, observed_maturity: 51.2, resolution: 70,
+  adjusted_maturity: 42.8, fully_resolved_pairs: 15, partially_resolved_pairs: 12,
+  unresolved_pairs: 3, contradictions: 2, scoring_authority: false,
+  criterion_resolutions: 'private criterion detail',
+}), {
+  formula_version: 'resolution_based_maturity_formula_v1', registry_version: '1.0.0',
+  corroborated_maturity: 42.3, observed_maturity: 51.2, resolution: 70,
+  adjusted_maturity: 42.8, fully_resolved_pairs: 15, partially_resolved_pairs: 12,
+  unresolved_pairs: 3, contradictions: 2, scoring_authority: false,
+});
 assert.deepEqual(filterOperationalMetadata('targeted_rescan_unavailable', {
   batch: 'C', criteria_count: 5, error_code: 'DEPENDENCY_UNCERTAINTY', fallback: 'verified_downgrades', error: 'private source content',
 }), { batch: 'C', criteria_count: 5, error_code: 'DEPENDENCY_UNCERTAINTY', fallback: 'verified_downgrades' });

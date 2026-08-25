@@ -61,6 +61,7 @@ import { sanitizeEvidenceSources } from "./deterministicPrivacyService";
 import { scrubDiagnosticResultForPrivacy } from "./privacyService";
 import { parseGovernedJsonObject, validateFindingsModePayload } from "./jsonResponseService";
 import { reconcileEvidenceProvenance } from "./evidenceCheckService";
+import { calculateResolutionBasedMaturityShadow } from "./maturityShadowService";
 // @ts-expect-error Pure JS contracts are also consumed by the server-side worker.
 import { OUTPUT_CONTRACT_IDS, withOneOutputRegeneration } from "../../lib/outputContracts.js";
 import {
@@ -609,9 +610,26 @@ export const analyzeDocument = async (
     emitProgress({ stage: 'calculation', status: 'in_progress' });
     await new Promise(r => setTimeout(r, 600));
     const validationData = calculateMetrics(auditLogs);
+    const maturityModelShadow = calculateResolutionBasedMaturityShadow(auditLogs);
     const unresolvedDomainIds = new Set(validationData.verification_unresolved.map(item => item.charAt(1)));
     const overallScoreAvailable = validationData.verification_unresolved.length === 0;
-    await checkpoint('phase2', 'accepted', { phase_2_validation: validationData });
+    await checkpoint('phase2', 'accepted', {
+      phase_2_validation: validationData,
+      maturity_model_shadow: maturityModelShadow,
+    });
+    serverLog(runId, 'info', 'maturity_model_shadow_calculated', {
+      formula_version: maturityModelShadow.formula_version,
+      registry_version: maturityModelShadow.registry_version,
+      corroborated_maturity: maturityModelShadow.overall.corroborated_maturity,
+      observed_maturity: maturityModelShadow.overall.observed_maturity,
+      resolution: maturityModelShadow.overall.resolution,
+      adjusted_maturity: maturityModelShadow.overall.adjusted_maturity,
+      fully_resolved_pairs: maturityModelShadow.overall.fully_resolved_pair_count,
+      partially_resolved_pairs: maturityModelShadow.overall.partially_resolved_pair_count,
+      unresolved_pairs: maturityModelShadow.overall.unresolved_pair_count,
+      contradictions: maturityModelShadow.overall.contradiction_count,
+      scoring_authority: false,
+    });
     emitProgress({ stage: 'calculation', status: 'completed' });
 
     console.log(`[FinOps] Phase 2 Complete. Readiness: ${Math.round(validationData.metrics.finops_readiness)}%, Classification: ${validationData.crawl_walk_run}`);
@@ -1480,7 +1498,10 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => unresolve
       ]));
     }
     applyQualityGateScoreCap(validationData, qualityGate.decision);
-    await checkpoint('phase2', 'accepted', { phase_2_validation: validationData });
+    await checkpoint('phase2', 'accepted', {
+      phase_2_validation: validationData,
+      maturity_model_shadow: maturityModelShadow,
+    });
 
     // LLM-augmented explanation only when the deterministic gate flagged
     // something. GO results don't need narrative — the metrics speak for them.

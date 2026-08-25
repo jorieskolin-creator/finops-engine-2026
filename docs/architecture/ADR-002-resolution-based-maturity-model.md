@@ -94,9 +94,12 @@ test runs.
 
 ## Incremental activation
 
-1. Publish and validate the canonical registry without runtime score changes.
-2. Build provenance-reconciled criterion resolution records.
-3. Calculate the new model in shadow mode and record formula/registry versions.
+1. **Implemented:** publish and validate the canonical registry without runtime
+   score changes.
+2. **Implemented:** build provenance-reconciled criterion resolution records.
+3. **Implemented for checkpointed shadow evaluation:** calculate the new model
+   in shadow mode and record formula/registry versions. It has no scoring,
+   classification, prompt, report, Quality Gate, or roadmap authority.
 4. Calibrate against synthetic scenarios and real test runs.
 5. Add the authoritative Assessment Sufficiency gate.
 6. Update reports, prompts, RunTrace, checkpoints, imports, and persistence.

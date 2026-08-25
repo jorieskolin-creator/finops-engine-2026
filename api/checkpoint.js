@@ -8,7 +8,7 @@ const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]
 const IDENT=/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
 const HASH=/^[0-9a-f]{64}$/;
 const KINDS=new Set(['acquisition','phase1','phase2','synthesis','fact_check','quality_gate','final_report']);
-const PAYLOAD_KEYS={acquisition:['source_registry_status','privacy_decision','integrity','source_parse_warnings'],phase1:['phase_1_audit_logs','evidence_check','validation'],phase2:['phase_2_validation'],synthesis:['phase_3_strategy'],fact_check:['fact_check'],quality_gate:['quality_gate','phase_3_strategy'],final_report:['result']};
+const PAYLOAD_KEYS={acquisition:['source_registry_status','privacy_decision','integrity','source_parse_warnings'],phase1:['phase_1_audit_logs','evidence_check','validation'],phase2:['phase_2_validation','maturity_model_shadow'],synthesis:['phase_3_strategy'],fact_check:['fact_check'],quality_gate:['quality_gate','phase_3_strategy'],final_report:['result']};
 const exact=(value,keys)=>value&&typeof value==='object'&&!Array.isArray(value)&&Object.keys(value).sort().join('|')===[...keys].sort().join('|');
 const unavailable=res=>res.status(503).json({error:'RESULT_UNAVAILABLE'});
 export function checkpointHandler(repository,redis){return async(req,res)=>{
