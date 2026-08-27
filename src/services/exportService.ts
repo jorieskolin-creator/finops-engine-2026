@@ -19,6 +19,10 @@ import { stripSourceFilenameMetadata } from './privacyService';
 const BATCHES = Object.keys(BATCH_TITLES);
 const escapeHtml = (s: string): string =>
   s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+const ASSESSMENT_METHOD_DISCLAIMER =
+  'This assessment was created using the FinOps Engine, which combines deterministic analysis with governed generative-AI processing. Generative AI supports bounded evidence interpretation, verification, diagnosis and synthesis tasks. Scoring, calculations, evidence sufficiency, confidence thresholds and final GO/WARN/BLOCK decisions are controlled by deterministic system logic. Customer evidence remains the source of truth, and raw customer evidence is not supplied directly to generative reasoning models. Generated analytical content is validated against evidence and system rules before publication.';
+const renderAssessmentMethodDisclaimer = (): string =>
+  `<p class="footer-disclaimer">${escapeHtml(ASSESSMENT_METHOD_DISCLAIMER)}</p>`;
 const renderTacticAction = (action: string): string =>
   escapeHtml(action).replace(/\[(TAC-[A-Z]+-\d{3})\]/g, (_match, id: string) =>
     `<a href="${FINOPS_TACTIC_PLAYBOOK_URL}#${id.toLowerCase()}" target="_blank" rel="noreferrer">[${id}]</a>`
@@ -925,6 +929,7 @@ export const generateSummaryReportHtml = (unsafeResult: DiagnosticResult): strin
     .heat-gap { background: #ffe4e6; border-color: #fecdd3; color: #9f1239; }
     .heat-silent { background: #f1f5f9; border-color: #e2e8f0; color: #64748b; }
     .footer { text-align: center; color: #94a3b8; font-size: 0.85rem; padding: 34px 0 10px; }
+    .footer-disclaimer { max-width: 760px; margin: 12px auto 0; text-align: left; line-height: 1.55; color: #64748b; font-size: 0.78rem; }
     .trace-note { background: #f8fafc; border: 1px solid #e2e8f0; color: #475569; border-radius: 12px; padding: 12px 14px; font-size: 0.85rem; }
     .source-packet-section { margin: 28px 0; }
     .source-packet-card { background: #fff; border: 1px solid #e2e8f0; border-radius: 16px; padding: 22px; box-shadow: 0 12px 35px rgba(15,23,42,0.05); }
@@ -995,7 +1000,8 @@ export const generateSummaryReportHtml = (unsafeResult: DiagnosticResult): strin
 
     <footer class="footer">
       <p>FinOps Engine v.${escapeHtml(result.meta.engine_version)} · Summary Report</p>
-      <p>This report is generated deterministically from the validated assessment output. Full audit details are available in the Master Data report.</p>
+      ${renderAssessmentMethodDisclaimer()}
+      <p>Full audit details are available in the Master Data report.</p>
       ${traceNote}
     </footer>
   </main>
@@ -1212,6 +1218,7 @@ export const generateReportHtml = (unsafeResult: DiagnosticResult): string => {
     .gate-quote { font-size: 0.78rem; opacity: 0.8; margin-top: 0.25rem; }
     .gate-llm-failed { font-size: 0.75rem; opacity: 0.6; font-style: italic; margin-top: 0.75rem; }
     .footer { text-align: center; padding: 2rem 0; margin-top: 3rem; border-top: 1px solid #e2e8f0; font-size: 0.85rem; color: #94a3b8; }
+    .footer-disclaimer { max-width: 760px; margin: 12px auto 0; text-align: left; line-height: 1.55; color: #64748b; font-size: 0.78rem; }
     ${SVG_CSS}
     @media (max-width: 760px) {
       body { padding: 24px 16px; }
@@ -1336,6 +1343,7 @@ export const generateReportHtml = (unsafeResult: DiagnosticResult): string => {
 
   <div class="footer">
     <p>FinOps Engine v.${escapeHtml(result.meta.engine_version)}</p>
+    ${renderAssessmentMethodDisclaimer()}
   </div>
 
   <script id="finops-data" type="application/json">${serializeDiagnosticResultForHtml(result)}</script>

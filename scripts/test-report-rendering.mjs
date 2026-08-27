@@ -128,6 +128,12 @@ assert.match(exportSource, /observability-only in this milestone/, 'Master Data 
 assert.match(exportSource, /renderAcquisitionQuality\(result\)/, 'Master Data generation should include the acquisition quality section');
 assert.match(exportSource, /Shadow deterministic A1\/AP-A1 observations/, 'Master Data should visibly label derived evidence as shadow-only');
 assert.match(exportSource, /raw values exposed/, 'Master Data should disclose the derived-evidence privacy boundary');
+assert.match(exportSource, /ASSESSMENT_METHOD_DISCLAIMER/, 'HTML exports should share one assessment-method disclaimer');
+assert.match(summaryExportSource, /renderAssessmentMethodDisclaimer\(\)/, 'Summary Report footer should include the assessment-method disclaimer');
+assert.match(masterDataExportSource, /renderAssessmentMethodDisclaimer\(\)/, 'Master Data footer should include the assessment-method disclaimer');
+assert.match(exportSource, /raw customer evidence is not supplied directly to generative reasoning models/, 'HTML exports should disclose that raw customer evidence is not sent to generative models');
+assert.match(exportSource, /final GO\/WARN\/BLOCK decisions are controlled by deterministic system logic/, 'HTML exports should disclose that GO/WARN/BLOCK remains deterministic');
+assert.doesNotMatch(exportSource, /This report is generated deterministically from the validated assessment output/, 'HTML exports should not overstate that the whole report is generated without generative processing');
 
 const reportViewModelSource = await readFile(new URL('../src/services/reportViewModel.ts', import.meta.url), 'utf8');
 assert.match(reportViewModelSource, /label: 'Corroborated Maturity'/, 'report gauges should expose corroborated paired maturity');
