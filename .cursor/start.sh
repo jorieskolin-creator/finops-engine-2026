@@ -11,6 +11,11 @@ cd "$(dirname "$0")/.."
 . ./.cursor/dev-env.sh
 
 echo "[start] starting PostgreSQL 16 cluster"
+# Defensive: create the 16/main cluster if the base image did not (some minimal
+# container images skip cluster creation during package install).
+if ! pg_lsclusters 2>/dev/null | awk 'NR>1 {print $1"/"$2}' | grep -qx "16/main"; then
+  sudo pg_createcluster 16 main
+fi
 sudo pg_ctlcluster 16 main start 2>/dev/null || true
 for _ in $(seq 1 30); do
   pg_isready -h localhost -p 5432 -q && break

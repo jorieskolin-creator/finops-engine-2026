@@ -1,0 +1,25 @@
+{
+  "name": "FinOps Engine",
+  "user": "ubuntu",
+  "build": {
+    "dockerfile": "Dockerfile"
+  },
+  "install": "bash .cursor/install.sh",
+  "start": "bash .cursor/start.sh",
+  "terminals": [
+    {
+      "name": "api-server",
+      "command": ". ./.cursor/dev-env.sh && node server.js",
+      "description": "Node/Express API + built SPA host on port 3000 (PostgreSQL control plane + Redis execution plane)."
+    },
+    {
+      "name": "vite",
+      "command": ". ./.cursor/dev-env.sh && npm run dev",
+      "description": "Vite dev server on port 5173; proxies /api requests to the Node server on port 3000."
+    }
+  ],
+  "ports": [
+    { "name": "vite", "port": 5173 },
+    { "name": "api", "port": 3000 }
+  ]
+}
