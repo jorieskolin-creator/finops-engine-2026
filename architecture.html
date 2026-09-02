@@ -941,6 +941,9 @@
     <p class="lede">
       A governed enterprise-grade assessment engine with deterministic, evidence-gated reasoning, designed to produce trusted and actionable decisions in complex enterprise environments. Unlike traditional AI agents that rely on autonomous generation, the FinOps Engine operates through a <strong>controlled reasoning pipeline</strong>: source material is parsed into a source registry and A-F evidence packets, evidence is extracted, findings are independently verified, scores are calculated through deterministic logic, and outputs pass through strict quality gates. Every maturity claim must trace back to real source evidence, while Knowledge Base material can guide interpretation and planning without becoming proof of current state.
     </p>
+    <p class="lede" style="margin-top: 24px; font-size: 18px;">
+      Authoritative scoring, lineage, and required-tactic contracts live in <code style="font-family: var(--mono); font-size: 14px;">docs/architecture/</code> (ADR-001, ADR-002, ADR-003). This page is the visual 60-criteria catalog. Active headline gauges are Corroborated Maturity, Observed Maturity with Resolution, and Adjusted FinOps Maturity. Assessment Sufficiency owns CRAWL/WALK/RUN publication. Quality Gate does not cap or rewrite maturity.
+    </p>
   </div>
 </section>
 
@@ -964,7 +967,7 @@
       <div class="stage" data-phase="0">
         <div class="stage-header">
           <div class="stage-title">Phase 0 — Pre-Flight</div>
-          <div class="stage-meta">Local parsing · DLP Officer · gpt-5.5 low-reasoning · deterministic redaction</div>
+          <div class="stage-meta">Local parsing · DLP Officer · deterministic redaction · model-assisted sample review via REASONER/WORKHORSE policy</div>
         </div>
         <div class="stage-body">
           Client-side parsers extract source material before model analysis: PDF.js extracts embedded PDF text up to 100 pages with page markers, CSV/TSV/XLSX files become profiled table evidence packets, HTML is sanitized, JSON is normalized, and selected PDF/image pages are attached as visual evidence under an image budget. A deterministic parse-quality check marks PDFs as good, mixed, or poor extraction, prioritizing sparse/scanned pages for visual inclusion. The Engine then creates a source registry with stable source, page, sheet, row, and chunk IDs, applies full-source deterministic DLP scanning/redaction, and sends distributed high-risk samples for low-reasoning DLP review. Low FinOps keyword signal is now a warning, not a hard rejection, when the material is technically parseable.
@@ -977,7 +980,7 @@
       <div class="stage" data-phase="1">
         <div class="stage-header">
           <div class="stage-title">Phase 1 — Forensic Audit</div>
-          <div class="stage-meta">6 parallel AI calls · claude-sonnet-4-6 primary · fallback chain in src/models.ts</div>
+          <div class="stage-meta">6 parallel AI calls · WORKHORSE role · lib/modelRoutingPolicy.js</div>
         </div>
         <div class="stage-body">
           Six batches run simultaneously. Each batch receives its own A-F context packet: high- and medium-relevance chunks, source/page IDs, table profile evidence, parse-quality notes, and absence-test coverage hints. Each batch evaluates 10 criteria (5 maturity + 5 anti-pattern). Each criterion has 3 sub-criteria. Evidence scale 0–3. Every captured evidence quote is tagged with one of <strong>seven evidence categories</strong> (Policy / Process / Operational / Automation / Accountability / Financial-Integration / Cultural). Phase 1 produces candidate audit logs; it does not get the final word.
@@ -1001,7 +1004,7 @@
       <div class="stage" data-phase="1" style="border-style: dashed;">
         <div class="stage-header">
           <div class="stage-title">Phase 1.5 — Evidence Check</div>
-          <div class="stage-meta">gpt-5.5 · independent verifier · Opus/GPT targeted rescans</div>
+          <div class="stage-meta">QUALITY_CHECKER verifier · WORKHORSE targeted rescans · lib/modelRoutingPolicy.js</div>
         </div>
         <div class="stage-body">
           Each completed A-F batch is checked against the cited source chunks before Phase 2 can calculate metrics. The verifier classifies every maturity and anti-pattern item as <em>supported</em>, <em>weak</em>, <em>unsupported</em>, or <em>missing</em>, recommends a verified score, and identifies anti-pattern absence as <em>confirmed present</em>, <em>partial finding</em>, <em>tested absent</em>, or <em>not assessed</em>. Weak or over-scored criteria trigger one targeted rescan; if the citation is unclear, the verifier can fall back to the full source registry instead of trusting packet context alone.
@@ -1017,7 +1020,7 @@
           <div class="stage-meta">No AI · Pure deterministic calculation</div>
         </div>
         <div class="stage-body">
-          The firewall against hallucination. Evidence-checked scores are processed through deterministic arithmetic to produce <strong>Evidence-Gated Readiness</strong>, <strong>Maturity Depth</strong>, <strong>Anti-Pattern Burden</strong>, <strong>Anti-Pattern Clearance</strong>, <strong>Anti-Pattern Coverage</strong>, <strong>Delivery Integrity</strong>, <strong>Evidence Density</strong>, <strong>Crawl/Walk/Run or Insufficient Evidence classification</strong>, domain-level breakdowns, category footprints, confirmed findings, verified absences, not-assessable anti-patterns, and silent areas.
+          The firewall against hallucination. Evidence-checked scores are processed through deterministic arithmetic to produce the active headline gauges — <strong>Corroborated Maturity</strong>, <strong>Observed Maturity with Resolution</strong>, and <strong>Adjusted FinOps Maturity</strong> — plus diagnostic depth, burden, clearance, coverage, delivery integrity, evidence density, Assessment Sufficiency, silent-domain telemetry, category footprints, confirmed findings, verified absences, and not-assessable anti-patterns. CRAWL/WALK/RUN is published only when Assessment Sufficiency passes.
         </div>
       </div>
 
@@ -1027,7 +1030,7 @@
       <div class="stage" data-phase="3">
         <div class="stage-header">
           <div class="stage-title">Phase 3 — Strategy Synthesis</div>
-          <div class="stage-meta">Confidence-bracketed · synthesis + roadmap_synthesis · Sonnet summaries · Opus roadmap</div>
+          <div class="stage-meta">Confidence-bracketed · synthesis WORKHORSE · roadmap_synthesis REASONER</div>
         </div>
         <div class="stage-body">
           <p>Inputs:</p>
@@ -1038,7 +1041,7 @@
             <li>Crawl-Walk-Run methodology framework</li>
             <li>Three persona definitions: FinOps Lead, CFO, Engineering Lead</li>
           </ol>
-          <p>Outputs depend on confidence. Evidence summary and diagnosis are generated separately from roadmap synthesis. The roadmap/planning substage uses <code style="font-family: var(--mono); font-size: 12px;">claude-opus-4-7</code> first, then <code style="font-family: var(--mono); font-size: 12px;">gpt-5.5</code>, then <code style="font-family: var(--mono); font-size: 12px;">claude-sonnet-4-6</code>. HIGH confidence can produce planning, scorecard, and a 4-phase roadmap with WHY, WHAT, and HOW layers. MEDIUM produces cautious planning with assumptions. LOW produces findings mode only: evidence-backed findings, missing evidence, validation plan, <strong>NO_GO</strong>, and an empty roadmap.</p>
+          <p>Outputs depend on confidence. Evidence summary and diagnosis are generated separately from roadmap synthesis. Role routing is centralized in <code style="font-family: var(--mono); font-size: 12px;">lib/modelRoutingPolicy.js</code>: synthesis uses the <code style="font-family: var(--mono); font-size: 12px;">WORKHORSE</code> role and roadmap/planning uses <code style="font-family: var(--mono); font-size: 12px;">REASONER</code>. Configured primaries are Anthropic Claude Sonnet 5, OpenAI GPT-5.6 Sol, and xAI Grok 4.6 with the fallbacks in the twelve-field policy. HIGH confidence can produce planning, scorecard, and a 4-phase roadmap with WHY, WHAT, and HOW layers. MEDIUM produces cautious planning with assumptions. LOW produces findings mode only: evidence-backed findings, missing evidence, validation plan, <strong>NO_GO</strong>, and an empty roadmap.</p>
         </div>
       </div>
 
@@ -1048,7 +1051,7 @@
       <div class="stage" data-phase="3" style="border-style: dashed;">
         <div class="stage-header">
           <div class="stage-title">Split Fact-Check Pass</div>
-          <div class="stage-meta">gpt-5.5 primary · claude-sonnet-4-6 fallback · summary/diagnosis separate from roadmap</div>
+          <div class="stage-meta">QUALITY_CHECKER · summary/diagnosis separate from roadmap</div>
         </div>
         <div class="stage-body">
           Evidence summaries and diagnosis are checked only against the source document, Phase 1 evidence, and Phase 2 metrics. Planning decisions and roadmap WHY/WHAT/HOW are checked against locked findings plus the verified tactics database and tactic activity playbook. Unsupported claims are tagged with failure type, severity, source location, and missing material so the regeneration loop or sanitation layer can repair the right kind of error.
@@ -1085,10 +1088,10 @@
       <div class="stage" data-phase="2">
         <div class="stage-header">
           <div class="stage-title">Quality Gate Aggregation</div>
-          <div class="stage-meta">Deterministic · GO / WARN / BLOCK · gpt-5.5 explanation</div>
+          <div class="stage-meta">Deterministic · GO / WARN / BLOCK · WORKHORSE explanation · does not cap maturity</div>
         </div>
         <div class="stage-body">
-          A final deterministic aggregation reads evidence density, Phase 1 completeness, evidence-check downgrades, anti-pattern coverage, Phase 3 grounding, invalid tactic IDs, strategy sanitation, and fact-check survivors. It returns <strong>GO</strong>, <strong>WARN</strong>, or <strong>BLOCK</strong>. WARN means the score remains usable while strategy hygiene notes are retained in the appendix. BLOCK is reserved for unsafe visible output, low evidence, failed evidence validation, or unsupported facts that cannot be isolated.
+          A final deterministic aggregation reads evidence density, Phase 1 completeness, evidence-check downgrades, anti-pattern coverage, Phase 3 grounding, invalid tactic IDs, strategy sanitation, and fact-check survivors. It returns <strong>GO</strong>, <strong>WARN</strong>, or <strong>BLOCK</strong> for roadmap actionability. WARN keeps usable strategy content visible while hygiene notes stay in the appendix. BLOCK is reserved for unsafe visible output or unresolved required-tactic contract failures. Quality Gate does not cap, average, or rewrite Adjusted FinOps Maturity; Assessment Sufficiency owns score publication.
         </div>
       </div>
 
@@ -1134,7 +1137,7 @@
       <div class="why-card">
         <div class="why-num">03</div>
         <h4>Phase 2 has no AI.</h4>
-        <p>The mathematical validation layer is a firewall against hallucination. Readiness is capped by evidence density, anti-pattern absence must be verified, and insufficient evidence stays insufficient no matter how polished the prose could be.</p>
+        <p>The mathematical validation layer is a firewall against hallucination. Assessment Sufficiency owns publication of Adjusted Maturity and CRAWL/WALK/RUN. Anti-pattern absence must be verified. Insufficient evidence stays insufficient no matter how polished the prose could be. Quality Gate does not cap the score.</p>
       </div>
       <div class="why-card">
         <div class="why-num">04</div>
@@ -1181,7 +1184,7 @@
           <dt>Behaviour</dt>
           <dd>Paranoid about safety, conservative about relevance. Scans input documents for PII, secrets, and risky content, while local parsers preserve usable low-signal material for evidence-gated assessment instead of rejecting it too early.</dd>
           <dt>Model</dt>
-          <dd><code style="font-family: var(--mono); font-size: 12px;">gpt-5.5</code> low-reasoning review with deterministic redaction, PDF.js extraction, parse-quality checks, CSV/TSV parsing, and local HTML/JSON handling.</dd>
+          <dd>Deterministic local redaction plus a model-assisted high-risk sample review using the configured AI-role policy in <code style="font-family: var(--mono); font-size: 12px;">lib/modelRoutingPolicy.js</code>, with PDF.js extraction, parse-quality checks, CSV/TSV parsing, and local HTML/JSON handling.</dd>
           <dt>Decision</dt>
           <dd>Hard blocks are reserved for unsafe, unreadable, unsupported, over-limit, or corrupt files. Generic but parseable material becomes a low-relevance warning, then the evidence pipeline decides whether it supports FinOps findings.</dd>
         </dl>
@@ -1246,7 +1249,7 @@ metrics, vendor management, VP+ engagement</code></pre>
             Receives 10 criteria definitions (5 maturity + 5 anti-pattern). Each criterion has 3 specific sub-criteria to check. For each criterion, writes a "reasoning" field — a scratchpad proving the connection to source text. Assigns a score of 0–3 based on how many sub-criteria have traceable evidence. Returns structured JSON — not prose, not opinions.
           </dd>
           <dt>Model · Concurrency</dt>
-          <dd><code style="font-family: var(--mono); font-size: 12px;">claude-sonnet-4-6</code> primary, with fallback routing centralized in <code style="font-family: var(--mono); font-size: 12px;">src/models.ts</code>. <strong>6 batches run simultaneously.</strong> Evidence-check runs separately after each completed batch.</dd>
+          <dd><code style="font-family: var(--mono); font-size: 12px;">WORKHORSE</code> role from <code style="font-family: var(--mono); font-size: 12px;">lib/modelRoutingPolicy.js</code> (default primary Anthropic Claude Sonnet 5 → xAI Grok 4.6). <strong>6 batches run simultaneously.</strong> Evidence-check runs separately after each completed batch.</dd>
         </dl>
         <div class="persona-rules">
           <h4>Behavioural Rules</h4>
@@ -1284,7 +1287,7 @@ metrics, vendor management, VP+ engagement</code></pre>
             Evidence-only persona summaries, an evidence summary object, diagnosis, planning decision, visual scorecard, and — only when confidence allows — a 4-phase remediation roadmap with WHY, WHAT, and HOW layers. LOW-confidence assessments produce findings mode, <strong>NO_GO</strong>, missing-evidence guidance, and an empty roadmap.
           </dd>
           <dt>Model</dt>
-          <dd><code style="font-family: var(--mono); font-size: 12px;">claude-sonnet-4-6</code> writes evidence summaries and diagnosis. The roadmap/planning substage uses <code style="font-family: var(--mono); font-size: 12px;">claude-opus-4-7</code> first, with <code style="font-family: var(--mono); font-size: 12px;">gpt-5.5</code> and <code style="font-family: var(--mono); font-size: 12px;">claude-sonnet-4-6</code> as fallbacks.</dd>
+          <dd><code style="font-family: var(--mono); font-size: 12px;">WORKHORSE</code> writes evidence summaries and diagnosis. Roadmap/planning uses <code style="font-family: var(--mono); font-size: 12px;">REASONER</code>. Configured primaries are Anthropic Claude Sonnet 5, OpenAI GPT-5.6 Sol, and xAI Grok 4.6 as defined in <code style="font-family: var(--mono); font-size: 12px;">lib/modelRoutingPolicy.js</code>.</dd>
         </dl>
         <div class="persona-rules">
           <h4>Behavioural Rules (STRATEGY_GUARDRAILS)</h4>
@@ -2505,16 +2508,32 @@ OUTPUT RULES:
 
     <div class="metrics-list">
       <div class="metric-item">
-        <div class="metric-name">FinOps Maturity Score<span>0–100, Quality Gate capped</span></div>
+        <div class="metric-name">Corroborated Maturity<span>active headline</span></div>
         <div>
-          <div class="metric-formula">finops_readiness = (capability_attainment + antipattern_control) / 2
-if Quality Gate = BLOCK: displayed score is capped at 70</div>
-          <div class="metric-interp">Both dimensions use their complete 30-criterion surfaces. Unknown criteria earn no points without being classified as confirmed gaps or findings. Only tested anti-pattern absence earns control; burden remains a separate diagnostic.</div>
+          <div class="metric-formula">weighted pair maturity using only pairs where both capability and anti-pattern sides are resolved</div>
+          <div class="metric-interp">Pair relationships come only from the versioned canonical pair registry. Unknown sides stay NA and are excluded. If no fully resolved pair exists, the result is unavailable.</div>
         </div>
       </div>
 
       <div class="metric-item">
-        <div class="metric-name">Maturity Ratio<span>0–100</span></div>
+        <div class="metric-name">Observed Maturity with Resolution<span>active headline</span></div>
+        <div>
+          <div class="metric-formula">weighted signal from fully or partially resolved pairs, shown with framework resolution %</div>
+          <div class="metric-interp">Resolution credit is 1.0 when both sides are resolved, 0.5 when exactly one side is resolved, and 0.0 when neither is resolved. Unknown criteria are not averaged as zero.</div>
+        </div>
+      </div>
+
+      <div class="metric-item">
+        <div class="metric-name">Adjusted FinOps Maturity<span>publishable only if sufficiency PASSes</span></div>
+        <div>
+          <div class="metric-formula">Adjusted = Observed × Resolution^gamma (gamma = 0.5)
+Classification uses 33 / 66 only after Assessment Sufficiency PASSes</div>
+          <div class="metric-interp">This is the active headline score. Quality Gate does not cap it at 70 and does not rewrite it. Capability Attainment and Anti-Pattern Control remain diagnostics, not independent headline gauges.</div>
+        </div>
+      </div>
+
+      <div class="metric-item">
+        <div class="metric-name">Maturity Ratio<span>0–100 diagnostic</span></div>
         <div>
           <div class="metric-formula">maturity_ratio = (criteria scored 3 / 30) * 100</div>
           <div class="metric-interp">Share of the 30 maturity criteria scored as fully embedded (3 of 3 sub-criteria met).</div>
@@ -2556,12 +2575,11 @@ if Quality Gate = BLOCK: displayed score is capped at 70</div>
       <div class="metric-item">
         <div class="metric-name">Crawl / Walk / Run Classification<span>categorical</span></div>
         <div>
-          <div class="metric-formula">if evidence_density &lt; 30: "Insufficient evidence"
-elif finops_readiness &lt; 33: "Crawl"
-elif &lt; 66 and antipattern_burden &gt; 50: "Walk with significant friction"
+          <div class="metric-formula">if Assessment Sufficiency = BLOCK or Adjusted Maturity is N/A: "Insufficient evidence"
+elif Adjusted Maturity &lt; 33: "Crawl"
 elif &lt; 66: "Walk"
 else: "Run"</div>
-          <div class="metric-interp">Classification is blocked by low evidence before maturity labels are allowed. The matrix also renders insufficient-evidence states outside the excellence quadrants.</div>
+          <div class="metric-interp">Assessment Sufficiency policy v2 uses 30% hard floors for criterion evidence density and overall resolution, with warnings below 60%. Quality Gate remains a separate roadmap-actionability decision.</div>
         </div>
       </div>
 
@@ -2638,9 +2656,9 @@ else: "Run"</div>
     },
     "active_persona": "finops_lead",
     "evidence_summary": {
-      "headline": "Evidence-gated readiness based only on Phase 1/2 findings",
-      "maturity_classification": "Insufficient evidence | Crawl | Walk | Walk with significant friction | Run",
-      "key_metrics": ["Evidence-gated readiness: 42/100", "Evidence density: 55%"],
+      "headline": "Resolution-based maturity from Phase 1/2 findings",
+      "maturity_classification": "Insufficient evidence | Crawl | Walk | Run",
+      "key_metrics": ["Adjusted FinOps Maturity: 42/100", "Resolution: 55%"],
       "confirmed_strengths": ["FinOps-relevant strengths only"],
       "confirmed_gaps": ["Maturity gaps verified by Phase 1/2"],
       "confirmed_antipatterns": ["Confirmed anti-pattern findings"],
@@ -2883,21 +2901,21 @@ else: "Run"</div>
       <div class="metric-item">
         <div class="metric-name">Mathematical Validation (Phase 2)<span>evidence-gated metrics</span></div>
         <div>
-          <p style="font-size: 14px; color: var(--ink-2); margin: 0;">Evidence-Gated Readiness · Maturity Ratio · Maturity Depth · Anti-Pattern Burden · Anti-Pattern Clearance · Anti-Pattern Coverage · Burden Confidence · Delivery Integrity · Evidence Density · Readiness cap · Per-batch category scores · Evidence footprint · Insufficient Evidence / Crawl / Walk / Run classification</p>
+          <p style="font-size: 14px; color: var(--ink-2); margin: 0;">Corroborated Maturity · Observed Maturity with Resolution · Adjusted FinOps Maturity · Assessment Sufficiency · Maturity Ratio · Maturity Depth · Anti-Pattern Burden · Anti-Pattern Clearance · Anti-Pattern Coverage · Burden Confidence · Delivery Integrity · Evidence Density · Per-batch category scores · Evidence footprint · Insufficient Evidence / Crawl / Walk / Run classification</p>
         </div>
       </div>
 
       <div class="metric-item">
         <div class="metric-name">Strategy Synthesis (Phase 3)<span>bracketed outputs</span></div>
         <div>
-          <p style="font-size: 14px; color: var(--ink-2); margin: 0;">Three persona-tailored summaries from locked findings · Evidence summary separate from diagnosis · Dedicated Opus roadmap synthesis with GPT/Sonnet fallbacks · Planning decision GO / CONDITIONAL_GO / NO_GO · Roadmap phases render WHY / WHAT / HOW · LOW produces findings mode and empty roadmap</p>
+          <p style="font-size: 14px; color: var(--ink-2); margin: 0;">Three persona-tailored summaries from locked findings · Evidence summary separate from diagnosis · WORKHORSE synthesis and REASONER roadmap synthesis via lib/modelRoutingPolicy.js · Planning decision GO / CONDITIONAL_GO / NO_GO · Roadmap phases render WHY / WHAT / HOW · LOW produces findings mode and empty roadmap</p>
         </div>
       </div>
 
       <div class="metric-item">
         <div class="metric-name">Split Fact-Check Pass<span>independent verification</span></div>
         <div>
-          <p style="font-size: 14px; color: var(--ink-2); margin: 0;">GPT-5.5 primary fact-check · Summary/diagnosis checked against source + Phase 1/2 · Roadmap WHY/WHAT/HOW checked against locked findings + tactics database · Unsupported claims classified by severity + failure_type + source_location + missing_material · Independent from the model that wrote the strategy</p>
+          <p style="font-size: 14px; color: var(--ink-2); margin: 0;">QUALITY_CHECKER fact-check · Summary/diagnosis checked against source + Phase 1/2 · Roadmap WHY/WHAT/HOW checked against locked findings + tactics database · Unsupported claims classified by severity + failure_type + source_location + missing_material · Independent from the model that wrote the strategy</p>
         </div>
       </div>
 
@@ -2925,14 +2943,14 @@ else: "Run"</div>
       <div class="metric-item">
         <div class="metric-name">Quality Gate<span>explicit decision</span></div>
         <div>
-          <p style="font-size: 14px; color: var(--ink-2); margin: 0;">GO / WARN / BLOCK with named blocking reasons or warnings · Aggregates evidence density, evidence-check results, anti-pattern coverage, strategy sanitation, Phase 3 grounding, fact-check survivors · GPT-5.5 explanation added when needed · Compact status near Evidence Check and detail in appendix</p>
+          <p style="font-size: 14px; color: var(--ink-2); margin: 0;">GO / WARN / BLOCK with named blocking reasons or warnings · Aggregates evidence density, evidence-check results, anti-pattern coverage, strategy sanitation, Phase 3 grounding, fact-check survivors, required-tactic contract · WORKHORSE explanation added when needed · Does not cap or rewrite Adjusted Maturity · Compact status near Evidence Check and detail in appendix</p>
         </div>
       </div>
 
       <div class="metric-item">
         <div class="metric-name">Model Routing + Runtime Reliability<span>centralized</span></div>
         <div>
-          <p style="font-size: 14px; color: var(--ink-2); margin: 0;">Stage-to-model routing lives in <code style="font-family: var(--mono); font-size: 12px;">src/models.ts</code> · provider fallbacks are stage-specific · internal Railway model proxy calls are marked as pipeline calls so response-stream closes do not abort upstream model work · true request aborts and provider failures still fail or fall back normally</p>
+          <p style="font-size: 14px; color: var(--ink-2); margin: 0;">AI-role routing lives in <code style="font-family: var(--mono); font-size: 12px;">lib/modelRoutingPolicy.js</code> · every stage maps to REASONER, WORKHORSE, or QUALITY_CHECKER · provider fallbacks follow the twelve-field policy · internal Railway model proxy calls are marked as pipeline calls so response-stream closes do not abort upstream model work · true request aborts and provider failures still fail or fall back normally</p>
         </div>
       </div>
 
@@ -3004,7 +3022,7 @@ else: "Run"</div>
 <footer>
   <div class="container">
     <p class="footer-note">
-      This document describes the intellectual architecture of the FinOps Maturity Assessment Engine. The knowledge base criteria, guardrails, taxonomy registry, tactics database, evidence-check stage, validation rules, and quality gates defined here represent the domain-specific content layer that sits on top of the Engine's reusable technical infrastructure (React UI, local parsing and parse-quality checks, Anthropic / OpenAI model routing, provider-specific fallback chains, internal-call protected model proxies, parallel batch processing, dedicated roadmap synthesis, fact-check pipeline, strategy sanitation, Quality Gate, engineering scenario fixtures, export system, and Railway deployment).
+      This document describes the intellectual architecture of the FinOps Maturity Assessment Engine. The 60-criteria catalog on this page remains a visual reference. Scoring, lineage, required-tactic dispositions, and AI-role routing are defined by the ADRs in <code>docs/architecture/</code>, <code>lib/modelRoutingPolicy.js</code>, and the knowledge-base registries. The technical infrastructure includes the React UI, local parsing, governed OpenAI / Anthropic / xAI dispatch, PostgreSQL + Redis control/execution planes, fact-check, strategy sanitation, Quality Gate, engineering scenario fixtures, export system, and Railway deployment.
     </p>
     <p class="footer-note" style="margin-top: 24px;">
       <a href="https://finops-engine.vercel.app/" target="_blank" rel="noopener noreferrer">FinOps Assessment Engine - DEMO</a>

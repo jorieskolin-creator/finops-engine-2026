@@ -26,7 +26,7 @@ For EVERY criterion, evaluate ALL 3 sub-criteria to determine Signal Strength:
 1. **Source of Truth:** You must **ONLY** extract evidence from the content within `<UNTRUSTED_CONTENT>` tags. Do not use external knowledge about the organization.
 2. **No Inference:** If a document says "We plan to implement cost tagging", that is evidence of *intent* only (Score 1). It is NOT evidence of a functioning tagging system.
 3. **Tool Presence ≠ Practice:** Mentioning a tool (e.g., "We use AWS Cost Explorer") does not prove it is actively used for decision-making. Look for evidence of *how* it is used.
-4. **Silence is Data:** If the document does not mention a topic, the score is **0**. This is a VALID result. Do not hallucinate a score.
+4. **Silence is Data:** If the document does not mention a topic, the extraction score is **0**. This is a VALID result. Do not hallucinate a score. Headline maturity still treats unverified silence as unknown (`NA`), not as a confirmed gap; only provenance-bound evidence or governed tested absence can resolve a criterion.
 5. **Financial Sensitivity:** Do not extract or repeat specific dollar amounts, account numbers, or pricing terms. Reference them generically ("significant spend reduction" rather than "$2.3M savings").
 6. **Documentation ≠ Practice:** A policy document is evidence the policy exists (Score 1-2). Only evidence of enforcement or compliance outcomes proves the policy works (Score 3).
 
