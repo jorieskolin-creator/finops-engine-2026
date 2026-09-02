@@ -11,6 +11,7 @@ The engine uses the same indexes for Knowledge Base content and assessment outpu
 | C | Governance & Policy | C1, C2, C3, C4, C5 |
 | D | Architecture & Engineering | D1, D2, D3, D4, D5 |
 | E | Culture & Organization | E1, E2, E3, E4, E5 |
+| F | GenAI & AI Cost Management | F1, F2, F3, F4, F5 |
 
 ## Streams
 
@@ -32,6 +33,7 @@ Examples:
 A - Cost Visibility & Allocation - A1 A2 A3 - Policy Process Operational - Allocation Examples
 C - Governance & Policy - C1 C2 - Policy Automation Accountability - Budget Controls
 E - Culture & Organization - E1 E3 E4 - Accountability Cultural - Operating Model Examples
+F - GenAI Token Cost Management - F1 F3 F4 - Operational Automation Financial-Integration - AI Consumption Controls
 ```
 
 This intentionally allows one document to cover several related capabilities and several evidence categories. Avoid over-fragmenting the KB into tiny single-criterion files unless the content is genuinely narrow.

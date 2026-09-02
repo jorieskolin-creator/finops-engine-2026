@@ -4,6 +4,20 @@ Evidence-gated FinOps Maturity Assessment prototype. The React, TypeScript, and 
 
 The repository is currently intended for solution development, structural validation, and accuracy/reproducibility testing. It is not yet a production-ready multi-user service.
 
+## Authoritative documentation
+
+Use these sources when a description disagrees with older narrative decks:
+
+| Document | Authority |
+|----------|-----------|
+| `docs/architecture/ADR-001-execution-and-evidence-lineage.md` | Lineage vocabulary and dispatch invariants |
+| `docs/architecture/ADR-002-resolution-based-maturity-model.md` | Active headline maturity and Assessment Sufficiency |
+| `docs/architecture/ADR-003-required-tactic-contract.md` | Required roadmap tactic dispositions |
+| `docs/architecture/maturity-model-calibration-baseline.md` | Executable synthetic calibration for the active formula |
+| `src/knowledge_base/finops_taxonomy_registry.json` | Canonical A–F domains, streams, and evidence categories |
+
+`architecture.html` is a visual 60-criteria catalog. It is not the scoring contract. Quality Gate `GO | WARN | BLOCK` does not cap or rewrite maturity. Unknown criteria stay `NA` in the active model; they are not averaged as zero across the full framework.
+
 ## Local development
 
 Install the locked dependencies and create a local environment file:
@@ -22,6 +36,8 @@ npx --yes vercel dev
 ```
 
 For UI-only work, run `npm run dev`. The UI will load, but assessments cannot complete unless `/api/*` is also available. To use the repository's Node adapter instead, export the required environment variables, run `npm run build && npm start` on port 3000, and run `npm run dev` separately for Vite and its `/api` proxy.
+
+Cursor Cloud Agents use the repo-managed environment in `.cursor/`: Ubuntu 24.04 with PostgreSQL 16, Redis, and Node.js 20, plus `install.sh` (`npm ci`) and `start.sh` (cluster, Redis, migrations). Real model dispatch still needs provider API keys as Cursor Secrets; the committed `dev-env.sh` defaults only boot the local control plane.
 
 ## Active model architecture
 
