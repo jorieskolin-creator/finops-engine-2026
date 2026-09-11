@@ -15,6 +15,7 @@ Use these sources when a description disagrees with older narrative decks:
 | `docs/architecture/ADR-003-required-tactic-contract.md` | Required roadmap tactic dispositions |
 | `docs/architecture/maturity-model-calibration-baseline.md` | Executable synthetic calibration for the active formula |
 | `src/knowledge_base/finops_taxonomy_registry.json` | Canonical A–F domains, streams, and evidence categories |
+| `docs/security/secure-coding-practices.md` | Evaluated secure-coding contract: secrets, auth, DLP, governed egress, logging, and review checklist |
 
 `architecture.html` is a visual 60-criteria catalog. It is not the scoring contract. Quality Gate `GO | WARN | BLOCK` does not cap or rewrite maturity. Unknown criteria stay `NA` in the active model; they are not averaged as zero across the full framework.
 
