@@ -153,4 +153,20 @@ assert.match(analysis, /model_mode: modelRoutingMode/);
 assert.match(analysis, /evidence_density < EVIDENCE_DENSITY_BLOCK[\s\S]*?reason_code: 'EVIDENCE_DENSITY_BELOW_FLOOR'/);
 assert.match(server, /resolveModelRouting\(process\.env\)/);
 
+const architecture = await readFile(new URL('../architecture.html', import.meta.url), 'utf8');
+const cleanRoom = await readFile(new URL('../finops-engine-clean-room-protocol.html', import.meta.url), 'utf8');
+assert.doesNotMatch(architecture, /GPT-5\.5|Opus 4\.7|Sonnet 4\.6/, 'architecture.html must not describe retired per-stage model IDs');
+assert.doesNotMatch(cleanRoom, /GPT-5\.5|Opus 4\.7|Sonnet 4\.6/, 'clean-room protocol must not describe retired per-stage model IDs');
+assert.match(architecture, /lib\/modelRoutingPolicy\.js/, 'architecture.html must point at the live role policy');
+assert.match(cleanRoom, /QUALITY_CHECKER/);
+assert.match(cleanRoom, /WORKHORSE/);
+assert.match(cleanRoom, /REASONER/);
+
+try {
+  await readFile(new URL('../FinOpsEngineArchitecture.html', import.meta.url), 'utf8');
+  assert.fail('FinOpsEngineArchitecture.html is a stale duplicate and must not remain in the repository');
+} catch (error) {
+  assert.equal(error.code, 'ENOENT', 'FinOpsEngineArchitecture.html must be absent');
+}
+
 console.log('AI role routing policy tests passed');

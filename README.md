@@ -148,7 +148,7 @@ The synthetic files under `test/` are engineering inputs for exercising parsing,
 
 ## Acquisition quality telemetry
 
-Completed assessments include a versioned `acquisition_quality_snapshot_v1` under `meta.acquisition_quality`. The Master Data HTML renders the same snapshot visibly. The shareable Summary Report HTML is display-only and does not embed a hidden `finops-data` JSON payload.
+Completed assessments include a versioned `acquisition_quality_snapshot_v1` under `meta.acquisition_quality`. The Master Data HTML renders the same snapshot visibly. The shareable Summary Report HTML is display-only: it must not embed `finops-data`, other hidden JSON, or script payloads. Master Data HTML still embeds a forensic `finops-data` payload so an exported Master Data file can be re-imported; treat that file as sensitive as the JSON download and do not share it as a customer-facing summary.
 
 The metrics intentionally remain separate:
 

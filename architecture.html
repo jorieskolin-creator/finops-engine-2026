@@ -1147,7 +1147,7 @@
       <div class="why-card">
         <div class="why-num">05</div>
         <h4>The fact-check is independent.</h4>
-        <p>A separate GPT-5.5 validation path reads the strategy and asks "can this claim be traced?" — the model that wrote the roadmap never grades its own work. Survivors after retries are either sanitized before display or retained as appendix traceability.</p>
+        <p>A separate <code style="font-family: var(--mono); font-size: 12px;">QUALITY_CHECKER</code> validation path reads the strategy and asks "can this claim be traced?" — the model that wrote the roadmap never grades its own work. Survivors after retries are either sanitized before display or retained as appendix traceability.</p>
       </div>
       <div class="why-card">
         <div class="why-num">06</div>
@@ -2741,7 +2741,7 @@ else: "Run"</div>
       <li>The <strong>visual_scorecard and remediation phases come from Phase 2</strong> — the AI cannot change Maturity, Burden, or classification.</li>
       <li>The <strong>three persona summaries must agree on facts</strong>; they differ only in lens, vocabulary, and emphasis.</li>
       <li><strong>Evidence summary and diagnosis are separate from roadmap synthesis</strong>; the Knowledge Base is absent from evidence-only summary prompts.</li>
-      <li><strong>Roadmap synthesis is its own model stage</strong>; Opus 4.7 writes planning first, GPT-5.5 and Sonnet 4.6 are fallbacks, and the output must explain WHY, WHAT, and HOW for each phase.</li>
+      <li><strong>Roadmap synthesis is its own model stage</strong>; <code style="font-family: var(--mono); font-size: 12px;">REASONER</code> writes planning first, with the configured role fallback, and the output must explain WHY, WHAT, and HOW for each phase.</li>
       <li><strong>Tactic IDs are optional but exact</strong>: prescribed tactic actions cite a verified database ID only when the KB problem pattern matches the locked finding. Invalid or mismatched tactic IDs are removed before fact-check spend.</li>
       <li>The <strong>roadmap structure is fixed</strong> (4 Crawl-Walk-Run phases) when a roadmap is allowed. LOW-confidence assessments return findings mode and an empty roadmap.</li>
       <li><strong>No weasel words allowed</strong> — the STRATEGY_GUARDRAILS enforce active, prescriptive language; the validator scans for forbidden phrases post-hoc.</li>
@@ -2768,7 +2768,7 @@ else: "Run"</div>
         <div class="metric-name">Split Fact-Check Pass<span>independent LLM</span></div>
         <div>
           <div class="metric-interp">
-            GPT-5.5 verifies evidence summaries and diagnosis separately from roadmap/planning, with Sonnet 4.6 as fallback. Summary claims must trace to the source document, Phase 1 evidence, or Phase 2 metrics. Roadmap WHY, WHAT, HOW, and planning claims may also trace to locked findings and the verified tactics database and tactic activity playbook. Unsupported claims receive severity, failure_type, source_location, and missing_material hints.
+            <code style="font-family: var(--mono); font-size: 12px;">QUALITY_CHECKER</code> verifies evidence summaries and diagnosis separately from roadmap/planning, using the configured role fallback. Summary claims must trace to the source document, Phase 1 evidence, or Phase 2 metrics. Roadmap WHY, WHAT, HOW, and planning claims may also trace to locked findings and the verified tactics database and tactic activity playbook. Unsupported claims receive severity, failure_type, source_location, and missing_material hints.
           </div>
         </div>
       </div>
@@ -2804,7 +2804,7 @@ else: "Run"</div>
         <div class="metric-name">Quality Gate Aggregation<span>GO / WARN / BLOCK</span></div>
         <div>
           <div class="metric-interp">
-            A final deterministic aggregator reads evidence density, Phase 1 completeness, evidence-check downgrades, anti-pattern coverage, strategy sanitation, Phase 3 grounding errors, and fact-check survivors. Returns an explicit GO / WARN / BLOCK decision. WARN/BLOCK receive a GPT-5.5-written explanation that annotates the deterministic decision without changing it.
+            A final deterministic aggregator reads evidence density, Phase 1 completeness, evidence-check downgrades, anti-pattern coverage, strategy sanitation, Phase 3 grounding errors, and fact-check survivors. Returns an explicit GO / WARN / BLOCK decision. WARN/BLOCK receive a <code style="font-family: var(--mono); font-size: 12px;">WORKHORSE</code>-written explanation that annotates the deterministic decision without changing it.
           </div>
         </div>
       </div>

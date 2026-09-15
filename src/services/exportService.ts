@@ -773,6 +773,8 @@ const renderDomainSignalOverview = (result: DiagnosticResult): string => {
   </section>`;
 };
 
+// Shareable Summary HTML is display-only. Do not embed diagnostic JSON, script
+// payloads, or other hidden fields that a recipient could extract later.
 export const generateSummaryReportHtml = (unsafeResult: DiagnosticResult): string => {
   const result = stripSourceFilenameMetadata(unsafeResult);
   const m = result.phase_2_validation.metrics;

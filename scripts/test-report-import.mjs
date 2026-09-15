@@ -48,6 +48,9 @@ assert.equal(imported.result.phase_3_strategy.executive_summary, 'safe </script>
 const ordinaryHtml = '<!doctype html><main><h1>Source material</h1></main>';
 assert.deepEqual(extractDiagnosticResultFromHtmlReport(ordinaryHtml), { kind: 'not_report' });
 
+const summaryLikeHtml = '<!doctype html><html><body><h1>FinOps Summary Report</h1><p>Maturity band Walk</p></body></html>';
+assert.deepEqual(extractDiagnosticResultFromHtmlReport(summaryLikeHtml), { kind: 'not_report' }, 'Summary HTML without finops-data must not restore an assessment');
+
 const brokenHtml = '<script id="finops-data" type="application/json">{not json</script>';
 const broken = extractDiagnosticResultFromHtmlReport(brokenHtml);
 assert.equal(broken.kind, 'invalid_report');

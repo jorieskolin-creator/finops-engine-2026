@@ -121,6 +121,8 @@ assert.match(exportSource, /Evidence sufficiency/, 'context packet tables should
 assert.doesNotMatch(exportSource, /source\.source_name/, 'HTML exports must not render source filenames');
 assert.match(exportSource, /stripSourceFilenameMetadata\(unsafeResult\)/, 'both HTML generators must remove legacy filename metadata at the export boundary');
 assert.doesNotMatch(summaryExportSource, /finops-data|serializeDiagnosticResultForHtml/, 'Summary Report HTML must not embed a hidden diagnostic JSON payload');
+assert.doesNotMatch(summaryExportSource, /<script/i, 'Summary Report HTML must not include script tags that could hide a payload');
+assert.doesNotMatch(summaryExportSource, /type="application\/json"/, 'Summary Report HTML must not include hidden JSON content types');
 assert.match(masterDataExportSource, /script id="finops-data"/, 'Master Data HTML may still embed a payload for forensic HTML re-import');
 assert.match(exportSource, /Domain Signal Overview/, 'HTML exports should include the domain signal title');
 assert.match(exportSource, /Anti-pattern finding rate/, 'HTML exports should label anti-pattern traffic lights');
