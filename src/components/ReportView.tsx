@@ -586,10 +586,11 @@ interface ReportViewProps {
   onBack: () => void;
   onDownloadSummary: () => void;
   onDownloadMaster: () => void;
+  onDownloadJson: () => void;
   onDownloadTrace: () => void;
 }
 
-export const ReportView: React.FC<ReportViewProps> = ({ result, onBack, onDownloadSummary, onDownloadMaster, onDownloadTrace }) => {
+export const ReportView: React.FC<ReportViewProps> = ({ result, onBack, onDownloadSummary, onDownloadMaster, onDownloadJson, onDownloadTrace }) => {
   const m = result.phase_2_validation.metrics;
   const reportView = buildReportViewModel(result);
   const isInsufficientEvidence = reportView.sufficiency.decision === 'BLOCK';
@@ -610,6 +611,9 @@ export const ReportView: React.FC<ReportViewProps> = ({ result, onBack, onDownlo
             </button>
             <button onClick={onDownloadMaster} className="px-4 py-2 bg-slate-900 text-white rounded-lg font-bold text-sm hover:bg-slate-700 transition-colors">
               Download Master Data
+            </button>
+            <button onClick={onDownloadJson} className="px-4 py-2 bg-slate-100 text-slate-900 rounded-lg font-bold text-sm hover:bg-slate-200 transition-colors">
+              Download JSON
             </button>
             {result.meta.run_trace && (
               <button onClick={onDownloadTrace} className="px-4 py-2 bg-slate-100 text-slate-900 rounded-lg font-bold text-sm hover:bg-slate-200 transition-colors">

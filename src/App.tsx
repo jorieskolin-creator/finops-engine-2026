@@ -7,7 +7,7 @@ import { renderDelimitedTableForAnalysis } from './services/tableService';
 import { inspectEvidenceFile } from './services/evidenceFileService';
 import { extractXlsx } from './services/xlsxService';
 import { extractImageOcr } from './services/ocrService';
-import { downloadMasterDataReport, downloadRunTraceJson, downloadSummaryReport } from './services/exportService';
+import { downloadAssessmentJson, downloadMasterDataReport, downloadRunTraceJson, downloadSummaryReport } from './services/exportService';
 import { forensicSanitizeImport } from './services/securityService';
 import { extractDiagnosticResultFromHtmlReport, isDiagnosticResultPayload, parseDiagnosticResultJson, serializeDiagnosticResultForHtml } from './services/reportImportService';
 import { findGeneratedReportPrivacyFindings, scrubDiagnosticResultForPrivacy } from './services/privacyService';
@@ -736,6 +736,11 @@ const App: React.FC = () => {
           clearFileInput();
           return;
         }
+        if (imported.kind === 'display_only_report') {
+          setError('This HTML report is display-only and cannot restore an assessment. Download and upload the assessment JSON instead.');
+          clearFileInput();
+          return;
+        }
         if (imported.kind === 'invalid_report') {
           setError(imported.error);
           clearFileInput();
@@ -1244,6 +1249,7 @@ const App: React.FC = () => {
           onBack={() => setViewMode('dashboard')}
           onDownloadSummary={() => downloadSummaryReport(result)}
           onDownloadMaster={() => downloadMasterDataReport(result)}
+          onDownloadJson={() => downloadAssessmentJson(result)}
           onDownloadTrace={() => downloadRunTraceJson(result)}
         />
       </AppErrorBoundary>
@@ -1582,7 +1588,7 @@ const App: React.FC = () => {
                           {privacyEdited && <span className="px-2 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-[10px] font-bold uppercase tracking-widest text-emerald-200">Edited locally</span>}
                         </div>
                         <p className="text-sm text-slate-300">
-                          Review generated wording before sharing. Manual edits and redactions are applied to the dashboard and exported HTML payload.
+          Review generated wording before sharing. Manual edits and redactions are applied to the dashboard and exported HTML and JSON files.
                         </p>
                         {privacyNotice && <p className="mt-2 text-xs text-amber-200">{privacyNotice}</p>}
                       </div>

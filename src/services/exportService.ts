@@ -11,7 +11,6 @@ import {
 } from './reportTextService';
 import { antiPatternStatusLabel, inferAntiPatternAbsenceStatus } from './antiPatternSemantics';
 import { displayQualityGateDiagnostic, isReportableSourceCoverageGap, splitQualityGateDiagnostics } from './reportDiagnosticsService';
-import { serializeDiagnosticResultForHtml } from './reportImportService';
 import { computeDomainSignalRows, DomainSignalTone } from './domainSignalService';
 import { buildReportViewModel } from './reportViewModel';
 import { stripSourceFilenameMetadata } from './privacyService';
@@ -465,6 +464,13 @@ export const downloadRunTraceJson = (result: DiagnosticResult) => {
   downloadJson(
     trace || { available: false, reason: 'RunTrace was not present on this assessment result.' },
     `FinOps_RunTrace_${new Date().toISOString().split('T')[0]}.json`
+  );
+};
+
+export const downloadAssessmentJson = (result: DiagnosticResult) => {
+  downloadJson(
+    result,
+    `FinOps_Assessment_${new Date().toISOString().split('T')[0]}.json`
   );
 };
 
@@ -999,6 +1005,8 @@ export const generateSummaryReportHtml = (unsafeResult: DiagnosticResult): strin
 </html>`;
 };
 
+// Master Data HTML is display-only. Do not embed diagnostic JSON, script
+// payloads, or other hidden fields that a recipient could extract later.
 export const generateReportHtml = (unsafeResult: DiagnosticResult): string => {
   const result = stripSourceFilenameMetadata(unsafeResult);
   const reportView = buildReportViewModel(result);
@@ -1334,9 +1342,6 @@ export const generateReportHtml = (unsafeResult: DiagnosticResult): string => {
     <p>FinOps Engine v.${escapeHtml(result.meta.engine_version)}</p>
     ${renderAssessmentMethodDisclaimer()}
   </div>
-
-  <!-- Forensic HTML re-import payload. Not used by the shareable Summary Report. -->
-  <script id="finops-data" type="application/json">${serializeDiagnosticResultForHtml(result)}</script>
 </body>
 </html>`;
 };
