@@ -142,9 +142,9 @@ npm run test:privacy
 
 ## Scenario and boundary fixtures
 
-The synthetic fixtures under `test/` represent separate organizations and must be assessed separately. They are engineering inputs for exercising parsing, routing, evidence, privacy, and Quality Gate boundaries. They are not expert-approved reference assessments and must not be used to claim model accuracy, reproducibility, or drift monitoring.
+The synthetic files under `test/` are engineering inputs for exercising parsing, routing, evidence, privacy, and Quality Gate boundaries. They are not expert-approved reference assessments and must not be used to claim model accuracy, reproducibility, or drift monitoring.
 
-The low-, borderline-, and strong-evidence scenarios provide broad pipeline inputs. Tier 1 fixtures exercise narrower document types such as governance policies, tagging standards, operating-model charters, strategies, and optimization reviews.
+`test/demo-simulation.txt` is the bundled Engine Simulation pack. The low-, borderline-, and strong-evidence scenario files remain pipeline-boundary samples. Retired single-document “Tier 1 fixture” packs are gone; a future Golden Standard org pack will replace simulation once labeled packs exist.
 
 ## Acquisition quality telemetry
 
