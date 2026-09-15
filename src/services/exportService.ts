@@ -446,17 +446,6 @@ const downloadJson = (payload: unknown, filename: string) => {
   URL.revokeObjectURL(url);
 };
 
-const cloneResult = (result: DiagnosticResult): DiagnosticResult =>
-  typeof structuredClone === 'function'
-    ? structuredClone(result)
-    : JSON.parse(JSON.stringify(result));
-
-const resultWithoutRunTrace = (result: DiagnosticResult): DiagnosticResult => {
-  const next = cloneResult(result);
-  if (next.meta) delete next.meta.run_trace;
-  return next;
-};
-
 export const downloadMasterDataReport = (result: DiagnosticResult) => {
   downloadHtml(
     generateReportHtml(result),
@@ -784,11 +773,12 @@ const renderDomainSignalOverview = (result: DiagnosticResult): string => {
   </section>`;
 };
 
+// Shareable Summary HTML is display-only. Do not embed diagnostic JSON, script
+// payloads, or other hidden fields that a recipient could extract later.
 export const generateSummaryReportHtml = (unsafeResult: DiagnosticResult): string => {
   const result = stripSourceFilenameMetadata(unsafeResult);
   const m = result.phase_2_validation.metrics;
   const reportView = buildReportViewModel(result);
-  const summaryPayload = resultWithoutRunTrace(result);
   const cwrClass = result.phase_2_validation.crawl_walk_run;
   const gauges = reportView.metrics;
   const qgTone = result.quality_gate.decision === 'GO' ? 'go' : result.quality_gate.decision === 'WARN' ? 'warn' : 'block';
@@ -1005,7 +995,6 @@ export const generateSummaryReportHtml = (unsafeResult: DiagnosticResult): strin
       ${traceNote}
     </footer>
   </main>
-  <script id="finops-data" type="application/json">${serializeDiagnosticResultForHtml(summaryPayload)}</script>
 </body>
 </html>`;
 };
@@ -1346,6 +1335,7 @@ export const generateReportHtml = (unsafeResult: DiagnosticResult): string => {
     ${renderAssessmentMethodDisclaimer()}
   </div>
 
+  <!-- Forensic HTML re-import payload. Not used by the shareable Summary Report. -->
   <script id="finops-data" type="application/json">${serializeDiagnosticResultForHtml(result)}</script>
 </body>
 </html>`;

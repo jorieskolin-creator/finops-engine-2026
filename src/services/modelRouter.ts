@@ -1,7 +1,7 @@
 // Provider-agnostic model dispatcher with fallback chain.
 //
 // Call sites build a NormalizedPrompt and hand it to `runStage(stageId, prompt, ctx)`.
-// The router resolves the stage to its primary + fallbacks (see src/models.ts),
+// The router resolves the stage to its primary + fallbacks (see lib/modelRoutingPolicy.js),
 // adapts the prompt to the active provider's request shape, and posts to the
 // matching server endpoint. On failure it logs and falls forward to the next
 // model.
