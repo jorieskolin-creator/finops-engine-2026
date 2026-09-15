@@ -11,6 +11,7 @@ import {
   validateGovernedOutput,
 } from '../lib/governance.js';
 import { LIFETIMES_MS } from '../lib/controlPlanePolicy.js';
+import { authorizedProfiles, settingsForProfile } from '../lib/modelRoutingPolicy.js';
 
 if (!process.env.DATABASE_URL || !process.env.REDIS_URL) {
   console.error('INTEGRATION_INFRASTRUCTURE_REQUIRED');
@@ -21,17 +22,25 @@ const infrastructure = await initializeInfrastructure();
 const { repository, redis } = infrastructure;
 const lifecycle = new RunLifecycleService({ repository, redis });
 
+const STAGE = 'forensic_audit';
+const PROVIDER = 'openai';
+const MODEL = 'gpt-5.6-sol';
+const profile = authorizedProfiles(STAGE, PROVIDER, MODEL)[0];
+if (!profile) {
+  throw new Error('INTEGRATION_DESTINATION_NOT_AUTHORIZED');
+}
+
 const makePacket = run => approveRequest({
   schema_version: STAGE_PACKET_REQUEST_VERSION,
   policy_version: POLICY_VERSION,
   run_id: run.run_id,
-  stage: 'forensic_audit',
-  provider: 'openai',
-  model: 'gpt-5.6-sol',
-  destination: 'openai:external_model',
+  stage: STAGE,
+  provider: PROVIDER,
+  model: MODEL,
+  destination: `${PROVIDER}:external_model`,
   system_instruction: 'Inspect approved public material.',
   parts: [{ type: 'text', text: 'Public cloud governance summary.' }],
-  settings: { max_tokens: 32768, reasoning_effort: 'high' },
+  settings: settingsForProfile(profile),
 });
 
 const persistPacket = async (run, packet) => {

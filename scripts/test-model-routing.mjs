@@ -7,6 +7,7 @@ import {
   MODEL_STAGES,
   STAGE_ROLES,
   ModelRoutingConfigurationError,
+  authorizedProfiles,
   resolveModelRouting,
   settingsForProfile,
 } from '../lib/modelRoutingPolicy.js';
@@ -128,6 +129,17 @@ for (const invalid of [
   assert.throws(() => resolveModelRouting(invalid), ModelRoutingConfigurationError);
 }
 
+assert.deepEqual(
+  settingsForProfile(authorizedProfiles('forensic_audit', 'openai', 'gpt-5.6-sol')[0]),
+  { max_tokens: 16384, reasoning_effort: 'medium' },
+  'forensic_audit is WORKHORSE and must not use REASONER token/reasoning settings',
+);
+assert.throws(() => authorizeDestination(
+  'forensic_audit', 'openai', 'gpt-5.6-sol', { max_tokens: 32768, reasoning_effort: 'high' },
+), /INVALID_MODEL_SETTINGS/, 'REASONER settings must fail on the WORKHORSE forensic_audit stage');
+assert.doesNotThrow(() => authorizeDestination(
+  'forensic_audit', 'openai', 'gpt-5.6-sol', { max_tokens: 16384, reasoning_effort: 'medium' },
+));
 assert.throws(() => authorizeConfiguredDestination(
   'forensic_audit', 'openai', 'gpt-5.6-sol', { max_tokens: 16384, reasoning_effort: 'medium' }, env,
 ), /DESTINATION_NOT_CONFIGURED/);
@@ -152,6 +164,10 @@ assert.doesNotMatch(modelContracts, /\| 'preflight'/);
 assert.match(analysis, /model_mode: modelRoutingMode/);
 assert.match(analysis, /evidence_density < EVIDENCE_DENSITY_BLOCK[\s\S]*?reason_code: 'EVIDENCE_DENSITY_BELOW_FLOOR'/);
 assert.match(server, /resolveModelRouting\(process\.env\)/);
+
+const integration = await readFile(new URL('../scripts/integration-infrastructure.mjs', import.meta.url), 'utf8');
+assert.match(integration, /settingsForProfile\(profile\)/, 'infrastructure integration must take packet settings from the live role policy');
+assert.doesNotMatch(integration, /max_tokens: 32768/, 'infrastructure integration must not hardcode REASONER settings onto forensic_audit');
 
 const architecture = await readFile(new URL('../architecture.html', import.meta.url), 'utf8');
 const cleanRoom = await readFile(new URL('../finops-engine-clean-room-protocol.html', import.meta.url), 'utf8');
