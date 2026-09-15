@@ -120,6 +120,8 @@ assert.match(exportSource, /renderScoreEvidenceGaps\(result\)/, 'Master Data sho
 assert.match(exportSource, /Evidence sufficiency/, 'context packet tables should distinguish evidence sufficiency from candidate inclusion');
 assert.doesNotMatch(exportSource, /source\.source_name/, 'HTML exports must not render source filenames');
 assert.match(exportSource, /stripSourceFilenameMetadata\(unsafeResult\)/, 'both HTML generators must remove legacy filename metadata at the export boundary');
+assert.doesNotMatch(summaryExportSource, /finops-data|serializeDiagnosticResultForHtml/, 'Summary Report HTML must not embed a hidden diagnostic JSON payload');
+assert.match(masterDataExportSource, /script id="finops-data"/, 'Master Data HTML may still embed a payload for forensic HTML re-import');
 assert.match(exportSource, /Domain Signal Overview/, 'HTML exports should include the domain signal title');
 assert.match(exportSource, /Anti-pattern finding rate/, 'HTML exports should label anti-pattern traffic lights');
 assert.match(exportSource, /Acquisition Quality &amp; Readiness/, 'Master Data should visibly render acquisition quality');

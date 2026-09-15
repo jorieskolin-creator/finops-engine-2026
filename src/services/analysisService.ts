@@ -143,8 +143,8 @@ const parseAiResponse = (text: string): any => {
 };
 
 // Direct model calls now flow through modelRouter (`runStage`). The router
-// resolves stage → primary+fallbacks from src/models.ts and dispatches to the
-// right provider endpoint.
+// resolves stage → primary+fallbacks from lib/modelRoutingPolicy.js and
+// dispatches to the right provider endpoint.
 
 const validateAndSanitizeLogs = (rawData: any): Phase1AuditLogs => {
   const safeLog: Phase1AuditLogs = { maturity: {}, antipattern: {} };
