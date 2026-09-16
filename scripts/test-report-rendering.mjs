@@ -87,6 +87,11 @@ assert.match(reportViewSource, /Maturity signal/, 'React report should label mat
 assert.match(reportViewSource, /Anti-pattern finding rate/, 'React report should label anti-pattern traffic lights');
 assert.doesNotMatch(reportViewSource, /FinOps Maturity Score/, 'React summary should not duplicate the score-detail panel');
 assert.doesNotMatch(reportViewSource, /Capability Attainment/, 'React summary should not duplicate calculated score components');
+assert.match(reportViewSource, /Download JSON/, 'React report should offer an explicit JSON download now that HTML is display-only');
+
+const appSource = await readFile(new URL('../src/App.tsx', import.meta.url), 'utf8');
+assert.match(appSource, /display_only_report/, 'HTML upload should refuse display-only generated reports instead of restoring them');
+assert.match(appSource, /downloadAssessmentJson/, 'the report view should download restore JSON from the dedicated exporter');
 
 const dashboardSource = await readFile(new URL('../src/components/DashboardComponents.tsx', import.meta.url), 'utf8');
 assert.match(dashboardSource, />Why</, 'Dashboard roadmap should render WHY context');
@@ -123,7 +128,10 @@ assert.match(exportSource, /stripSourceFilenameMetadata\(unsafeResult\)/, 'both 
 assert.doesNotMatch(summaryExportSource, /finops-data|serializeDiagnosticResultForHtml/, 'Summary Report HTML must not embed a hidden diagnostic JSON payload');
 assert.doesNotMatch(summaryExportSource, /<script/i, 'Summary Report HTML must not include script tags that could hide a payload');
 assert.doesNotMatch(summaryExportSource, /type="application\/json"/, 'Summary Report HTML must not include hidden JSON content types');
-assert.match(masterDataExportSource, /script id="finops-data"/, 'Master Data HTML may still embed a payload for forensic HTML re-import');
+assert.doesNotMatch(masterDataExportSource, /finops-data|serializeDiagnosticResultForHtml/, 'Master Data HTML must not embed a hidden diagnostic JSON payload');
+assert.doesNotMatch(masterDataExportSource, /<script/i, 'Master Data HTML must not include script tags that could hide a payload');
+assert.doesNotMatch(masterDataExportSource, /type="application\/json"/, 'Master Data HTML must not include hidden JSON content types');
+assert.doesNotMatch(exportSource, /finops-data|serializeDiagnosticResultForHtml/, 'neither HTML generator may serialize a hidden diagnostic payload');
 assert.match(exportSource, /Domain Signal Overview/, 'HTML exports should include the domain signal title');
 assert.match(exportSource, /Anti-pattern finding rate/, 'HTML exports should label anti-pattern traffic lights');
 assert.match(exportSource, /Acquisition Quality &amp; Readiness/, 'Master Data should visibly render acquisition quality');

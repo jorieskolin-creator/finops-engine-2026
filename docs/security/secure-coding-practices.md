@@ -75,7 +75,7 @@ Implementation: `server.js`, `lib/governance.js`, `lib/providerGateway.js`, `api
 - Source chunks rendered into model packets escape XML so `</CHUNK>`-style sentinels in customer text cannot break packet markup.
 - Raw filenames are not placed in model-visible manifests; privacy replacement uses pseudonymous `Document NNN` names.
 - Prompt construction isolates customer material in `<UNTRUSTED_CONTENT>` and instructs the model to use only that text (`src/prompts.ts`, `src/knowledge_base/finops_guardrails.md`).
-- Shareable Summary HTML must not embed `finops-data`, other hidden JSON, or script payloads. Master Data HTML may embed a forensic `finops-data` JSON payload for re-import; `<` is escaped to `\u003c` to avoid script breakout (`src/services/reportImportService.ts`). Treat Master Data HTML as sensitive as the JSON download.
+- Summary and Master Data HTML must not embed `finops-data`, other hidden JSON, or script payloads. Restore a saved assessment from the explicit JSON download. Older HTML files that still contain `finops-data` can be imported; `<` in that legacy payload is escaped to `\u003c` to avoid script breakout (`src/services/reportImportService.ts`).
 
 Implementation: `lib/controlPlaneRepository.js`, `src/services/securityService.ts`, `src/services/reportTextService.ts`, `src/services/svgChartService.ts`, `src/services/sourceRegistryService.ts`, `src/services/deterministicPrivacyService.ts`, `src/prompts.ts`.
 

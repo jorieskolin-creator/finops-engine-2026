@@ -3,7 +3,13 @@ import type { DiagnosticResult } from '../types';
 export type ReportImportResult =
   | { kind: 'report'; result: DiagnosticResult }
   | { kind: 'not_report' }
+  | { kind: 'display_only_report' }
   | { kind: 'invalid_report'; error: string };
+
+const GENERATED_HTML_REPORT_TITLE_RE = /<title>\s*FinOps (?:Master Data|Summary) Report\s*<\/title>/i;
+
+export const looksLikeGeneratedFinOpsHtmlReport = (html: string): boolean =>
+  GENERATED_HTML_REPORT_TITLE_RE.test(html);
 
 export const isDiagnosticResultPayload = (payload: unknown): payload is DiagnosticResult => {
   if (!payload || typeof payload !== 'object') return false;
@@ -51,7 +57,11 @@ export const parseDiagnosticResultJson = (jsonText: string): ReportImportResult 
 
 export const extractDiagnosticResultFromHtmlReport = (html: string): ReportImportResult => {
   const payload = extractFinOpsPayloadScript(html);
-  if (!payload) return { kind: 'not_report' };
+  if (!payload) {
+    return looksLikeGeneratedFinOpsHtmlReport(html)
+      ? { kind: 'display_only_report' }
+      : { kind: 'not_report' };
+  }
   return parseDiagnosticResultJson(payload);
 };
 
