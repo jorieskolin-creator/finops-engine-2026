@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdtemp } from 'node:fs/promises';
+import { mkdtemp, readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { build } from 'esbuild';
@@ -143,5 +143,10 @@ const disguised = await inspectEvidenceBytes({
 });
 assert.equal(disguised.validation_status, 'BLOCK');
 assert.ok(disguised.validation_codes.includes('EXTENSION_CONTENT_MISMATCH'));
+
+const readme = await readFile(new URL('../README.md', import.meta.url), 'utf8');
+assert.doesNotMatch(readme, /local OCR is unavailable|PDF pages are not rasterized|Direct images are rejected|blocks image processing until local OCR/i);
+assert.match(readme, /local Tesseract OCR/);
+assert.match(readme, /UNINSPECTED_VISUAL_REGION/);
 
 console.log('visual acquisition tests passed');

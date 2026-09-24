@@ -88,12 +88,12 @@ The UI is public, but assessment and supporting API operations require an HMAC-s
 | `/api/openai-generate` | POST | Packet-ID-only governed OpenAI dispatch. |
 | `/api/anthropic-generate` | POST | Packet-ID-only governed Anthropic dispatch. |
 | `/api/xai-generate` | POST | Packet-ID-only governed xAI dispatch. |
-
-Milestone C uses structured source/page records and blocks image processing until local OCR/redaction is available. Approval is deterministic pattern-based risk reduction, not proof that arbitrary source content is public. PostgreSQL stores canonical governed packet bytes for dispatch plus content-free control metadata. Redis holds coordination state, checkpoints, and governed results. Packet bodies and Redis transient content are deleted after acknowledged delivery, terminal failure/deletion, or expiry and never survive the immutable 24-hour run deadline.
 | `/api/model-result` | POST | Recover a completed governed result from Redis. |
 | `/api/run` | GET/POST/DELETE | Create, inspect, complete, fail, or delete an authoritative run. |
 | `/api/kb-index` | GET | Build or return the cached remote reference-KB index. |
 | `/api/log` | POST | Write authenticated client pipeline events to server logs. |
+
+Milestone C uses structured source and page records. Local OCR and post-OCR redaction are active: uploaded images and sparse or raster-heavy PDF pages are read in the browser with Tesseract (`tesseract.js@7.0.0`). Governed packets stay text-only. Image pixels and non-text visual semantics are withheld as `UNINSPECTED_VISUAL_REGION` and are not sent to models. Approval is deterministic pattern-based risk reduction, not proof that arbitrary source content is public. PostgreSQL stores canonical governed packet bytes for dispatch plus content-free control metadata. Redis holds coordination state, checkpoints, and governed results. Packet bodies and Redis transient content are deleted after acknowledged delivery, terminal failure/deletion, or expiry and never survive the immutable 24-hour run deadline.
 
 The authentication implementation lives in `lib/auth.js`. The current shared-password design is suitable only for a controlled prototype audience.
 
@@ -102,7 +102,7 @@ The authentication implementation lives in `lib/auth.js`. The current shared-pas
 The current implementation provides the following controls and limitations:
 
 - Source files are parsed in the browser; the original files are not uploaded as files by this application.
-- Only browser-extracted text is sent through the server proxies to the configured OpenAI, Anthropic, and xAI services. Direct images are rejected, PDF pages are not rasterized, and scanned/visual-only pages are not processed because local OCR is unavailable. Provider-side storage and retention depend on the configured provider account and contract terms.
+- Only browser-extracted text is sent through the server proxies to the configured OpenAI, Anthropic, and xAI services. Uploaded images and sparse or raster-heavy PDF pages are read with local Tesseract OCR in the browser; those PDF pages are rasterized only for that local OCR pass. OCR text is redacted before it can enter a model packet. Image bytes are not sent to providers, and non-text visual semantics stay withheld as `UNINSPECTED_VISUAL_REGION`. Provider-side storage and retention depend on the configured provider account and contract terms.
 - A deterministic pattern scan blocks recognized high-risk secret and contextual financial-value patterns before the main assessment. A model-assisted review checks distributed text samples. This is policy approval and risk reduction, not proof of public classification or comprehensive PII/data-classification prevention; source material must be reviewed before upload.
 - The completed report, including report-visible evidence, is stored in browser `sessionStorage` for crash recovery until the tab/session data is cleared.
 - Canonical governed packet bodies are retained temporarily as PostgreSQL `BYTEA`; governed model output may remain in Redis for up to 30 minutes for recovery. Completion, failure, expiry, and user deletion synchronously tombstone Redis coordination state and delete PostgreSQL packet bodies; retryable cleanup is resumed by the worker. Content-free operational metadata expires after 90 days.
