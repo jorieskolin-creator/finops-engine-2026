@@ -124,9 +124,11 @@ assert.throws(
 );
 
 const appSource = await readFile(new URL('../src/App.tsx', import.meta.url), 'utf8');
-assert.match(appSource, /const MAX_FILES = 20;/, 'artifact limit should be raised to 20');
-assert.match(appSource, /const MAX_TOTAL_UPLOAD_MB = 25;/, 'upload limit should be applied to the total set');
-assert.doesNotMatch(appSource, /MAX_FILE_SIZE_MB/, 'per-file 25MB cap should not be used');
+assert.match(appSource, /const MIN_FILES = 2;/, 'an assessment should require at least two artifacts');
+assert.match(appSource, /const MAX_FILES = 30;/, 'an assessment should allow up to 30 artifacts');
+assert.match(appSource, /const MAX_TOTAL_UPLOAD_MB = 50;/, 'upload set should have a 50 MB cap');
+assert.match(appSource, /const MAX_FILE_SIZE_MB = 25;/, 'each uploaded file should have a 25 MB cap');
+assert.match(appSource, /newFiles\.find\(file => file\.size > MAX_FILE_SIZE_BYTES\)/, 'oversized individual files should be rejected before reading');
 assert.match(appSource, /\.tsv/, 'TSV files should be accepted');
 assert.match(appSource, /delimiter: 'auto'/, 'CSV delimiter should be detected deterministically');
 assert.match(appSource, /rejectedFiles\.push/, 'each selected file should fail independently');

@@ -634,8 +634,10 @@ const App: React.FC = () => {
   }, [result]);
 
   const MIN_FILES = 2;
-  const MAX_FILES = 20;
-  const MAX_TOTAL_UPLOAD_MB = 25;
+  const MAX_FILES = 30;
+  const MAX_FILE_SIZE_MB = 25;
+  const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
+  const MAX_TOTAL_UPLOAD_MB = 50;
   const MAX_TOTAL_UPLOAD_BYTES = MAX_TOTAL_UPLOAD_MB * 1024 * 1024;
 
   const makeLowRelevanceWarning = (scan: ScanResult, kind?: UploadedFile['kind']): ScanResult => ({
@@ -719,10 +721,7 @@ const App: React.FC = () => {
     return () => clearTimeout(timer);
   }, [aggregatedText, files]);
 
-  const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    if (!event.target.files) return;
-    const newFiles = Array.from(event.target.files);
-
+  const processSelectedFiles = async (newFiles: File[]) => {
     if (newFiles.length === 1) {
       const file = newFiles[0];
       if (file.type === 'text/html' || file.name.endsWith('.html')) {
@@ -732,18 +731,14 @@ const App: React.FC = () => {
           setPreparedResult(imported.result, 'html_import');
           setViewMode('dashboard');
           setRecoveryNotice('Imported a saved FinOps report from HTML.');
-          setError(null);
-          clearFileInput();
           return;
         }
         if (imported.kind === 'display_only_report') {
           setError('This HTML report is display-only and cannot restore an assessment. Download and upload the assessment JSON instead.');
-          clearFileInput();
           return;
         }
         if (imported.kind === 'invalid_report') {
           setError(imported.error);
-          clearFileInput();
           return;
         }
       } else if (file.type === 'application/json' || file.name.endsWith('.json')) {
@@ -754,13 +749,10 @@ const App: React.FC = () => {
             setPreparedResult(imported.result, 'json_import');
             setViewMode('dashboard');
             setRecoveryNotice('Imported a saved FinOps report from JSON.');
-            setError(null);
-            clearFileInput();
             return;
           }
           if (imported.kind === 'invalid_report') {
             setError(imported.error);
-            clearFileInput();
             return;
           }
         } catch (e) { console.error("Failed to parse JSON file (error_code=JSON_IMPORT_FAILED); filename and error content omitted."); }
@@ -769,7 +761,6 @@ const App: React.FC = () => {
 
     if (result) {
       setError('A completed assessment is currently open. Use Reset Session before uploading new source material; the current report is preserved.');
-      clearFileInput();
       return;
     }
 
@@ -784,8 +775,6 @@ const App: React.FC = () => {
       return;
     }
 
-    setParsing(true);
-    setError(null);
     const processedFiles: UploadedFile[] = [];
     const rejectedFiles: Array<{ name: string; code: string }> = [];
     for (const file of newFiles) {
@@ -904,8 +893,28 @@ const App: React.FC = () => {
     if (rejectedFiles.length > 0) {
       setError(`Rejected ${rejectedFiles.length} file(s): ${rejectedFiles.map(file => `${file.name} (${file.code})`).join('; ')}. Other valid files were retained.`);
     }
-    setParsing(false);
-    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    if (parsing || !event.target.files?.length) return;
+    const newFiles = Array.from(event.target.files);
+    const oversizedFile = newFiles.find(file => file.size > MAX_FILE_SIZE_BYTES);
+    if (oversizedFile) {
+      setError(`${oversizedFile.name} exceeds the ${MAX_FILE_SIZE_MB} MB per-file limit.`);
+      clearFileInput();
+      return;
+    }
+
+    setParsing(true);
+    setError(null);
+    try {
+      await processSelectedFiles(newFiles);
+    } catch {
+      setError('Could not read the selected files.');
+    } finally {
+      setParsing(false);
+      clearFileInput();
+    }
   };
 
   const removeFile = (id: string) => setFiles(files.filter(f => f.id !== id));
@@ -1456,7 +1465,7 @@ const App: React.FC = () => {
                           ))}
                         </div>
                         <p className="z-10 text-xs text-slate-500 mt-3 text-center max-w-md">
-                          {MAX_TOTAL_UPLOAD_MB} MB total set · {MIN_FILES}–{MAX_FILES} artifacts · PDFs parsed as extracted text up to 100 pages
+                          {MIN_FILES}–{MAX_FILES} artifacts · {MAX_TOTAL_UPLOAD_MB} MB total · {MAX_FILE_SIZE_MB} MB per file · PDFs parsed as extracted text up to 100 pages
                         </p>
                       </div>
                     )}
@@ -1464,7 +1473,7 @@ const App: React.FC = () => {
 
                   <div className="flex justify-between items-center px-10 py-6 bg-slate-900/60 backdrop-blur-xl relative z-10 border-t border-white/5">
                     <div className="flex items-center gap-4">
-                      <button onClick={() => fileInputRef.current?.click()} disabled={files.length >= MAX_FILES} className="text-sm font-bold text-slate-400 hover:text-white transition-colors flex items-center gap-2 hover:bg-white/5 px-4 py-2 rounded-lg">
+                      <button onClick={() => fileInputRef.current?.click()} disabled={parsing || files.length >= MAX_FILES} className="text-sm font-bold text-slate-400 hover:text-white transition-colors flex items-center gap-2 hover:bg-white/5 px-4 py-2 rounded-lg">
                         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 6v6m0 0v6m0-6h6m-6 0H6" /></svg>
                         Add Files (PDF, HTML, CSV, TSV, XLSX, images, JSON)
                       </button>
@@ -1481,7 +1490,7 @@ const App: React.FC = () => {
                         <span className="font-bold">Deep analysis</span>
                       </label>
                     </div>
-                    <input type="file" ref={fileInputRef} onChange={handleFileSelect} className="hidden" accept=".pdf,.html,.csv,.tsv,.xlsx,.png,.jpg,.jpeg,.webp,.json,text/csv,text/tab-separated-values,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,image/png,image/jpeg,image/webp" multiple />
+                    <input type="file" ref={fileInputRef} onChange={handleFileSelect} disabled={parsing} className="hidden" accept=".pdf,.html,.csv,.tsv,.xlsx,.png,.jpg,.jpeg,.webp,.json,text/csv,text/tab-separated-values,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,image/png,image/jpeg,image/webp" multiple />
                     <button onClick={handleAnalyze} disabled={!scanResult.canRun || files.length < MIN_FILES || files.length > MAX_FILES} className={`px-8 py-4 rounded-xl font-bold shadow-2xl transition-all transform active:scale-[0.98] flex items-center gap-3 border ${!scanResult.canRun || files.length < MIN_FILES || files.length > MAX_FILES ? 'bg-slate-800 text-slate-500 border-slate-700 cursor-not-allowed shadow-none' : 'text-slate-900 bg-white border-white hover:bg-emerald-400 hover:border-emerald-400 hover:shadow-[0_0_30px_rgba(16,185,129,0.4)]'}`}>
                       {!scanResult.canRun || files.length < MIN_FILES || files.length > MAX_FILES ? (
                         <span>{files.length < MIN_FILES ? `Add ${MIN_FILES - files.length} more files` : files.length > MAX_FILES ? "Limit Exceeded" : "Checks Failed"}</span>
