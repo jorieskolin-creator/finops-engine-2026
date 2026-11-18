@@ -337,7 +337,6 @@ export const analyzeDocument = async (
         }] : [])
     );
     const dataSignalCoverage = buildDataSignalCoverageReport();
-    const text = renderPseudonymousSourceContext(sourceRegistry, 120000);
     const baselineSourcePackets = buildDomainPackets(sourceRegistry);
     const gapPlan = planGapRetrieval({
       packets: baselineSourcePackets,
@@ -511,7 +510,7 @@ export const analyzeDocument = async (
     emitProgress({ stage: 'analysis', status: 'in_progress', completed: 0, total: Object.keys(BATCH_DEFINITIONS).length });
     emitProgress({ stage: 'evidence', status: 'in_progress', completed: 0, total: Object.keys(BATCH_DEFINITIONS).length });
     const phase1Started = Date.now();
-    let aggregatedRawData = await runPhase1Audit(text, images, (completed, total, batchId) => {
+    let aggregatedRawData = await runPhase1Audit((completed, total, batchId) => {
       emitProgress({ stage: 'analysis', status: 'in_progress', completed, total, domain_id: batchId });
       emitProgress({ stage: 'evidence', status: 'in_progress', completed, total, domain_id: batchId });
     }, { runId }, { packets: evidenceStagePackets, expandWeakEvidence });
@@ -555,6 +554,7 @@ export const analyzeDocument = async (
     activePacketCoverageWarnings = packetCoverageWarnings(sourcePackets);
     sourceParseWarnings.push(...activePacketCoverageWarnings);
     validateEvidenceContinuity(evidenceIntegrity, sourceRegistry, sourcePackets);
+    const text = renderPseudonymousSourceContext(sourceRegistry, sourcePackets, 120000);
     const provenanceReconciliation = reconcileEvidenceProvenance(aggregatedRawData, sourceRegistry, sourcePackets, derivedAnalyticalEvidence);
     aggregatedRawData = provenanceReconciliation.result;
     if (provenanceReconciliation.adjustedCriteria.length > 0) {

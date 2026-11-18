@@ -13,6 +13,7 @@ import {
 } from '../knowledge_base';
 import { isEvidenceQuoteBoundToChunk, isEvidenceQuoteBoundToDerivedEvidence } from './evidenceSupport';
 import { hashString } from './runTraceService';
+import { isChunkEligibleForDomain } from './sourceRegistryService';
 
 export type IntegrityGate = 'acquisition' | 'knowledge' | 'pre_synthesis';
 
@@ -122,6 +123,7 @@ const stableRegistryValue = (registry: SourceRegistry): string => JSON.stringify
       withheld_visual_region_count: chunk.withheld_visual_region_count,
       type: chunk.type,
       text: chunk.text,
+      routing: chunk.routing,
       image_hash: chunk.image ? hashString(chunk.image.data) : undefined,
     })),
 });
@@ -244,6 +246,7 @@ export const validateEvidenceAcquisition = (
     for (const item of packet.manifest) {
       const chunk = chunksById.get(item.chunk_id);
       if (!chunk
+        || !isChunkEligibleForDomain(chunk, domain)
         || packetChunkIds.has(item.chunk_id)
         || chunk.source_id !== item.source_id
         || chunk.page_id !== item.page_id

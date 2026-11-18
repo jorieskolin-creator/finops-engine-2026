@@ -1,4 +1,4 @@
-import type { DerivedAnalyticalEvidence, SourceRecord } from '../../../types';
+import type { DerivedAnalyticalEvidence, SourceRecord, SourceRegistry } from '../../../types';
 import { medianGap } from '../stats';
 import { cadenceBand } from '../banding';
 import { baseResult, buildDerived, qualityFor } from '../object';
@@ -12,8 +12,8 @@ import {
   tablesFor,
 } from '../shape';
 
-export const analyzeConsistency = (sources: SourceRecord[]): DerivedAnalyticalEvidence[] => {
-  const declared = detectDeclaredCadences(sources);
+export const analyzeConsistency = (sources: SourceRecord[], registry?: SourceRegistry): DerivedAnalyticalEvidence[] => {
+  const declared = detectDeclaredCadences(sources, registry);
   if (declared.length === 0) return [];
   return sources.flatMap(source => tablesFor(source).flatMap(table => {
     const process = detectProcess(table);
@@ -31,7 +31,7 @@ export const analyzeConsistency = (sources: SourceRecord[]): DerivedAnalyticalEv
     const alignment = aligned ? 'CONSISTENT' as const : 'INCONSISTENT' as const;
     return [buildDerived({
       analyzerId: 'consistency_v1',
-      analyzerVersion: '1.0.0',
+      analyzerVersion: '1.1.0',
       method: 'consistency_analysis',
       calculationIds: ['declared_vs_observed_cadence', 'agreement_state'],
       sourceId: source.source_id,

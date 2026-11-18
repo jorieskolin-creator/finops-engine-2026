@@ -61,8 +61,11 @@ export const isDerivedEvidenceApprovedForPacket = (evidence: DerivedAnalyticalEv
     && entry.approved_for_model_packet
     && evidence.result.row_scope === 'full_table'
   );
+  const scopedAnalyzer = ['crucial_item_coverage_v1', 'consistency_v1'].includes(evidence.derivation.analyzer_id);
+  const supportedVersion = evidence.derivation.analyzer_version === '1.0.0'
+    || (scopedAnalyzer && evidence.derivation.analyzer_version === '1.1.0');
   const registered = evidence.derivation.registry_version === 'evidence_analysis_registry_v2'
-    && evidence.derivation.analyzer_version === '1.0.0'
+    && supportedVersion
     && ['crucial_item_coverage_v1', 'trend_v1', 'variation_v1', 'concentration_v1', 'adoption_v1', 'process_v1', 'consistency_v1', 'exception_v1', 'association_v1'].includes(evidence.derivation.analyzer_id)
     && evidence.llm_policy?.may_recalculate === false
     && evidence.llm_policy?.causal_authority === 'NONE'

@@ -226,11 +226,9 @@ const runTargetedRescan = async (
 };
 
 export const runPhase1Audit = async (
-  text: string,
-  images: ImageInput[],
   onProgress: (completed: number, total: number, batchId?: string) => void,
   ctx: RunContext,
-  sourcePackets?: Phase1SourcePackets
+  sourcePackets: Phase1SourcePackets
 ): Promise<Phase1Result> => {
   const batches = BATCH_IDS;
   const totalBatches = batches.length;
@@ -296,7 +294,8 @@ export const runPhase1Audit = async (
         let currentPacket = packetInput.packet;
         for (let pass = 1 as 1 | 2; pass <= 2; pass = (pass + 1) as 1 | 2) {
           const needsRescan = evidenceItemsNeedingRescan(evidenceCheck);
-          if (evidenceCheck.failed || needsRescan.length === 0 || !sourcePackets?.expandWeakEvidence) break;
+          if (evidenceCheck.failed || needsRescan.length === 0 || !sourcePackets.expandWeakEvidence
+            || currentPacket.coverage.omitted_relevant_chunks === 0) break;
           const expansion = await sourcePackets.expandWeakEvidence({ batchId, items: needsRescan, pass, seenTerms, packet: currentPacket });
           const trace = expansion.trace;
           if (trace.gap_analysis_model) evidenceGapAnalysisModelsSeen.add(trace.gap_analysis_model);

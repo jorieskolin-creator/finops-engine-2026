@@ -20,6 +20,10 @@ const BATCH_DEFINITIONS = Object.fromEntries(BATCH_IDS.map(domain => [domain, { 
 const buildShadowKnowledgePacket = () => ({ readiness: 'NOT_READY' });
 `)
   .replace("import { isEvidenceQuoteBoundToChunk, isEvidenceQuoteBoundToDerivedEvidence } from './evidenceSupport';", "import { isEvidenceQuoteBoundToChunk, isEvidenceQuoteBoundToDerivedEvidence } from './evidenceSupport.mjs';")
+  .replace(
+    "import { isChunkEligibleForDomain } from './sourceRegistryService';",
+    "const isChunkEligibleForDomain = (chunk, domain) => chunk.routing.some(hint => hint.domain === domain && ['medium', 'high'].includes(hint.tier));"
+  )
   .replace("import { hashString } from './runTraceService';", `
 const hashString = value => {
   let hash = 0x811c9dc5;
@@ -46,7 +50,7 @@ const sourceRecord = {
   schema_version: 'source_record_v1', source_id: 'src-001', source_name: 'input.txt', kind: 'text', text: 'General finance material.',
   extraction: { unit: 'document', total_units: 1, processed_units: 1, truncated: false, quality: 'mixed', text_coverage_ratio: 0.8 },
 };
-const chunk = { chunk_id: 'src-001-c001', source_id: 'src-001', source_name: 'input.txt', type: 'text', text: sourceRecord.text, routing: [] };
+const chunk = { chunk_id: 'src-001-c001', source_id: 'src-001', source_name: 'input.txt', type: 'text', text: sourceRecord.text, routing: [{ domain: 'A', tier: 'high', score: 6, reasons: [] }] };
 const registry = {
   source_count: 1, chunk_count: 1, chunks: [chunk], warnings: [],
   acquisition_limitations: { schema_version: 'evidence_acquisition_limitations_v1', withheld_sheet_count: 0, withheld_row_count: 0, withheld_column_count: 0, active_filter_table_count: 0, merged_range_count: 0, uninspected_workbook_image_source_count: 0, partial_native_chart_count: 0, unsupported_object_codes: [] },
@@ -197,6 +201,14 @@ const routedPacket = {
 routedPacket.char_count = routedPacket.text.length;
 const routedPackets = { ...packets, A: routedPacket };
 const routedSnapshot = validateEvidenceAcquisition([sourceRecord], registry, routedPackets);
+assert.throws(
+  () => validateEvidenceAcquisition([sourceRecord], registry, {
+    ...packets,
+    B: { ...routedPacket, domain_id: 'B', text: routedPacket.text.replace('domain="A"', 'domain="B"') },
+  }),
+  error => error instanceof PipelineIntegrityError && error.code === 'EVIDENCE_PACKET_INTEGRITY_FAILED',
+  'a real chunk cannot enter a packet for an ineligible domain',
+);
 const validLocatedPhase1 = {
   ...phase1,
   phase_1_audit_logs: {

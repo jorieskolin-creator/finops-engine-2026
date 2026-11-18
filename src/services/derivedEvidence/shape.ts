@@ -1,6 +1,7 @@
-import type { SourceRecord, StructuredTableData } from '../../types';
+import type { SourceRecord, SourceRegistry, StructuredTableData } from '../../types';
 import type { CadenceBand } from './banding';
 import associationsData from '../../knowledge_base/finops_permitted_associations.json';
+import { isChunkEligibleForDomain } from '../sourceRegistryService';
 import {
   bindingTarget,
   liveThemeBindings,
@@ -568,19 +569,22 @@ export const corpusHaystack = (sources: SourceRecord[]): string => sources.map(s
   ...(source.structured_table ? source.structured_table.headers : []),
 ].join(' ')).join(' ').toLowerCase();
 
-export const detectDeclaredCadences = (sources: SourceRecord[]): Array<{ criterion_id: string; cadence: CadenceBand }> => {
-  const haystack = corpusHaystack(sources);
+export const detectDeclaredCadences = (sources: SourceRecord[], registry?: SourceRegistry): Array<{ criterion_id: string; cadence: CadenceBand }> => {
+  const passages = registry
+    ? registry.chunks.filter(chunk => isChunkEligibleForDomain(chunk, 'C')).map(chunk => chunk.text.toLowerCase())
+    : [corpusHaystack(sources)];
   const cadenceBindings = liveThemeBindings('consistency_v1').filter(item => item.detection === 'declared_cadence');
   const found: Array<{ criterion_id: string; cadence: CadenceBand }> = [];
-  for (const { cadence, re } of CADENCE_PATTERNS) {
-    const copy = new RegExp(re.source, 'gi');
-    let match: RegExpExecArray | null;
-    while ((match = copy.exec(haystack))) {
-      const context = haystack.slice(Math.max(0, match.index - 80), match.index + match[0].length + 80);
-      const binding = cadenceBindings.find(item =>
-        matchesTheme(context, item.theme_patterns || item.header_patterns)
-      );
-      if (binding) found.push({ criterion_id: binding.criterion_id, cadence });
+  for (const text of passages) {
+    for (const { cadence, re } of CADENCE_PATTERNS) {
+      for (const match of text.matchAll(re)) {
+        const start = match.index ?? 0;
+        const context = text.slice(Math.max(0, start - 80), start + match[0].length + 80);
+        const binding = cadenceBindings.find(item =>
+          matchesTheme(context, item.theme_patterns || item.header_patterns)
+        );
+        if (binding) found.push({ criterion_id: binding.criterion_id, cadence });
+      }
     }
   }
   const unique = new Map<string, Set<CadenceBand>>();

@@ -45,7 +45,7 @@ export const deriveAllEvidenceSignals = (
   const coverage = analyzeCrucialItemCoverage(sources, registry);
   const shaped = sources.flatMap(shapedWithAliasRetry);
   return {
-    evidence: [...analyzeStructuredSources(sources), ...coverage.evidence, ...shaped, ...analyzeConsistency(sources)],
+    evidence: [...analyzeStructuredSources(sources), ...coverage.evidence, ...shaped, ...analyzeConsistency(sources, registry)],
     locations: coverage.locations,
   };
 };
