@@ -29,7 +29,7 @@ const pendingUnit = normalizeOcrResult({
   sourceHash,
   width: 800,
   height: 600,
-  text: 'Tagging owner alice@example.com and allocation coverage',
+  text: 'Our cloud cost allocation owner is alice@example.com',
   confidence: 66.5,
   blocks: [{ paragraphs: [{ lines: [{ words: [
     { text: 'Tagging', confidence: 91, bbox: { x0: 10, y0: 10, x1: 80, y1: 30 } },
@@ -56,7 +56,7 @@ const rawSource = {
 const privacy = sanitizeEvidenceSources([rawSource]);
 assert.equal(privacy.decision.decision, 'PASS_WITH_REDACTIONS');
 assert.equal(privacy.decision.scanned_text_unit_count, 1, 'canonical OCR text is scanned exactly once');
-assert.equal(privacy.sources[0].visual_units[0].text, 'Tagging owner [EMAIL_REDACTED] and allocation coverage');
+assert.equal(privacy.sources[0].visual_units[0].text, 'Our cloud cost allocation owner is [EMAIL_REDACTED]');
 assert.ok(privacy.sources[0].visual_units[0].words.every(word => word.text === '[OCR_TOKEN_WITHHELD]'));
 assert.equal(privacy.sources[0].visual_units[0].post_ocr_redaction_status, 'PASSED_WITH_REDACTIONS');
 

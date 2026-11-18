@@ -1,41 +1,18 @@
 import assert from 'node:assert/strict';
-import { mkdtemp, readFile, writeFile } from 'node:fs/promises';
-import { existsSync } from 'node:fs';
+import { mkdtemp } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-
-const localTsPath = fileURLToPath(new URL('../node_modules/typescript/lib/typescript.js', import.meta.url));
-const bundledTsPath = '/Users/jorieskolin/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/typescript/lib/typescript.js';
-const tsPath = existsSync(localTsPath) ? localTsPath : existsSync(bundledTsPath) ? bundledTsPath : null;
-if (!tsPath) {
-  console.warn('distributed DLP sampling tests skipped: TypeScript compiler is unavailable in this local dependency tree');
-  process.exit(0);
-}
-const ts = await import(pathToFileURL(tsPath));
-
-const transpile = (source) => ts.transpileModule(source, {
-  compilerOptions: {
-    module: ts.ModuleKind.ES2022,
-    target: ts.ScriptTarget.ES2020,
-    importsNotUsedAsValues: ts.ImportsNotUsedAsValues.Remove,
-  },
-}).outputText;
+import { emitTypescript } from './ts-emit.mjs';
 
 const dir = await mkdtemp(join(tmpdir(), 'finops-dlp-distributed-'));
-const source = (await readFile(new URL('../src/services/sourceRegistryService.ts', import.meta.url), 'utf8'))
-  .replace(
-    "import { BATCH_TITLES } from '../knowledge_base';",
-    "const BATCH_TITLES = { A: 'Cost Visibility & Allocation', B: 'Rate & Usage Optimization', C: 'Governance & Policy', D: 'Architecture & Engineering', E: 'Culture & Organization', F: 'GenAI & AI Cost Management' };"
-  )
-  .replace("import { renderStructuredTableContext } from './tableService';", "const renderStructuredTableContext=()=>'';");
-await writeFile(join(dir, 'sourceRegistryService.mjs'), transpile(source), 'utf8');
+const entry = await emitTypescript(fileURLToPath(new URL('../src/services/sourceRegistryService.ts', import.meta.url)), dir);
 
 const {
   buildSourceRegistry,
   buildDlpReviewPacket,
   scanRegistryDlp
-} = await import(`file://${join(dir, 'sourceRegistryService.mjs')}`);
+} = await import(pathToFileURL(entry).href);
 
 const safeIntro = Array.from({ length: 12 }, (_, i) => `[PDF_PAGE source="Risky.pdf" page="${i + 1}"]\nCloud operating model and FinOps process notes without secrets.\n[/PDF_PAGE]`).join('\n\n');
 const laterSecret = `[PDF_PAGE source="Risky.pdf" page="15"]\nAppendix credential example: AKIA1234567890ABCDEF should never be uploaded.\n[/PDF_PAGE]`;

@@ -25,9 +25,9 @@ export const applyBoundedRetrieval=(
     const selected=new Set(packet.manifest.map(item=>item.chunk_id));
     const extraTerms=(gap?.terms_by_domain[domainId]||[]).map(term=>term.toLowerCase());
     const forcedIds=new Set(gap?.chunk_ids_by_domain[domainId]||[]);
-    const routed=rankedDomainCandidates(registry,domainId).map(item=>item.chunk);const routedIds=new Set(routed.map(chunk=>chunk.chunk_id));
-    const expansion=registry.chunks.filter(chunk=>!routedIds.has(chunk.chunk_id)&&(forcedIds.has(chunk.chunk_id)||hasNeutralGapSignal(chunk,domainId,extraTerms))).sort((a,b)=>a.chunk_id.localeCompare(b.chunk_id));
-    const eligibleIds=new Set([...routed,...expansion].map(chunk=>chunk.chunk_id));
+    const routed=rankedDomainCandidates(registry,domainId).map(item=>item.chunk);
+    const expansion=routed.filter(chunk=>forcedIds.has(chunk.chunk_id)||hasNeutralGapSignal(chunk,domainId,extraTerms));
+    const eligibleIds=new Set(routed.map(chunk=>chunk.chunk_id));
     const coverage=()=>percent([...selected].filter(id=>eligibleIds.has(id)).length,eligibleIds.size);
     const baselineCoverage=coverage();
     const passes:BoundedRetrievalTrace['domains'][number]['passes']=[];

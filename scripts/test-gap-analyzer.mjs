@@ -13,7 +13,7 @@ const dir = await mkdtemp(join(tmpdir(), 'finops-gap-'));
 const stubPath = join(dir, 'sourceRegistryService.mjs');
 await writeFile(stubPath, `
 export const rankedDomainCandidates = (registry, domainId) =>
-  registry.chunks.filter(chunk => chunk.routing.some(route => route.domain === domainId)).map(chunk => ({ chunk }));
+  registry.chunks.filter(chunk => chunk.routing.some(route => route.domain === domainId && ['high', 'medium'].includes(route.tier))).map(chunk => ({ chunk }));
 export const expandDomainPacket = (registry, packet, ids) => {
   const additions = registry.chunks.filter(chunk => ids.includes(chunk.chunk_id));
   if (additions.length === 0) return { packet, selected_chunk_ids: [] };
@@ -46,7 +46,7 @@ const sources = [{
 }];
 const chunks = [
   { chunk_id: 'c1', source_id: 'src-1', type: 'text', text: 'Monthly forecast ennuste is owned by finance.', routing: [{ domain: 'C', tier: 'high', score: 6, reasons: [] }] },
-  { chunk_id: 'c2', source_id: 'src-1', type: 'text', text: 'Corrective action mechanism for budget overrun.', routing: [{ domain: 'C', tier: 'low', score: 0, reasons: [] }] },
+  { chunk_id: 'c2', source_id: 'src-1', type: 'text', text: 'Our cloud budget variance procedure includes corrective actions.', routing: [{ domain: 'C', tier: 'medium', score: 3, reasons: [] }] },
 ];
 const registry = {
   source_count: 1, chunk_count: 2, warnings: [],
@@ -69,7 +69,7 @@ assert.ok((plan.terms_by_domain.C || []).length > 0, 'missing items expand to al
 const applied = applyBoundedRetrieval(registry, packets, { gap_plan: plan });
 const c = applied.trace.domains.find(domain => domain.domain_id === 'C');
 assert.ok(c.passes.length > 0, 'gap plan must be allowed to run even when weak_coverage is false');
-assert.ok(applied.packets.C.manifest.some(item => item.chunk_id === 'c2'), 'unrouted supporting or omitted chunks should be selectable');
+assert.ok(applied.packets.C.manifest.some(item => item.chunk_id === 'c2'), 'eligible omitted chunks should be selectable');
 
 const sufficient = {
   B: { domain_id: 'B', title: 'B', text: '', images: [], manifest: [], included_chunk_count: 0, total_candidate_chunks: 0, weak_coverage: false, coverage_notes: [], char_count: 0 }

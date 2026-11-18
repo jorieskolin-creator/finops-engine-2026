@@ -17,6 +17,7 @@ await writeFile(join(dir, 'knowledgeBase.mjs'), `export const MASTER_BINGO_FINOP
   antipattern: []
 };`);
 await writeFile(join(dir, 'sourceRegistryService.mjs'), `
+export const isChunkEligibleForDomain = (chunk, domain) => chunk.eligibleDomain === domain;
 export const routingTermsForDomain = () => ['architecture', 'efficiency'];
 export const expandDomainPacket = (registry, packet, ids) => {
   const additions = registry.chunks.filter(chunk => ids.includes(chunk.chunk_id));
@@ -50,8 +51,8 @@ const packet = {
 const registry = {
   chunks: [
     { chunk_id: 'c1', source_id: 's1', type: 'text', text: 'baseline' },
-    { chunk_id: 'c2', source_id: 's1', type: 'text', text: 'Kubernetes autoscaling policy is configured but utilization thresholds remain undocumented.' },
-    { chunk_id: 'c3', source_id: 's1', type: 'text', text: 'Unrelated procurement narrative.' },
+    { chunk_id: 'c2', source_id: 's1', type: 'text', eligibleDomain: 'D', text: 'Kubernetes autoscaling policy is configured but utilization thresholds remain undocumented.' },
+    { chunk_id: 'c3', source_id: 's1', type: 'text', text: 'An illustrative discussion of autoscaling and utilization thresholds.' },
   ]
 };
 const weak = {

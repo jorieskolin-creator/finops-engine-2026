@@ -1,4 +1,5 @@
 import { BATCH_TITLES } from '../knowledge_base';
+import { classifyEvidenceRouting, routingVocabulary, structuredEvidenceDomain } from './evidenceAdmissionService';
 import type {
   DlpPatternHit,
   DlpScanResult,
@@ -32,45 +33,42 @@ const invalidStructuredTable = (): Error & { code: string } => Object.assign(
 const DOMAIN_TERMS: Record<string, string[]> = {
   A: [
     'allocation', 'tagging', 'tag', 'showback', 'chargeback', 'dashboard', 'reporting',
-    'cost visibility', 'unit economics', 'cost per', 'anomaly', 'alert', 'owner', 'cost center'
+    'cost visibility', 'unit economics', 'cost per', 'anomaly', 'alert', 'owner', 'cost center',
+    'cost dashboard', 'allocation key', 'application owner', 'owner tag', 'owner list',
+    'cost centre tag', 'cost center tag', 'supplier invoice', 'breakdown by application'
   ],
   B: [
     'reservation', 'reserved instance', 'savings plan', 'commitment', 'rightsizing', 'right-size',
-    'utilization', 'waste', 'idle', 'orphaned', 'spot', 'preemptible', 'storage lifecycle', 'tiering'
+    'utilization', 'waste', 'idle', 'orphaned', 'spot', 'preemptible', 'storage lifecycle', 'tiering',
+    'idle compute', 'utilization data', 'unattached disk', 'rightsize vm', 'reservation coverage', 'storage tier'
   ],
   C: [
     'policy', 'governance', 'budget', 'forecast', 'approval', 'guardrail', 'procurement',
-    'vendor', 'compliance', 'regulatory', 'raci', 'operating model', 'finops operating'
+    'vendor', 'compliance', 'regulatory', 'raci', 'operating model', 'finops operating',
+    'cloud budget', 'budget figures', 'budget file', 'budget alert'
   ],
   D: [
     'architecture', 'engineering', 'infrastructure as code', 'terraform', 'pulumi', 'cloudformation',
     'autoscaling', 'auto scaling', 'serverless', 'container', 'kubernetes', 'multi-cloud', 'hybrid',
-    'design review'
+    'design review', 'architecture decision', 'recovery design', 'capacity options'
   ],
   E: [
     'culture', 'organization', 'team', 'finance', 'engineering accountability', 'platform team',
-    'finops team', 'enabling team', 'training', 'kpi', 'incentive', 'collaboration', 'community'
+    'finops team', 'enabling team', 'training', 'kpi', 'incentive', 'collaboration', 'community',
+    'cost meeting', 'product owners'
   ],
   F: [
     'genai', 'generative ai', 'llm', 'token', 'tokens', 'model routing', 'prompt', 'context window',
     'rag', 'embedding', 'openai', 'anthropic', 'gemini', 'inference', 'ai cost', 'model spend',
-    'api usage', 'ai budget'
+    'api usage', 'ai budget', 'model evaluation', 'alternate model', 'incumbent model', 'feature-level usage'
   ]
 };
 
-const GAP_TERMS = [
-  'missing', 'not available', 'not implemented', 'not yet', 'planned', 'manual', 'ad hoc',
-  'no evidence', 'no process', 'gap', 'lacks', 'without', 'unknown', 'not tracked'
-];
-
-const CONTRADICTION_TERMS = [
-  'contradiction', 'conflict', 'inconsistent', 'unclear', 'exception', 'override', 'manual override'
-];
+const DOMAIN_VOCABULARY = Object.fromEntries(Object.entries(DOMAIN_TERMS)
+  .map(([domain, terms]) => [domain, routingVocabulary(domain, terms)]));
 
 export const routingTermsForDomain = (domainId: string): string[] => [
   ...(DOMAIN_TERMS[domainId] || []),
-  ...GAP_TERMS,
-  ...CONTRADICTION_TERMS
 ];
 
 const validNativeCharts = (charts: NonNullable<SourceRecord['structured_table']>['native_charts']): boolean => {
@@ -318,29 +316,8 @@ const tableRowChunks = (text: string): Array<{ rowNumber: number; text: string }
   });
 };
 
-const scoreDomain = (haystack: string, domain: string): SourceChunkRoutingHint => {
-  const terms = DOMAIN_TERMS[domain] || [];
-  const reasons: string[] = [];
-  let score = 0;
-  for (const term of terms) {
-    if (haystack.includes(term)) {
-      score += term.length > 8 ? 3 : 2;
-      if (reasons.length < 4) reasons.push(term);
-    }
-  }
-  const tier: SourceRelevanceTier = score >= 6 ? 'high' : score >= 2 ? 'medium' : 'low';
-  return { domain, score, tier, reasons };
-};
-
-const routeChunk = (text: string): SourceChunkRoutingHint[] => {
-  const haystack = text.toLowerCase();
-  const hints = Object.keys(BATCH_TITLES).map(domain => scoreDomain(haystack, domain));
-  const anySignal = hints.some(h => h.score > 0);
-  if (!anySignal) {
-    return Object.keys(BATCH_TITLES).map(domain => ({ domain, score: 0, tier: 'unknown' as const, reasons: [] }));
-  }
-  return hints;
-};
+const routeChunk = (text: string, structuredDomain?: string, isTableRow = false): SourceChunkRoutingHint[] =>
+  classifyEvidenceRouting(text, DOMAIN_VOCABULARY, structuredDomain, isTableRow);
 
 const validateSourceRecords = (records: SourceRecord[]): void => {
   if (!Array.isArray(records) || records.length === 0 || records.length > 100) {
@@ -516,6 +493,7 @@ export const buildSourceRegistry = (records: SourceRecord[]): SourceRegistry => 
     if (doc.kind === 'xlsx' && doc.structured_tables) {
       for (const table of doc.structured_tables.filter(item => item.model_eligible)) {
         const context = structuredTableProfile(table, 'XLSX');
+        const structuredDomain = structuredEvidenceDomain(table);
         chunks.push({
           chunk_id: chunkIdFor(sourceId, chunkIndex++),
           source_id: sourceId,
@@ -524,7 +502,7 @@ export const buildSourceRegistry = (records: SourceRecord[]): SourceRegistry => 
           sheet_name: table.sheet_name,
           char_start: 0,
           char_end: context.length,
-          routing: routeChunk(context)
+          routing: routeChunk(context, structuredDomain)
         });
         for (const row of structuredTableRows(table)) {
           chunks.push({
@@ -540,7 +518,7 @@ export const buildSourceRegistry = (records: SourceRecord[]): SourceRegistry => 
             segment_count: row.segmentCount,
             char_start: row.charStart,
             char_end: row.charEnd,
-            routing: routeChunk(row.text)
+            routing: routeChunk(row.text, structuredDomain, true)
           });
         }
       }
@@ -549,6 +527,7 @@ export const buildSourceRegistry = (records: SourceRecord[]): SourceRegistry => 
     if ((doc.kind === 'csv' || doc.kind === 'tsv') && doc.structured_table) {
       const table = doc.structured_table;
       const context = structuredTableProfile(table, doc.kind === 'tsv' ? 'TSV' : 'CSV');
+      const structuredDomain = structuredEvidenceDomain(table);
       chunks.push({
         chunk_id: chunkIdFor(sourceId, chunkIndex++),
         source_id: sourceId,
@@ -556,7 +535,7 @@ export const buildSourceRegistry = (records: SourceRecord[]): SourceRegistry => 
         text: context,
         char_start: 0,
         char_end: context.length,
-        routing: routeChunk(context)
+        routing: routeChunk(context, structuredDomain)
       });
       for (const row of structuredTableRows(table)) {
         chunks.push({
@@ -571,7 +550,7 @@ export const buildSourceRegistry = (records: SourceRecord[]): SourceRegistry => 
           segment_count: row.segmentCount,
           char_start: row.charStart,
           char_end: row.charEnd,
-          routing: routeChunk(row.text)
+          routing: routeChunk(row.text, structuredDomain, true)
         });
       }
       return;
@@ -675,9 +654,9 @@ const routedDomains = (chunk: SourceChunk): string[] => chunk.routing
   .filter(r => r.tier === 'high' || r.tier === 'medium')
   .map(r => r.domain);
 
-const hasGapOrContradictionSignal = (chunk: SourceChunk): boolean => {
-  const lower = chunk.text.toLowerCase();
-  return GAP_TERMS.some(term => lower.includes(term)) || CONTRADICTION_TERMS.some(term => lower.includes(term));
+export const isChunkEligibleForDomain = (chunk: SourceChunk, domain: string): boolean => {
+  const tier = tierForDomain(chunk, domain);
+  return tier === 'high' || tier === 'medium';
 };
 
 const renderChunk = (chunk: SourceChunk, relevance: SourceRelevanceTier): string => {
@@ -775,8 +754,8 @@ const structuredTableRows = (table: NonNullable<SourceRecord['structured_table']
 };
 
 export const rankedDomainCandidates = (registry: SourceRegistry, domainId: string) => registry.chunks
+    .filter(chunk => isChunkEligibleForDomain(chunk, domainId))
     .map(chunk => ({ chunk, tier: tierForDomain(chunk, domainId), score: scoreForDomain(chunk, domainId) }))
-    .filter(item => item.tier === 'high' || item.tier === 'medium' || hasGapOrContradictionSignal(item.chunk))
     .sort((a, b) => {
       const tierWeight = (tier: SourceRelevanceTier) => tier === 'high' ? 3 : tier === 'medium' ? 2 : tier === 'unknown' ? 1 : 0;
       return tierWeight(b.tier) - tierWeight(a.tier) || b.score - a.score || a.chunk.chunk_id.localeCompare(b.chunk.chunk_id);
@@ -797,7 +776,7 @@ const assembleDomainPacket = (
     weakCoverage
       ? `Packet ${domainId} has incomplete deterministic coverage; no broad-source fallback is permitted.`
       : `Packet ${domainId} includes high/medium relevance source chunks for ${title}.`,
-    `Candidate chunks: ${totalCandidateChunks}; included chunks: ${included.length}; omitted relevant chunks: ${omittedRelevantChunks}.`
+    `Eligible candidate chunks: ${totalCandidateChunks}; included chunks: ${included.length}; omitted eligible chunks: ${omittedRelevantChunks}.`
   ];
 
   const manifest = included.map(item => manifestFor(item.chunk, item.tier));
@@ -863,14 +842,15 @@ export const expandDomainPacket = (
   const selectedIds = new Set(packet.manifest.map(item => item.chunk_id));
   const included = packet.manifest.flatMap(item => {
     const chunk = registry.chunks.find(candidate => candidate.chunk_id === item.chunk_id);
-    return chunk ? [{ chunk, tier: item.relevance }] : [];
+    return chunk && isChunkEligibleForDomain(chunk, packet.domain_id)
+      ? [{ chunk, tier: tierForDomain(chunk, packet.domain_id) }] : [];
   });
   let chars = included.reduce((sum, item) => sum + item.chunk.text.length + 260, 0);
   const selected: string[] = [];
   for (const chunkId of requestedChunkIds) {
     if (selectedIds.has(chunkId)) continue;
     const chunk = registry.chunks.find(candidate => candidate.chunk_id === chunkId);
-    if (!chunk) continue;
+    if (!chunk || !isChunkEligibleForDomain(chunk, packet.domain_id)) continue;
     const nextLen = chunk.text.length + 260;
     if (chars + nextLen > HARD_PACKET_CHARS) continue;
     const tier = tierForDomain(chunk, packet.domain_id);
@@ -889,10 +869,26 @@ export const buildDomainPackets = (registry: SourceRegistry): Record<string, Rou
   return Object.fromEntries(Object.keys(BATCH_TITLES).map(domain => [domain, buildDomainPacket(registry, domain)]));
 };
 
-export const renderPseudonymousSourceContext = (registry: SourceRegistry, maxChars = 45000): string => {
+export const renderPseudonymousSourceContext = (
+  registry: SourceRegistry,
+  packets: Record<string, RoutedSourcePacket>,
+  maxChars = 45000,
+): string => {
+  const chunksById = new Map(registry.chunks.map(chunk => [chunk.chunk_id, chunk]));
+  const admitted = new Map<string, SourceChunk>();
+  for (const packet of Object.values(packets)) {
+    for (const item of packet.manifest) {
+      const chunk = chunksById.get(item.chunk_id);
+      if (chunk && isChunkEligibleForDomain(chunk, packet.domain_id)) admitted.set(chunk.chunk_id, chunk);
+    }
+  }
   const rendered: string[]=[]; let chars=0;
   const bySource = new Map<string, SourceChunk[]>();
-  for (const chunk of registry.chunks) bySource.set(chunk.source_id, [...(bySource.get(chunk.source_id) || []), chunk]);
+  for (const chunk of admitted.values()) {
+    const sourceChunks = bySource.get(chunk.source_id) ?? [];
+    sourceChunks.push(chunk);
+    bySource.set(chunk.source_id, sourceChunks);
+  }
   const sources = [...bySource.values()];
   for (let index = 0; sources.some(chunks => index < chunks.length); index++) {
     for (const chunks of sources) {
@@ -903,7 +899,7 @@ export const renderPseudonymousSourceContext = (registry: SourceRegistry, maxCha
       rendered.push(value);chars+=value.length;
     }
   }
-  return `<FULL_SOURCE_CONTEXT source_count="${registry.source_count}" chunk_count="${registry.chunk_count}">\n${rendered.join('\n\n')}\n</FULL_SOURCE_CONTEXT>`;
+  return `<ADMITTED_SOURCE_CONTEXT source_count="${bySource.size}" chunk_count="${rendered.length}">\n${rendered.join('\n\n')}\n</ADMITTED_SOURCE_CONTEXT>`;
 };
 
 const countMatches = (text: string, rx: RegExp): number => {

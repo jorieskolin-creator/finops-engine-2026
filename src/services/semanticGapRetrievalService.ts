@@ -1,6 +1,6 @@
 import type { EvidenceCheckItem, RoutedSourcePacket, SemanticGapRetrievalPassTrace, SourceChunk, SourceRegistry } from '../types';
 import { MASTER_BINGO_FINOPS } from '../knowledge_base';
-import { expandDomainPacket, routingTermsForDomain } from './sourceRegistryService';
+import { expandDomainPacket, isChunkEligibleForDomain, routingTermsForDomain } from './sourceRegistryService';
 import aliasData from '../knowledge_base/finops_term_aliases.json';
 
 const MAX_SELECTIONS_PER_PASS = 8;
@@ -75,11 +75,11 @@ const semanticTerms = (items: EvidenceCheckItem[], seenTerms: Set<string>): stri
 };
 
 const matchScore = (chunk: SourceChunk, terms: string[]): number => {
-  const text = normalize(chunk.text);
+  const text = ` ${normalize(chunk.text)} `;
   return terms.reduce((score, term) => {
-    if (text.includes(term)) return score + term.split(' ').length * 4;
+    if (text.includes(` ${term} `)) return score + term.split(' ').length * 4;
     const tokens = term.split(' ');
-    const matched = tokens.filter(token => text.includes(token)).length;
+    const matched = tokens.filter(token => text.includes(` ${token} `)).length;
     return score + (matched === tokens.length ? matched : 0);
   }, 0);
 };
@@ -110,7 +110,7 @@ export const expandWeakEvidencePacket = (input: {
   proposedTerms.forEach(term => input.seenTerms.add(term));
   const selected = new Set(input.packet.manifest.map(item => item.chunk_id));
   const candidates = proposedTerms.length === 0 ? [] : input.registry.chunks
-    .filter(chunk => !selected.has(chunk.chunk_id))
+    .filter(chunk => !selected.has(chunk.chunk_id) && isChunkEligibleForDomain(chunk, input.packet.domain_id))
     .map(chunk => ({ chunk, score: matchScore(chunk, proposedTerms) }))
     .filter(candidate => candidate.score > 0)
     .sort((a, b) => b.score - a.score || a.chunk.chunk_id.localeCompare(b.chunk.chunk_id));

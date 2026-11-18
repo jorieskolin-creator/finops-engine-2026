@@ -1,9 +1,10 @@
-import type { DerivedAnalyticalEvidence, SourceChunk, SourceRecord, SourceRegistry } from '../../types';
+import type { DerivedAnalyticalEvidence, SourceRecord, SourceRegistry } from '../../types';
 import crucialItemsData from '../../knowledge_base/finops_crucial_items.json';
 import aliasData from '../../knowledge_base/finops_term_aliases.json';
+import { isChunkEligibleForDomain } from '../sourceRegistryService';
 
 export const CRUCIAL_ITEM_COVERAGE_ANALYZER_ID = 'crucial_item_coverage_v1' as const;
-export const CRUCIAL_ITEM_COVERAGE_ANALYZER_VERSION = '1.0.0' as const;
+export const CRUCIAL_ITEM_COVERAGE_ANALYZER_VERSION = '1.1.0' as const;
 export const EVIDENCE_ANALYSIS_REGISTRY_V2 = 'evidence_analysis_registry_v2' as const;
 
 type CrucialItem = { id: string; critical: boolean; aliases: string[] };
@@ -37,12 +38,7 @@ const coverageBand = (percentValue: number): NonNullable<DerivedAnalyticalEviden
   return '90_100';
 };
 
-const termHit = (haystack: string, term: string): boolean => {
-  const needle = normalize(term);
-  if (needle.length < 4) return false;
-  if (!haystack.includes(needle)) return false;
-  return new RegExp(`(?:^| )${needle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?: |$)`).test(` ${haystack} `);
-};
+const termHit = (haystack: string, term: string): boolean => haystack.includes(` ${term} `);
 
 const expandAliases = (item: CrucialItem): string[] => {
   const terms = new Set<string>(item.aliases);
@@ -53,8 +49,7 @@ const expandAliases = (item: CrucialItem): string[] => {
   return [...terms];
 };
 
-const corpusText = (sources: SourceRecord[], registry?: SourceRegistry): { text: string; chunks: SourceChunk[]; headers: string } => {
-  const chunks = registry?.chunks || [];
+const corpusText = (sources: SourceRecord[]): string => {
   const sourceText = sources.map(source => [
     source.text || '',
     ...(source.pages || []).map(page => page.text),
@@ -64,8 +59,7 @@ const corpusText = (sources: SourceRecord[], registry?: SourceRegistry): { text:
     [...(source.structured_tables || []), ...(source.structured_table ? [source.structured_table] : [])]
       .flatMap(table => table.headers)
   ).join(' ');
-  const chunkText = chunks.map(chunk => chunk.text).join(' ');
-  return { text: normalize([sourceText, chunkText, headerText].join(' ')), chunks, headers: normalize(headerText) };
+  return normalize(`${sourceText} ${headerText}`);
 };
 
 export interface CoverageLocationMap {
@@ -77,24 +71,22 @@ export const analyzeCrucialItemCoverage = (
   registry?: SourceRegistry
 ): { evidence: DerivedAnalyticalEvidence[]; locations: CoverageLocationMap } => {
   if (sources.length === 0) return { evidence: [], locations: {} };
-  const { text, chunks, headers } = corpusText(sources, registry);
-  const haystack = `${text} ${headers}`;
-  if (!haystack.trim()) return { evidence: [], locations: {} };
+  const fallbackText = registry ? '' : corpusText(sources);
+  if (!registry && !fallbackText.trim()) return { evidence: [], locations: {} };
 
+  const localChunks = (registry?.chunks ?? []).map(chunk => ({ chunk, text: ` ${normalize(chunk.text)} ` }));
   const locations: CoverageLocationMap = {};
   const evidence = CRITERIA.map(criterion => {
+    const chunks = localChunks.filter(({ chunk }) => isChunkEligibleForDomain(chunk, criterion.criterion_id[0]));
     const found: string[] = [];
     const missing: string[] = [];
     const itemChunks: Record<string, string[]> = {};
     for (const item of criterion.items) {
-      const terms = expandAliases(item);
-      const matched = terms.some(term => termHit(haystack, term));
-      if (matched) {
+      const terms = expandAliases(item).map(normalize).filter(term => term.length >= 4);
+      const matches = chunks.filter(chunk => terms.some(term => termHit(chunk.text, term)));
+      if (registry ? matches.length > 0 : terms.some(term => termHit(` ${fallbackText} `, term))) {
         found.push(item.id);
-        itemChunks[item.id] = chunks
-          .filter(chunk => terms.some(term => termHit(normalize(chunk.text), term)))
-          .map(chunk => chunk.chunk_id)
-          .sort();
+        itemChunks[item.id] = matches.map(({ chunk }) => chunk.chunk_id).sort();
       } else {
         missing.push(item.id);
       }
@@ -109,8 +101,9 @@ export const analyzeCrucialItemCoverage = (
       : foundCount === 0
         ? 'MISSING' as const
         : 'PARTIAL' as const;
-    const confidence = haystack.length > 4000 && foundCount >= 2 ? 'HIGH' as const : haystack.length > 800 ? 'MODERATE' as const : 'LOW' as const;
-    const sourceId = sources[0].source_id;
+    const corpusLength = registry ? chunks.reduce((total, { chunk }) => total + chunk.text.length, 0) : fallbackText.length;
+    const confidence = corpusLength > 4000 && foundCount >= 2 ? 'HIGH' as const : corpusLength > 800 ? 'MODERATE' as const : 'LOW' as const;
+    const sourceId = chunks[0]?.chunk.source_id ?? sources[0].source_id;
     const coverage = {
       expected,
       found: foundCount,
@@ -133,7 +126,7 @@ export const analyzeCrucialItemCoverage = (
       criterion.criterion_id,
       hash(JSON.stringify({ found: found.slice().sort(), missing: missing.slice().sort(), source_ids: sources.map(source => source.source_id).sort() })),
     ].join('|');
-    const rowCount = chunks.length || sources.length;
+    const rowCount = registry ? chunks.length : sources.length;
     const object: DerivedAnalyticalEvidence = {
       schema_version: 'derived_analytical_evidence_v1',
       mode: 'authoritative',
@@ -174,7 +167,7 @@ export const analyzeCrucialItemCoverage = (
       report_eligible: true,
       raw_value_exposure: false,
       quality: {
-        population_coverage: haystack.length > 4000 ? 'HIGH' : haystack.length > 800 ? 'MODERATE' : 'LOW',
+        population_coverage: corpusLength > 4000 ? 'HIGH' : corpusLength > 800 ? 'MODERATE' : 'LOW',
         confidence,
         limitation: missing.length ? `Missing items remain NOT_FOUND after alias search: ${missing.join(', ')}.` : null,
       },
