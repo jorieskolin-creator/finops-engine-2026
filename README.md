@@ -44,15 +44,15 @@ Cursor Cloud Agents use the repo-managed environment in `.cursor/`: Ubuntu 24.04
 
 Model profiles, AI-role assignments, and fallback chains are centralized in the server-owned `lib/modelRoutingPolicy.js`. The active providers are OpenAI, Anthropic, and xAI. Every existing model stage maps to exactly one of `REASONER`, `WORKHORSE`, or `QUALITY_CHECKER`; roles select their configured primary and fallback without changing pipeline stages. The browser obtains the effective content-free route from `/api/model-routing`, while governed-packet approval independently enforces the same Railway policy.
 
-| Task/role | Configured primary → fallback |
+| Task/role | Example primary → fallback |
 |-----------|-------------------------------|
 | Acquisition and DLP | Deterministic local processing; no model call |
-| `REASONER` | OpenAI GPT-5.6 Sol → xAI Grok 4.6 |
-| `WORKHORSE` | Anthropic Claude Sonnet 5 → xAI Grok 4.6 |
-| `QUALITY_CHECKER` | xAI Grok 4.6 → Anthropic Claude Sonnet 5 |
+| `REASONER` | Anthropic `claude-sonnet-5-5` → OpenAI `gpt-6.2-sol` |
+| `WORKHORSE` | OpenAI `gpt-6.1-terra` → xAI `grok-4.7` |
+| `QUALITY_CHECKER` | xAI `grok-4.7` → OpenAI `gpt-6.1-terra` |
 | Deterministic Quality Gate | Authoritative code path; no model decision |
 
-All twelve role-routing variables are required as one complete policy. The configured model must match a code-authorized model for its provider; OpenAI `gpt-5.6-sol` and `gpt-5.6-terra` are authorized for every role. Partial policies, legacy provider-level variables, unknown providers, unsupported models, and identical primary/fallback profiles fail closed. Provider fallback is allowed only for the existing explicit safe-failure outcomes; post-send uncertainty never becomes fallback.
+All twelve role-routing variables in `.env.example` are required as one complete policy. Each model must match its provider and a profile in `lib/modelRoutingPolicy.js`. The example uses all three provider credentials, including `ANTHROPIC_API_KEY` for the Reasoner. Partial policies, legacy provider-level variables, unknown providers, unsupported models, and identical primary/fallback profiles fail closed. Provider fallback is allowed only for the existing explicit safe-failure outcomes; post-send uncertainty never becomes fallback.
 
 ## Environment variables
 

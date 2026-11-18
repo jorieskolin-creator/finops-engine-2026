@@ -1041,7 +1041,7 @@
             <li>Crawl-Walk-Run methodology framework</li>
             <li>Three persona definitions: FinOps Lead, CFO, Engineering Lead</li>
           </ol>
-          <p>Outputs depend on confidence. Evidence summary and diagnosis are generated separately from roadmap synthesis. Role routing is centralized in <code style="font-family: var(--mono); font-size: 12px;">lib/modelRoutingPolicy.js</code>: synthesis uses the <code style="font-family: var(--mono); font-size: 12px;">WORKHORSE</code> role and roadmap/planning uses <code style="font-family: var(--mono); font-size: 12px;">REASONER</code>. Configured primaries are Anthropic Claude Sonnet 5, OpenAI GPT-5.6 Sol, and xAI Grok 4.6 with the fallbacks in the twelve-field policy. HIGH confidence can produce planning, scorecard, and a 4-phase roadmap with WHY, WHAT, and HOW layers. MEDIUM produces cautious planning with assumptions. LOW produces findings mode only: evidence-backed findings, missing evidence, validation plan, <strong>NO_GO</strong>, and an empty roadmap.</p>
+          <p>Outputs depend on confidence. Evidence summary and diagnosis are generated separately from roadmap synthesis. Role routing is centralized in <code style="font-family: var(--mono); font-size: 12px;">lib/modelRoutingPolicy.js</code>: synthesis uses the <code style="font-family: var(--mono); font-size: 12px;">WORKHORSE</code> role and roadmap/planning uses <code style="font-family: var(--mono); font-size: 12px;">REASONER</code>. The twelve routing variables in <code>.env.example</code> show the primary and fallback models for each role. HIGH confidence can produce planning, scorecard, and a 4-phase roadmap with WHY, WHAT, and HOW layers. MEDIUM produces cautious planning with assumptions. LOW produces findings mode only: evidence-backed findings, missing evidence, validation plan, <strong>NO_GO</strong>, and an empty roadmap.</p>
         </div>
       </div>
 
@@ -1249,7 +1249,7 @@ metrics, vendor management, VP+ engagement</code></pre>
             Receives 10 criteria definitions (5 maturity + 5 anti-pattern). Each criterion has 3 specific sub-criteria to check. For each criterion, writes a "reasoning" field — a scratchpad proving the connection to source text. Assigns a score of 0–3 based on how many sub-criteria have traceable evidence. Returns structured JSON — not prose, not opinions.
           </dd>
           <dt>Model · Concurrency</dt>
-          <dd><code style="font-family: var(--mono); font-size: 12px;">WORKHORSE</code> role from <code style="font-family: var(--mono); font-size: 12px;">lib/modelRoutingPolicy.js</code> (default primary Anthropic Claude Sonnet 5 → xAI Grok 4.6). <strong>6 batches run simultaneously.</strong> Evidence-check runs separately after each completed batch.</dd>
+          <dd><code style="font-family: var(--mono); font-size: 12px;">WORKHORSE</code> role from <code style="font-family: var(--mono); font-size: 12px;">lib/modelRoutingPolicy.js</code> (example primary OpenAI GPT-6.1 Terra → fallback xAI Grok 4.7). <strong>6 batches run simultaneously.</strong> Evidence-check runs separately after each completed batch.</dd>
         </dl>
         <div class="persona-rules">
           <h4>Behavioural Rules</h4>
@@ -1287,7 +1287,7 @@ metrics, vendor management, VP+ engagement</code></pre>
             Evidence-only persona summaries, an evidence summary object, diagnosis, planning decision, visual scorecard, and — only when confidence allows — a 4-phase remediation roadmap with WHY, WHAT, and HOW layers. LOW-confidence assessments produce findings mode, <strong>NO_GO</strong>, missing-evidence guidance, and an empty roadmap.
           </dd>
           <dt>Model</dt>
-          <dd><code style="font-family: var(--mono); font-size: 12px;">WORKHORSE</code> writes evidence summaries and diagnosis. Roadmap/planning uses <code style="font-family: var(--mono); font-size: 12px;">REASONER</code>. Configured primaries are Anthropic Claude Sonnet 5, OpenAI GPT-5.6 Sol, and xAI Grok 4.6 as defined in <code style="font-family: var(--mono); font-size: 12px;">lib/modelRoutingPolicy.js</code>.</dd>
+          <dd><code style="font-family: var(--mono); font-size: 12px;">WORKHORSE</code> writes evidence summaries and diagnosis. Roadmap/planning uses <code style="font-family: var(--mono); font-size: 12px;">REASONER</code>. Each role uses the configured primary and fallback from <code style="font-family: var(--mono); font-size: 12px;">lib/modelRoutingPolicy.js</code>.</dd>
         </dl>
         <div class="persona-rules">
           <h4>Behavioural Rules (STRATEGY_GUARDRAILS)</h4>
