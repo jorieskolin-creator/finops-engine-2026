@@ -120,17 +120,23 @@ await assert.rejects(
   error => error?.code === 'INCOMPLETE_RESPONSE' && error?.terminationReason === 'CONTEXT_WINDOW_EXCEEDED',
 );
 
-for (const provider of ['openai', 'anthropic', 'xai']) {
+for (const [provider, model, settings] of [
+  ['openai', 'gpt-6.2-sol', { max_tokens: 32768, reasoning_effort: 'high' }],
+  ['openai', 'gpt-6.1-terra', { max_tokens: 16384, reasoning_effort: 'medium' }],
+  ['anthropic', 'claude-sonnet-5-5', { max_tokens: 32768 }],
+  ['xai', 'grok-4.7', { max_tokens: 16384, reasoning_effort: 'medium' }],
+]) {
   let structuredRequest;
   const structuredPacket = {
     ...packet,
     stage: 'synthesis',
     provider,
-    model: provider === 'openai' ? 'gpt-5.6-sol' : provider === 'xai' ? 'grok-4.6' : 'claude-sonnet-5',
+    model,
     output_contract: OUTPUT_CONTRACT_IDS.evidenceSynthesis,
-    settings: { max_tokens: 8192 },
+    settings,
   };
-  await invokeProvider(structuredPacket, {
+  const responseText = '{"phase_3_strategy":{}}';
+  const structuredResult = await invokeProvider(structuredPacket, {
     env: provider === 'openai'
       ? { OPENAI_API_KEY: 'test-key' }
       : provider === 'xai'
@@ -141,13 +147,25 @@ for (const provider of ['openai', 'anthropic', 'xai']) {
       return {
         ok: true,
         json: async () => provider === 'openai'
-          ? { status: 'completed', output_text: '{"phase_3_strategy":{}}' }
+          ? { status: 'completed', output: [{ type: 'message', content: [{ type: 'output_text', text: responseText }] }] }
           : provider === 'xai'
-            ? { choices: [{ finish_reason: 'stop', message: { content: '{"phase_3_strategy":{}}' } }] }
-            : { stop_reason: 'end_turn', content: [{ type: 'text', text: '{"phase_3_strategy":{}}' }] },
+            ? { choices: [{ finish_reason: 'stop', message: { content: responseText } }] }
+            : { stop_reason: 'end_turn', content: [{ type: 'thinking', thinking: '' }, { type: 'text', text: responseText }] },
       };
     },
   });
+  assert.equal(structuredResult.text, responseText);
+  assert.equal(structuredRequest.model, model);
+  if (provider === 'openai') {
+    assert.equal(structuredRequest.max_output_tokens, settings.max_tokens);
+    assert.deepEqual(structuredRequest.reasoning, { effort: settings.reasoning_effort });
+  } else if (provider === 'xai') {
+    assert.equal(structuredRequest.max_completion_tokens, settings.max_tokens);
+    assert.equal(structuredRequest.reasoning_effort, settings.reasoning_effort);
+  } else {
+    assert.equal(structuredRequest.max_tokens, settings.max_tokens);
+    assert.equal(structuredRequest.thinking, undefined, 'Sonnet 5.5 uses the Claude API adaptive thinking default');
+  }
   const format = provider === 'openai'
     ? structuredRequest.text.format
     : provider === 'xai'

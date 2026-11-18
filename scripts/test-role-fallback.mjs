@@ -1,36 +1,27 @@
 import assert from 'node:assert/strict';
-import crypto from 'node:crypto';
 import { build } from 'esbuild';
-import { mkdtemp } from 'node:fs/promises';
+import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { resolveModelRouting } from '../lib/modelRoutingPolicy.js';
+import { approveRequest, authorizeConfiguredDestination, inspectOutput } from '../lib/governance.js';
+import { MODEL_STAGES, resolveModelRouting, settingsForProfile } from '../lib/modelRoutingPolicy.js';
 
+const example = await readFile(new URL('../.env.example', import.meta.url), 'utf8');
 const env = {
+  ...Object.fromEntries([...example.matchAll(/^(\w+(?:_PROVIDER|_MODEL))=(\S+)$/gm)].map(([, key, value]) => [key, value])),
   OPENAI_API_KEY: 'test-openai-key',
   ANTHROPIC_API_KEY: 'test-anthropic-key',
   XAI_API_KEY: 'test-xai-key',
-  REASONER_PROVIDER: 'OPENAI', REASONER_MODEL: 'gpt-5.6-sol',
-  REASONER_FALLBACK_PROVIDER: 'XAI', REASONER_FALLBACK_MODEL: 'grok-4.6',
-  WORKHORSE_PROVIDER: 'ANTHROPIC', WORKHORSE_MODEL: 'claude-sonnet-5',
-  WORKHORSE_FALLBACK_PROVIDER: 'XAI', WORKHORSE_FALLBACK_MODEL: 'grok-4.6',
-  QUALITY_CHECKER_PROVIDER: 'XAI', QUALITY_CHECKER_MODEL: 'grok-4.6',
-  QUALITY_CHECKER_FALLBACK_PROVIDER: 'ANTHROPIC', QUALITY_CHECKER_FALLBACK_MODEL: 'claude-sonnet-5',
 };
 const routing = resolveModelRouting(env);
-const dir = await mkdtemp(join(tmpdir(), 'finops-role-fallback-'));
+assert.throws(() => resolveModelRouting({ ...env, ANTHROPIC_API_KEY: '' }), /MODEL_ROUTING_CONFIGURATION_INVALID/);
+for (const stage of MODEL_STAGES) {
+  for (const profile of routing.routes[stage]) {
+    authorizeConfiguredDestination(stage, profile.provider, profile.id, settingsForProfile(profile), env);
+  }
+}
 
-const runCase = async ({ primaryText, expectedProvider, expectedAttempts }) => {
-  const outfile = join(dir, `${expectedProvider}-${expectedAttempts}.mjs`);
-  await build({
-    entryPoints: [new URL('../src/services/modelRouter.ts', import.meta.url).pathname],
-    bundle: true,
-    platform: 'node',
-    format: 'esm',
-    outfile,
-    logLevel: 'silent',
-  });
-  const { runStage } = await import(`file://${outfile}`);
+const runCase = async (runStage, { stage, role, expectedModels, rejectPrimary }) => {
   const approvals = new Map();
   const approvedRequests = [];
   const originalFetch = globalThis.fetch;
@@ -40,36 +31,17 @@ const runCase = async ({ primaryText, expectedProvider, expectedAttempts }) => {
     if (url === '/api/governed-packet') {
       const request = JSON.parse(options.body);
       approvedRequests.push(request);
-      const packet = {
-        ...request,
-        schema_version: 'approved_stage_packet_v1',
-        packet_id: `packet-${request.provider}`,
-        packet_hash: crypto.createHash('sha256').update(request.provider).digest('hex'),
-        classification_method: 'deterministic_pattern_screen_v1',
-        approval_basis: 'policy_approved_after_pattern_screening',
-      };
+      authorizeConfiguredDestination(request.stage, request.provider, request.model, request.settings, env);
+      const packet = approveRequest(request);
       approvals.set(packet.packet_id, packet);
       return Response.json(packet, { status: 201 });
     }
-    if (/^\/api\/(anthropic|xai)-generate$/.test(String(url))) {
+    if (/^\/api\/(anthropic|openai|xai)-generate$/.test(String(url))) {
       const request = JSON.parse(options.body);
       const approval = approvals.get(request.packet_id);
-      const text = approval.provider === 'anthropic' ? primaryText : '{"valid":true}';
-      const output = {
-        schema_version: 'governed_output_v1',
-        policy_version: 'llm_egress_policy_v1',
-        inspection_status: 'passed',
-        inspection_method: 'deterministic_pattern_screen_and_contact_redaction_v1',
-        run_id: request.run_id,
-        stage: request.stage,
-        provider: approval.provider,
-        model: approval.model,
-        source_packet_id: approval.packet_id,
-        source_packet_hash: approval.packet_hash,
-        text,
-        char_count: text.length,
-        output_hash: crypto.createHash('sha256').update(text).digest('hex'),
-      };
+      assert.equal(url, `/api/${approval.provider}-generate`);
+      const text = JSON.stringify({ valid: !(rejectPrimary && approvedRequests.length === 1) });
+      const output = inspectOutput(text, approval);
       return new Response(`${JSON.stringify({ type: 'done', output, usage: {} })}\n`);
     }
     throw new Error(`Unexpected URL: ${url}`);
@@ -84,13 +56,15 @@ const runCase = async ({ primaryText, expectedProvider, expectedAttempts }) => {
         if (parsed.valid !== true) throw Object.assign(new Error('invalid'), { code: 'INVALID_TEST_CONTRACT' });
       },
     };
-    const result = await runStage('forensic_audit', originalPrompt, { runId: 'run-role-test' });
-    assert.equal(result.modelUsed.provider, expectedProvider);
+    const result = await runStage(stage, originalPrompt, { runId: 'run-role-test' });
+    const expectedAttempts = rejectPrimary ? 1 : 0;
+    assert.equal(`${result.modelUsed.provider}:${result.modelUsed.id}`, expectedModels[expectedAttempts]);
     assert.equal(result.attempts.length, expectedAttempts);
-    assert.equal(approvedRequests.length, expectedAttempts + 1);
+    assert.deepEqual(approvedRequests.map(request => `${request.provider}:${request.model}`),
+      expectedModels.slice(0, expectedAttempts + 1));
     for (const request of approvedRequests) {
       assert.equal(request.parts[0].text, originalPrompt.userText);
-      assert.match(request.system_instruction, /AI ROLE: WORKHORSE/);
+      assert.ok(request.system_instruction.includes(`AI ROLE: ${role}.`));
       assert.match(request.system_instruction, /Return one JSON object\./);
     }
     assert.equal(new Set(approvedRequests.map(request => request.parts[0].text)).size, 1);
@@ -100,7 +74,28 @@ const runCase = async ({ primaryText, expectedProvider, expectedAttempts }) => {
   }
 };
 
-await runCase({ primaryText: '{"valid":true}', expectedProvider: 'anthropic', expectedAttempts: 0 });
-await runCase({ primaryText: '{"valid":false}', expectedProvider: 'xai', expectedAttempts: 1 });
+const dir = await mkdtemp(join(tmpdir(), 'finops-role-fallback-'));
+try {
+  const outfile = join(dir, 'model-router.mjs');
+  await build({
+    entryPoints: [new URL('../src/services/modelRouter.ts', import.meta.url).pathname],
+    bundle: true,
+    platform: 'node',
+    format: 'esm',
+    outfile,
+    logLevel: 'silent',
+  });
+  const { runStage } = await import(`file://${outfile}`);
+  for (const [stage, role, expectedModels] of [
+    ['forensic_audit', 'WORKHORSE', ['openai:gpt-6.1-terra', 'xai:grok-4.7']],
+    ['roadmap_synthesis', 'REASONER', ['anthropic:claude-sonnet-5-5', 'openai:gpt-6.2-sol']],
+    ['fact_check', 'QUALITY_CHECKER', ['xai:grok-4.7', 'openai:gpt-6.1-terra']],
+  ]) {
+    await runCase(runStage, { stage, role, expectedModels, rejectPrimary: false });
+    await runCase(runStage, { stage, role, expectedModels, rejectPrimary: true });
+  }
+} finally {
+  await rm(dir, { recursive: true, force: true });
+}
 
 console.log('AI role primary and validated fallback tests passed');
