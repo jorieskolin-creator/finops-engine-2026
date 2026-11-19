@@ -136,6 +136,19 @@ assert.deepEqual(recovered.recovery.map(pass => [pass.domain_id, pass.round, pas
 assert.deepEqual(recovered.stages.C.evidence.map(item => item.source_id), ['src-003']);
 assert.deepEqual(calls, [['C', 'evidence_gap_analysis'], ['C', 'forensic_audit'], ['C', 'evidence_check']]);
 
+const distantText = 'Routine notes. '.repeat(24);
+const repeatedMatches = [
+  `Our Azure team recorded the forecast. ${distantText}The forecast is a spending outlook.`,
+  `Our Azure team recorded a spending outlook. ${distantText}The spending outlook is our forecast.`,
+  `Our Azure team recorded the forecast. ${distantText}The spending outlook is provisional. ${distantText}The forecast is a spending outlook.`,
+  `Our Azure team recorded the forecast. ${distantText}The spending outlook is provisional. ${distantText}The forecast was recorded.`,
+].map((text, index) => ({ ...sources[0], source_id: `src-00${index + 6}`, text }));
+calls.length = 0;
+const repeatedRecovery = await dispatch(repeatedMatches);
+assert.equal(repeatedRecovery.initialPackets.C.included_chunk_count, 0);
+assert.deepEqual(repeatedRecovery.stages.C.evidence.map(item => item.source_id), ['src-006', 'src-007', 'src-008']);
+assert.deepEqual(calls, [['C', 'evidence_gap_analysis'], ['C', 'forensic_audit'], ['C', 'evidence_check']]);
+
 calls.length = 0;
 plannerUnavailable = true;
 const fallback = await dispatch(recoveryInputs);

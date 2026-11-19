@@ -20,8 +20,16 @@ interface DomainGapPlan {
 const MAX_LEADS_PER_CRITERION = 32;
 const MAX_ADDITIONS_PER_DOMAIN = 8;
 const MAX_CUE_DISTANCE = 256;
-const wholeMatch = (text: string, term: string): number => text.indexOf(` ${term} `);
 const catalogById = new Map(catalog.criteria.map(criterion => [criterion.criterion_id, criterion]));
+
+const wholeMatchPositions = (text: string, term: string): number[] => {
+  const phrase = ` ${term} `;
+  const positions: number[] = [];
+  for (let index = text.indexOf(phrase); index >= 0; index = text.indexOf(phrase, index + 1)) {
+    positions.push(index);
+  }
+  return positions;
+};
 
 export const planAcquisitionGapQueries = (
   registry: SourceRegistry,
@@ -51,7 +59,7 @@ export const planAcquisitionGapQueries = (
     const leads: SearchLead[] = [];
     for (const { chunk, text } of scoped) {
       if (isChunkEligibleForDomain(chunk, domain)) continue;
-      const cuePositions = cues.map(term => ({ term, index: wholeMatch(text, term) })).filter(cue => cue.index >= 0);
+      const cuePositions = cues.flatMap(term => wholeMatchPositions(text, term).map(index => ({ term, index })));
       if (cuePositions.length === 0) continue;
       leads.push({ chunkId: chunk.chunk_id, text, cuePositions });
       if (leads.length >= MAX_LEADS_PER_CRITERION) break;
@@ -69,9 +77,15 @@ export const planAcquisitionGapQueries = (
 const hasLocalCorroboration = (lead: SearchLead, terms: readonly string[]): boolean => terms.some(raw => {
   const term = normalize(raw);
   if (!term.includes(' ')) return false;
-  const index = wholeMatch(lead.text, term);
-  return index >= 0 && lead.cuePositions.some(cue => !` ${term} `.includes(` ${cue.term} `)
-    && !` ${cue.term} `.includes(` ${term} `) && Math.abs(cue.index - index) <= MAX_CUE_DISTANCE);
+  const phrase = ` ${term} `;
+  if (!lead.text.includes(phrase)) return false;
+  return lead.cuePositions.some(cue => {
+    const cuePhrase = ` ${cue.term} `;
+    if (phrase.includes(cuePhrase) || cuePhrase.includes(phrase)) return false;
+    const start = Math.max(0, cue.index - MAX_CUE_DISTANCE);
+    const index = lead.text.indexOf(phrase, start);
+    return index >= 0 && index <= cue.index + MAX_CUE_DISTANCE;
+  });
 });
 
 export const retrieveAcquisitionGaps = async (
