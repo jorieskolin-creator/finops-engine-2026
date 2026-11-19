@@ -718,7 +718,7 @@ export const summarizeEvidenceCheck = (
   items: EvidenceCheckItem[],
   adjustments: EvidenceCheckAdjustment[]
 ): EvidenceCheckResult => {
-  const countBy = (status: EvidenceCheckStatus) => items.filter(i => i.status === status).length;
+  const countBy = (status: EvidenceCheckStatus) => items.filter(i => !i.skipped_no_evidence && i.status === status).length;
   return {
     batch_id: batchId,
     total_items: items.length,
@@ -726,6 +726,7 @@ export const summarizeEvidenceCheck = (
     weak_count: countBy('weak'),
     unsupported_count: countBy('unsupported'),
     missing_count: countBy('missing'),
+    skipped_count: items.filter(i => i.skipped_no_evidence).length,
     downgraded_count: adjustments.filter(a => !a.verification_unresolved && a.verified_count < a.original_count).length,
     rescan_count: adjustments.filter(a => a.rescan_attempted).length,
     items,

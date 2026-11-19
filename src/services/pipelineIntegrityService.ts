@@ -1,5 +1,7 @@
 import type {
   EvidenceCheckResult,
+  EvidenceLaneStagePacket,
+  AuditItem,
   RemoteKnowledgeBaseIndex,
   RoutedSourcePacket,
   SourceRecord,
@@ -75,6 +77,7 @@ interface Phase1IntegrityInput {
   };
   evidence_check: EvidenceCheckResult;
   failed_batches: string[];
+  skipped_domains?: Record<string, string>;
 }
 
 const stableRegistryValue = (registry: SourceRegistry): string => JSON.stringify({
@@ -325,6 +328,7 @@ export const validatePreSynthesisIntegrity = (
   knowledgeIndex: RemoteKnowledgeBaseIndex,
   phase1: Phase1IntegrityInput,
   derivedEvidence: DerivedAnalyticalEvidence[] = [],
+  stagePackets?: Record<string, EvidenceLaneStagePacket>,
 ): void => {
   validateEvidenceContinuity(evidenceSnapshot, registry, packets);
   const currentKnowledgeMode = remoteKnowledgeReady(knowledgeIndex) ? 'remote_blob' : 'built_in';
@@ -406,9 +410,32 @@ export const validatePreSynthesisIntegrity = (
   }
 
   const evidence = phase1.evidence_check;
+  const skipped = phase1.skipped_domains || {};
+  const skippedDomainIds = new Set(Object.keys(skipped));
+  for (const [domain, hash] of Object.entries(skipped)) {
+    const stage = stagePackets?.[domain];
+    if (!BATCH_IDS.includes(domain) || !stage || stage.domain_id !== domain
+      || hash !== evidenceSnapshot.packet_hashes[domain] || stage.acquisition_binding.source_packet_hash !== hash
+      || packets[domain].manifest.length !== 0 || stage.derived_evidence.length !== 0
+      || stage.evidence.length !== 0 || stage.sanitized_visual_evidence.length !== 0) {
+      throw new PipelineIntegrityError('EVIDENCE_VERIFICATION_FAILED', 'pre_synthesis', [domain]);
+    }
+  }
   const decisionKeys = new Set(evidence.items.map(item => `${item.stream}:${item.id}`));
   const expectedDecisionKeys = new Set([...expectedIds].flatMap(id => [`maturity:${id}`, `antipattern:${id}`]));
   const unsafeUnresolved = evidence.items.some(item => {
+    const domainSkipped = skippedDomainIds.has(item.id.charAt(0));
+    if (item.skipped_no_evidence || domainSkipped) {
+      const audit = phase1.phase_1_audit_logs[item.stream][item.id] as AuditItem | undefined;
+      return !item.skipped_no_evidence || !domainSkipped
+        || item.status !== 'missing' || item.original_count !== 0 || item.verified_count !== 0
+        || item.assessment_status !== 'not_assessed' || item.verification_unresolved || item.adjudication_unresolved
+        || item.quote_supported || item.rescan_recommended
+        || audit?.assessment_status !== 'not_assessed' || audit.count !== 0
+        || audit.evidence_quotes.length !== 0 || audit.verification_unresolved
+        || (item.stream === 'antipattern' && (audit.antipattern_absence_status !== 'unknown_absent'
+          || item.antipattern_absence_status !== 'unknown_absent'));
+    }
     if (!item.adjudication_unresolved && !item.verification_unresolved) return false;
     const auditItem = phase1.phase_1_audit_logs[item.stream][item.id] as {
       count?: unknown;

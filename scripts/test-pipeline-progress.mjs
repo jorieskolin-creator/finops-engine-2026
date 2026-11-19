@@ -17,7 +17,7 @@ for (const stage of orderedStages) {
   previous = position;
 }
 for (const domain of ['A','B','C','D','E','F']) assert.match(loadingComponent, new RegExp(`id: '${domain}'`));
-assert.match(loadingComponent, /Six domains execute in parallel/);
+assert.match(loadingComponent, /Domains with eligible evidence are audited in parallel/);
 assert.doesNotMatch(loadingComponent, /Claude|GPT|Sonnet|Opus|model/i);
 assert.doesNotMatch(app, /Claude|GPT|Sonnet|Opus/);
 assert.doesNotMatch(app, /Assessment Suite v1\.0/);
@@ -30,14 +30,14 @@ assert.match(orchestrator, /onProgress\(completedCount, totalBatches, batchId\)/
 assert.match(orchestrator, /unavailableEvidenceCheck\(batchId, errorCode\)/, 'failed domains must produce explicit unavailable evidence decisions');
 assert.match(orchestrator, /catch \(error\) \{[\s\S]*?'targeted_rescan_unavailable'[\s\S]*?fallback: 'verified_downgrades'/, 'an unavailable targeted rescan must retain conservative verifier downgrades instead of failing the domain');
 const integrityGatePosition = analysis.indexOf('validatePreSynthesisIntegrity(');
-const effectivePacketPosition = analysis.indexOf('sourcePackets = { ...semanticPackets }');
+const effectivePacketPosition = analysis.indexOf('sourcePackets = acquisitionGap.packets');
 const provenancePosition = analysis.indexOf('reconcileEvidenceProvenance(');
 const calculationPosition = analysis.indexOf('const validationData = calculateMetrics');
 const synthesisPosition = analysis.indexOf("emitProgress({ stage: 'synthesis', status: 'in_progress' })");
 assert.ok(integrityGatePosition > 0 && integrityGatePosition < calculationPosition && calculationPosition < synthesisPosition, 'technical domain failures must stop before calculation and synthesis');
 assert.ok(effectivePacketPosition > 0 && effectivePacketPosition < provenancePosition && provenancePosition < integrityGatePosition, 'effective semantic-gap packets must become authoritative before provenance and pre-synthesis integrity checks');
 assert.match(analysis, /buildRunTrace\(\{[\s\S]*?sourcePackets,[\s\S]*?evidenceStagePackets,[\s\S]*?baselineEvidenceStagePackets,/, 'RunTrace must receive the final effective packet set and baseline packet hashes');
-assert.match(analysis, /sourceParseWarnings = sourceParseWarnings\.filter\([\s\S]*?activePacketCoverageWarnings = packetCoverageWarnings\(sourcePackets\)/, 'final report warnings must be refreshed from the effective packet set');
+assert.ok(analysis.indexOf('activePacketCoverageWarnings = packetCoverageWarnings(sourcePackets)') > effectivePacketPosition, 'final report warnings must use the effective packet set');
 assert.match(analysis, /checkpoint\('phase1', 'accepted'[\s\S]*?effective_source_registry_status:[\s\S]*?effective_evidence_integrity:[\s\S]*?semantic_gap_retrieval:/, 'the accepted Phase 1 checkpoint must retain effective packet lineage');
 assert.match(orchestrator, /semantic_gap_retrieval\.passes\.sort\(/, 'parallel semantic-gap traces must be ordered deterministically before delivery');
 assert.match(analysis, /throw new PipelineIntegrityError\('ANALYSIS_OUTPUT_INCOMPLETE', 'pre_synthesis'\)/, 'invalid Phase 1 output must terminate before synthesis');

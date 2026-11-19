@@ -139,6 +139,7 @@ const renderSourceRegistryPacketSummary = (result: DiagnosticResult): string => 
         included: packet.included_chunk_count || 0,
         candidates: packet.total_candidate_chunks || 0,
         weakCoverage: !!packet.weak_coverage,
+        skipped: 'audit_dispatch' in packet && packet.audit_dispatch === 'skipped_no_evidence',
         chars: packet.char_count || 0,
         notes: 'coverage_notes' in packet ? packet.coverage_notes || [] : []
       };
@@ -149,6 +150,7 @@ const renderSourceRegistryPacketSummary = (result: DiagnosticResult): string => 
       included: number;
       candidates: number;
       weakCoverage: boolean;
+      skipped: boolean;
       chars: number;
       notes: string[];
     } => !!row);
@@ -184,7 +186,7 @@ const renderSourceRegistryPacketSummary = (result: DiagnosticResult): string => 
                 <td><strong>${escapeHtml(row.domain)}</strong><span>${escapeHtml(row.title)}</span></td>
                 <td>${formatNumber(row.included)}</td>
                 <td>${formatNumber(row.candidates)}</td>
-                <td><span class="packet-coverage ${row.weakCoverage ? 'packet-coverage-weak' : 'packet-coverage-ok'}">${row.weakCoverage ? 'Weak coverage' : 'OK'}</span></td>
+                <td><span class="packet-coverage ${row.weakCoverage ? 'packet-coverage-weak' : 'packet-coverage-ok'}">${row.skipped ? 'Not assessed' : row.weakCoverage ? 'Weak coverage' : 'OK'}</span></td>
                 <td>${formatNumber(row.chars)}</td>
               </tr>
             `).join('')}
@@ -286,6 +288,7 @@ const renderRunTraceAppendix = (result: DiagnosticResult): string => {
     ${(trace.derived_analytical_evidence || []).length > 0 ? `<div class="gate-label">Shadow deterministic A1/AP-A1 observations</div>
     <ul class="appendix-list">${trace.derived_analytical_evidence!.map(evidence => `<li><strong>${escapeHtml(evidence.evidence_id)}</strong> · ${escapeHtml(evidence.result.status)} · ${evidence.result.row_scope === 'bounded_prefix' ? 'bounded-prefix' : evidence.result.row_scope === 'acquired_corpus' ? 'acquired-corpus' : 'full-table'} analyzed-row coverage (${evidence.result.analyzed_row_count}/${evidence.result.source_row_count} rows; input truncated: ${String(evidence.result.row_truncated)}): mapping ${evidence.result.mapping_population_coverage ?? 'n/a'}% · tagging ${evidence.result.tagging_population_coverage ?? 'n/a'}% · allocation ${evidence.result.allocation_population_coverage ?? 'n/a'}% · analyzer ${escapeHtml(evidence.derivation.analyzer_version)} · raw values exposed: ${String(evidence.raw_value_exposure)}</li>`).join('')}</ul>` : ''}
     ${trace.bounded_retrieval ? `<div class="gate-label">Shadow bounded retrieval diagnostics</div><p class="appendix-note">Candidate inclusion measures how much of the eligible routed candidate set was selected. It is not a measure of evidence sufficiency; a domain can include 100% of routed candidates and still have weak evidence.</p><ul class="appendix-list">${trace.bounded_retrieval.domains.map(domain => `<li><strong>Domain ${escapeHtml(domain.domain_id)}</strong> · routed candidate inclusion ${domain.baseline_coverage}%→${domain.final_coverage}% · evidence sufficiency ${result.meta.run_trace?.context_packets.find(packet => packet.domain_id === domain.domain_id)?.weak_coverage ? 'weak' : 'sufficient'} · passes ${domain.passes.length}/${trace.bounded_retrieval!.max_passes} · stop ${escapeHtml(domain.stop_reason)}</li>`).join('')}</ul>` : ''}
+    ${trace.acquisition_gap_passes?.length ? `<div class="gate-label">Acquisition gap re-reads</div><ul class="appendix-list">${trace.acquisition_gap_passes.map(pass => `<li><strong>Domain ${escapeHtml(pass.domain_id)}</strong> · round ${pass.round} · ${pass.candidate_count} local leads · ${pass.selected_chunk_ids.length} admitted · ${escapeHtml(pass.outcome)}</li>`).join('')}</ul>` : ''}
     ${trace.data_signal_coverage ? `<div class="gate-label">Data Signal Registry coverage</div><p class="appendix-note">${trace.data_signal_coverage.analyzer_available_count} of ${trace.data_signal_coverage.total_object_count} objects have an authoritative analyzer mapping from the live theme-binding catalog or A1 tagging allocation; ${trace.data_signal_coverage.unsupported_count} remain explicitly NO_AUTHORITATIVE_ANALYZER_SEMANTICS. No placeholder analyzers are invented.</p>` : ''}
   </div>`;
 };
@@ -321,6 +324,7 @@ const renderEvidenceCheckSummary = (result: DiagnosticResult): string => {
     ['Weak', ec.weak_count],
     ['Unsupported', ec.unsupported_count],
     ['Missing', ec.missing_count],
+    ...(ec.skipped_count ? [['Skipped (no evidence)', ec.skipped_count] as [string, number]] : []),
     ['Downgraded', ec.downgraded_count],
     ['Rescanned', ec.rescan_count],
   ];
@@ -328,7 +332,7 @@ const renderEvidenceCheckSummary = (result: DiagnosticResult): string => {
   <h2>Evidence Check</h2>
   <div class="evidence-check-summary">
     ${renderQualityGateStatus(result.quality_gate)}
-    <p>Phase 1 findings were verified against the raw material before Phase 2 metrics were calculated.</p>
+    <p>Evidence Check reviewed audited criteria before scoring. Empty domains are recorded as Not assessed.</p>
     <div class="evidence-check-grid">
       ${stats.map(([label, value]) => `<div class="evidence-check-stat"><span>${escapeHtml(label)}</span><strong>${value}</strong></div>`).join('')}
     </div>

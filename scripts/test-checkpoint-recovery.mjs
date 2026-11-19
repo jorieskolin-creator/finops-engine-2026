@@ -27,10 +27,12 @@ const phase2Meta=metadata('00000000-0000-4000-8000-000000000022','phase2','accep
 globalThis.fetch=async url=>{
   const value=String(url);
   if(!value.includes('checkpoint_id='))return response({checkpoints:[phase1Meta,phase2Meta]});
-  if(value.includes(phase1Meta.checkpoint_id))return response({metadata:phase1Meta,payload:{phase_1_audit_logs:{maturity:{},antipattern:{}},evidence_check:{failed:false},validation:{valid:true}}});
+  if(value.includes(phase1Meta.checkpoint_id))return response({metadata:phase1Meta,payload:{phase_1_audit_logs:{maturity:{},antipattern:{}},evidence_check:{failed:false,skipped_count:40},validation:{valid:true}}});
   return response({metadata:phase2Meta,payload:{phase_2_validation:{metrics:{evidence_density:20,finops_readiness:15,antipattern_burden:10},crawl_walk_run:'Insufficient Evidence',silent_areas:['A1'],maturity_gaps:['Missing ownership'],antipattern_findings:[]}}});
 };
 const partial=await recoverCheckpointResult(runId);assert.equal(partial.complete,false);assert.equal(partial.result.quality_gate.decision,'BLOCK');assert.equal(partial.result.phase_3_strategy.planning_decision.decision,'NO_GO');assert.deepEqual(partial.result.phase_3_strategy.remediation_roadmap,[]);
+assert.equal(partial.result.evidence_check.skipped_count, 40);
+assert.deepEqual(partial.result.phase_3_strategy.evidence_summary.confirmed_gaps, []);
 
 const analysis=await readFile(new URL('../src/services/analysisService.ts',import.meta.url),'utf8');
 for(const boundary of ['acquisition','phase1','phase2','synthesis','fact_check','quality_gate','final_report'])assert.ok(analysis.includes(`checkpoint('${boundary}'`),`missing ${boundary} recovery boundary`);

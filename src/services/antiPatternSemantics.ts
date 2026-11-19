@@ -92,6 +92,7 @@ export const resolveAntiPatternAbsenceStatus = (input: {
 };
 
 export const inferAntiPatternAbsenceStatus = (item: Partial<AuditItem> | undefined): AntiPatternAbsenceStatus => {
+  if (item?.assessment_status === 'not_assessed' || item?.antipattern_absence_status === 'unknown_absent') return 'unknown_absent';
   const count = typeof item?.count === 'number' ? Math.max(0, Math.min(3, Math.round(item.count))) : 0;
   if (count >= 3) return 'confirmed_present';
   if (count > 0) return 'partially_present';

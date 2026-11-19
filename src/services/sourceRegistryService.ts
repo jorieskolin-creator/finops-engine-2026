@@ -782,7 +782,7 @@ const assembleDomainPacket = (
   const manifest = included.map(item => manifestFor(item.chunk, item.tier));
   const body = included.length > 0
     ? included.map(item => renderChunk(item.chunk, item.tier)).join('\n\n')
-    : '<NO_ROUTED_CHUNKS>Deterministic routing found no domain-specific chunks. Treat source coverage as insufficient and do not infer findings or absence.</NO_ROUTED_CHUNKS>';
+    : '<NO_ROUTED_CHUNKS>Deterministic routing found no domain-specific chunks. Assess only approved derived evidence when present. Without it, report Not assessed.</NO_ROUTED_CHUNKS>';
   const manifestText = manifest.map(item => [
     item.chunk_id,
     item.page_number ? `page ${item.page_number}` : '',

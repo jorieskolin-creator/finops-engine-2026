@@ -216,7 +216,7 @@ export const buildEvidenceLaneStagePackets = (input: {
       knowledge_context: [],
       coverage: {
         weak: sourcePacket.weak_coverage,
-        signal_state: sourcePacket.included_chunk_count > 0 ? 'ROUTED_EVIDENCE' : 'ACQUIRED_SOURCE_SILENCE',
+        signal_state: sourcePacket.included_chunk_count + domainDerived.length > 0 ? 'ROUTED_EVIDENCE' : 'ACQUIRED_SOURCE_SILENCE',
         candidate_chunks: sourcePacket.total_candidate_chunks,
         included_chunks: sourcePacket.included_chunk_count,
         omitted_relevant_chunks: Math.max(0, sourcePacket.total_candidate_chunks - sourcePacket.included_chunk_count),
@@ -288,6 +288,8 @@ export const assertEvidenceLaneStagePacket = (packet: EvidenceLaneStagePacket): 
     || !packet.acquisition_binding.packet_manifest_hash
     || !packet.acquisition_binding.source_packet_hash
     || !packet.acquisition_binding.privacy_decision_hash
+    || packet.coverage.included_chunks !== packet.evidence.length + packet.sanitized_visual_evidence.length
+    || (packet.coverage.candidate_chunks > 0 && packet.coverage.included_chunks === 0)
     || packet.derived_evidence.some(item => item.report_eligible !== true || item.mode !== 'authoritative')
     || packet.derived_evidence.some(isDerivedEvidenceAcquisitionDiagnostic)
     || packet.acquisition_diagnostics.some(item =>

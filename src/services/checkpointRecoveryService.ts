@@ -20,7 +20,8 @@ const recoveredStrategy = (phase2: any): any => {
     : `${Math.round(Number(metrics.adjusted_maturity))}/100`;
   const sufficiency = phase2?.assessment_sufficiency?.decision || 'BLOCK';
   const silent = Array.isArray(phase2?.silent_areas) ? phase2.silent_areas : [];
-  const gaps = Array.isArray(phase2?.maturity_gaps) ? phase2.maturity_gaps : [];
+  const gaps = Array.isArray(phase2?.confirmed_maturity_gaps) ? phase2.confirmed_maturity_gaps
+    : Array.isArray(phase2?.maturity_gaps) ? phase2.maturity_gaps.filter((gap: unknown) => typeof gap === 'string' && /^\[[A-F][1-5]\] Confirmed gap:/.test(gap)) : [];
   const antipatterns = Array.isArray(phase2?.antipattern_findings) ? phase2.antipattern_findings : [];
   const summary = `The accepted analysis was recovered from temporary storage after pipeline interruption. Evidence density was ${density}%, adjusted maturity was ${adjusted}, and Assessment Sufficiency was ${sufficiency}. A full summary and roadmap cannot be safely reconstructed without a validated synthesis, so roadmap actionability is BLOCK / NO_GO.`;
   return {

@@ -129,6 +129,7 @@ export interface Phase2Validation {
   assessment_sufficiency: AssessmentSufficiencyResult;
   raw_counts: RawCounts;
   maturity_gaps: string[];
+  confirmed_maturity_gaps?: string[];
   antipattern_findings: string[];
   verified_antipattern_absences: string[];
   unknown_antipattern_absences: string[];
@@ -166,6 +167,7 @@ export interface EvidenceCheckItem {
   coverage_reason?: string;
   adjudication_unresolved?: boolean;
   verification_unresolved?: boolean;
+  skipped_no_evidence?: true;
 }
 
 export interface EvidenceCheckAdjustment {
@@ -188,6 +190,7 @@ export interface EvidenceCheckResult {
   weak_count: number;
   unsupported_count: number;
   missing_count: number;
+  skipped_count?: number;
   downgraded_count: number;
   rescan_count: number;
   items: EvidenceCheckItem[];
@@ -954,6 +957,7 @@ export interface RunTrace {
   data_signal_coverage?: DataSignalCoverageReport;
   semantic_gap_retrieval?: SemanticGapRetrievalTrace;
   bounded_retrieval?: BoundedRetrievalTrace;
+  acquisition_gap_passes?: AcquisitionGapPassTrace[];
   gap_retrieval?: GapRetrievalPlan;
   resolution_maturity?: ResolutionBasedMaturityRunTrace;
   dlp: {
@@ -1028,7 +1032,17 @@ export interface DataSignalCoverageReport {
   }>;
 }
 
-export type RetrievalStopReason = 'SUFFICIENT_BASELINE' | 'MINIMUM_GAIN_NOT_MET' | 'NO_NEW_CANDIDATES' | 'MAX_PASSES_REACHED';
+export type RetrievalStopReason = 'SUFFICIENT_BASELINE' | 'MINIMUM_GAIN_NOT_MET' | 'NO_NEW_CANDIDATES' | 'MAX_PASSES_REACHED' | 'SEMANTIC_PASS_RESERVED';
+
+export interface AcquisitionGapPassTrace {
+  domain_id: string;
+  round: 1 | 2;
+  criterion_ids: string[];
+  candidate_count: number;
+  selected_chunk_ids: string[];
+  outcome: 'NEW_EVIDENCE_SELECTED' | 'NO_ELIGIBLE_GAIN' | 'PLANNER_UNAVAILABLE';
+  model_used?: string;
+}
 
 export interface BoundedRetrievalTrace {
   schema_version: 'bounded_retrieval_trace_v1';
@@ -1268,6 +1282,7 @@ export interface ContextPacketTrace {
   evidence_stage_packet_hash?: string;
   baseline_evidence_stage_packet_hash?: string;
   evidence_stage_packet_schema?: EvidenceLaneStagePacket['schema_version'];
+  audit_dispatch?: 'audited' | 'skipped_no_evidence';
   acquisition_readiness?: EvidenceLaneStagePacket['acquisition_readiness'];
   acquisition_readiness_reasons?: EvidenceLaneStagePacket['acquisition_readiness_reasons'];
   privacy_decision?: EvidenceLaneStagePacket['privacy_decision'];

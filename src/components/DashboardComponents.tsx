@@ -211,7 +211,7 @@ export const NeuralLoadingGrid: React.FC<{
           <div className="flex items-center justify-between gap-4 mb-5">
             <div>
               <div className="text-xs font-bold uppercase tracking-widest text-slate-300">FinOps domain analysis</div>
-              <div className="text-[11px] text-slate-500 mt-1">Six domains execute in parallel; checks appear as each domain completes.</div>
+              <div className="text-[11px] text-slate-500 mt-1">Domains with eligible evidence are audited in parallel. Empty domains are marked Not assessed.</div>
             </div>
             <span className={`text-[10px] uppercase tracking-widest font-bold ${analysisActive ? 'text-emerald-400' : 'text-slate-500'}`}>{analysisActive ? 'Parallel processing active' : `${completedDomains.length}/6 completed`}</span>
           </div>

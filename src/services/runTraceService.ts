@@ -49,6 +49,8 @@ interface TacticGroundingTraceAdjustment {
 }
 
 interface BuildRunTraceInput {
+  skippedDomains?: Record<string, string>;
+  acquisitionGapPasses?: RunTrace['acquisition_gap_passes'];
   runId: string;
   engineVersion: string;
   sourceRegistry: SourceRegistry;
@@ -452,6 +454,7 @@ export const buildRunTrace = (input: BuildRunTraceInput): RunTrace => {
     evidence_stage_packet_hash: input.evidenceStagePackets?.[domain]?.integrity_hash,
     baseline_evidence_stage_packet_hash: input.baselineEvidenceStagePackets?.[domain]?.integrity_hash,
     evidence_stage_packet_schema: input.evidenceStagePackets?.[domain]?.schema_version,
+    audit_dispatch: input.skippedDomains && (input.skippedDomains[domain] ? 'skipped_no_evidence' as const : 'audited' as const),
     acquisition_readiness: input.evidenceStagePackets?.[domain]?.acquisition_readiness,
     acquisition_readiness_reasons: input.evidenceStagePackets?.[domain]?.acquisition_readiness_reasons,
     privacy_decision: input.evidenceStagePackets?.[domain]?.privacy_decision,
@@ -499,6 +502,7 @@ export const buildRunTrace = (input: BuildRunTraceInput): RunTrace => {
     data_signal_coverage: input.dataSignalCoverage,
     semantic_gap_retrieval: input.semanticGapRetrieval,
     bounded_retrieval: input.boundedRetrieval,
+    acquisition_gap_passes: input.acquisitionGapPasses,
     gap_retrieval: input.gapRetrieval,
     resolution_maturity: input.resolutionMaturity,
     dlp: {
