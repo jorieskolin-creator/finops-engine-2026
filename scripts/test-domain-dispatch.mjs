@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
-import { mkdtemp } from 'node:fs/promises';
+import { execFileSync } from 'node:child_process';
+import { mkdtemp, readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -18,6 +19,9 @@ await build({
       export { buildEvidenceLaneStagePackets } from './src/services/evidenceStagePacketService';
       export { renderDelimitedTableForAnalysis } from './src/services/tableService';
       export { calculateMetrics } from './src/services/metricsService';
+      export { sanitizeEvidenceSources } from './src/services/deterministicPrivacyService';
+      export { applyBoundedRetrieval } from './src/services/boundedRetrievalService';
+      export { planAcquisitionGapQueries, retrieveAcquisitionGaps } from './src/services/acquisitionGapRetrievalService';
       export { inferAntiPatternAbsenceStatus } from './src/services/antiPatternSemantics';`,
   },
   bundle: true, platform: 'node', format: 'esm', outfile: out,
@@ -36,7 +40,19 @@ await build({
 const engine = await import(pathToFileURL(out));
 engine.knowledgeBaseService.fetchReferenceKnowledgeBaseContext = async () => '';
 const calls = [];
+let plannerUnavailable = false;
 globalThis.dispatchTestModel = async (stage, prompt) => {
+  if (stage === 'evidence_gap_analysis') {
+    const request = JSON.parse(prompt.userText);
+    calls.push([request.domain_id, stage]);
+    assert.doesNotMatch(prompt.userText, /PRIVATE_CANARY|Azure|background\.txt|src-00/);
+    assert.equal(request.round, 2);
+    if (plannerUnavailable) throw new Error('Planner unavailable');
+    const text = JSON.stringify({ schema_version: 'finops_evidence_gap_query_v1', domain_id: request.domain_id,
+      queries: request.gaps.map(gap => ({ criterion_id: gap.criterion_id, themes: ['spending outlook'], terms: ['spending outlook'] })) });
+    prompt.validateOutput(text);
+    return { text, modelUsed: { id: 'stub' } };
+  }
   const domain = prompt.userText.match(/<EVIDENCE_LANE_STAGE_PACKET[^>]+domain="([A-F])"/)?.[1];
   assert.ok(domain);
   calls.push([domain, stage]);
@@ -61,11 +77,20 @@ const billing = { schema_version: 'source_record_v1', source_id: 'src-002', sour
 const knowledge = { status: { source: 'built_in', document_count: 0 }, documents: [] };
 const privacy = { decision: 'PASS', blocking_codes: [] };
 
-async function dispatch(records, derivedOnly = false) {
-  const registry = engine.buildSourceRegistry(records);
-  const derived = engine.deriveAllEvidenceSignals(records, registry).evidence;
+async function dispatch(input, derivedOnly = false) {
+  const records = engine.sanitizeEvidenceSources(input).sources;
+  let registry = engine.buildSourceRegistry(records);
+  let derived = engine.deriveAllEvidenceSignals(records, registry).evidence;
   if (derivedOnly) registry.chunks.forEach(chunk => { chunk.routing = []; });
-  const packets = engine.buildDomainPackets(registry);
+  const initialPackets = engine.buildDomainPackets(registry);
+  const plan = engine.planAcquisitionGapQueries(registry, initialPackets, derived);
+  const bounded = engine.applyBoundedRetrieval(registry, initialPackets, { reserve_semantic_round_for: new Set(plan.keys()) });
+  const recovered = await engine.retrieveAcquisitionGaps(registry, bounded.packets, plan, { runId: 'dispatch-test' });
+  if (recovered.registry !== registry) {
+    registry = recovered.registry;
+    derived = engine.deriveAllEvidenceSignals(records, registry).evidence;
+  }
+  const { packets } = recovered;
   const integrity = engine.validateEvidenceAcquisition(records, registry, packets);
   const status = engine.sourceRegistryRuntimeStatus(registry, packets, 0, engine.scanRegistryDlp(registry), privacy, integrity);
   const stages = engine.buildEvidenceLaneStagePackets({ source_packets: packets, source_packet_hashes: integrity.packet_hashes,
@@ -73,7 +98,7 @@ async function dispatch(records, derivedOnly = false) {
   const phase = await engine.runPhase1Audit(() => {}, { runId: 'dispatch-test' }, { packets: stages });
   const validate = (result, stagePackets = stages) => engine.validatePreSynthesisIntegrity(integrity, engine.validateKnowledgeAcquisition(knowledge), registry, packets, knowledge, result, derived, stagePackets);
   validate(phase);
-  return { phase, stages, validate };
+  return { phase, stages, validate, initialPackets, bounded: bounded.trace, recovery: recovered.passes };
 }
 
 const empty = await dispatch(sources);
@@ -82,6 +107,7 @@ assert.equal(empty.phase.evidence_check.total_items, 60);
 assert.equal(empty.phase.evidence_check.skipped_count, 60);
 assert.equal(empty.phase.evidence_check.missing_count, 0);
 assert.equal(engine.calculateMetrics(empty.phase.phase_1_audit_logs).metrics.evidence_density, 0);
+assert.deepEqual(engine.calculateMetrics(empty.phase.phase_1_audit_logs).confirmed_maturity_gaps, []);
 assert.equal(engine.inferAntiPatternAbsenceStatus({ ...empty.phase.phase_1_audit_logs.antipattern.F4, coverage_reason: 'Weak evidence of an anti-pattern.' }), 'unknown_absent');
 assert.throws(() => empty.validate({ ...empty.phase, skipped_domains: { ...empty.phase.skipped_domains, A: 'bad-hash' } }), /Evidence verification/);
 
@@ -97,4 +123,46 @@ for (const derivedOnly of [false, true]) {
     assert.ok(stages.A.derived_evidence.length > 0);
   }
 }
-console.log('empty, mixed and derived-only domain dispatch tests passed');
+
+const nearMiss = { ...sources[0], source_id: 'src-003', text: 'Our Azure team recorded the forecast as a spending outlook for next month. PRIVATE_CANARY.' };
+const samePhraseUnscoped = { ...sources[0], source_id: 'src-004', text: 'A spending outlook and a forecast are theoretical topics for general study.' };
+const samePhraseReference = { ...sources[0], source_id: 'src-005', text: 'Training material: our Azure forecast as a spending outlook is an example.' };
+const recoveryInputs = [...sources, nearMiss, samePhraseUnscoped, samePhraseReference];
+calls.length = 0;
+const recovered = await dispatch(recoveryInputs);
+assert.equal(recovered.initialPackets.C.included_chunk_count, 0);
+assert.equal(recovered.bounded.domains.find(domain => domain.domain_id === 'C').passes.length, 1);
+assert.deepEqual(recovered.recovery.map(pass => [pass.domain_id, pass.round, pass.outcome]), [['C', 2, 'NEW_EVIDENCE_SELECTED']]);
+assert.deepEqual(recovered.stages.C.evidence.map(item => item.source_id), ['src-003']);
+assert.deepEqual(calls, [['C', 'evidence_gap_analysis'], ['C', 'forensic_audit'], ['C', 'evidence_check']]);
+
+calls.length = 0;
+plannerUnavailable = true;
+const fallback = await dispatch(recoveryInputs);
+assert.equal(fallback.recovery[0].outcome, 'PLANNER_UNAVAILABLE');
+assert.deepEqual(calls, [['C', 'evidence_gap_analysis']]);
+assert.equal(fallback.phase.evidence_check.skipped_count, 60);
+plannerUnavailable = false;
+
+// Optional replay of the supplied files, without adding their content to Git.
+if (process.env.FINOPS_CLEAR_BLOCK_REPLAY_DIR) {
+  const folder = process.env.FINOPS_CLEAR_BLOCK_REPLAY_DIR;
+  const file = 'Systems-Thinking-and-the-Cynefin-Framework-Final.3(1).pdf';
+  const pages = execFileSync('pdftotext', [join(folder, file), '-'], { encoding: 'utf8' }).split('\f')
+    .flatMap((text, index) => text.trim() ? [{ schema_version: 'source_page_v1', page_id: `p${index + 1}`, page_number: index + 1, text }] : []);
+  const records = [{ schema_version: 'source_record_v1', source_id: 'src-001', source_name: file, kind: 'pdf', pages }];
+  for (const [index, filename] of ['02-optimization-backlog(1).csv', '01-cost-line-items(1).csv'].entries()) {
+    const table = engine.renderDelimitedTableForAnalysis(await readFile(join(folder, filename), 'utf8'), { fileName: filename, delimiter: ',' });
+    records.push({ ...billing, source_id: `src-00${index + 2}`, source_name: filename, text: table.text, structured_table: table.structuredTable,
+      extraction: { ...billing.extraction, total_units: table.rowCount, processed_units: table.rowCount } });
+  }
+  calls.length = 0;
+  const replay = await dispatch(records);
+  assert.deepEqual(calls.sort(), [['A', 'evidence_check'], ['A', 'forensic_audit'], ['B', 'evidence_check'], ['B', 'forensic_audit']]);
+  assert.equal(replay.stages.A.evidence.length, 5);
+  assert.equal(replay.stages.B.evidence.length, 6);
+  assert.equal(replay.phase.evidence_check.skipped_count, 40);
+  assert.ok(Object.values(replay.stages).every(packet => packet.evidence.every(item => item.source_id !== 'src-001')));
+  console.log('Clear BLOCK replay retained 11 CSV chunks and skipped 40 criteria. Cynefin placements: 0.');
+}
+console.log('Domain dispatch and acquisition gap recovery tests passed');

@@ -2,9 +2,29 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { approvedPacketBytes,approvedPacketHash,approveRequest,approveRequestArtifact,authorizeDestination,evaluatePacketBinding,inspectOutput,packetRuntimeDiagnostics,parseApprovedPacketBody,validateGovernedOutput,POLICY_VERSION,STAGE_PACKET_REQUEST_VERSION } from '../lib/governance.js';
 import { OUTPUT_CONTRACT_IDS } from '../lib/outputContracts.js';
+import { validateApprovedGapSearch } from '../lib/evidenceGapRequest.js';
 import { governedPacketHandler } from '../api/governed-packet.js';
 import { issueCookie } from '../lib/auth.js';
 const request={schema_version:STAGE_PACKET_REQUEST_VERSION,policy_version:POLICY_VERSION,run_id:'run-1',stage:'forensic_audit',provider:'anthropic',model:'claude-sonnet-5',destination:'anthropic:external_model',system_instruction:'Review safely',parts:[{type:'text',text:'monthly invoice review, EDP pricing policy, billing account governance'}],settings:{max_tokens:16384}};
+const catalogGap = { schema_version: 'finops_evidence_gap_input_v1', domain_id: 'C', round: 2,
+  gaps: [{ criterion_id: 'maturity.C2', missing_concept_ids: ['variance_threshold'] }] };
+const gapRequest = input => ({ ...request, stage: 'evidence_gap_analysis', system_instruction: '',
+  output_contract: OUTPUT_CONTRACT_IDS.evidenceGapQuery, parts: [{ type: 'text', text: JSON.stringify(input) }] });
+const gapPacket = approveRequest(gapRequest(catalogGap));
+assert.match(gapPacket.parts[0].text, /FORECAST_VARIANCE|overrun threshold/);
+assert.doesNotMatch(gapPacket.parts[0].text, /run-1|customer|source_id|round/);
+assert.doesNotThrow(() => validateApprovedGapSearch(gapPacket));
+assert.throws(() => validateApprovedGapSearch({ ...gapPacket, parts: [{ type: 'text', text: '{"coverage_summary":"PRIVATE_CANARY"}' }] }));
+for (const invalid of [
+  { ...catalogGap, source_text: 'PRIVATE_CANARY' },
+  { ...catalogGap, domain_id: 'D' },
+  { ...catalogGap, round: 3 },
+  { ...catalogGap, gaps: [{ ...catalogGap.gaps[0], coverage_summary: 'PRIVATE_CANARY' }] },
+  { ...catalogGap, gaps: [{ ...catalogGap.gaps[0], missing_concept_ids: ['customer_contract_amount'] }] },
+]) {
+  assert.throws(() => approveRequest(gapRequest(invalid)), /INVALID_EVIDENCE_GAP_INPUT/);
+}
+assert.throws(() => approveRequest({ ...gapRequest(catalogGap), system_instruction: 'PRIVATE_CANARY' }), /INVALID_EVIDENCE_GAP_INPUT/);
 assert.equal(approveRequest(request).approval_basis,'policy_approved_after_pattern_screening');
 const undefinedOptionals=approveRequest({...request,settings:{...request.settings,reasoning_effort:undefined},output_contract:undefined},1000);
 const persistedUndefinedOptionals=JSON.parse(JSON.stringify(undefinedOptionals));

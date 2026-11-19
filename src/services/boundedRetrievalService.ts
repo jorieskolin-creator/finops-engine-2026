@@ -16,7 +16,7 @@ const hasNeutralGapSignal=(chunk:SourceChunk,domainId:string,extraTerms:string[]
 export const applyBoundedRetrieval=(
   registry:SourceRegistry,
   baselinePackets:Record<string,RoutedSourcePacket>,
-  options?:{gap_plan?:GapRetrievalPlan}
+  options?:{gap_plan?:GapRetrievalPlan; reserve_semantic_round_for?: ReadonlySet<string>}
 ):{packets:Record<string,RoutedSourcePacket>;trace:BoundedRetrievalTrace}=>{
   const packets={...baselinePackets};
   const gap=options?.gap_plan;
@@ -32,7 +32,8 @@ export const applyBoundedRetrieval=(
     const baselineCoverage=coverage();
     const passes:BoundedRetrievalTrace['domains'][number]['passes']=[];
     const gapTriggered=Boolean(gap?.trigger_domains.includes(domainId));
-    if(!packet.weak_coverage&&!gapTriggered)return{domain_id:domainId,baseline_coverage:baselineCoverage,final_coverage:baselineCoverage,stop_reason:'SUFFICIENT_BASELINE' as const,passes};
+    const reserveSemanticRound = options?.reserve_semantic_round_for?.has(domainId);
+    if(!packet.weak_coverage&&!gapTriggered&&!reserveSemanticRound)return{domain_id:domainId,baseline_coverage:baselineCoverage,final_coverage:baselineCoverage,stop_reason:'SUFFICIENT_BASELINE' as const,passes};
     const runPass=(pass:1|2,strategy:'omitted_routed_candidates'|'neutral_gap_expansion',candidates:SourceChunk[])=>{
       const before=coverage();
       const eligible=candidates.filter(chunk=>!selected.has(chunk.chunk_id));
@@ -41,6 +42,7 @@ export const applyBoundedRetrieval=(
       const after=coverage();passes.push({pass,strategy,coverage_before:before,coverage_after:after,gain_points:after-before,candidate_count:eligible.length,selected_chunk_ids:expanded.selected_chunk_ids});return{additions:expanded.selected_chunk_ids,gain:after-before,candidateCount:eligible.length};
     };
     const first=runPass(1,'omitted_routed_candidates',routed);
+    if(reserveSemanticRound)return{domain_id:domainId,baseline_coverage:baselineCoverage,final_coverage:coverage(),stop_reason:'SEMANTIC_PASS_RESERVED' as const,passes};
     if(first.additions.length>0&&first.gain<MINIMUM_GAIN_POINTS)return{domain_id:domainId,baseline_coverage:baselineCoverage,final_coverage:coverage(),stop_reason:'MINIMUM_GAIN_NOT_MET' as const,passes};
     const second=runPass(2,'neutral_gap_expansion',expansion);
     const stopReason=second.additions.length===0?(second.candidateCount===0?'NO_NEW_CANDIDATES' as const:'MINIMUM_GAIN_NOT_MET' as const):second.gain<MINIMUM_GAIN_POINTS?'MINIMUM_GAIN_NOT_MET' as const:'MAX_PASSES_REACHED' as const;

@@ -36,6 +36,7 @@ export const calculateMetrics = (
   options: { evidencePacketReady?: boolean } = {},
 ): Phase2Validation => {
   let maturityCount = 0; let maturitySum = 0; const maturityGaps: string[] = [];
+  const confirmedMaturityGaps: string[] = [];
   let antipatternCount = 0; let antipatternSum = 0; const antipatternFindings: string[] = [];
   let testedAbsentCount = 0;
   let assessedMaturityItemCount = 0;
@@ -110,9 +111,11 @@ export const calculateMetrics = (
     const catPrefix = key.charAt(0);
     if (categoryScores[catPrefix] !== undefined) categoryScores[catPrefix] += Math.max(item.count, 0);
     if (item.count === 0) {
-      const hasGapEvidence = hasVerifiedSourceCoverage(item, 'maturity');
+      const hasGapEvidence = hasCapabilityEvidence;
       if (!hasGapEvidence) silentAreas.push(`Capability not demonstrated by supplied material: ${key}`);
-      maturityGaps.push(`[${key}] ${hasGapEvidence ? 'Confirmed gap' : 'Not demonstrated by supplied material (not proof the capability is absent)'}: ${item.reasoning}`);
+      const gap = `[${key}] ${hasGapEvidence ? 'Confirmed gap' : 'Not demonstrated by supplied material (not proof the capability is absent)'}: ${item.reasoning}`;
+      maturityGaps.push(gap);
+      if (hasGapEvidence) confirmedMaturityGaps.push(gap);
     }
   });
 
@@ -161,7 +164,7 @@ export const calculateMetrics = (
       antipatternUncontrolled++;
     }
     if (absenceStatus === 'confirmed_present' || absenceStatus === 'partially_present') antipatternCount++;
-    if (absenceStatus === 'confirmed_present' || absenceStatus === 'partially_present' || item.count > 0) {
+    if (scoreEligible && (absenceStatus === 'confirmed_present' || absenceStatus === 'partially_present')) {
       const findingLabel = absenceStatus === 'partially_present' ? 'Partial finding' : 'Finding';
       antipatternFindings.push(`[${key}] ${findingLabel}: ${item.evidence.substring(0, 100)}...`);
     }
@@ -270,6 +273,7 @@ export const calculateMetrics = (
       antipattern_sub_criteria_met: antipatternSum
     },
     maturity_gaps: maturityGaps,
+    confirmed_maturity_gaps: confirmedMaturityGaps,
     antipattern_findings: antipatternFindings,
     verified_antipattern_absences: verifiedAntipatternAbsences,
     unknown_antipattern_absences: unknownAntipatternAbsences,

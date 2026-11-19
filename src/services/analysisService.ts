@@ -56,8 +56,7 @@ import { deriveAllEvidenceSignals } from "./derivedEvidence";
 import { planGapRetrieval } from "./gapAnalyzerService";
 import { buildEvidenceLaneStagePackets } from "./evidenceStagePacketService";
 import { applyBoundedRetrieval } from "./boundedRetrievalService";
-import { expandWeakEvidencePacket } from "./semanticGapRetrievalService";
-import { analyzeEvidenceGaps } from "./evidenceGapAnalysisService";
+import { planAcquisitionGapQueries, retrieveAcquisitionGaps } from "./acquisitionGapRetrievalService";
 import { sanitizeEvidenceSources } from "./deterministicPrivacyService";
 import { scrubDiagnosticResultForPrivacy } from "./privacyService";
 import { parseGovernedJsonObject, validateFindingsModePayload } from "./jsonResponseService";
@@ -324,7 +323,7 @@ export const analyzeDocument = async (
     const extractionWarnings = acquiredSources.filter(source => source.extraction?.truncated || source.extraction?.quality === 'poor' || (source.parse_warnings?.length || 0) > 0).length;
     emitProgress({ stage: 'extraction', status: extractionWarnings > 0 ? 'completed_with_warnings' : 'completed' });
     emitProgress({ stage: 'packetization', status: 'in_progress' });
-    const sourceRegistry = buildSourceRegistry(acquiredSources);
+    let sourceRegistry = buildSourceRegistry(acquiredSources);
     const derivedRun = deriveAllEvidenceSignals(acquiredSources, sourceRegistry);
     let derivedAnalyticalEvidence = derivedRun.evidence;
     const tableInspections = acquiredSources.flatMap(source =>
@@ -343,28 +342,64 @@ export const analyzeDocument = async (
       derived: derivedAnalyticalEvidence,
       locations: derivedRun.locations
     });
-    const boundedRetrievalResult = applyBoundedRetrieval(sourceRegistry, baselineSourcePackets, { gap_plan: gapPlan });
+    const semanticPlans = planAcquisitionGapQueries(sourceRegistry, baselineSourcePackets, derivedAnalyticalEvidence);
+    const boundedRetrievalResult = applyBoundedRetrieval(sourceRegistry, baselineSourcePackets, {
+      gap_plan: gapPlan, reserve_semantic_round_for: new Set(semanticPlans.keys()),
+    });
     let sourcePackets = boundedRetrievalResult.packets;
     const boundedRetrieval = boundedRetrievalResult.trace;
-    if (boundedRetrieval.domains.some(domain => domain.passes.some(pass => pass.selected_chunk_ids.length > 0))) {
-      const privacyAgain = sanitizeEvidenceSources(acquiredSources);
-      if (privacyAgain.decision.decision === 'BLOCK') {
-        throw new Error(`Deterministic privacy gate blocked the evidence set after gap re-read (${privacyAgain.decision.blocking_codes.join(', ')}). Remove prohibited secrets before running the assessment.`);
+    const verifyAcquisition = () => {
+      const dlpScan = scanRegistryDlp(sourceRegistry);
+      if (dlpScan.blocked) {
+        throw new Error('Security Alert: high-risk secret material detected in source chunks.');
       }
+      const integrity = validateEvidenceAcquisition(acquiredSources, sourceRegistry, sourcePackets);
+      const status = sourceRegistryRuntimeStatus(sourceRegistry, sourcePackets, 0, dlpScan, privacy.decision, integrity);
+      const stagePackets = buildEvidenceLaneStagePackets({
+        source_packets: sourcePackets,
+        source_packet_hashes: integrity.packet_hashes,
+        derived_evidence: derivedAnalyticalEvidence,
+        acquisition_limitations: sourceRegistry.acquisition_limitations,
+        privacy_decision: privacy.decision,
+        acquisition_readiness: status.acquisition_readiness,
+      });
+      return { integrity, status, stagePackets, dlpScan };
+    };
+    const baseline = verifyAcquisition();
+    const baselineEvidenceStagePackets = baseline.stagePackets;
+    const acquisitionGap = await retrieveAcquisitionGaps(sourceRegistry, sourcePackets, semanticPlans, { runId });
+    const changed = acquisitionGap.registry !== sourceRegistry;
+    const addedChunks = changed || boundedRetrieval.domains.some(domain => domain.passes.some(pass => pass.selected_chunk_ids.length > 0));
+    if (addedChunks) {
+      const recheck = sanitizeEvidenceSources(acquiredSources).decision;
+      if (recheck.decision === 'BLOCK' || recheck.redaction_count > 0) {
+        throw new Error('Deterministic privacy revalidation rejected the evidence set after bounded retrieval.');
+      }
+    }
+    if (changed) {
+      sourceRegistry = acquisitionGap.registry;
+      sourcePackets = acquisitionGap.packets;
       derivedAnalyticalEvidence = deriveAllEvidenceSignals(acquiredSources, sourceRegistry).evidence;
     }
-    let packetWeakDomainIds = Object.entries(sourcePackets)
+    const {
+      integrity: evidenceIntegrity,
+      status: sourceRegistryStatus,
+      stagePackets: evidenceStagePackets,
+      dlpScan,
+    } = changed ? verifyAcquisition() : baseline;
+    const acquisitionGapModels = [...new Set(acquisitionGap.passes.flatMap(pass => pass.model_used ? [pass.model_used] : []))];
+    if (acquisitionGapModels.length) actuals.evidence_gap_analysis = acquisitionGapModels.join(',');
+    const packetWeakDomainIds = Object.entries(sourcePackets)
       .filter(([, packet]) => packet.weak_coverage)
       .map(([domain]) => domain);
-    const dlpScan = scanRegistryDlp(sourceRegistry);
     const packetWarnings = Object.values(sourcePackets).filter(packet => packet.weak_coverage).length;
     emitProgress({ stage: 'packetization', status: packetWarnings > 0 ? 'completed_with_warnings' : 'completed' });
     emitProgress({ stage: 'privacy', status: 'in_progress' });
     const packetCoverageWarnings = (packets: typeof sourcePackets): string[] => Object.entries(packets)
       .filter(([, packet]) => packet.weak_coverage)
       .map(([domain, packet]) => `Source packet ${domain} has incomplete deterministic routing coverage (${packet.included_chunk_count}/${packet.total_candidate_chunks} relevant chunks); no broad-source fallback was used.`);
-    let activePacketCoverageWarnings = packetCoverageWarnings(sourcePackets);
-    let sourceParseWarnings = [
+    const activePacketCoverageWarnings = packetCoverageWarnings(sourcePackets);
+    const sourceParseWarnings = [
       ...sourceRegistry.warnings,
       ...dlpScan.caution_hits.map(hit => `DLP caution: ${hit.kind} detected in ${hit.chunk_ids.length} chunk(s).`),
       ...activePacketCoverageWarnings,
@@ -399,70 +434,6 @@ export const analyzeDocument = async (
       caution_hits: dlpScan.caution_hits.reduce((sum, hit) => sum + hit.count, 0),
       blocked: dlpScan.blocked ? 'yes' : 'no',
     });
-    if (dlpScan.blocked) {
-      throw new Error(`Security Alert: high-risk secret material detected in source chunks (${dlpScan.high_risk_hits.map(hit => `${hit.kind}:${hit.count}`).join(', ')}). Remove or redact secrets before running the assessment.`);
-    }
-    let evidenceIntegrity = validateEvidenceAcquisition(acquiredSources, sourceRegistry, sourcePackets);
-    let sourceRegistryStatus = sourceRegistryRuntimeStatus(
-      sourceRegistry,
-      sourcePackets,
-      0,
-      dlpScan,
-      privacy.decision,
-      evidenceIntegrity
-    );
-    let evidenceStagePackets = buildEvidenceLaneStagePackets({
-      source_packets: sourcePackets,
-      source_packet_hashes: evidenceIntegrity.packet_hashes,
-      derived_evidence: derivedAnalyticalEvidence,
-      acquisition_limitations: sourceRegistry.acquisition_limitations,
-      privacy_decision: privacy.decision,
-      acquisition_readiness: sourceRegistryStatus.acquisition_readiness
-    });
-    const baselineEvidenceStagePackets = evidenceStagePackets;
-    const semanticPackets = { ...sourcePackets };
-    const expandWeakEvidence = async (input: Parameters<NonNullable<import('../orchestrator').Phase1SourcePackets['expandWeakEvidence']>>[0]) => {
-      const gapAnalysis = await analyzeEvidenceGaps({
-        domainId: input.batchId,
-        items: input.items,
-        pass: input.pass,
-        seenTerms: input.seenTerms,
-        ctx: { runId },
-      });
-      const expanded = expandWeakEvidencePacket({
-        registry: sourceRegistry,
-        packet: semanticPackets[input.batchId],
-        items: input.items,
-        pass: input.pass,
-        seenTerms: input.seenTerms,
-        proposedTerms: gapAnalysis.failed ? undefined : gapAnalysis.terms,
-        gapAnalysisModel: gapAnalysis.model_used,
-        gapAnalysisFailed: gapAnalysis.failed,
-      });
-      semanticPackets[input.batchId] = expanded.packet;
-      if (expanded.trace.selected_chunk_ids.length > 0) {
-        derivedAnalyticalEvidence = deriveAllEvidenceSignals(acquiredSources, sourceRegistry).evidence;
-      }
-      const snapshot = { ...semanticPackets };
-      const integrity = validateEvidenceAcquisition(acquiredSources, sourceRegistry, snapshot);
-      const status = sourceRegistryRuntimeStatus(sourceRegistry, snapshot, 0, dlpScan, privacy.decision, integrity);
-      const rebuilt = buildEvidenceLaneStagePackets({
-        source_packets: snapshot,
-        source_packet_hashes: integrity.packet_hashes,
-        derived_evidence: derivedAnalyticalEvidence,
-        acquisition_limitations: sourceRegistry.acquisition_limitations,
-        privacy_decision: privacy.decision,
-        acquisition_readiness: status.acquisition_readiness
-      })[input.batchId];
-      return {
-        packet: rebuilt,
-        trace: {
-          ...expanded.trace,
-          packet_hash_before: input.packet.integrity_hash,
-          packet_hash_after: rebuilt.integrity_hash
-        }
-      };
-    };
     serverLog(runId, 'info', 'pipeline_integrity_passed', {
       gate: 'acquisition',
       sources: sourceRegistry.source_count,
@@ -476,12 +447,13 @@ export const analyzeDocument = async (
       privacy_decision: privacy.decision,
       integrity: evidenceIntegrity,
       source_parse_warnings: sourceParseWarnings,
+      acquisition_gap_passes: acquisitionGap.passes,
     });
 
     if (privacy.decision.redaction_count > 0) {
       sourceParseWarnings.push(`Deterministic privacy controls redacted ${privacy.decision.redaction_count} prohibited contact, identifier, or financial-value occurrence(s) before packet assembly.`);
     }
-    console.log("[FinOps] Deterministic privacy scan passed. Phase 1 is the first generative stage.");
+    console.log("[FinOps] Evidence packets passed deterministic privacy and integrity validation.");
     const privacyWarnings = dlpScan.caution_hits.length > 0 || privacy.decision.redaction_count > 0;
     emitProgress({ stage: 'privacy', status: privacyWarnings ? 'completed_with_warnings' : 'completed' });
 
@@ -513,7 +485,7 @@ export const analyzeDocument = async (
     let aggregatedRawData = await runPhase1Audit((completed, total, batchId) => {
       emitProgress({ stage: 'analysis', status: 'in_progress', completed, total, domain_id: batchId });
       emitProgress({ stage: 'evidence', status: 'in_progress', completed, total, domain_id: batchId });
-    }, { runId }, { packets: evidenceStagePackets, expandWeakEvidence });
+    }, { runId }, { packets: evidenceStagePackets });
     if (aggregatedRawData.models_used.length > 0) {
       actuals.forensic_audit = aggregatedRawData.models_used.join(',');
     }
@@ -526,33 +498,6 @@ export const analyzeDocument = async (
     if (aggregatedRawData.evidence_adjudication_models_used.length > 0) {
       actuals.evidence_adjudication = aggregatedRawData.evidence_adjudication_models_used.join(',');
     }
-    if (aggregatedRawData.evidence_gap_analysis_models_used.length > 0) {
-      actuals.evidence_gap_analysis = aggregatedRawData.evidence_gap_analysis_models_used.join(',');
-    }
-    sourcePackets = { ...semanticPackets };
-    evidenceIntegrity = validateEvidenceAcquisition(acquiredSources, sourceRegistry, sourcePackets);
-    sourceRegistryStatus = sourceRegistryRuntimeStatus(
-      sourceRegistry,
-      sourcePackets,
-      0,
-      dlpScan,
-      privacy.decision,
-      evidenceIntegrity
-    );
-    evidenceStagePackets = buildEvidenceLaneStagePackets({
-      source_packets: sourcePackets,
-      source_packet_hashes: evidenceIntegrity.packet_hashes,
-      derived_evidence: derivedAnalyticalEvidence,
-      acquisition_limitations: sourceRegistry.acquisition_limitations,
-      privacy_decision: privacy.decision,
-      acquisition_readiness: sourceRegistryStatus.acquisition_readiness
-    });
-    packetWeakDomainIds = Object.entries(sourcePackets)
-      .filter(([, packet]) => packet.weak_coverage)
-      .map(([domain]) => domain);
-    sourceParseWarnings = sourceParseWarnings.filter(warning => !activePacketCoverageWarnings.includes(warning));
-    activePacketCoverageWarnings = packetCoverageWarnings(sourcePackets);
-    sourceParseWarnings.push(...activePacketCoverageWarnings);
     validateEvidenceContinuity(evidenceIntegrity, sourceRegistry, sourcePackets);
     const text = renderPseudonymousSourceContext(sourceRegistry, sourcePackets, 120000);
     const provenanceReconciliation = reconcileEvidenceProvenance(aggregatedRawData, sourceRegistry, sourcePackets, derivedAnalyticalEvidence);
@@ -615,6 +560,7 @@ export const analyzeDocument = async (
     const validationData = calculateMetrics(auditLogs, {
       evidencePacketReady: sourceRegistryStatus.acquisition_readiness.status !== 'BLOCKED',
     });
+    const confirmedMaturityGaps = validationData.confirmed_maturity_gaps ?? [];
     const silentDomainIds = validationData.assessment_sufficiency.silent_domain_ids;
     const unresolvedDomainIds = new Set(validationData.verification_unresolved.map(item => item.charAt(1)));
     const overallScoreAvailable = validationData.assessment_sufficiency.decision === 'PASS'
@@ -1083,7 +1029,7 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => unresolve
       confirmed_strengths: Object.entries(validationData.category_scores)
         .filter(([cat, score]) => !unresolvedDomainIds.has(cat) && !silentDomainIds.includes(cat as DomainId) && score >= 10)
         .map(([cat, score]) => `Domain ${cat} shows relatively strong maturity signal (${score}/15).`),
-      confirmed_gaps: validationData.maturity_gaps.slice(0, 8),
+      confirmed_gaps: confirmedMaturityGaps.slice(0, 8),
       confirmed_antipatterns: validationData.antipattern_findings.slice(0, 8),
       silent_or_missing_evidence: [
         ...validationData.verification_unresolved,
@@ -1093,9 +1039,9 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => unresolve
     });
 
     const buildFallbackDiagnosis = () => ({
-      primary_bottleneck: validationData.maturity_gaps[0] || validationData.antipattern_findings[0] || 'No single bottleneck dominated the validated audit output.',
+      primary_bottleneck: confirmedMaturityGaps[0] || validationData.antipattern_findings[0] || 'Available evidence did not establish an organizational bottleneck.',
       root_causes: [
-        ...validationData.maturity_gaps.slice(0, 3),
+        ...confirmedMaturityGaps.slice(0, 3),
         ...validationData.antipattern_findings.slice(0, 3)
       ].slice(0, 5),
       domain_diagnosis: Object.fromEntries(
@@ -1124,7 +1070,7 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => unresolve
 
     const buildFallbackFindingsMode = () => ({
       evidence_backed_findings: [
-        ...validationData.maturity_gaps.slice(0, 4),
+        ...confirmedMaturityGaps.slice(0, 4),
         ...validationData.antipattern_findings.slice(0, 2),
         ...validationData.verified_antipattern_absences.slice(0, 2)
       ].slice(0, 8),
@@ -1203,6 +1149,9 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => unresolve
           domainDiagnosis[domainId] = `Domain ${domainId} is silent below 10% verified criterion evidence; no broad maturity conclusion or remediation is supported. Collect domain evidence.`;
         }
       }
+      const summary = raw.phase_3_strategy.evidence_summary;
+      summary.confirmed_gaps = confirmedMaturityGaps.slice(0, 8);
+      summary.confirmed_antipatterns = validationData.antipattern_findings.slice(0, 8);
       return sanitizeEvidenceSummaryUncertainty(raw);
     };
 
@@ -1749,6 +1698,7 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => unresolve
       tableInspections,
       dataSignalCoverage,
       boundedRetrieval,
+      acquisitionGapPasses: acquisitionGap.passes,
       semanticGapRetrieval: aggregatedRawData.semantic_gap_retrieval,
       gapRetrieval: gapPlan,
       resolutionMaturity: maturityRunTraceProjection(

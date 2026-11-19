@@ -50,6 +50,7 @@ interface TacticGroundingTraceAdjustment {
 
 interface BuildRunTraceInput {
   skippedDomains?: Record<string, string>;
+  acquisitionGapPasses?: RunTrace['acquisition_gap_passes'];
   runId: string;
   engineVersion: string;
   sourceRegistry: SourceRegistry;
@@ -501,6 +502,7 @@ export const buildRunTrace = (input: BuildRunTraceInput): RunTrace => {
     data_signal_coverage: input.dataSignalCoverage,
     semantic_gap_retrieval: input.semanticGapRetrieval,
     bounded_retrieval: input.boundedRetrieval,
+    acquisition_gap_passes: input.acquisitionGapPasses,
     gap_retrieval: input.gapRetrieval,
     resolution_maturity: input.resolutionMaturity,
     dlp: {

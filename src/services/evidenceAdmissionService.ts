@@ -9,6 +9,7 @@ const normalize = (text: string): string => text
   .toLowerCase()
   .replace(/[^\p{L}\p{N}]+/gu, ' ')
   .trim();
+export const normalizeEvidenceSearchText = normalize;
 
 const contains = (text: string, term: string): boolean => text.includes(` ${term} `);
 const phrase = (text: string): string => ` ${normalize(text)} `;
@@ -30,6 +31,20 @@ const contextTerms = [
 const customerContext = /\b(?:we|our|meidan|production|nonprod|customer|tenant|subscription|invoice|billing period|billing export|cost report|review minutes|action log|billing account|configured|enabled|enforced|required|recorded|reviewed|reviews|approved|implemented|deployed|closed|awaiting owner|tuotanto|lasku|tilaus|kaytossa|seurataan|toteutettu)\b/u;
 const referenceOnly = /^(?:(?:finops |cloud |ai )?(?:training material|tutorial|glossary|worked example|hypothetical example|reference material))\b/u;
 const technologyCostComparison = /\b(?:architecture decision|architecture review)\b.*\b(?:eur|usd|gbp) \d.{0,15}\bmonth\b/u;
+const isCustomerScoped = (text: string, anchors: readonly string[]): boolean =>
+  anchors.length > 0 && customerContext.test(text) && !referenceOnly.test(text.trimStart());
+
+const findContextAnchors = (text: string): string[] => {
+  const anchors = contextTerms.filter(term => contains(text, term));
+  if (technologyCostComparison.test(text)) anchors.push('priced architecture comparison');
+  if (contains(text, 'platform line') && contains(text, 'invoice')) anchors.push('platform invoice line');
+  return anchors;
+};
+
+export const hasCustomerFinOpsContext = (rawText: string): boolean => {
+  const text = phrase(rawText);
+  return isCustomerScoped(text, findContextAnchors(text));
+};
 const hasTaggedControlRecord = (text: string): boolean => {
   const row = phrase(splitHeaderWords(text));
   return contains(row, 'control id') && contains(row, 'status') && /\bcost cent(?:er|re) tag\b/u.test(row);
@@ -99,11 +114,9 @@ export const classifyEvidenceRouting = (
   isTableRow = false,
 ): SourceChunkRoutingHint[] => {
   const localText = phrase(text);
-  const context = contextTerms.filter(term => contains(localText, term));
-  if (technologyCostComparison.test(localText)) context.push('priced architecture comparison');
-  if (contains(localText, 'platform line') && contains(localText, 'invoice')) context.push('platform invoice line');
+  const context = findContextAnchors(localText);
   const hasTaggedControl = isTableRow && hasTaggedControlRecord(text);
-  const customerScoped = context.length > 0 && customerContext.test(localText) && !referenceOnly.test(localText.trimStart());
+  const customerScoped = isCustomerScoped(localText, context);
   return Object.entries(vocabulary).map(([domain, domainTerms]) => {
     if (domain === structuredDomain || (hasTaggedControl && (domain === 'A' || domain === 'C'))) {
       return { domain, score: 6, tier: 'high', reasons: ['structured_finops_record'] };

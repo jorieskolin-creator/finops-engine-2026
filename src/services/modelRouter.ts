@@ -343,7 +343,9 @@ export async function runStage(stage: StageId, prompt: NormalizedPrompt, ctx: Ru
   const chain = routing.routes[stage];
   const rolePrompt: NormalizedPrompt = {
     ...prompt,
-    systemInstruction: [ROLE_INSTRUCTIONS[role], prompt.systemInstruction].filter(Boolean).join('\n\n'),
+    systemInstruction: stage === 'evidence_gap_analysis'
+      ? prompt.systemInstruction
+      : [ROLE_INSTRUCTIONS[role], prompt.systemInstruction].filter(Boolean).join('\n\n'),
   };
   const failures: Array<{ profile: ModelProfile; error: string }> = [];
   const stageStarted = Date.now();

@@ -8,9 +8,6 @@ const compile = source => ts.transpileModule(source, {
   compilerOptions: { module: ts.ModuleKind.ES2022, target: ts.ScriptTarget.ES2020, importsNotUsedAsValues: ts.ImportsNotUsedAsValues.Remove },
 }).outputText;
 const dir = await mkdtemp(join(tmpdir(), 'finops-evidence-gap-analysis-'));
-await writeFile(join(dir, 'knowledgeBase.mjs'), `export const MASTER_BINGO_FINOPS = {
-  maturity: [{ id: 'D1', title: 'Architecture efficiency', desc: 'Workload rightsizing and autoscaling controls' }], antipattern: []
-};`);
 await writeFile(join(dir, 'modelRouter.mjs'), `
 export const runStage = async (stage, prompt) => {
   globalThis.__gapStage = stage; globalThis.__gapPrompt = prompt;
@@ -20,7 +17,6 @@ export const runStage = async (stage, prompt) => {
 };`);
 await writeFile(join(dir, 'outputContracts.mjs'), await readFile(new URL('../lib/outputContracts.js', import.meta.url), 'utf8'));
 const serviceSource = (await readFile(new URL('../src/services/evidenceGapAnalysisService.ts', import.meta.url), 'utf8'))
-  .replace("'../knowledge_base'", "'./knowledgeBase.mjs'")
   .replace("'./modelRouter'", "'./modelRouter.mjs'")
   .replace("'../../lib/outputContracts.js'", "'./outputContracts.mjs'");
 await writeFile(join(dir, 'evidenceGapAnalysisService.mjs'), compile(serviceSource));
@@ -30,36 +26,31 @@ globalThis.__gapResponse = {
   schema_version: 'finops_evidence_gap_query_v1', domain_id: 'D',
   queries: [{ criterion_id: 'maturity.D1', themes: ['automatic scaling'], terms: ['utilization threshold'] }],
 };
-const weak = { stream: 'maturity', id: 'D1', status: 'weak', rescan_recommended: true, rationale: 'LOW_EVIDENCE_SUMMARY', coverage_reason: 'Threshold details are unclear.' };
-const generated = await analyzeEvidenceGaps({ domainId: 'D', items: [weak], pass: 1, seenTerms: new Set(), ctx: { runId: 'run-1' } });
+const request = { schema_version: 'finops_evidence_gap_input_v1', domain_id: 'D', round: 2,
+  gaps: [{ criterion_id: 'maturity.D1', missing_concept_ids: ['cost_modeling'] }] };
+const generated = await analyzeEvidenceGaps(request, { runId: 'run-1' });
 assert.equal(globalThis.__gapStage, 'evidence_gap_analysis');
-assert.deepEqual(generated.terms, ['automatic scaling', 'utilization threshold']);
+assert.deepEqual(generated.termsByCriterion['maturity.D1'], ['automatic scaling', 'utilization threshold']);
 assert.equal(generated.model_used, 'test-workhorse');
 assert.equal(generated.failed, false);
-assert.match(globalThis.__gapPrompt.userText, /LOW_EVIDENCE_SUMMARY/);
-assert.doesNotMatch(globalThis.__gapPrompt.userText + globalThis.__gapPrompt.systemInstruction, /REMOTE_KB_CANARY|source chunk|customer quote/i);
+assert.deepEqual(JSON.parse(globalThis.__gapPrompt.userText), request);
+assert.equal(globalThis.__gapPrompt.systemInstruction, undefined);
 
 globalThis.__gapStage = 'not-called';
-const notTriggered = await analyzeEvidenceGaps({ domainId: 'D', items: [{ ...weak, status: 'supported' }], pass: 1, seenTerms: new Set(), ctx: { runId: 'run-1' } });
-assert.equal(globalThis.__gapStage, 'not-called', 'non-weak evidence must not invoke the query-planning model');
-assert.equal(notTriggered.failed, false);
-assert.equal(notTriggered.terms, undefined);
+const notTriggered = await analyzeEvidenceGaps({ ...request, gaps: [] }, { runId: 'run-1' });
+assert.equal(globalThis.__gapStage, 'not-called');
+assert.deepEqual(notTriggered.termsByCriterion, {});
 
 const omittedCriterion = await analyzeEvidenceGaps({
-  domainId: 'D',
-  items: [weak, { ...weak, stream: 'antipattern', id: 'D1' }],
-  pass: 1,
-  seenTerms: new Set(),
-  ctx: { runId: 'run-1' },
-});
-assert.equal(omittedCriterion.failed, true, 'the model must return one bounded query for every supplied weak criterion');
+  ...request, gaps: [...request.gaps, { criterion_id: 'maturity.D2', missing_concept_ids: ['iac_declared'] }],
+}, { runId: 'run-1' });
+assert.equal(omittedCriterion.failed, true);
 
 globalThis.__gapResponse = { ...globalThis.__gapResponse, score: 100 };
-const invalid = await analyzeEvidenceGaps({ domainId: 'D', items: [weak], pass: 1, seenTerms: new Set(), ctx: { runId: 'run-1' } });
-assert.equal(invalid.failed, true, 'invalid or scoring output must fall back deterministically');
-assert.equal(invalid.terms, undefined);
+const invalid = await analyzeEvidenceGaps(request, { runId: 'run-1' });
+assert.equal(invalid.failed, true);
+assert.deepEqual(invalid.termsByCriterion, {});
 globalThis.__gapFailure = true;
-const failed = await analyzeEvidenceGaps({ domainId: 'D', items: [weak], pass: 1, seenTerms: new Set(), ctx: { runId: 'run-1' } });
-assert.equal(failed.failed, true, 'model failure must not fail the evidence lane');
-
+const failed = await analyzeEvidenceGaps(request, { runId: 'run-1' });
+assert.equal(failed.failed, true);
 console.log('evidence gap analysis tests passed');
