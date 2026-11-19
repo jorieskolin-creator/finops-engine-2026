@@ -572,6 +572,7 @@ export const analyzeDocument = async (
       referenceKbIndex,
       aggregatedRawData,
       derivedAnalyticalEvidence,
+      evidenceStagePackets,
     );
     serverLog(runId, 'info', 'pipeline_integrity_passed', {
       gate: 'pre_synthesis',
@@ -596,6 +597,7 @@ export const analyzeDocument = async (
       validation: phase1Validation,
       effective_source_registry_status: sourceRegistryStatus,
       effective_evidence_integrity: evidenceIntegrity,
+      skipped_domains: aggregatedRawData.skipped_domains,
       semantic_gap_retrieval: aggregatedRawData.semantic_gap_retrieval,
     });
     serverLog(runId, 'info', 'stage_complete', {
@@ -1733,6 +1735,7 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => unresolve
       stageTraces: consumeStageTraces(runId),
       auditLogs,
       evidenceCheck: aggregatedRawData.evidence_check,
+      skippedDomains: aggregatedRawData.skipped_domains,
       phase2: validationData,
       strategy: finalResult.phase_3_strategy,
       qualityGate,

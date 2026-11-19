@@ -548,6 +548,7 @@ const EvidenceCheckSummaryBlock: React.FC<{ result: DiagnosticResult }> = ({ res
     ['Weak', evidenceCheck.weak_count, 'text-amber-700'],
     ['Unsupported', evidenceCheck.unsupported_count, 'text-rose-700'],
     ['Missing', evidenceCheck.missing_count, 'text-slate-600'],
+    ...(evidenceCheck.skipped_count ? [['Skipped (no evidence)', evidenceCheck.skipped_count, 'text-slate-600'] as const] : []),
     ['Downgraded', evidenceCheck.downgraded_count, 'text-rose-700'],
     ['Rescanned', evidenceCheck.rescan_count, 'text-slate-700'],
   ] as const;
@@ -556,7 +557,7 @@ const EvidenceCheckSummaryBlock: React.FC<{ result: DiagnosticResult }> = ({ res
       <h2 className="text-xl font-display font-bold text-slate-900 mb-2">Evidence Check</h2>
       <QualityGateBlock gate={result.quality_gate} />
       <p className="text-sm text-slate-600 mb-4">
-        Phase 1 findings were verified against the raw material before Phase 2 metrics were calculated.
+        Evidence Check reviewed audited criteria before scoring. Empty domains are recorded as Not assessed.
       </p>
       <div className="grid grid-cols-2 md:grid-cols-6 gap-3 mb-4">
         {stats.map(([label, value, color]) => (

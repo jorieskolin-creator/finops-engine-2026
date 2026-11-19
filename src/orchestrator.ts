@@ -3,7 +3,7 @@ import { generateBatchSystemInstruction, generateBatchUserPrompt, generateTarget
 import { BATCH_DEFINITIONS, BATCH_IDS, knowledgeBaseService } from './knowledge_base';
 import { runStage, serverLog, RunContext, StageExecutionError } from './services/modelRouter';
 import { StageId } from './models';
-import { EvidenceCheckItem, EvidenceCheckResult, EvidenceLaneStagePacket, ImageInput, SemanticGapRetrievalPassTrace, SemanticGapRetrievalTrace } from './types';
+import { AuditItem, EvidenceCheckItem, EvidenceCheckResult, EvidenceLaneStagePacket, ImageInput, SemanticGapRetrievalPassTrace, SemanticGapRetrievalTrace } from './types';
 import { assertEvidenceLaneStagePacket } from './services/evidenceStagePacketService';
 import {
   applyEvidenceCheckToBatch,
@@ -53,6 +53,7 @@ export interface Phase1Result {
   };
   evidence_check: EvidenceCheckResult;
   failed_batches: string[];
+  skipped_domains: Record<string, string>;
   models_used: string[];
   targeted_rescan_models_used: string[];
   evidence_check_models_used: string[];
@@ -191,6 +192,27 @@ const unavailableEvidenceCheck = (batchId: string, failureCode: string): Evidenc
   };
 };
 
+const unassessedDomain = (domain: string): { batch: BatchAuditResult; check: EvidenceCheckResult } => {
+  const reason = 'Not assessed: no eligible customer evidence remained after acquisition.';
+  const batch: { maturity: Record<string, AuditItem>; antipattern: Record<string, AuditItem> } = { maturity: {}, antipattern: {} };
+  const items: EvidenceCheckItem[] = [];
+  for (const stream of ['maturity', 'antipattern'] as const) {
+    for (let index = 1; index <= 5; index++) {
+      const id = `${domain}${index}`;
+      const absence = stream === 'antipattern' ? { antipattern_absence_status: 'unknown_absent' as const, coverage_reason: reason } : {};
+      batch[stream][id] = {
+        count: 0, status: 'NOK', assessment_status: 'not_assessed', question_results: ['unknown', 'unknown', 'unknown'],
+        evidence: reason, reasoning: reason, evidence_quotes: [], is_silent: true, ...absence,
+      };
+      items.push({
+        stream, id, status: 'missing', assessment_status: 'not_assessed', skipped_no_evidence: true,
+        original_count: 0, verified_count: 0, rationale: reason, rescan_recommended: false, quote_supported: false, ...absence,
+      });
+    }
+  }
+  return { batch, check: summarizeEvidenceCheck(domain, items, []) };
+};
+
 const feedbackForRescan = (items: EvidenceCheckItem[]): string => {
   return items
     .map(item => `${item.stream}.${item.id}: scanner=${item.original_count}, verifier=${item.verified_count}, status=${item.status}. ${item.rationale}`)
@@ -237,6 +259,7 @@ export const runPhase1Audit = async (
     phase_1_audit_logs: { maturity: {}, antipattern: {} },
     evidence_check: mergeEvidenceCheckResults([]),
     failed_batches: [],
+    skipped_domains: {},
     models_used: [],
     targeted_rescan_models_used: [],
     evidence_check_models_used: [],
@@ -268,6 +291,18 @@ export const runPhase1Audit = async (
     for (let attempt = 1; attempt <= 2; attempt++) {
       try {
         const packetInput = packetForBatch(batchId, sourcePackets);
+        const packet = packetInput.packet;
+        if (packet.evidence.length + packet.sanitized_visual_evidence.length + packet.derived_evidence.length === 0) {
+          const { batch, check } = unassessedDomain(batchId);
+          Object.assign(aggregated.phase_1_audit_logs.maturity, batch.maturity);
+          Object.assign(aggregated.phase_1_audit_logs.antipattern, batch.antipattern);
+          evidenceResults.push(check);
+          aggregated.skipped_domains[batchId] = packet.acquisition_binding.source_packet_hash;
+          serverLog(ctx.runId, 'info', 'domain_audit_skipped', {
+            batch: batchId, reason_code: 'NO_ELIGIBLE_EVIDENCE', source_packet_hash: packet.acquisition_binding.source_packet_hash,
+          });
+          break;
+        }
         serverLog(ctx.runId, packetInput.packet.coverage.weak ? 'warn' : 'info', 'source_packet_used', {
           batch: batchId,
           chunks: packetInput.packet.coverage.included_chunks,

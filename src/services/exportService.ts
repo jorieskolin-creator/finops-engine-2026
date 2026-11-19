@@ -139,6 +139,7 @@ const renderSourceRegistryPacketSummary = (result: DiagnosticResult): string => 
         included: packet.included_chunk_count || 0,
         candidates: packet.total_candidate_chunks || 0,
         weakCoverage: !!packet.weak_coverage,
+        skipped: 'audit_dispatch' in packet && packet.audit_dispatch === 'skipped_no_evidence',
         chars: packet.char_count || 0,
         notes: 'coverage_notes' in packet ? packet.coverage_notes || [] : []
       };
@@ -149,6 +150,7 @@ const renderSourceRegistryPacketSummary = (result: DiagnosticResult): string => 
       included: number;
       candidates: number;
       weakCoverage: boolean;
+      skipped: boolean;
       chars: number;
       notes: string[];
     } => !!row);
@@ -184,7 +186,7 @@ const renderSourceRegistryPacketSummary = (result: DiagnosticResult): string => 
                 <td><strong>${escapeHtml(row.domain)}</strong><span>${escapeHtml(row.title)}</span></td>
                 <td>${formatNumber(row.included)}</td>
                 <td>${formatNumber(row.candidates)}</td>
-                <td><span class="packet-coverage ${row.weakCoverage ? 'packet-coverage-weak' : 'packet-coverage-ok'}">${row.weakCoverage ? 'Weak coverage' : 'OK'}</span></td>
+                <td><span class="packet-coverage ${row.weakCoverage ? 'packet-coverage-weak' : 'packet-coverage-ok'}">${row.skipped ? 'Not assessed' : row.weakCoverage ? 'Weak coverage' : 'OK'}</span></td>
                 <td>${formatNumber(row.chars)}</td>
               </tr>
             `).join('')}
@@ -321,6 +323,7 @@ const renderEvidenceCheckSummary = (result: DiagnosticResult): string => {
     ['Weak', ec.weak_count],
     ['Unsupported', ec.unsupported_count],
     ['Missing', ec.missing_count],
+    ...(ec.skipped_count ? [['Skipped (no evidence)', ec.skipped_count] as [string, number]] : []),
     ['Downgraded', ec.downgraded_count],
     ['Rescanned', ec.rescan_count],
   ];
@@ -328,7 +331,7 @@ const renderEvidenceCheckSummary = (result: DiagnosticResult): string => {
   <h2>Evidence Check</h2>
   <div class="evidence-check-summary">
     ${renderQualityGateStatus(result.quality_gate)}
-    <p>Phase 1 findings were verified against the raw material before Phase 2 metrics were calculated.</p>
+    <p>Evidence Check reviewed audited criteria before scoring. Empty domains are recorded as Not assessed.</p>
     <div class="evidence-check-grid">
       ${stats.map(([label, value]) => `<div class="evidence-check-stat"><span>${escapeHtml(label)}</span><strong>${value}</strong></div>`).join('')}
     </div>

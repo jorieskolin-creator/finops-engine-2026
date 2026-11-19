@@ -16,13 +16,15 @@ const hasSourceQuote = (item: AuditItem): boolean =>
   item.evidence_quotes.some(q =>
     typeof q?.quote === 'string' &&
     q.quote.trim().length > 0 &&
-    (q.evidence_source === undefined || q.evidence_source === 'text' || q.evidence_source === 'image')
+    (q.evidence_source === undefined || q.evidence_source === 'text' || q.evidence_source === 'image'
+      || (q.evidence_source === 'derived' && Boolean(q.derived_evidence_id && q.source_id)))
   );
 
 export const hasVerifiedSourceCoverage = (item: AuditItem, stream: 'maturity' | 'antipattern'): boolean => {
   if (item.verification_unresolved) return false;
-  if (item.assessment_status !== 'not_assessed' && hasSourceQuote(item)) return true;
   if (item.evidence_check_status === 'unsupported' || item.evidence_check_status === 'missing') return false;
+  if (item.assessment_status !== 'not_assessed' && hasSourceQuote(item)) return true;
+  if (item.assessment_status === 'not_assessed') return false;
   if (stream === 'antipattern') {
     return inferAntiPatternAbsenceStatus(item) === 'tested_absent' && Boolean(item.coverage_reason);
   }

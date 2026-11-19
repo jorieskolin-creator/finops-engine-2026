@@ -166,6 +166,7 @@ export interface EvidenceCheckItem {
   coverage_reason?: string;
   adjudication_unresolved?: boolean;
   verification_unresolved?: boolean;
+  skipped_no_evidence?: true;
 }
 
 export interface EvidenceCheckAdjustment {
@@ -188,6 +189,7 @@ export interface EvidenceCheckResult {
   weak_count: number;
   unsupported_count: number;
   missing_count: number;
+  skipped_count?: number;
   downgraded_count: number;
   rescan_count: number;
   items: EvidenceCheckItem[];
@@ -1268,6 +1270,7 @@ export interface ContextPacketTrace {
   evidence_stage_packet_hash?: string;
   baseline_evidence_stage_packet_hash?: string;
   evidence_stage_packet_schema?: EvidenceLaneStagePacket['schema_version'];
+  audit_dispatch?: 'audited' | 'skipped_no_evidence';
   acquisition_readiness?: EvidenceLaneStagePacket['acquisition_readiness'];
   acquisition_readiness_reasons?: EvidenceLaneStagePacket['acquisition_readiness_reasons'];
   privacy_decision?: EvidenceLaneStagePacket['privacy_decision'];
