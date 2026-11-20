@@ -45,6 +45,11 @@ const imported = extractDiagnosticResultFromHtmlReport(html);
 assert.equal(imported.kind, 'report');
 assert.equal(imported.result.phase_3_strategy.executive_summary, 'safe </script> text');
 
+assert.equal(imported.result.phase_2_validation.crawl_walk_run, 'Run');
+assert.equal(imported.result.quality_gate.decision, 'GO');
+assert.equal(imported.result.phase_3_strategy.planning_decision, undefined);
+assert.deepEqual(imported.result.phase_3_strategy.remediation_roadmap, []);
+
 const ordinaryHtml = '<!doctype html><main><h1>Source material</h1></main>';
 assert.deepEqual(extractDiagnosticResultFromHtmlReport(ordinaryHtml), { kind: 'not_report' });
 
