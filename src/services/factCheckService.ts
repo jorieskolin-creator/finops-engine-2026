@@ -1,5 +1,5 @@
 
-import { AuditItem, FactCheckClaim, FactCheckResult, Phase1AuditLogs, Phase2Validation, ClaimFailureType, ClaimSeverity, ClaimSourceLocation, StrategicTactic, TacticActivityPlaybookEntry, TacticReviewDisposition } from '../types';
+import { FactCheckClaim, FactCheckResult, Phase1AuditLogs, Phase2Validation, ClaimFailureType, ClaimSeverity, ClaimSourceLocation, StrategicTactic, TacticActivityPlaybookEntry, TacticReviewDisposition } from '../types';
 
 const VALID_FAILURE_TYPES: ClaimFailureType[] = ['fabricated_number', 'unverifiable_entity', 'unsupported_org_claim', 'out_of_scope', 'other'];
 const VALID_SEVERITIES: ClaimSeverity[] = ['BLOCKING_UNSUPPORTED_FACT', 'BLOCKING_UNSAFE_ROADMAP', 'WARN_MISCLASSIFIED_BUT_REAL', 'WARN_TACTIC_HYGIENE', 'SUPPORTED'];
@@ -54,6 +54,7 @@ export interface FactCheckInputs {
   sourceDocument: string;
   phase1: Phase1AuditLogs;
   phase2: Phase2Validation;
+  acceptedFacts?: string;
   imageCount?: number;
   // Compact index of the Verified Tactics Database that the synthesis step
   // was instructed to draw from. Prescription claims (e.g. "modeled on
@@ -68,19 +69,6 @@ export interface RoadmapFactCheckInputs extends FactCheckInputs {
 }
 
 const MAX_SOURCE_CHARS = 100000;
-
-const compactEvidence = (phase1: Phase1AuditLogs): string => {
-  const lines: string[] = [];
-  for (const stream of ['maturity', 'antipattern'] as const) {
-    for (const [id, item] of Object.entries(phase1[stream])) {
-      const a = item as AuditItem;
-      if (a.evidence_quotes.length === 0) continue;
-      const quotes = a.evidence_quotes.map(q => `"${q.quote.replace(/"/g, "'").substring(0, 200)}"`).join(' | ');
-      lines.push(`${stream}.${id} (count=${a.count}): ${quotes}`);
-    }
-  }
-  return lines.join('\n');
-};
 
 // Extract company names from a tactic's case_study field. Most entries follow
 // "COMPANY: ..." but we also pick up any ALL-CAPS word (Spotify, Netflix etc.
@@ -122,12 +110,21 @@ const compactTacticActivityPlaybook = (entries: TacticActivityPlaybookEntry[] | 
 
 const compactMetrics = (phase2: Phase2Validation): string => {
   const m = phase2.metrics;
+  const records = phase2.resolution_maturity?.criterion_resolutions || [];
+  const overall = phase2.resolution_maturity?.overall;
   const categoryScoreLines = Object.entries(phase2.category_scores || {})
-    .map(([cat, score]) => `  ${cat}: ${score}/15`)
-    .join('\n');
+    .map(([category, score]) => {
+      const hasScore = !records.some(r => r.domain_id === category && r.state === 'VERIFICATION_UNRESOLVED')
+        && records.some(r => r.domain_id === category && r.stream === 'maturity' && r.state === 'RESOLVED');
+      return `  ${category}: ${hasScore ? `${score}/15 (assessed points on domain surface)` : 'NA'}`;
+    }).join('\n');
   return [
     `corroborated_maturity=${m.corroborated_maturity === null ? 'NA' : `${Math.round(m.corroborated_maturity)}%`}`,
     `observed_maturity=${m.observed_maturity === null ? 'NA' : `${Math.round(m.observed_maturity)}%`}`,
+    `criterion_evidence_density=${phase2.assessment_sufficiency.criterion_evidence_density}% (${records.filter(r => r.state === 'RESOLVED').length}/${records.length} criteria assessed)`,
+    `resolution_basis=${overall?.fully_resolved_pair_count ?? 'NA'} fully resolved and ${overall?.partially_resolved_pair_count ?? 'NA'} partially resolved of ${phase2.resolution_maturity?.pair_results?.length ?? 'NA'} pairs`,
+    `capability_0/3_concentration=${m.maturity_zero_ratio == null ? 'NA' : Math.round(m.maturity_zero_ratio) + '%'} (${m.maturity_zero_count ?? 'NA'} of ${m.maturity_assessed_count ?? 'NA'} assessed maturity criteria scored 0/3)`,
+    `antipattern_finding_rate=${m.antipattern_finding_ratio ?? 'NA'}% (${m.antipattern_finding_count ?? 'NA'} of ${records.filter(r => r.stream === 'antipattern').length} anti-pattern criteria)`,
     `assessment_resolution=${Math.round(m.assessment_resolution)}%`,
     `adjusted_finops_maturity=${m.adjusted_maturity === null ? 'NA' : `${Math.round(m.adjusted_maturity)}%`}`,
     `assessment_sufficiency=${phase2.assessment_sufficiency.decision}`,
@@ -151,9 +148,38 @@ const compactMetrics = (phase2: Phase2Validation): string => {
     `verified_antipattern_absences_count=${phase2.verified_antipattern_absences.length}`,
     `unknown_antipattern_absences_count=${phase2.unknown_antipattern_absences.length}`,
   ].join(', ')
-    + (categoryScoreLines ? `\n\nCATEGORY SCORES (these are the X/15 numbers the strategy may legitimately quote):\n${categoryScoreLines}` : '')
-    + (phase2.verification_unresolved.length > 0 ? `\n\nVERIFICATION UNRESOLVED:\n${phase2.verification_unresolved.join('\n')}` : '')
-    + (phase2.score_evidence_gaps.length > 0 ? `\n\nDETERMINISTIC SCORE/EVIDENCE GAPS:\n${phase2.score_evidence_gaps.map(value => value.substring(0, 800)).join('\n')}` : '');
+    + (categoryScoreLines ? `\nCategory scores:\n${categoryScoreLines}` : '');
+};
+
+// Preserve whole qualified statements. A clipped sentence can reverse a scope limit.
+const compactDetail = (value: string | undefined, limit: number): string => {
+  const text = value?.replace(/\s+/g, ' ').trim() || '';
+  return text.length <= limit ? text : '';
+};
+
+export const formatAcceptedFacts = (phase1: Phase1AuditLogs, phase2: Phase2Validation): string => {
+  const rows = (phase2.resolution_maturity?.criterion_resolutions || []).map(record => {
+    const item = phase1[record.stream]?.[record.criterion_id];
+    const key = `${record.stream}.${record.criterion_id}`;
+    if (record.state !== 'RESOLVED') return `${key} | ${record.state} | unscored | ${record.reason}`;
+    const basis = `${key} | assessed ${record.score_count}/3 | ${record.antipattern_absence_status || record.reason}`;
+    const scope = compactDetail(item?.coverage_reason, 350);
+    // Omit narrative details together if a recorded scope qualification cannot fit.
+    if (item?.coverage_reason && !scope) return `${basis} | scope detail withheld; omit narrative claim`;
+    const scoped = phase2.scoped_observations?.some(observation => observation.startsWith(`[${record.stream === 'antipattern' ? 'AP-' : ''}${record.criterion_id}] Scoped observation`));
+    const questions = item?.question_results?.join(', ');
+    const rationale = compactDetail(item?.adjustment_reason || item?.reasoning || item?.evidence, 680);
+    const quote = item?.evidence_quotes?.find(q => q.source_id && (q.chunk_id || q.derived_evidence_id) && q.quote);
+    const locator = quote && [quote.source_id, quote.derived_evidence_id || quote.chunk_id, quote.page_id].filter(Boolean).join('/');
+    const excerpt = compactDetail(quote?.quote, 240);
+    return [basis, scoped && 'scoped observation; full criterion scope unverified', questions && `subcriteria: ${questions}`, scope, rationale, excerpt, compactDetail(locator, 150)]
+      .filter((value, i, values) => value && values.indexOf(value) === i).join(' | ');
+  });
+  return [
+    compactMetrics(phase2),
+    'Accepted criterion facts. Limit each claim to its recorded scope. Omit claims whose supporting detail is unavailable. Unknown subcriteria are unverified.',
+    ...rows,
+  ].join('\n');
 };
 
 export const buildFactCheckPrompt = (inputs: FactCheckInputs): string => `
@@ -218,13 +244,9 @@ ${(inputs.imageCount ?? 0) > 0
 }
 </output_format>
 
-<phase_2_metrics>
-${compactMetrics(inputs.phase2)}
-</phase_2_metrics>
-
-<phase_1_evidence>
-${compactEvidence(inputs.phase1)}
-</phase_1_evidence>
+<accepted_phase_1_and_2_facts>
+${inputs.acceptedFacts ?? formatAcceptedFacts(inputs.phase1, inputs.phase2)}
+</accepted_phase_1_and_2_facts>
 
 <verified_tactics_db>
 ${compactTactics(inputs.tactics)}
@@ -464,13 +486,9 @@ Your job: verify ONLY the evidence summaries and diagnosis. The tactics database
 }
 </output_format>
 
-<phase_2_metrics>
-${compactMetrics(inputs.phase2)}
-</phase_2_metrics>
-
-<phase_1_evidence>
-${compactEvidence(inputs.phase1)}
-</phase_1_evidence>
+<accepted_phase_1_and_2_facts>
+${inputs.acceptedFacts ?? formatAcceptedFacts(inputs.phase1, inputs.phase2)}
+</accepted_phase_1_and_2_facts>
 
 <source_document>
 ${inputs.sourceDocument.substring(0, MAX_SOURCE_CHARS)}
@@ -535,13 +553,9 @@ ROADMAP GROUNDING:
 ${inputs.lockedFindingsText}
 </locked_findings>
 
-<phase_2_metrics>
-${compactMetrics(inputs.phase2)}
-</phase_2_metrics>
-
-<phase_1_evidence>
-${compactEvidence(inputs.phase1)}
-</phase_1_evidence>
+<accepted_phase_1_and_2_facts>
+${inputs.acceptedFacts ?? formatAcceptedFacts(inputs.phase1, inputs.phase2)}
+</accepted_phase_1_and_2_facts>
 
 <verified_tactics_db>
 ${compactTactics(inputs.tactics)}
