@@ -26,12 +26,43 @@ const entries = (logs: Phase1AuditLogs) => [
   ...Object.entries(logs.antipattern).map(([id, item]) => ({ id, stream: 'antipattern' as const, item }))
 ];
 
-const isCovered = (item: AuditItem, stream: 'maturity' | 'antipattern'): boolean => {
-  if ((item.evidence_quotes || []).some(quote => quote.quote?.trim())) return true;
+const hasQuote = (item: AuditItem): boolean =>
+  (item.evidence_quotes || []).some(quote =>
+    typeof quote?.quote === 'string'
+    && quote.quote.trim().length > 0
+    && (quote.evidence_source === undefined
+      || quote.evidence_source === 'text'
+      || quote.evidence_source === 'image'
+      || (quote.evidence_source === 'derived' && Boolean(quote.derived_evidence_id && quote.source_id)))
+  );
+
+const isCovered = (item: AuditItem | undefined, stream: 'maturity' | 'antipattern'): boolean => {
+  if (!item || item.verification_unresolved) return false;
+  if (item.assessment_status === 'not_assessed') return false;
   if (item.evidence_check_status === 'unsupported' || item.evidence_check_status === 'missing') return false;
-  return stream === 'antipattern'
-    && item.antipattern_absence_status === 'tested_absent'
-    && Boolean(item.coverage_reason);
+  if (stream === 'maturity') return hasQuote(item);
+  const explicit = item.antipattern_absence_status;
+  const count = typeof item.count === 'number' ? Math.max(0, Math.min(3, Math.round(item.count))) : 0;
+  const status = explicit === 'unknown_absent'
+    ? 'unknown_absent'
+    : count >= 3
+      ? 'confirmed_present'
+      : count > 0
+        ? 'partially_present'
+        : explicit === 'confirmed_present' || explicit === 'partially_present'
+          ? explicit
+          : explicit === 'tested_absent'
+            && (item.evidence_check_status === undefined || item.evidence_check_status === 'supported')
+            && typeof item.coverage_reason === 'string'
+            && item.coverage_reason.trim().length > 0
+            ? 'tested_absent'
+            : 'unknown_absent';
+  if (status === 'unknown_absent') return false;
+  if (status === 'tested_absent') return count === 0;
+  const dispositionConsistent = status === 'confirmed_present'
+    ? count === 3
+    : status === 'partially_present' && count <= 2;
+  return dispositionConsistent && hasQuote(item);
 };
 
 const statusWeight = (item: AuditItem): number => {

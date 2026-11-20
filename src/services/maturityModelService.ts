@@ -116,8 +116,8 @@ const resolveAntipattern = (id: CapabilityId, item: AuditItem | undefined): Matu
   }
 
   const basis = evidenceBasis(item);
-  const count = item ? Math.min(Math.max(Math.round(item.count), 0), 3) : 0;
-  const dispositionConsistent = status === 'confirmed_present' ? count === 3 : status === 'partially_present' && (count === 1 || count === 2);
+  const rawCount = item ? Math.min(Math.max(Math.round(item.count), 0), 3) : 0;
+  const dispositionConsistent = status === 'confirmed_present' ? rawCount === 3 : status === 'partially_present' && rawCount <= 2;
   if ((status === 'confirmed_present' || status === 'partially_present') && !dispositionConsistent) {
     return unresolvedRecord('antipattern', id, 'INCONSISTENT_DISPOSITION', basis, status);
   }
@@ -125,6 +125,7 @@ const resolveAntipattern = (id: CapabilityId, item: AuditItem | undefined): Matu
     || item.evidence_check_status === 'unsupported' || item.evidence_check_status === 'missing') {
     return unresolvedRecord('antipattern', id, 'NO_GOVERNED_EVIDENCE', basis, status);
   }
+  const count = status === 'partially_present' ? Math.max(rawCount, 1) : rawCount;
   return resolvedRecord('antipattern', id, count, (3 - count) / 3, basis, 'PROVENANCE_BOUND_EVIDENCE', status);
 };
 
@@ -264,14 +265,14 @@ export const evaluateAssessmentSufficiency = (
   const blockingReasons: string[] = [];
   const warningReasons: string[] = [];
   if (criterionEvidenceDensity < SUFFICIENCY_THRESHOLDS.criterion_evidence_density) {
-    blockingReasons.push(`Criterion evidence density ${criterionEvidenceDensity}% is below ${SUFFICIENCY_THRESHOLDS.criterion_evidence_density}%.`);
+    blockingReasons.push(`Criterion evidence density ${criterionEvidenceDensity}% (${resolvedCriteria.length}/${model.criterion_resolutions.length} assessed criteria) is below ${SUFFICIENCY_THRESHOLDS.criterion_evidence_density}%.`);
   }
   if (model.overall.resolution < SUFFICIENCY_THRESHOLDS.overall_resolution) {
     blockingReasons.push(`Overall assessment resolution ${model.overall.resolution}% is below ${SUFFICIENCY_THRESHOLDS.overall_resolution}%.`);
   }
   if (criterionEvidenceDensity >= SUFFICIENCY_THRESHOLDS.criterion_evidence_density
     && criterionEvidenceDensity < SUFFICIENCY_THRESHOLDS.evidence_warning_below) {
-    warningReasons.push(`Criterion evidence density ${criterionEvidenceDensity}% is below the ${SUFFICIENCY_THRESHOLDS.evidence_warning_below}% confidence target.`);
+    warningReasons.push(`Criterion evidence density ${criterionEvidenceDensity}% (${resolvedCriteria.length}/${model.criterion_resolutions.length} assessed criteria) is below the ${SUFFICIENCY_THRESHOLDS.evidence_warning_below}% confidence target.`);
   }
   if (model.overall.resolution >= SUFFICIENCY_THRESHOLDS.overall_resolution
     && model.overall.resolution < SUFFICIENCY_THRESHOLDS.evidence_warning_below) {

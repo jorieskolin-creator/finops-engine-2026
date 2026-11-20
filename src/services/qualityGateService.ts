@@ -125,9 +125,13 @@ export const runQualityGate = (
   const warnings: string[] = [];
   const notes: string[] = [];
 
+  const assessedCriterionCount = typeof phase2.metrics.maturity_assessed_count === 'number'
+    && typeof phase2.metrics.antipattern_assessed_count === 'number'
+    ? phase2.metrics.maturity_assessed_count + phase2.metrics.antipattern_assessed_count
+    : undefined;
   if (phase2.metrics.evidence_density < EVIDENCE_DENSITY_BLOCK) {
     blocking_reasons.push(
-      `Evidence density ${phase2.metrics.evidence_density}% < ${EVIDENCE_DENSITY_BLOCK}% floor.`
+      `Evidence density ${phase2.metrics.evidence_density}% < ${EVIDENCE_DENSITY_BLOCK}% floor${assessedCriterionCount !== undefined ? ` (${assessedCriterionCount}/${totalCriterionCount} assessed criteria)` : ''}.`
     );
   }
   const maturityZeroRatio = phase2.metrics.maturity_zero_ratio

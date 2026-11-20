@@ -242,4 +242,47 @@ const disambiguatedLogs = { maturity: { A1: item('supported', [{ quote: 'disambi
 const disambiguatedSnapshot = buildAcquisitionQualitySnapshot({ logs: disambiguatedLogs, phase2: { metrics: { evidence_density: 100 } }, sourceRegistry, knowledgeBase, runTrace: { ...duplicateNameTrace, evidence_paths: [{ stream: 'maturity', criterion_id: 'A1', source_id: 'src-1', source_document: 'duplicate.pdf', chunk_id: 'src-1-c1' }] } });
 assert.equal(disambiguatedSnapshot.evidence.provenance.integrity, 100, 'source ID and chunk must establish provenance without retaining a filename');
 
+const scopedUnassessedApLogs = {
+  maturity: Object.fromEntries(['A1', 'A2', 'B1', 'B2', 'B3'].map(id => [id, item('supported', [quote(`evidence ${id}`, 'src-1', 'Operational')])])),
+  antipattern: {
+    A1: item('supported', [{
+      evidence_source: 'derived',
+      quote: derivedLine,
+      source_id: 'table-1',
+      derived_evidence_id: 'EVID-DER-1',
+      category: 'Operational',
+    }], {
+      count: 0,
+      assessment_status: 'assessed',
+      antipattern_absence_status: 'unknown_absent',
+      coverage_reason: 'Four-row extract confirms sample allocation only; anti-pattern remains Not assessed.',
+    }),
+  },
+};
+const scopedUnassessedSnapshot = buildAcquisitionQualitySnapshot({
+  logs: scopedUnassessedApLogs,
+  phase2: { metrics: { evidence_density: 8 } },
+  sourceRegistry,
+  knowledgeBase,
+  runTrace: {
+    ...runTrace,
+    input_manifest: [
+      { source_id: 'src-1', chunk_ids: ['src-1-c1'] },
+      { source_id: 'table-1', chunk_ids: [] },
+    ],
+    evidence_paths: [
+      ...['A1', 'A2', 'B1', 'B2', 'B3'].map(id => ({ stream: 'maturity', criterion_id: id, source_id: 'src-1', chunk_id: 'src-1-c1' })),
+      { stream: 'antipattern', criterion_id: 'A1', evidence_source: 'derived', derived_evidence_id: 'EVID-DER-1', source_id: 'table-1', quote_snippet: derivedLine },
+    ],
+    derived_analytical_evidence: [{
+      mode: 'authoritative', evidence_id: 'EVID-DER-1', source_id: 'table-1', report_eligible: true,
+      eligibility: { state: 'ELIGIBLE' }, targets: [{ stream: 'antipattern', criterion_id: 'A1' }], summary_lines: [derivedLine],
+    }],
+  },
+});
+assert.equal(scopedUnassessedSnapshot.evidence.coverage.covered_items, 5, 'unknown_absent AP-A1 with a scoped derived quote must not increment covered_items to 6');
+assert.equal(scopedUnassessedSnapshot.evidence.coverage.antipattern, 0);
+assert.equal(scopedUnassessedSnapshot.evidence.coverage.overall, 8);
+assert.equal(scopedUnassessedSnapshot.evidence.coverage.by_domain.A.covered_items, 2, 'Domain A assessed count must exclude unassessed AP-A1');
+
 console.log('acquisition quality tests passed');

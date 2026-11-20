@@ -34,7 +34,8 @@ const clampScore = (value: unknown): number => {
 };
 
 const maturityItemAssessed = (item: AuditItem | undefined): boolean => {
-  if (!item || item.is_silent || item.verification_unresolved) return false;
+  if (!item || item.is_silent || item.verification_unresolved || item.assessment_status === 'not_assessed') return false;
+  if (item.evidence_check_status === 'unsupported' || item.evidence_check_status === 'missing') return false;
   if ((item.evidence_quotes?.length ?? 0) > 0) return true;
   if (item.count > 0) return true;
   return item.evidence_check_status === 'supported' || item.evidence_check_status === 'weak';

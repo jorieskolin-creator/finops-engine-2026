@@ -20,15 +20,26 @@ const hasSourceQuote = (item: AuditItem): boolean =>
       || (q.evidence_source === 'derived' && Boolean(q.derived_evidence_id && q.source_id)))
   );
 
-export const hasVerifiedSourceCoverage = (item: AuditItem, stream: 'maturity' | 'antipattern'): boolean => {
-  if (item.verification_unresolved) return false;
-  if (item.evidence_check_status === 'unsupported' || item.evidence_check_status === 'missing') return false;
-  if (item.assessment_status !== 'not_assessed' && hasSourceQuote(item)) return true;
+export const hasVerifiedSourceCoverage = (item: AuditItem | undefined, stream: 'maturity' | 'antipattern'): boolean => {
+  if (!item || item.verification_unresolved) return false;
   if (item.assessment_status === 'not_assessed') return false;
-  if (stream === 'antipattern') {
-    return inferAntiPatternAbsenceStatus(item) === 'tested_absent' && Boolean(item.coverage_reason);
+  if (item.evidence_check_status === 'unsupported' || item.evidence_check_status === 'missing') return false;
+  if (stream === 'maturity') {
+    return hasSourceQuote(item);
   }
-  return false;
+  const absenceStatus = inferAntiPatternAbsenceStatus(item);
+  if (absenceStatus === 'unknown_absent') return false;
+  if (absenceStatus === 'tested_absent') {
+    return (item.count ?? 0) === 0
+      && (item.evidence_check_status === undefined || item.evidence_check_status === 'supported')
+      && typeof item.coverage_reason === 'string'
+      && item.coverage_reason.trim().length > 0;
+  }
+  const count = Math.min(Math.max(Math.round(item.count ?? 0), 0), 3);
+  const dispositionConsistent = absenceStatus === 'confirmed_present'
+    ? count === 3
+    : absenceStatus === 'partially_present' && count <= 2;
+  return dispositionConsistent && hasSourceQuote(item);
 };
 
 export const calculateMetrics = (
