@@ -243,12 +243,30 @@ export const classifyFinalRequiredTactics = (
 
 export const buildMissingRequiredTacticAppendix = (
   missingIds: string[],
-  plan: TacticSelectionPlan
+  plan: TacticSelectionPlan,
+  sanitizedClaims: StrategySanitationItem[] = []
 ): string => {
   const missing = plan.required.filter(candidate => missingIds.includes(candidate.tactic_id));
+  const rejectionNotes = new Map<string, Array<{ claim: string; rationale: string }>>();
+  for (const item of sanitizedClaims) {
+    if (item.source_location !== 'roadmap' || item.tactic_disposition !== 'citation_rejected') continue;
+    for (const match of item.claim.matchAll(TACTIC_RX)) {
+      const tacticId = match[1];
+      if (!missingIds.includes(tacticId)) continue;
+      const list = rejectionNotes.get(tacticId) || [];
+      list.push({ claim: item.claim, rationale: item.rationale });
+      rejectionNotes.set(tacticId, list);
+    }
+  }
+  const rejectionLines = Array.from(rejectionNotes.entries()).flatMap(([tacticId, entries]) =>
+    entries.map(entry =>
+      `- [${tacticId}] rejected wording: "${entry.claim}"\n  Quality Checker rationale: ${entry.rationale || 'Citation or scope was not supported by locked findings.'}\n  Repair guidance: Rewrite as a strictly grounded, prerequisite-bounded action matching the locked findings, or explicitly surface a Playbook "Do not use when" conflict if contraindicated.`
+    )
+  );
   return [
     '### REQUIRED TACTIC CONTRACT CORRECTION',
-    `The previous roadmap omitted required direct Playbook tactic IDs: ${missingIds.join(', ')}.`,
+    `The previous roadmap omitted or lost required direct Playbook tactic IDs after verification: ${missingIds.join(', ')}.`,
+    ...(rejectionLines.length > 0 ? ['Previous Quality Checker rejection details (fix these exact defects):\n' + rejectionLines.join('\n')] : []),
     'Regenerate the roadmap and include each exact bracketed ID in a grounded action. Preserve the locked findings. If implementation prerequisites are absent, prescribe a bounded validation/preparation action rather than omitting the required tactic or inventing evidence.',
     ...missing.map(candidate => compactCandidate(candidate, true)),
   ].join('\n\n');

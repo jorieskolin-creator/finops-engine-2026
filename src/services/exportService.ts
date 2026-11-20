@@ -12,7 +12,7 @@ import {
 import { antiPatternStatusLabel, inferAntiPatternAbsenceStatus } from './antiPatternSemantics';
 import { displayQualityGateDiagnostic, isReportableSourceCoverageGap, splitQualityGateDiagnostics } from './reportDiagnosticsService';
 import { computeDomainSignalRows, DomainSignalTone } from './domainSignalService';
-import { buildReportViewModel } from './reportViewModel';
+import { buildReportViewModel, isRoadmapContractOnlyBlock } from './reportViewModel';
 import { stripSourceFilenameMetadata } from './privacyService';
 
 const BATCHES = Object.keys(BATCH_TITLES);
@@ -27,12 +27,16 @@ const renderTacticAction = (action: string): string =>
     `<a href="${FINOPS_TACTIC_PLAYBOOK_URL}#${id.toLowerCase()}" target="_blank" rel="noreferrer">[${id}]</a>`
   );
 
-const qualityGateStatusText = (gate: QualityGateResult): string => {
+const qualityGateStatusText = (result: DiagnosticResult): string => {
+  const gate = result.quality_gate;
   if (gate.decision === 'GO') return gate.notes[0] || 'All checks passed.';
   if (gate.decision === 'WARN') {
     return gate.fact_check?.sanitized_claims?.length
       ? 'Assessment score remains valid. Unsupported strategy wording or actions were removed or retained only in the appendix.'
       : 'Assessment score remains valid. WARN-level strategy hygiene notes are included in the appendix for traceability.';
+  }
+  if (isRoadmapContractOnlyBlock(result)) {
+    return 'Evidence and maturity analysis passed; only roadmap publication is blocked by the Phase 3 required-tactic contract.';
   }
   return 'Assessment is unsafe to act on until blocking issues are resolved.';
 };
@@ -52,14 +56,15 @@ const factCheckStatusText = (gate: QualityGateResult): string => {
   return fc.failed ? 'fact-check unavailable' : '0 claims checked';
 };
 
-const renderQualityGateStatus = (gate: QualityGateResult): string => {
+const renderQualityGateStatus = (result: DiagnosticResult): string => {
+  const gate = result.quality_gate;
   const supported = factCheckStatusText(gate);
   const cls = gate.decision === 'GO' ? 'qg-status-go' : gate.decision === 'BLOCK' ? 'qg-status-block' : 'qg-status-warn';
   return `
     <div class="qg-status ${cls}">
       <div>
         <span class="qg-status-label">Quality Gate Status: ${escapeHtml(gate.decision)}</span>
-        <p>${escapeHtml(qualityGateStatusText(gate))}</p>
+        <p>${escapeHtml(qualityGateStatusText(result))}</p>
       </div>
       <span class="qg-status-meta">${escapeHtml(supported)}</span>
     </div>`;
@@ -334,7 +339,7 @@ const renderEvidenceCheckSummary = (result: DiagnosticResult): string => {
   return `
   <h2>Evidence Check</h2>
   <div class="evidence-check-summary">
-    ${renderQualityGateStatus(result.quality_gate)}
+    ${renderQualityGateStatus(result)}
     <p>Evidence Check reviewed audited criteria before scoring. Empty domains are recorded as Not assessed.</p>
     <div class="evidence-check-grid">
       ${stats.map(([label, value]) => `<div class="evidence-check-stat"><span>${escapeHtml(label)}</span><strong>${value}</strong></div>`).join('')}

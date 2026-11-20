@@ -1416,7 +1416,7 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => unresolve
           required: tacticSelectionPlan.required.filter(candidate => !requiredTacticContract.contraindicated.includes(candidate.tactic_id)),
         };
         const correction = [
-          buildMissingRequiredTacticAppendix(repairableTacticIds, tacticSelectionPlan),
+          buildMissingRequiredTacticAppendix(repairableTacticIds, tacticSelectionPlan, factCheck.sanitized_claims || []),
           requiredTacticContract.contraindicated.length > 0
             ? `Do not restore Quality Checker-confirmed contraindicated tactic IDs: ${requiredTacticContract.contraindicated.join(', ')}.`
             : '',
@@ -1491,9 +1491,12 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => unresolve
     }
 
     let qualityGate = runQualityGate(auditLogs, validationData, phase1Validation, groundingValidation, aggregatedRawData.evidence_check, factCheck, sourceRegistryStatus);
+    const isRoadmapContractBlocker = (reason: string): boolean =>
+      reason.startsWith('Phase 3: Required tactic contract is incomplete');
     const factCheckOnlyBlock = qualityGate.decision === 'BLOCK'
       && qualityGate.blocking_reasons.length > 0
-      && qualityGate.blocking_reasons.every(reason => reason.startsWith('Fact-check:'));
+      && qualityGate.blocking_reasons.every(reason => reason.startsWith('Fact-check:') || isRoadmapContractBlocker(reason));
+    const escalateRoadmapOnly = qualityGate.blocking_reasons.every(isRoadmapContractBlocker);
     if (factCheckOnlyBlock && !factCheck.failed) {
       serverLog(runId, 'warn', 'fact_check_escalated', {
         from_stage: 'fact_check',
@@ -1501,7 +1504,13 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => unresolve
         medium_attempts: factCheck.attempts,
         blocking_reasons: qualityGate.blocking_reasons.length,
       });
-      const highFactChecks = await runFactCheck(strategyData, factCheck.attempts + 1, 'fact_check_high');
+      const highFactChecks = await runFactCheck(
+        strategyData,
+        factCheck.attempts + 1,
+        'fact_check_high',
+        escalateRoadmapOnly ? 'roadmap' : 'both',
+        escalateRoadmapOnly ? acceptedFactChecks : undefined
+      );
       const highFactCheck = highFactChecks.merged;
       await checkpoint('fact_check', 'escalated', { fact_check: highFactCheck });
       if (!highFactCheck.failed) {
