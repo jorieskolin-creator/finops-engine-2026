@@ -22,7 +22,7 @@ export const displaySourceCoverageWarning = (warning: string): string => {
   );
   if (!match) return warning;
   const [, domain, included, candidates] = match;
-  return `Source packet ${domain} included ${included}/${candidates} routed candidate chunks, but the available material did not provide sufficient domain evidence. No broad-source fallback was used.`;
+  return `Source packet ${domain} included ${included}/${candidates} routed candidate chunks. Domain coverage is limited. Individually assessed criteria retain their verified scope.`;
 };
 
 export const displayPlanningDecisionRationale = (

@@ -45,7 +45,7 @@ try {
   assert.equal(isInsufficientEvidenceReport('Run', 90, 'GO'), false);
   assert.equal(
     displaySourceCoverageWarning('Source packet F has incomplete deterministic routing coverage (4/4 relevant chunks); no broad-source fallback was used.'),
-    'Source packet F included 4/4 routed candidate chunks, but the available material did not provide sufficient domain evidence. No broad-source fallback was used.'
+    'Source packet F included 4/4 routed candidate chunks. Domain coverage is limited. Individually assessed criteria retain their verified scope.'
   );
   assert.equal(
     displayPlanningDecisionRationale(
