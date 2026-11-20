@@ -120,6 +120,7 @@ const logs = (maturityFactory, antiFactory) => ({
     () => anti(0, false)
   ));
   assert.equal(result.crawl_walk_run, 'Insufficient evidence');
+  assert.ok(result.score_evidence_gaps.every(line => line.includes('unscored and reduces assessment resolution')));
   assert.ok(result.score_evidence_gaps.length > 0, 'low evidence should produce explicit score evidence gaps');
 }
 

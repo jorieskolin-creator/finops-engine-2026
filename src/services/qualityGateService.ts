@@ -164,8 +164,10 @@ export const runQualityGate = (
 
   const weakPackets = Object.entries(sourceRegistry?.packets || {}).filter(([, packet]) => packet.weak_coverage);
   if (weakPackets.length > 0) {
+    const silent = phase2.assessment_sufficiency?.silent_domain_ids || [];
+    const collectionOnly = silent.length ? ` Verified silent domains (${silent.join(', ')}) permit evidence collection only.` : '';
     warnings.push(
-      `Source routing coverage is incomplete for ${weakPackets.length} domain packet(s) (${weakPackets.map(([domain]) => domain).join(', ')}). Findings in those domains remain not demonstrated or not assessed, and remediation recommendations for them are withheld until relevant evidence is supplied.`
+      `Source routing coverage is incomplete for ${weakPackets.length} domain packet(s) (${weakPackets.map(([domain]) => domain).join(', ')}). Interpret each assessed criterion within its verified scope. Unassessed criteria remain unscored.${collectionOnly}`
     );
   }
 
@@ -240,7 +242,7 @@ export const runQualityGate = (
     phase2.metrics.evidence_density < EVIDENCE_DENSITY_WARN
   ) {
     warnings.push(
-      `Evidence density ${phase2.metrics.evidence_density}% < ${EVIDENCE_DENSITY_WARN}% — many criteria were scored without verified source coverage.`
+      `Evidence density ${phase2.metrics.evidence_density}% < ${EVIDENCE_DENSITY_WARN}% — criteria without eligible evidence remain unscored and reduce assessment resolution.`
     );
   }
 
