@@ -139,6 +139,9 @@ const QualityGateBlock: React.FC<{ gate: QualityGateResult }> = ({ gate }) => {
       const base = `${fc.supported_count}/${fc.total_claims} claims supported`;
       return fc.partial_failure_reason ? `${base} · partial check` : base;
     }
+    if (!fc.failed && fc.attempts === 0 && gate.decision === 'BLOCK') {
+      return 'deterministic findings-only · narrative skipped';
+    }
     return fc.failed ? 'fact-check unavailable' : '0 claims checked';
   })();
   const statusText = gate.decision === 'GO'
@@ -742,6 +745,7 @@ export const ReportView: React.FC<ReportViewProps> = ({ result, onBack, onDownlo
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   {renderList('Key metrics', evidence.key_metrics)}
                   {renderList(strengthsSectionTitle(useSourceObservationTitle), evidence.confirmed_strengths)}
+                  {renderList('Scoped source observations', evidence.scoped_observations)}
                   {renderList('Confirmed gaps', evidence.confirmed_gaps)}
                   {renderList('Confirmed anti-patterns', evidence.confirmed_antipatterns)}
                   {renderList('Verified anti-pattern absences', result.phase_2_validation.verified_antipattern_absences)}

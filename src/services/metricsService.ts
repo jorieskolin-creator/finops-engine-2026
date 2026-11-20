@@ -47,7 +47,9 @@ export const calculateMetrics = (
   options: { evidencePacketReady?: boolean } = {},
 ): Phase2Validation => {
   let maturityCount = 0; let maturitySum = 0; const maturityGaps: string[] = [];
-  const confirmedMaturityGaps: string[] = [];
+  const candidateConfirmedMaturityGaps: Array<{ key: string; reasoning: string }> = [];
+  const scopedObservations: string[] = [];
+  const assessedPositiveObservations: string[] = [];
   let antipatternCount = 0; let antipatternSum = 0; const antipatternFindings: string[] = [];
   let testedAbsentCount = 0;
   let assessedMaturityItemCount = 0;
@@ -109,24 +111,38 @@ export const calculateMetrics = (
       assessedMaturityItemCount++;
       maturitySum += item.count;
       maturityFull++;
+      assessedPositiveObservations.push(`[${key}] Assessed (${item.count}/3): ${item.evidence || item.reasoning}`);
     } else if (item.count === 2) {
       assessedMaturityItemCount++;
       maturitySum += item.count;
       maturityPartial++;
+      assessedPositiveObservations.push(`[${key}] Assessed (${item.count}/3): ${item.evidence || item.reasoning}`);
     } else {
       assessedMaturityItemCount++;
       maturitySum += Math.max(item.count, 0);
       if (item.count === 0) maturityZeroCount++;
+      if (item.count > 0) {
+        assessedPositiveObservations.push(`[${key}] Assessed (${item.count}/3): ${item.evidence || item.reasoning}`);
+      }
       maturityLowOrAbsent++;
     }
     const catPrefix = key.charAt(0);
     if (categoryScores[catPrefix] !== undefined) categoryScores[catPrefix] += Math.max(item.count, 0);
     if (item.count === 0) {
       const hasGapEvidence = hasCapabilityEvidence;
-      if (!hasGapEvidence) silentAreas.push(`Capability not demonstrated by supplied material: ${key}`);
-      const gap = `[${key}] ${hasGapEvidence ? 'Confirmed gap' : 'Not demonstrated by supplied material (not proof the capability is absent)'}: ${item.reasoning}`;
-      maturityGaps.push(gap);
-      if (hasGapEvidence) confirmedMaturityGaps.push(gap);
+      const fullScopeRefuted = !Array.isArray(item.question_results)
+        || (item.question_results.length === 3 && item.question_results.every(result => result === 'not_supported'));
+      if (!hasGapEvidence) {
+        silentAreas.push(`Capability not demonstrated by supplied material: ${key}`);
+        maturityGaps.push(`[${key}] Not demonstrated by supplied material (not proof the capability is absent): ${item.reasoning}`);
+      } else if (!fullScopeRefuted) {
+        const scoped = `[${key}] Scoped observation (0/3; full criterion scope not established): ${item.reasoning || ''}`;
+        maturityGaps.push(scoped);
+        scopedObservations.push(scoped);
+      } else {
+        candidateConfirmedMaturityGaps.push({ key, reasoning: item.reasoning || '' });
+        maturityGaps.push(`[${key}] Confirmed gap: ${item.reasoning || ''}`);
+      }
     }
   });
 
@@ -164,6 +180,12 @@ export const calculateMetrics = (
     if (absenceStatus === 'unknown_absent') {
       antipatternNotAssessed++;
       unknownAntipatternAbsences.push(`[${key}] Not assessed: ${item.coverage_reason || item.reasoning || item.evidence || 'Source coverage was insufficient to verify absence.'}`);
+      if (hasSourceQuote(item)) {
+        const quoteText = item.evidence_quotes.find(q => typeof q?.quote === 'string' && q.quote.trim().length > 0)?.quote.trim();
+        if (quoteText) {
+          scopedObservations.push(`[AP-${key}] Scoped observation (anti-pattern not assessed): "${quoteText}"${item.coverage_reason ? ` — ${item.coverage_reason}` : ''}`);
+        }
+      }
       scoreEvidenceGaps.push(
         `[${key}] Anti-pattern control was not assessed. This contributes zero to the score, and no finding must be interpreted as tested absence. Evidence needed: ${item.coverage_reason || item.reasoning || 'material covering this anti-pattern.'}`
       );
@@ -209,6 +231,20 @@ export const calculateMetrics = (
   const antipattern_control = antipattern_clearance;
   const resolution_maturity = calculateResolutionBasedMaturity(logs);
   const assessment_sufficiency = evaluateAssessmentSufficiency(resolution_maturity, options);
+  const sufficiencyBlocked = assessment_sufficiency.decision === 'BLOCK';
+  const confirmedMaturityGaps = sufficiencyBlocked
+    ? []
+    : candidateConfirmedMaturityGaps.map(({ key, reasoning }) => `[${key}] Confirmed gap: ${reasoning}`);
+  if (sufficiencyBlocked) {
+    for (let i = 0; i < maturityGaps.length; i++) {
+      if (maturityGaps[i].includes('] Confirmed gap: ')) {
+        const rewritten = maturityGaps[i].replace('] Confirmed gap: ', '] Scoped observation (0/3 under insufficient assessment coverage): ');
+        maturityGaps[i] = rewritten;
+        scopedObservations.push(rewritten);
+      }
+    }
+    scopedObservations.unshift(...assessedPositiveObservations);
+  }
   const corroborated_maturity = resolution_maturity.overall.corroborated_maturity;
   const observed_maturity = resolution_maturity.overall.observed_maturity;
   const assessment_resolution = resolution_maturity.overall.resolution;
@@ -285,6 +321,7 @@ export const calculateMetrics = (
     },
     maturity_gaps: maturityGaps,
     confirmed_maturity_gaps: confirmedMaturityGaps,
+    scoped_observations: scopedObservations,
     antipattern_findings: antipatternFindings,
     verified_antipattern_absences: verifiedAntipatternAbsences,
     unknown_antipattern_absences: unknownAntipatternAbsences,

@@ -56,13 +56,26 @@ const hygieneMissingMaterialTerms = [
   'kb mapping',
   'mechanism match',
   'removal of',
-  'assigning it to domain'
+  'assigning it to domain',
+  'primary constraint',
+  'primary bottleneck',
+  'organizational bottleneck',
+  'main bottleneck',
+  'primary blocker',
+  'root cause',
+  'prove that',
+  'proving that',
 ];
+
+const diagnosticBottleneckClaimPattern = /\b(?:primary|main|single|central)\s+(?:organizational\s+)?(?:bottleneck|constraint|blocker|driver)\b|\broot[- ]cause\b/i;
 
 export const isReportableSourceCoverageGap = (claim: FactCheckClaim): boolean => {
   if (!claim.missing_material) return false;
   if (claim.severity === 'WARN_MISCLASSIFIED_BUT_REAL' || claim.severity === 'WARN_TACTIC_HYGIENE') return false;
   if (claim.source_location === 'planning_decision' || claim.source_location === 'roadmap') return false;
+  if (claim.source_location === 'diagnosis' && diagnosticBottleneckClaimPattern.test(`${claim.claim || ''} ${claim.missing_material}`)) {
+    return false;
+  }
   const material = claim.missing_material.toLowerCase();
   return !hygieneMissingMaterialTerms.some(term => material.includes(term));
 };

@@ -130,6 +130,7 @@ export interface Phase2Validation {
   raw_counts: RawCounts;
   maturity_gaps: string[];
   confirmed_maturity_gaps?: string[];
+  scoped_observations?: string[];
   antipattern_findings: string[];
   verified_antipattern_absences: string[];
   unknown_antipattern_absences: string[];
@@ -297,6 +298,7 @@ export interface AssessmentEvidenceSummary {
   maturity_classification: Phase2Validation['crawl_walk_run'];
   key_metrics: string[];
   confirmed_strengths: string[];
+  scoped_observations?: string[];
   confirmed_gaps: string[];
   confirmed_antipatterns: string[];
   silent_or_missing_evidence: string[];

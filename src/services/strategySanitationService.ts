@@ -1,4 +1,4 @@
-import { FactCheckClaim, FactCheckResult, StrategySanitationItem } from '../types';
+import { AuditItem, DerivedAnalyticalEvidence, DomainId, FactCheckClaim, FactCheckResult, Phase1AuditLogs, Phase2Validation, StrategySanitationItem } from '../types';
 import {
   isBlockingUnsupportedClaim,
   isDomainTaxonomyHygieneClaim,
@@ -333,6 +333,19 @@ export const sanitizeBlockedStrategy = (
 
   strategy.remediation_roadmap = [];
   strategy.effective_bracket = 'LOW';
+  if ((context.evidenceDensity ?? 100) < 30) {
+    if (strategy.evidence_summary && Array.isArray(strategy.evidence_summary.confirmed_gaps) && strategy.evidence_summary.confirmed_gaps.length > 0) {
+      strategy.evidence_summary.scoped_observations = Array.from(new Set([
+        ...(strategy.evidence_summary.scoped_observations || []),
+        ...strategy.evidence_summary.confirmed_gaps.map((gap: string) => gap.replace('] Confirmed gap:', '] Scoped observation (0/3):')),
+      ]));
+      strategy.evidence_summary.confirmed_gaps = [];
+    }
+    if (strategy.diagnosis && typeof strategy.diagnosis.primary_bottleneck === 'string' && /^\[[A-F][1-5]\]/.test(strategy.diagnosis.primary_bottleneck.trim())) {
+      strategy.diagnosis.primary_bottleneck = 'Not established — assessed criterion coverage is below the 30% sufficiency floor, so no single criterion can be identified as the primary organizational bottleneck.';
+      strategy.diagnosis.root_causes = ['Root-cause ranking is withheld until missing domain and criterion evidence is supplied.'];
+    }
+  }
   const mayReviewFindings =
     (context.evidenceDensity || 0) >= 30
     && context.evidenceCheckCompleted === true
@@ -344,16 +357,200 @@ export const sanitizeBlockedStrategy = (
       'Rerun the assessment after the blocking conditions and evidence questions are resolved.',
     ]
     : [
-      'Resolve the listed validation, integrity, security, or evidence-verification blockers before relying on the assessment findings.',
+      'Review only the verified scoped source observations below as bounded sample facts; do not extrapolate organization-wide maturity or bottlenecks.',
+      'Collect and validate the missing domain and criterion evidence listed under Evidence Needed Before Action.',
       'Rerun the assessment after the blocking conditions are resolved.',
     ];
+  const priorNoGoEvidence = strategy.planning_decision?.decision === 'NO_GO'
+    && Array.isArray(strategy.planning_decision.evidence_needed_before_action)
+    ? strategy.planning_decision.evidence_needed_before_action
+    : [];
+  const combinedEvidenceNeeded = Array.from(new Set([
+    ...blockingReasons,
+    ...priorNoGoEvidence,
+    ...(context.scoreEvidenceGaps || []).slice(0, 8),
+  ])).slice(0, 10);
   strategy.planning_decision = {
     decision: 'NO_GO',
     rationale: 'Required validation did not complete or the quality gate blocked actionability. Preserve the diagnostic findings, but do not execute recommendations until the blocking reasons are resolved.',
     safe_to_act_on: safeToActOn,
-    evidence_needed_before_action: blockingReasons.length > 0 || (context.scoreEvidenceGaps?.length || 0) > 0
-      ? [...blockingReasons, ...(context.scoreEvidenceGaps || []).slice(0, 8)]
+    evidence_needed_before_action: combinedEvidenceNeeded.length > 0
+      ? combinedEvidenceNeeded
       : ['Resolve the quality-gate blockers and re-run required verification.']
   };
   return data;
+};
+
+export interface DeterministicBlockedReportInput {
+  auditLogs: Phase1AuditLogs;
+  validationData: Phase2Validation;
+  skippedDomains?: Record<string, string>;
+  derivedEvidence?: DerivedAnalyticalEvidence[];
+  bracketDetail: string;
+}
+
+export const buildDeterministicBlockedFindingsStrategy = ({
+  auditLogs,
+  validationData,
+  skippedDomains = {},
+  derivedEvidence = [],
+  bracketDetail,
+}: DeterministicBlockedReportInput): any => {
+  const assessedCount = (validationData.metrics.maturity_assessed_count ?? 0) + (validationData.metrics.antipattern_assessed_count ?? 0);
+  const density = Math.round(validationData.metrics.evidence_density);
+  const silentDomainIds = validationData.assessment_sufficiency.silent_domain_ids || [];
+  const unresolvedDomainIds = new Set((validationData.verification_unresolved || []).map(item => item.charAt(1)));
+  const skippedDomainList = Object.keys(skippedDomains).sort();
+
+  const criterionQuoteObservations: string[] = [];
+  for (const [id, rawItem] of Object.entries(auditLogs.maturity || {})) {
+    const item = rawItem as AuditItem;
+    if (!item || item.verification_unresolved || item.assessment_status === 'not_assessed') continue;
+    if (item.evidence_check_status === 'unsupported' || item.evidence_check_status === 'missing') continue;
+    const firstQuote = (item.evidence_quotes || []).find(q => typeof q?.quote === 'string' && q.quote.trim().length > 0)?.quote.trim();
+    if (!firstQuote) continue;
+    const truncatedQuote = firstQuote.length > 180 ? `${firstQuote.slice(0, 177)}...` : firstQuote;
+    criterionQuoteObservations.push(
+      `[${id}] Scoped observation (${item.count}/3): ${item.evidence || item.reasoning} (Quote: "${truncatedQuote}")`
+    );
+  }
+  for (const [id, rawItem] of Object.entries(auditLogs.antipattern || {})) {
+    const item = rawItem as AuditItem;
+    if (!item || item.verification_unresolved) continue;
+    if (item.evidence_check_status === 'unsupported' || item.evidence_check_status === 'missing') continue;
+    const firstQuote = (item.evidence_quotes || []).find(q => typeof q?.quote === 'string' && q.quote.trim().length > 0)?.quote.trim();
+    if (!firstQuote) continue;
+    const truncatedQuote = firstQuote.length > 180 ? `${firstQuote.slice(0, 177)}...` : firstQuote;
+    if (item.antipattern_absence_status === 'unknown_absent' || item.assessment_status === 'not_assessed') {
+      criterionQuoteObservations.push(
+        `[AP-${id}] Scoped observation (anti-pattern not assessed): "${truncatedQuote}"${item.coverage_reason ? ` — ${item.coverage_reason}` : ''}`
+      );
+    }
+  }
+
+  const derivedSummaryObservations = derivedEvidence
+    .filter(item =>
+      item.mode === 'authoritative'
+      && item.report_eligible
+      && item.eligibility?.state === 'ELIGIBLE'
+      && item.derivation?.analyzer_id !== 'crucial_item_coverage_v1'
+      && Array.isArray(item.summary_lines)
+      && item.summary_lines.length > 0
+    )
+    .flatMap(item => item.summary_lines.slice(0, 2).map(line => `[${item.evidence_id}] Deterministic table observation: ${line}`));
+
+  const scopedObservations = Array.from(new Set([
+    ...criterionQuoteObservations,
+    ...(validationData.scoped_observations || []),
+    ...derivedSummaryObservations,
+  ])).slice(0, 10);
+
+  const evidenceRequests: string[] = [];
+  if (skippedDomainList.length > 0) {
+    evidenceRequests.push(
+      `Unassessed domains (${skippedDomainList.join(', ')}): no eligible customer FinOps evidence was routed; supply primary governance/budget policies, architecture decision records, operating-model/RACI artifacts, and AI consumption controls.`
+    );
+  }
+  const activeDomains = (['A', 'B', 'C', 'D', 'E', 'F'] as DomainId[]).filter(d => !skippedDomainList.includes(d));
+  const prioritizedGaps = [
+    ...(validationData.score_evidence_gaps || []).filter(gap => activeDomains.some(d => gap.startsWith(`[${d}`))),
+    ...(validationData.score_evidence_gaps || []).filter(gap => !activeDomains.some(d => gap.startsWith(`[${d}`))),
+  ];
+  evidenceRequests.push(...prioritizedGaps.slice(0, 8));
+
+  const outcome = `The assessment completed deterministic acquisition and Phase 1 verification, resolving ${assessedCount}/60 criteria (${density}% evidence density) while ${60 - assessedCount}/60 criteria remained unassessed. Because assessed criterion coverage is below the 30% evidence floor, narrative synthesis and regeneration were skipped in favor of a deterministic findings-only report.`;
+  const boundary = 'Decision: NO_GO. No organizational primary bottleneck, confirmed capability gap, or remediation roadmap is issued from below-floor coverage. Review the scoped observations and supply the requested evidence before rerunning.';
+
+  return {
+    phase_3_strategy: {
+      executive_summaries: {
+        finops_lead: `${outcome}\n\n${boundary}`,
+        cfo: `${outcome}\n\nThe supplied extract is insufficient to establish organization-wide investment priorities or verified financial realization. ${boundary}`,
+        engineering_lead: `${outcome}\n\nThe supplied extract is insufficient to prescribe organization-wide engineering controls or architectural changes. ${boundary}`,
+      },
+      executive_summary: `${outcome}\n\n${boundary}`,
+      active_persona: 'finops_lead',
+      evidence_summary: {
+        headline: 'Roadmap actionability BLOCKED · maturity classification unavailable because Assessment Sufficiency did not pass',
+        maturity_classification: validationData.crawl_walk_run,
+        key_metrics: [
+          `Adjusted FinOps Maturity: ${validationData.metrics.adjusted_maturity === null ? 'N/A' : `${Math.round(validationData.metrics.adjusted_maturity)}/100 (diagnostic only)`}`,
+          `Corroborated maturity: ${validationData.metrics.corroborated_maturity === null ? 'N/A' : `${Math.round(validationData.metrics.corroborated_maturity)}%`}`,
+          `Observed maturity: ${validationData.metrics.observed_maturity === null ? 'N/A' : `${Math.round(validationData.metrics.observed_maturity)}%`}`,
+          `Assessment resolution: ${Math.round(validationData.metrics.assessment_resolution)}%`,
+          `Assessment sufficiency: ${validationData.assessment_sufficiency.decision}`,
+          `Evidence density: ${density}% (${assessedCount}/60 assessed criteria)`,
+          `Delivery integrity: ${Math.round(validationData.metrics.delivery_integrity)}%`,
+          `Anti-pattern coverage: ${Math.round(validationData.metrics.antipattern_coverage)}%`,
+        ],
+        confirmed_strengths: [],
+        scoped_observations: scopedObservations,
+        confirmed_gaps: [],
+        confirmed_antipatterns: validationData.antipattern_findings.slice(0, 8),
+        silent_or_missing_evidence: [
+          ...validationData.verification_unresolved,
+          ...evidenceRequests,
+        ].slice(0, 8),
+      },
+      diagnosis: {
+        primary_bottleneck: `Not established — assessed criterion coverage (${assessedCount}/60, ${density}%) is below the 30% sufficiency floor, so no criterion can be identified as the primary organizational bottleneck.`,
+        root_causes: [
+          'Root-cause attribution is withheld until missing domain and criterion evidence is supplied.',
+        ],
+        domain_diagnosis: Object.fromEntries(
+          Object.entries(validationData.category_scores).map(([cat, score]) => [
+            cat,
+            skippedDomainList.includes(cat)
+              ? `Domain ${cat} was not assessed because no eligible customer FinOps evidence remained after acquisition.`
+              : silentDomainIds.includes(cat as DomainId)
+                ? `Domain ${cat} is silent below 10% verified criterion evidence; collect domain evidence before drawing maturity conclusions.`
+                : unresolvedDomainIds.has(cat)
+                  ? `Verification was unavailable in domain ${cat}; scanner candidates were excluded and no validated domain score is reported.`
+                  : `Scoped domain signal ${score}/15 in domain ${cat} from partial evidence coverage; insufficient for organization-wide bottleneck attribution.`,
+          ])
+        ),
+        confidence: 'low',
+        confidence_rationale: bracketDetail,
+      },
+      planning_decision: {
+        decision: 'NO_GO',
+        rationale: 'Assessed criterion coverage is below the 30% evidence floor. Preserve the verified scoped observations, gather the missing evidence below, and rerun the assessment before prioritizing remediation.',
+        safe_to_act_on: [
+          'Review only the verified scoped source observations as bounded extract facts.',
+          'Collect the primary domain and criterion evidence listed under Evidence Needed Before Action.',
+          'Rerun the assessment once broader customer FinOps artifacts are available.',
+        ],
+        evidence_needed_before_action: evidenceRequests.slice(0, 8),
+      },
+      visual_scorecard: {
+        headline: 'Insufficient Evidence — Deterministic Findings Only',
+        maturity_score: `${validationData.metrics.adjusted_maturity === null ? 'N/A' : `${Math.round(validationData.metrics.adjusted_maturity)}/100 diagnostic`} — Assessment Sufficiency BLOCK`,
+        burden_score: `${Math.round(validationData.metrics.antipattern_burden)}% anti-pattern burden`,
+      },
+      remediation_roadmap: [],
+      findings_mode: {
+        evidence_backed_findings: [
+          ...scopedObservations,
+          ...validationData.antipattern_findings.slice(0, 3),
+          ...validationData.verified_antipattern_absences.slice(0, 3),
+        ].slice(0, 10),
+        candidate_themes: [
+          ...(activeDomains.length > 0
+            ? [`Expand partial extract coverage in Domain${activeDomains.length > 1 ? 's' : ''} ${activeDomains.join(', ')} with organization-wide billing, allocation, realization, and governance records before confirming capability gaps.`]
+            : []),
+          ...(skippedDomainList.length > 0
+            ? [`Establish baseline assessment coverage across unassessed Domains ${skippedDomainList.join(', ')}.`]
+            : []),
+        ],
+        missing_evidence: evidenceRequests.slice(0, 8),
+        validation_plan: [
+          'Supply multi-period billing/allocation exports and documented tagging/showback ownership to evaluate Domain A across the full organization.',
+          'Supply optimization realization records with explicit time horizons, baseline/realized validation, and commitment coverage to evaluate Domain B.',
+          'Attach FinOps governance/budget policies, architecture review artifacts, operating-model/RACI documentation, and AI cost controls for Domains C–F.',
+        ],
+      },
+      confidence_bracket: 'LOW',
+      effective_bracket: 'LOW',
+    },
+  };
 };
