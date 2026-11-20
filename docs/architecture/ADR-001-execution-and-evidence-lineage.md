@@ -57,11 +57,17 @@ as they are moved to the server-side orchestration boundary.
    validation. Provenance reconciliation, pre-synthesis validation, and the
    final RunTrace consume the effective packet set, while RunTrace retains the
    baseline and per-pass packet hashes for lineage.
-8. The `evidence_gap_analysis` model may propose bounded search themes and
-   terms from low-evidence summaries. It cannot search, select evidence, score,
-   classify, or change gates; deterministic orchestration performs local search
-   only within the privacy-approved customer Source Registry. Remote KB bodies
-   are not inputs to this stage.
+8. The `evidence_gap_analysis` model accepts only catalog domain, criterion, and
+   missing-concept IDs under `finops_evidence_gap_input_v1`, hydrated server-side
+   from approved catalog terms, and returns bounded search queries under
+   `finops_evidence_gap_query_v1`. Free-form fields, customer source snippets,
+   low-evidence narrative summaries, and remote KB bodies are rejected or
+   excluded as inputs to this stage. It cannot search, select evidence, score,
+   classify, or change gates; deterministic orchestration performs corroborated
+   local search only within the privacy-approved customer Source Registry.
+   Domains without eligible customer evidence or approved substantive derived
+   evidence record `Not assessed` locally and skip forensic audit and Evidence
+   Check model dispatch while preserving packet and RunTrace lineage.
 9. Derived analysis is additive. Enabling a deterministic analyzer must not
    remove, replace, reorder out of reach, or truncate a routed direct-evidence
    chunk. The scanner, verifier, adjudicator, provenance reconciler, final
