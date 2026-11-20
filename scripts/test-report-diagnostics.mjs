@@ -81,4 +81,22 @@ assert.equal(isReportableSourceCoverageGap({
   missing_material: 'Revised wording assigning it to Domain B.'
 }), false);
 
+assert.equal(isReportableSourceCoverageGap({
+  claim: 'Cost allocation (A1) is the primary organizational constraint.',
+  classification: 'unsupported',
+  source_location: 'diagnosis',
+  failure_type: 'unsupported_org_claim',
+  severity: 'BLOCKING_UNSUPPORTED_FACT',
+  missing_material: 'Organization-wide evidence proving that A1 is the primary constraint across all FinOps domains.'
+}), false, 'rejected bottleneck claims must never ask the user for evidence proving the rejected bottleneck');
+
+assert.equal(isReportableSourceCoverageGap({
+  claim: 'A1 is the primary bottleneck.',
+  classification: 'unsupported',
+  source_location: 'finops_lead',
+  failure_type: 'unsupported_org_claim',
+  severity: 'BLOCKING_UNSUPPORTED_FACT',
+  missing_material: 'Evidence establishing A1 as the primary bottleneck.'
+}), false, 'primary bottleneck proof requests in any summary section must be excluded from coverage gaps');
+
 console.log('report diagnostics unit tests passed');

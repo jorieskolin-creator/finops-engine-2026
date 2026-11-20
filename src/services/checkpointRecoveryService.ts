@@ -33,13 +33,15 @@ const recoveredStrategy = (phase2: any): any => {
       maturity_classification: phase2?.crawl_walk_run || 'Insufficient Evidence',
       key_metrics: [`Adjusted FinOps Maturity: ${adjusted}`, `Assessment Sufficiency: ${sufficiency}`, `Evidence density: ${density}%`],
       confirmed_strengths: [],
-      confirmed_gaps: gaps.slice(0, 8),
+      confirmed_gaps: sufficiency === 'PASS' ? gaps.slice(0, 8) : [],
       confirmed_antipatterns: antipatterns.slice(0, 8),
       silent_or_missing_evidence: silent.slice(0, 8),
     },
     diagnosis: {
-      primary_bottleneck: gaps[0] || antipatterns[0] || 'Validated synthesis was unavailable.',
-      root_causes: [...gaps, ...antipatterns].slice(0, 5),
+      primary_bottleneck: sufficiency === 'PASS'
+        ? (gaps[0] || antipatterns[0] || 'Validated synthesis was unavailable.')
+        : 'Not established — Assessment Sufficiency did not pass, so organizational bottleneck attribution is withheld.',
+      root_causes: sufficiency === 'PASS' ? [...gaps, ...antipatterns].slice(0, 5) : [],
       domain_diagnosis: {},
       confidence: 'low',
       confidence_rationale: 'Recovered from accepted deterministic Phase 1 and Phase 2 checkpoints; no replacement claims were generated.',

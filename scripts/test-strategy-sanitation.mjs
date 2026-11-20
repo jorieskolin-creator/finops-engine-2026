@@ -33,7 +33,12 @@ await writeFile(
 );
 
 const { runQualityGate } = await import(`file://${join(dir, 'qualityGateService.mjs')}`);
-const { sanitizeBlockedStrategy, sanitizeEvidenceSummaryUncertainty, sanitizeStrategyAfterFactCheck } = await import(`file://${join(dir, 'strategySanitationService.mjs')}`);
+const {
+  buildDeterministicBlockedFindingsStrategy,
+  sanitizeBlockedStrategy,
+  sanitizeEvidenceSummaryUncertainty,
+  sanitizeStrategyAfterFactCheck,
+} = await import(`file://${join(dir, 'strategySanitationService.mjs')}`);
 
 const ids = ['A', 'B', 'C', 'D', 'E', 'F'].flatMap(batch => [1, 2, 3, 4, 5].map(n => `${batch}${n}`));
 const emptyItem = {
@@ -305,5 +310,132 @@ const lowEvidenceGate = runQualityGate(
   sanitized.factCheck,
 );
 assert.equal(lowEvidenceGate.decision, 'BLOCK');
+
+// Clear BLOCK deterministic findings-only report regression:
+// - 0/3 observations stay scoped and are never promoted to Confirmed gaps or Primary bottleneck;
+// - AP-A1 scoped derived quote and B1 observation are preserved in scoped_observations and findings_mode;
+// - deterministic fact-check pass with attempts=0 keeps Quality Gate BLOCK cleanly without unsupported claims.
+const clearBlockAuditLogs = {
+  maturity: {
+    ...phase1.maturity,
+    A1: {
+      count: 0,
+      status: 'NOK',
+      assessment_status: 'assessed',
+      evidence_check_status: 'supported',
+      question_results: ['not_supported', 'unknown', 'unknown'],
+      evidence: 'Four May 2026 billing rows carry cost center tags; organization-wide showback policy is absent from extract.',
+      reasoning: 'Four billing rows show allocation fields, but organization-wide tagging governance is not in scope.',
+      evidence_quotes: [{ quote: '2026-05-01,CC-100,EUR', source_id: 'src-billing', chunk_id: 'c1' }],
+    },
+    B1: {
+      count: 1,
+      status: 'Partial',
+      assessment_status: 'assessed',
+      evidence_check_status: 'supported',
+      question_results: ['supported', 'unknown', 'unknown'],
+      evidence: 'Five optimization backlog rows list estimated savings without stated savings period or verified realization.',
+      reasoning: 'Backlog estimates exist without savings horizon or realized verification.',
+      evidence_quotes: [{ quote: 'Rightsize compute,Estimated,open', source_id: 'src-backlog', chunk_id: 'c2' }],
+    },
+  },
+  antipattern: {
+    ...phase1.antipattern,
+    A1: {
+      count: 0,
+      status: 'OK',
+      assessment_status: 'assessed',
+      evidence_check_status: 'supported',
+      antipattern_absence_status: 'unknown_absent',
+      coverage_reason: 'Four-row extract confirms sample allocation only; anti-pattern remains Not assessed.',
+      evidence: 'Scoped allocation observation.',
+      reasoning: 'Sample-only extract.',
+      evidence_quotes: [{
+        evidence_source: 'derived',
+        derived_evidence_id: 'EVID-DER-a1',
+        source_id: 'src-billing',
+        quote: 'allocation row coverage: 100%; valid=4/4; invalid placeholders=0; state=FIELD_PRESENT_VALID.',
+      }],
+    },
+  },
+};
+const clearBlockPhase2 = {
+  metrics: {
+    evidence_density: 8,
+    delivery_integrity: 100,
+    antipattern_coverage: 0,
+    antipattern_burden: 0,
+    antipattern_clearance: 0,
+    maturity_depth: 1.1,
+    maturity_assessed_count: 5,
+    antipattern_assessed_count: 0,
+    corroborated_maturity: null,
+    observed_maturity: 16.7,
+    assessment_resolution: 8.3,
+    adjusted_maturity: 4.8,
+  },
+  assessment_sufficiency: {
+    decision: 'BLOCK',
+    silent_domain_ids: ['C', 'D', 'E', 'F'],
+    blocking_reasons: ['Criterion evidence density 8.3% (5/60 assessed criteria) is below 30%.'],
+    warning_reasons: [],
+  },
+  crawl_walk_run: 'Insufficient evidence',
+  category_scores: { A: 0, B: 1, C: 0, D: 0, E: 0, F: 0 },
+  confirmed_maturity_gaps: [],
+  scoped_observations: ['[A1] Scoped observation (0/3; full criterion scope not established): Four billing rows show allocation fields.'],
+  antipattern_findings: [],
+  verified_antipattern_absences: [],
+  unknown_antipattern_absences: ['[A1] Not assessed: Four-row extract confirms sample allocation only.'],
+  silent_areas: ['Capability not demonstrated by supplied material: C1'],
+  score_evidence_gaps: [
+    '[A2] Not demonstrated by the supplied material. Evidence needed: showback cadence.',
+    '[B2] Not demonstrated by the supplied material. Evidence needed: realized savings verification.',
+    '[C1] Not demonstrated by the supplied material. Evidence needed: FinOps governance charter.',
+  ],
+  verification_unresolved: [],
+};
+const deterministicBlocked = buildDeterministicBlockedFindingsStrategy({
+  auditLogs: clearBlockAuditLogs,
+  validationData: clearBlockPhase2,
+  skippedDomains: { C: 'h1', D: 'h2', E: 'h3', F: 'h4' },
+  derivedEvidence: [{
+    mode: 'authoritative',
+    report_eligible: true,
+    evidence_id: 'EVID-DER-a1',
+    eligibility: { state: 'ELIGIBLE', reasons: [] },
+    derivation: { analyzer_id: 'tagging_allocation_v1' },
+    summary_lines: ['Analyzed population: 4 row(s); scope=full_table.', 'allocation row coverage: 100%; valid=4/4; invalid placeholders=0; state=FIELD_PRESENT_VALID.'],
+  }],
+  bracketDetail: 'bracket=LOW evidence_density=8% delivery_integrity=100% silent_areas=55',
+});
+assert.deepEqual(deterministicBlocked.phase_3_strategy.evidence_summary.confirmed_gaps, [], 'Clear BLOCK must not promote 0/3 observations to confirmed gaps');
+assert.doesNotMatch(deterministicBlocked.phase_3_strategy.diagnosis.primary_bottleneck, /\[A1\]/, 'Clear BLOCK must not promote A1 as primary bottleneck');
+assert.match(deterministicBlocked.phase_3_strategy.diagnosis.primary_bottleneck, /Not established .*\(5\/60, 8%\)/);
+assert.ok(deterministicBlocked.phase_3_strategy.evidence_summary.scoped_observations.some(line => line.startsWith('[A1] Scoped observation')));
+assert.ok(deterministicBlocked.phase_3_strategy.evidence_summary.scoped_observations.some(line => line.startsWith('[AP-A1] Scoped observation (anti-pattern not assessed)')));
+assert.ok(deterministicBlocked.phase_3_strategy.evidence_summary.scoped_observations.some(line => line.startsWith('[B1] Scoped observation (1/3)')));
+assert.ok(deterministicBlocked.phase_3_strategy.findings_mode.missing_evidence[0].includes('Unassessed domains (C, D, E, F)'));
+assert.doesNotMatch(JSON.stringify(deterministicBlocked), /primary constraint/i);
+
+const skippedFactCheck = { attempts: 0, total_claims: 0, supported_count: 0, unsupported_claims: [], sanitized_claims: [], trajectory: [], failed: false };
+const clearBlockGate = runQualityGate(clearBlockAuditLogs, clearBlockPhase2, validationOk, validationOk, evidenceCheckOk, skippedFactCheck);
+assert.equal(clearBlockGate.decision, 'BLOCK');
+assert.ok(clearBlockGate.blocking_reasons.some(reason => /Evidence density 8% < 30% floor \(5\/60 assessed criteria\)/.test(reason)));
+assert.equal(clearBlockGate.blocking_reasons.some(reason => /fact-check/i.test(reason)), false, 'deterministic findings-only skip must not create a false fact-check failure blocker');
+
+const postGateBlocked = sanitizeBlockedStrategy(deterministicBlocked, clearBlockGate.blocking_reasons, {
+  evidenceDensity: 8,
+  evidenceCheckCompleted: true,
+  scoreEvidenceGaps: clearBlockPhase2.score_evidence_gaps,
+});
+assert.ok(postGateBlocked.phase_3_strategy.planning_decision.evidence_needed_before_action.some(item => item.includes('Unassessed domains (C, D, E, F)')));
+
+const analysisSource = await readFile(new URL('../src/services/analysisService.ts', import.meta.url), 'utf8');
+assert.match(
+  analysisSource,
+  /if \(deterministicSynthesisFallback\) \{\s*await checkpoint\('fact_check', 'pass_1', \{ fact_check: factCheck \}\);\s*\} else \{\s*acceptedFactChecks = await runFactCheck/,
+  'evidence-floor BLOCK must skip narrative fact-check and regeneration loops'
+);
 
 console.log('strategy sanitation regression tests passed');
