@@ -66,6 +66,7 @@ export interface FactCheckInputs {
 
 export interface RoadmapFactCheckInputs extends FactCheckInputs {
   lockedFindingsText: string;
+  excludedPremises?: string[];
 }
 
 const MAX_SOURCE_CHARS = 100000;
@@ -157,29 +158,47 @@ const compactDetail = (value: string | undefined, limit: number): string => {
   return text.length <= limit ? text : '';
 };
 
-export const formatAcceptedFacts = (phase1: Phase1AuditLogs, phase2: Phase2Validation): string => {
+export interface AcceptedCriterionBasis {
+  details: string[];
+  unknownStatus?: string;
+}
+
+export const buildAcceptedFacts = (phase1: Phase1AuditLogs, phase2: Phase2Validation) => {
+  const basisByCriterion = new Map<string, AcceptedCriterionBasis>();
   const rows = (phase2.resolution_maturity?.criterion_resolutions || []).map(record => {
     const item = phase1[record.stream]?.[record.criterion_id];
     const key = `${record.stream}.${record.criterion_id}`;
-    if (record.state !== 'RESOLVED') return `${key} | ${record.state} | unscored | ${record.reason}`;
+    const label = `[${record.stream === 'antipattern' ? 'AP-' : ''}${record.criterion_id}]`;
+    const scoped = phase2.scoped_observations?.find(observation => observation.startsWith(`${label} Scoped observation`));
+    const quote = item?.evidence_quotes?.find(q => q.source_id && (q.chunk_id || q.derived_evidence_id) && q.quote);
+    const locator = quote && compactDetail([quote.source_id, quote.derived_evidence_id || quote.chunk_id, quote.page_id].filter(Boolean).join('/'), 150);
+    if (record.state !== 'RESOLVED') {
+      const unknownStatus = `${record.state} | unscored | ${record.reason}`;
+      basisByCriterion.set(key, { unknownStatus, details: [] });
+      // Phase 2 can retain a bounded observation even when the anti-pattern
+      // itself is unknown. Only that accepted observation may accompany it.
+      const observed = record.state === 'UNKNOWN' && compactDetail(scoped, 550);
+      return [key, unknownStatus, observed, observed && locator].filter(Boolean).join(' | ');
+    }
     const basis = `${key} | assessed ${record.score_count}/3 | ${record.antipattern_absence_status || record.reason}`;
     const scope = compactDetail(item?.coverage_reason, 350);
-    // Omit narrative details together if a recorded scope qualification cannot fit.
-    if (item?.coverage_reason && !scope) return `${basis} | scope detail withheld; omit narrative claim`;
-    const scoped = phase2.scoped_observations?.some(observation => observation.startsWith(`[${record.stream === 'antipattern' ? 'AP-' : ''}${record.criterion_id}] Scoped observation`));
+    const reason = item?.adjustment_reason || item?.reasoning || item?.evidence;
+    const rationale = compactDetail(reason, 680);
+    if ((item?.coverage_reason && !scope) || (reason && !rationale)) {
+      return [basis, 'scope detail withheld; omit narrative claim', locator].filter(Boolean).join(' | ');
+    }
     const questions = item?.question_results?.join(', ');
-    const rationale = compactDetail(item?.adjustment_reason || item?.reasoning || item?.evidence, 680);
-    const quote = item?.evidence_quotes?.find(q => q.source_id && (q.chunk_id || q.derived_evidence_id) && q.quote);
-    const locator = quote && [quote.source_id, quote.derived_evidence_id || quote.chunk_id, quote.page_id].filter(Boolean).join('/');
     const excerpt = compactDetail(quote?.quote, 240);
-    return [basis, scoped && 'scoped observation; full criterion scope unverified', questions && `subcriteria: ${questions}`, scope, rationale, excerpt, compactDetail(locator, 150)]
+    basisByCriterion.set(key, { details: [scope, rationale, excerpt].filter(Boolean) });
+    return [basis, scoped && 'scoped observation; full criterion scope unverified', questions && `subcriteria: ${questions}`, scope, rationale, excerpt, locator]
       .filter((value, i, values) => value && values.indexOf(value) === i).join(' | ');
   });
-  return [
+  const text = [
     compactMetrics(phase2),
     'Accepted criterion facts. Limit each claim to its recorded scope. Omit claims whose supporting detail is unavailable. Unknown subcriteria are unverified.',
     ...rows,
   ].join('\n');
+  return { text, basisByCriterion };
 };
 
 export const buildFactCheckPrompt = (inputs: FactCheckInputs): string => `
@@ -245,7 +264,7 @@ ${(inputs.imageCount ?? 0) > 0
 </output_format>
 
 <accepted_phase_1_and_2_facts>
-${inputs.acceptedFacts ?? formatAcceptedFacts(inputs.phase1, inputs.phase2)}
+${inputs.acceptedFacts ?? buildAcceptedFacts(inputs.phase1, inputs.phase2).text}
 </accepted_phase_1_and_2_facts>
 
 <verified_tactics_db>
@@ -272,7 +291,8 @@ export const parseFactCheckResponse = (
     allowedClassifications: VALID_CLASSIFICATIONS,
     allowedSourceLocations: VALID_SOURCE_LOCATIONS,
     allowedUnsupportedSeverities: VALID_SEVERITIES.filter(severity => severity !== 'SUPPORTED')
-  }
+  },
+  onVerifiedClaims?: (claims: FactCheckClaim[]) => void,
 ): FactCheckResult => {
   const cleaned = text.replace(/```json/gi, '').replace(/```/g, '').trim();
   const match = cleaned.match(/\{[\s\S]*\}/);
@@ -338,6 +358,7 @@ export const parseFactCheckResponse = (
         ...(VALID_TACTIC_DISPOSITIONS.includes(c.tactic_disposition) ? { tactic_disposition: c.tactic_disposition } : {}),
       } : {})
     }));
+    onVerifiedClaims?.(validClaims.filter(c => c.classification === 'supported_by_source' || c.classification === 'supported_by_audit'));
     const unsupported = validClaims.filter(c => c.classification === 'unsupported');
     return {
       attempts,
@@ -487,7 +508,7 @@ Your job: verify ONLY the evidence summaries and diagnosis. The tactics database
 </output_format>
 
 <accepted_phase_1_and_2_facts>
-${inputs.acceptedFacts ?? formatAcceptedFacts(inputs.phase1, inputs.phase2)}
+${inputs.acceptedFacts ?? buildAcceptedFacts(inputs.phase1, inputs.phase2).text}
 </accepted_phase_1_and_2_facts>
 
 <source_document>
@@ -515,6 +536,8 @@ ROADMAP GROUNDING:
 
 <rules>
 - Do NOT re-score the evidence summary. Treat LOCKED_FINDINGS as the current-state baseline.
+- Check each planning rationale, safe-to-act item, evidence request, Why, What, action and assumption against surviving customer evidence. Excluded premises and their paraphrases cannot justify any statement, even if repeated in LOCKED_FINDINGS. A shared criterion ID or an applicable tactic alone cannot establish the premise. A narrower review may stand on the accepted evidence for the same criterion.
+- For independently supported statements, return the entire field or list item verbatim as the claim. In the rationale cite the exact stream and criterion followed by a short verbatim supporting excerpt in double quotes, e.g. maturity.B1 "monthly utilization review of the sampled reservation". Supply each material criterion and check scope and qualifiers. For an evidence request grounded in an unknown, quote its complete status (UNKNOWN | unscored | NO_GOVERNED_EVIDENCE). For unsupported statements, flag the unsupported premise or action. Prioritize affected statements within the existing claim limit.
 - Ask: do the WHY, WHAT, and HOW sections answer the findings? If a phase rationale, intended outcome, or action does not address a confirmed gap, anti-pattern, missing-evidence item, or diagnosis statement, classify it as unsupported.
 - Planning decision must be proportionate to confidence. If the plan says GO while locked findings contain major uncertainty, unsupported claims, or evidence gaps, flag the GO rationale as unsupported or overconfident.
 - Tactic IDs are allowed only in roadmap actions and must exist in the tactics DB.
@@ -549,12 +572,16 @@ ROADMAP GROUNDING:
 }
 </output_format>
 
+<excluded_premises>
+${JSON.stringify(inputs.excludedPremises || [])}
+</excluded_premises>
+
 <locked_findings>
 ${inputs.lockedFindingsText}
 </locked_findings>
 
 <accepted_phase_1_and_2_facts>
-${inputs.acceptedFacts ?? formatAcceptedFacts(inputs.phase1, inputs.phase2)}
+${inputs.acceptedFacts ?? buildAcceptedFacts(inputs.phase1, inputs.phase2).text}
 </accepted_phase_1_and_2_facts>
 
 <verified_tactics_db>
