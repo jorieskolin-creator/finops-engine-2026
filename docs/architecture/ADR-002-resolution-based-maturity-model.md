@@ -86,10 +86,11 @@ actionability. It must not mutate a calculated maturity score. An
 assessment-integrity blocker may block both decisions; a strategy-only blocker
 must not rewrite evidence-based maturity.
 
-Assessment Sufficiency policy v2 uses hard publication floors of 30% criterion
-evidence density and 30% overall resolution, provenance integrity 100%, no
+Assessment Sufficiency policy v2 uses hard publication floors requiring
+strictly greater than 24% criterion evidence density and strictly greater than
+24% overall resolution (`<= 24%` blocks), provenance integrity 100%, no
 unresolved verification, and a ready effective Evidence Package. Density and
-resolution from 30% through less than 60% pass with explicit evidence warnings.
+resolution above 24% through less than 60% pass with explicit evidence warnings.
 
 Per-domain resolution is telemetry, not a global blocker. The engine separately
 calculates verified criterion evidence density for each domain. A domain with
@@ -108,7 +109,10 @@ actions after verified criterion evidence has been established.
 4. **Implemented:** synthetic calibration baseline and aggregate RunTrace data.
 5. **Implemented:** authoritative Assessment Sufficiency gate.
 6. **Implemented:** three active gauges in the Engine, Summary Report, and
-   Master Data report, plus prompt, fact-check, checkpoint, and recovery use.
+   Master Data report (`Adjusted FinOps Maturity`, `Criterion Evidence Density`,
+   and `Overall Assessment Resolution`, while `Corroborated` and `Observed`
+   maturity remain in RunTrace and `key_metrics`), plus prompt, fact-check,
+   checkpoint, and recovery use.
 7. **Implemented:** removal of the legacy average as scoring authority and of
    the Quality Gate 70-point score cap. Legacy dimensions remain diagnostics.
 

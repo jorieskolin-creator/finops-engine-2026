@@ -155,9 +155,9 @@ assert.match(exportSource, /final GO\/WARN\/BLOCK decisions are controlled by de
 assert.doesNotMatch(exportSource, /This report is generated deterministically from the validated assessment output/, 'HTML exports should not overstate that the whole report is generated without generative processing');
 
 const reportViewModelSource = await readFile(new URL('../src/services/reportViewModel.ts', import.meta.url), 'utf8');
-assert.match(reportViewModelSource, /label: 'Corroborated Maturity'/, 'report gauges should expose corroborated paired maturity');
-assert.match(reportViewModelSource, /label: 'Observed Maturity'/, 'report gauges should expose observed paired maturity');
 assert.match(reportViewModelSource, /label: 'Adjusted FinOps Maturity'/, 'report gauges should expose resolution-adjusted maturity');
+assert.match(reportViewModelSource, /label: 'Criterion Evidence Density'/, 'report gauges should expose criterion evidence density');
+assert.match(reportViewModelSource, /label: 'Overall Assessment Resolution'/, 'report gauges should expose overall assessment resolution');
 assert.match(reportViewModelSource, /Assessment Sufficiency/, 'active gauge explanation should disclose the publication gate');
 assert.doesNotMatch(reportViewModelSource, /label: 'Observed Friction'/, 'Observed Friction should no longer occupy a primary report gauge');
 

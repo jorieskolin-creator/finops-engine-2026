@@ -3,7 +3,7 @@ import { AuditItem, EvidenceCheckResult, FactCheckClaim, FactCheckResult, Phase1
 import { FINOPS_CRITERIA } from '../knowledge_base';
 import { runStage, RunContext } from './modelRouter';
 
-export const EVIDENCE_DENSITY_BLOCK = 30;
+export const EVIDENCE_DENSITY_BLOCK = 25;
 export const EVIDENCE_DENSITY_WARN = 60;
 export const MATURITY_ZERO_RATIO_WARN = 70;
 export const SILENT_AREAS_WARN = 15;
@@ -103,7 +103,7 @@ export const isBlockingUnsupportedClaim = (claim: FactCheckClaim): boolean => {
 export const buildEvidenceDensityBlock = (density: number): QualityGateResult => ({
   decision: 'BLOCK',
   blocking_reasons: [
-    `Evidence density ${density}% is below the ${EVIDENCE_DENSITY_BLOCK}% floor. Fewer than ${Math.ceil(totalCriterionCount * (EVIDENCE_DENSITY_BLOCK / 100))} of ${totalCriterionCount} criteria had verified source coverage — the audit cannot ground a strategy on this material.`
+    `Evidence density ${density}% is at or below the 24% floor. Fewer than ${Math.ceil(totalCriterionCount * (EVIDENCE_DENSITY_BLOCK / 100))} of ${totalCriterionCount} criteria had verified source coverage — the audit cannot ground a strategy on this material.`
   ],
   warnings: [],
   notes: ['Skipped Phase 3 (strategy) and fact-check to avoid building on unreliable signal.'],
@@ -131,7 +131,7 @@ export const runQualityGate = (
     : undefined;
   if (phase2.metrics.evidence_density < EVIDENCE_DENSITY_BLOCK) {
     blocking_reasons.push(
-      `Evidence density ${phase2.metrics.evidence_density}% < ${EVIDENCE_DENSITY_BLOCK}% floor${assessedCriterionCount !== undefined ? ` (${assessedCriterionCount}/${totalCriterionCount} assessed criteria)` : ''}.`
+      `Evidence density ${phase2.metrics.evidence_density}% <= 24% floor${assessedCriterionCount !== undefined ? ` (${assessedCriterionCount}/${totalCriterionCount} assessed criteria)` : ''}.`
     );
   }
   const maturityZeroRatio = phase2.metrics.maturity_zero_ratio

@@ -168,13 +168,13 @@ const sufficiencyFixture = (resolvedCount, overallResolution, options = {}) => {
 };
 
 {
-  const belowFloor = sufficiencyFixture(17, 29.9);
-  assert.equal(belowFloor.decision, 'BLOCK', 'evidence and resolution below 30% must block classification');
-  assert.equal(belowFloor.policy_version, 'assessment_sufficiency_policy_v2');
+  const atFloor = sufficiencyFixture(14, 24);
+  assert.equal(atFloor.decision, 'BLOCK', 'evidence and resolution at or below 24% must block classification');
+  assert.equal(atFloor.policy_version, 'assessment_sufficiency_policy_v2');
 
-  const boundary = sufficiencyFixture(18, 30);
-  assert.equal(boundary.decision, 'PASS', 'the 30% hard-floor boundary must publish a classification');
-  assert.ok(boundary.warning_reasons.some(reason => /confidence target/.test(reason)), '30% must retain calibration warnings below 60%');
+  const justAboveFloor = sufficiencyFixture(15, 25);
+  assert.equal(justAboveFloor.decision, 'PASS', 'criterion density >24% and resolution >24% (e.g. 25%/25%) must pass Assessment Sufficiency');
+  assert.ok(justAboveFloor.warning_reasons.some(reason => /confidence target/.test(reason)), '25% must retain calibration warnings below 60%');
 
   const reviewedRun = sufficiencyFixture(19, 31.7);
   assert.equal(reviewedRun.decision, 'PASS', 'the reviewed 31.7% run must pass Assessment Sufficiency');

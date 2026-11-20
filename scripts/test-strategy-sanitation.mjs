@@ -412,6 +412,7 @@ const deterministicBlocked = buildDeterministicBlockedFindingsStrategy({
 assert.deepEqual(deterministicBlocked.phase_3_strategy.evidence_summary.confirmed_gaps, [], 'Clear BLOCK must not promote 0/3 observations to confirmed gaps');
 assert.doesNotMatch(deterministicBlocked.phase_3_strategy.diagnosis.primary_bottleneck, /\[A1\]/, 'Clear BLOCK must not promote A1 as primary bottleneck');
 assert.match(deterministicBlocked.phase_3_strategy.diagnosis.primary_bottleneck, /Not established .*\(5\/60, 8%\)/);
+assert.doesNotMatch(deterministicBlocked.phase_3_strategy.executive_summary, /\b(?:24|25|30)%/, 'deterministic BLOCK summary must not emit ungrounded threshold percentages');
 assert.ok(deterministicBlocked.phase_3_strategy.evidence_summary.scoped_observations.some(line => line.startsWith('[A1] Scoped observation')));
 assert.ok(deterministicBlocked.phase_3_strategy.evidence_summary.scoped_observations.some(line => line.startsWith('[AP-A1] Scoped observation (anti-pattern not assessed)')));
 assert.ok(deterministicBlocked.phase_3_strategy.evidence_summary.scoped_observations.some(line => line.startsWith('[B1] Scoped observation (1/3)')));
@@ -421,7 +422,7 @@ assert.doesNotMatch(JSON.stringify(deterministicBlocked), /primary constraint/i)
 const skippedFactCheck = { attempts: 0, total_claims: 0, supported_count: 0, unsupported_claims: [], sanitized_claims: [], trajectory: [], failed: false };
 const clearBlockGate = runQualityGate(clearBlockAuditLogs, clearBlockPhase2, validationOk, validationOk, evidenceCheckOk, skippedFactCheck);
 assert.equal(clearBlockGate.decision, 'BLOCK');
-assert.ok(clearBlockGate.blocking_reasons.some(reason => /Evidence density 8% < 30% floor \(5\/60 assessed criteria\)/.test(reason)));
+assert.ok(clearBlockGate.blocking_reasons.some(reason => /Evidence density 8% <= 24% floor \(5\/60 assessed criteria\)/.test(reason)));
 assert.equal(clearBlockGate.blocking_reasons.some(reason => /fact-check/i.test(reason)), false, 'deterministic findings-only skip must not create a false fact-check failure blocker');
 
 const postGateBlocked = sanitizeBlockedStrategy(deterministicBlocked, clearBlockGate.blocking_reasons, {

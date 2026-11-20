@@ -237,8 +237,8 @@ export const calculateResolutionBasedMaturity = (
 };
 
 const SUFFICIENCY_THRESHOLDS = {
-  criterion_evidence_density: 30,
-  overall_resolution: 30,
+  criterion_evidence_density: 24,
+  overall_resolution: 24,
   evidence_warning_below: 60,
   silent_domain_density_below: 10,
   provenance_integrity: 100,
@@ -264,17 +264,17 @@ export const evaluateAssessmentSufficiency = (
   const evidencePacketReady = options.evidencePacketReady !== false;
   const blockingReasons: string[] = [];
   const warningReasons: string[] = [];
-  if (criterionEvidenceDensity < SUFFICIENCY_THRESHOLDS.criterion_evidence_density) {
-    blockingReasons.push(`Criterion evidence density ${criterionEvidenceDensity}% (${resolvedCriteria.length}/${model.criterion_resolutions.length} assessed criteria) is below ${SUFFICIENCY_THRESHOLDS.criterion_evidence_density}%.`);
+  if (criterionEvidenceDensity <= SUFFICIENCY_THRESHOLDS.criterion_evidence_density) {
+    blockingReasons.push(`Criterion evidence density ${criterionEvidenceDensity}% (${resolvedCriteria.length}/${model.criterion_resolutions.length} assessed criteria) must be above ${SUFFICIENCY_THRESHOLDS.criterion_evidence_density}%.`);
   }
-  if (model.overall.resolution < SUFFICIENCY_THRESHOLDS.overall_resolution) {
-    blockingReasons.push(`Overall assessment resolution ${model.overall.resolution}% is below ${SUFFICIENCY_THRESHOLDS.overall_resolution}%.`);
+  if (model.overall.resolution <= SUFFICIENCY_THRESHOLDS.overall_resolution) {
+    blockingReasons.push(`Overall assessment resolution ${model.overall.resolution}% must be above ${SUFFICIENCY_THRESHOLDS.overall_resolution}%.`);
   }
-  if (criterionEvidenceDensity >= SUFFICIENCY_THRESHOLDS.criterion_evidence_density
+  if (criterionEvidenceDensity > SUFFICIENCY_THRESHOLDS.criterion_evidence_density
     && criterionEvidenceDensity < SUFFICIENCY_THRESHOLDS.evidence_warning_below) {
     warningReasons.push(`Criterion evidence density ${criterionEvidenceDensity}% (${resolvedCriteria.length}/${model.criterion_resolutions.length} assessed criteria) is below the ${SUFFICIENCY_THRESHOLDS.evidence_warning_below}% confidence target.`);
   }
-  if (model.overall.resolution >= SUFFICIENCY_THRESHOLDS.overall_resolution
+  if (model.overall.resolution > SUFFICIENCY_THRESHOLDS.overall_resolution
     && model.overall.resolution < SUFFICIENCY_THRESHOLDS.evidence_warning_below) {
     warningReasons.push(`Overall assessment resolution ${model.overall.resolution}% is below the ${SUFFICIENCY_THRESHOLDS.evidence_warning_below}% confidence target.`);
   }

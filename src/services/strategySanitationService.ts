@@ -333,7 +333,7 @@ export const sanitizeBlockedStrategy = (
 
   strategy.remediation_roadmap = [];
   strategy.effective_bracket = 'LOW';
-  if ((context.evidenceDensity ?? 100) < 30) {
+  if ((context.evidenceDensity ?? 100) < 25) {
     if (strategy.evidence_summary && Array.isArray(strategy.evidence_summary.confirmed_gaps) && strategy.evidence_summary.confirmed_gaps.length > 0) {
       strategy.evidence_summary.scoped_observations = Array.from(new Set([
         ...(strategy.evidence_summary.scoped_observations || []),
@@ -342,12 +342,12 @@ export const sanitizeBlockedStrategy = (
       strategy.evidence_summary.confirmed_gaps = [];
     }
     if (strategy.diagnosis && typeof strategy.diagnosis.primary_bottleneck === 'string' && /^\[[A-F][1-5]\]/.test(strategy.diagnosis.primary_bottleneck.trim())) {
-      strategy.diagnosis.primary_bottleneck = 'Not established — assessed criterion coverage is below the 30% sufficiency floor, so no single criterion can be identified as the primary organizational bottleneck.';
+      strategy.diagnosis.primary_bottleneck = 'Not established — assessed criterion coverage is below the sufficiency floor, so no single criterion can be identified as the primary organizational bottleneck.';
       strategy.diagnosis.root_causes = ['Root-cause ranking is withheld until missing domain and criterion evidence is supplied.'];
     }
   }
   const mayReviewFindings =
-    (context.evidenceDensity || 0) >= 30
+    (context.evidenceDensity || 0) >= 25
     && context.evidenceCheckCompleted === true
     && !unsafeDiagnosticBlock(blockingReasons);
   const safeToActOn = mayReviewFindings
@@ -458,7 +458,7 @@ export const buildDeterministicBlockedFindingsStrategy = ({
   ];
   evidenceRequests.push(...prioritizedGaps.slice(0, 8));
 
-  const outcome = `The assessment completed deterministic acquisition and Phase 1 verification, resolving ${assessedCount}/60 criteria (${density}% evidence density) while ${60 - assessedCount}/60 criteria remained unassessed. Because assessed criterion coverage is below the 30% evidence floor, narrative synthesis and regeneration were skipped in favor of a deterministic findings-only report.`;
+  const outcome = `The assessment completed deterministic acquisition and Phase 1 verification, resolving ${assessedCount}/60 criteria (${density}% evidence density) while ${60 - assessedCount}/60 criteria remained unassessed. Because assessed criterion coverage is below the minimum evidence floor, narrative synthesis and regeneration were skipped in favor of a deterministic findings-only report.`;
   const boundary = 'Decision: NO_GO. No organizational primary bottleneck, confirmed capability gap, or remediation roadmap is issued from below-floor coverage. Review the scoped observations and supply the requested evidence before rerunning.';
 
   return {
@@ -493,7 +493,7 @@ export const buildDeterministicBlockedFindingsStrategy = ({
         ].slice(0, 8),
       },
       diagnosis: {
-        primary_bottleneck: `Not established — assessed criterion coverage (${assessedCount}/60, ${density}%) is below the 30% sufficiency floor, so no criterion can be identified as the primary organizational bottleneck.`,
+        primary_bottleneck: `Not established — assessed criterion coverage (${assessedCount}/60, ${density}%) is below the minimum sufficiency floor, so no criterion can be identified as the primary organizational bottleneck.`,
         root_causes: [
           'Root-cause attribution is withheld until missing domain and criterion evidence is supplied.',
         ],
@@ -514,7 +514,7 @@ export const buildDeterministicBlockedFindingsStrategy = ({
       },
       planning_decision: {
         decision: 'NO_GO',
-        rationale: 'Assessed criterion coverage is below the 30% evidence floor. Preserve the verified scoped observations, gather the missing evidence below, and rerun the assessment before prioritizing remediation.',
+        rationale: 'Assessed criterion coverage is below the minimum evidence floor. Preserve the verified scoped observations, gather the missing evidence below, and rerun the assessment before prioritizing remediation.',
         safe_to_act_on: [
           'Review only the verified scoped source observations as bounded extract facts.',
           'Collect the primary domain and criterion evidence listed under Evidence Needed Before Action.',

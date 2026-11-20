@@ -1712,8 +1712,8 @@ export interface AssessmentSufficiencyResult {
   decision: 'PASS' | 'BLOCK';
   scoring_authority: true;
   thresholds: {
-    criterion_evidence_density: 30;
-    overall_resolution: 30;
+    criterion_evidence_density: 24;
+    overall_resolution: 24;
     evidence_warning_below: 60;
     silent_domain_density_below: 10;
     provenance_integrity: 100;
