@@ -24,10 +24,11 @@ inverses.
 
 The sparse and domain-blind scenarios demonstrate why Adjusted Maturity cannot
 authorize publication or CRAWL/WALK/RUN by itself. Assessment Sufficiency policy
-v2 applies 30% hard floors for criterion evidence density and overall resolution,
-with warnings below 60%. Per-domain resolution remains telemetry. A separate
-strict `<10%` verified criterion-density rule marks a domain silent and limits
-that domain to evidence collection without globally blocking classification.
+v2 requires strictly greater than 24% criterion evidence density and overall
+resolution (`<= 24%` blocks), with warnings below 60%. Per-domain resolution
+remains telemetry. A separate strict `<10%` verified criterion-density rule marks
+a domain silent and limits that domain to evidence collection without globally
+blocking classification.
 
 RunTrace exports aggregate-only active results under `resolution_maturity`. It
 excludes criterion records, pair records, quotes, source identifiers, and chunk

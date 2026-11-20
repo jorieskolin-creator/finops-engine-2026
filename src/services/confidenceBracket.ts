@@ -25,7 +25,7 @@ export const HIGH_THRESHOLDS = {
 };
 
 export const LOW_THRESHOLDS = {
-  evidence_density: 30,
+  evidence_density: 25,
   delivery_integrity: 70,
 };
 

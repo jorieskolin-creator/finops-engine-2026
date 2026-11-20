@@ -1560,7 +1560,7 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => unresolve
     // reports skip narrative/reviewer model calls altogether.
     if (deterministicSynthesisFallback && qualityGate.decision !== 'GO') {
       qualityGate.llm_explanation = {
-        summary: 'Deterministic findings-only report: narrative synthesis, regeneration, and fact-check model passes were skipped because assessed criterion coverage is below the 30% evidence floor.',
+        summary: 'Deterministic findings-only report: narrative synthesis, regeneration, and fact-check model passes were skipped because assessed criterion coverage is at or below the 24% evidence floor.',
         blocking_details: [],
         warning_details: [],
         fallback_used: true,

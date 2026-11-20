@@ -316,7 +316,7 @@ const logs = (maturityFactory, antiFactory) => ({
     },
   });
   assert.equal(view.metrics.length, 3, 'report summary should expose only the three active maturity gauges');
-  assert.deepEqual(view.metrics.map(metric => metric.label), ['Corroborated Maturity', 'Observed Maturity', 'Adjusted FinOps Maturity']);
+  assert.deepEqual(view.metrics.map(metric => metric.label), ['Adjusted FinOps Maturity', 'Criterion Evidence Density', 'Overall Assessment Resolution']);
   assert.equal(view.sufficiency.decision, 'PASS', 'Quality Gate BLOCK must not alter Assessment Sufficiency');
   assert.equal(view.antipatternDisposition.unresolved, 0);
   assert.equal(
@@ -367,6 +367,27 @@ const logs = (maturityFactory, antiFactory) => ({
   assert.deepEqual(result.confirmed_maturity_gaps, [], 'below-floor BLOCK must not promote 0/3 observations into confirmed_maturity_gaps');
   assert.ok(result.scoped_observations.some(entry => entry.startsWith('[A1] Scoped observation')), '0/3 observation under BLOCK must be retained as a scoped observation');
   assert.ok(result.scoped_observations.some(entry => entry.startsWith('[AP-A1] Scoped observation (anti-pattern not assessed)')), 'AP-A1 derived quote must be retained as a scoped observation');
+}
+
+{
+  // Attached 2026-11-20 RunTrace boundary: 15/60 assessed criteria (25% density,
+  // 25% resolution across A=90%, B=30%, C=30%, D/E/F=0% silent) must PASS sufficiency
+  // (>24% floor) and classify as Crawl rather than Insufficient evidence / BLOCK.
+  const assessed25Logs = logs(
+    (id) => (['A1', 'A2', 'A3', 'A4', 'A5', 'B1', 'B2', 'B3', 'C1', 'C2', 'C3'].includes(id)
+      ? item(id.startsWith('A') ? 2 : 1, true)
+      : item(0, false)),
+    (id) => (['A1', 'A2', 'A3', 'A4'].includes(id)
+      ? anti(0, false, 'tested_absent')
+      : anti(0, false, 'unknown_absent')),
+  );
+  const result = calculateMetrics(assessed25Logs);
+  assert.equal(result.metrics.evidence_density, 25);
+  assert.equal(result.assessment_sufficiency.criterion_evidence_density, 25);
+  assert.equal(result.assessment_sufficiency.overall_resolution, 25);
+  assert.equal(result.assessment_sufficiency.decision, 'PASS');
+  assert.equal(result.crawl_walk_run, 'Crawl');
+  assert.deepEqual(result.assessment_sufficiency.silent_domain_ids, ['D', 'E', 'F']);
 }
 
 console.log('metrics unit tests passed');

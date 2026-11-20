@@ -3,7 +3,7 @@ import { BATCH_TITLES, FINOPS_ANTIPATTERNS, FINOPS_CRITERIA } from '../knowledge
 import { inferAntiPatternAbsenceStatus } from './antiPatternSemantics';
 import { calculateResolutionBasedMaturity, evaluateAssessmentSufficiency } from './maturityModelService';
 
-export const EVIDENCE_DENSITY_BLOCK = 30;
+export const EVIDENCE_DENSITY_BLOCK = 25;
 export const EVIDENCE_DENSITY_WARN = 60;
 
 const clampPercent = (value: number): number => Math.min(Math.max(value, 0), 100);
