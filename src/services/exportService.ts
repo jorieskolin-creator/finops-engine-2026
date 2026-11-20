@@ -210,8 +210,8 @@ const renderAcquisitionQuality = (result: DiagnosticResult): string => {
   const statusClass = (ready: boolean) => ready ? 'packet-coverage-ok' : 'packet-coverage-weak';
   const metricRows: Array<[string, string]> = [
     ['Extraction completeness', `${quality.extraction.overall_completeness}% · ${quality.extraction.status}`],
-    ['Evidence coverage', `${coverage.overall}% · ${coverage.covered_items}/${coverage.total_items} objects`],
-    ['Evidence density', `${density.overall}%`],
+    ['Evidence density (assessed criteria)', `${coverage.overall}% · ${coverage.covered_items}/${coverage.total_items} criteria`],
+    ['Acquisition quality composite (covered items)', `${density.overall}%`],
     ['Verified evidence strength', `${density.verified_strength}%`],
     ['Source diversity', `${density.source_diversity}%`],
     ['Evidence-category diversity', `${density.category_diversity}%`],
@@ -226,7 +226,7 @@ const renderAcquisitionQuality = (result: DiagnosticResult): string => {
   <section class="source-packet-section">
     <h2>Acquisition Quality &amp; Readiness</h2>
     <div class="source-packet-card">
-      <p class="source-packet-note">Versioned acquisition telemetry (${escapeHtml(quality.formula_version)}). Evidence coverage measures how much of the assessment surface was tested; evidence density separately combines verified strength (60%), per-object source diversity (20%), and evidence-category diversity (20%). These readiness values are observability-only in this milestone and do not alter scores or the Quality Gate.</p>
+      <p class="source-packet-note">Versioned acquisition telemetry (${escapeHtml(quality.formula_version)}). Evidence density (assessed criteria) measures how much of the 60-criterion assessment surface was assessed; the acquisition quality composite separately combines verified strength (60%), per-object source diversity (20%), and evidence-category diversity (20%) across assessed criteria. These readiness values are observability-only in this milestone and do not alter scores or the Quality Gate.</p>
       <div class="source-packet-tables">
         <table class="source-packet-table source-packet-metrics-table">
           <thead><tr><th>Quality measure</th><th>Value</th></tr></thead>
@@ -242,7 +242,7 @@ const renderAcquisitionQuality = (result: DiagnosticResult): string => {
         </table>
         ${domainRows.length > 0 ? `
         <table class="source-packet-table">
-          <thead><tr><th>Domain</th><th>Covered objects</th><th>Expected objects</th><th>Coverage</th></tr></thead>
+          <thead><tr><th>Domain</th><th>Assessed criteria</th><th>Expected criteria</th><th>Evidence density</th></tr></thead>
           <tbody>${domainRows.map(([domain, value]) => `<tr><td><strong>${escapeHtml(domain)}</strong><span>${escapeHtml(BATCH_TITLES[domain] || domain)}</span></td><td>${value.covered_items}</td><td>${value.total_items}</td><td>${value.completeness}%</td></tr>`).join('')}</tbody>
         </table>` : ''}
         ${quality.extraction.sources.length > 0 ? `
@@ -392,7 +392,7 @@ const renderForensicCriterion = (cat: { id: string; title: string; desc: string 
       </div>` : ''}
       ${item?.evidence_quotes && item.evidence_quotes.length > 0 ? `
       <div class="forensic-block">
-        <div class="forensic-label">Evidence</div>
+        <div class="forensic-label">${item.assessment_status === 'not_assessed' || (stream === 'antipattern' && inferAntiPatternAbsenceStatus(item) === 'unknown_absent') ? 'Scoped observation (criterion not assessed)' : 'Evidence'}</div>
         <ul class="forensic-quotes">
           ${item.evidence_quotes.map(q => {
             const isImage = q.evidence_source === 'image';
@@ -975,7 +975,7 @@ export const generateSummaryReportHtml = (unsafeResult: DiagnosticResult): strin
         <span class="pill pill-${qgTone}">${result.quality_gate.decision === 'BLOCK' ? 'Roadmap actionability BLOCKED' : `Maturity band ${escapeHtml(cwrClass)}`}</span>
         ${result.quality_gate.decision === 'BLOCK' ? `<span class="pill">Observed maturity band ${escapeHtml(cwrClass)}</span>` : ''}
         <span class="pill pill-${qgTone}">Quality Gate ${escapeHtml(result.quality_gate.decision)}</span>
-        <span class="pill">Evidence ${Math.round(m.evidence_density)}%</span>
+        <span class="pill">Evidence density ${Math.round(m.evidence_density)}%${typeof m.maturity_assessed_count === 'number' && typeof m.antipattern_assessed_count === 'number' ? ` (${m.maturity_assessed_count + m.antipattern_assessed_count}/60)` : ''}</span>
         ${kbStatus ? `<span class="pill">${escapeHtml(kbStatus)}</span>` : ''}
       </div>
       ${sourceNote}

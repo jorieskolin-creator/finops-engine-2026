@@ -135,7 +135,11 @@ assert.doesNotMatch(exportSource, /finops-data|serializeDiagnosticResultForHtml/
 assert.match(exportSource, /Domain Signal Overview/, 'HTML exports should include the domain signal title');
 assert.match(exportSource, /Anti-pattern finding rate/, 'HTML exports should label anti-pattern traffic lights');
 assert.match(exportSource, /Acquisition Quality &amp; Readiness/, 'Master Data should visibly render acquisition quality');
-assert.match(exportSource, /Evidence coverage measures how much of the assessment surface was tested/, 'Master Data should distinguish coverage from density');
+assert.match(exportSource, /Evidence density \(assessed criteria\) measures how much of the 60-criterion assessment surface was assessed/, 'Master Data should define evidence density strictly as assessed criterion coverage');
+assert.match(exportSource, /Acquisition quality composite \(covered items\)/, 'Master Data should label the 60/20/20 composite separately from evidence density');
+assert.doesNotMatch(exportSource, /\['Evidence density',\s*`\$\{density\.overall\}%`\]/, 'Master Data must never label the acquisition quality composite as Evidence density');
+assert.match(exportSource, /Scoped observation \(criterion not assessed\)/, 'Master Data should retain quotes on unassessed criteria as scoped observations');
+assert.match(reportViewSource, /Scoped observation \(criterion not assessed\)/, 'React report should retain quotes on unassessed criteria as scoped observations');
 assert.match(exportSource, /observability-only in this milestone/, 'Master Data should disclose that acquisition readiness does not alter the Quality Gate');
 assert.match(exportSource, /renderAcquisitionQuality\(result\)/, 'Master Data generation should include the acquisition quality section');
 assert.match(exportSource, /Shadow deterministic A1\/AP-A1 observations/, 'Master Data should visibly label derived evidence as shadow-only');

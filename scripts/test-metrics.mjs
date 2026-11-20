@@ -194,9 +194,9 @@ const logs = (maturityFactory, antiFactory) => ({
             ? anti(0, false, 'partially_present')
             : anti(0, false, 'unknown_absent')
   ));
-  assert.equal(result.metrics.evidence_density, 63, 'fixture must reproduce the latest run evidence coverage');
+  assert.equal(result.metrics.evidence_density, 60, 'unknown_absent anti-patterns with scoped quotes must not inflate assessed criterion coverage');
   assert.equal(result.metrics.capability_attainment, 0);
-  assert.equal(result.metrics.antipattern_assessed_count, 15, 'only evidence-covered anti-patterns count as assessed coverage');
+  assert.equal(result.metrics.antipattern_assessed_count, 13, 'only resolved anti-patterns (findings or tested_absent) count as assessed coverage');
   assert.equal(result.metrics.antipattern_score_eligible_count, 13, 'unknown and not-assessed signals must not enter the control denominator');
   assert.equal(Math.round(result.metrics.antipattern_burden * 10) / 10, 38.5);
   assert.equal(result.metrics.antipattern_control, 0, 'partial findings without tested absence must not raise control');
@@ -324,6 +324,46 @@ const logs = (maturityFactory, antiFactory) => ({
     30,
     'anti-pattern disposition states must partition all 30 anti-pattern criteria'
   );
+}
+
+{
+  // Clear BLOCK 5/60 vs 6/60 regression: AP-A1 carries a scoped derived
+  // allocation quote from a 4-row extract while remaining unknown_absent (Not assessed).
+  const derivedApQuote = {
+    quote: 'allocation row coverage: 100%; valid=4/4; invalid placeholders=0; state=FIELD_PRESENT_VALID.',
+    category: 'Operational',
+    evidence_source: 'derived',
+    source_id: 'src-billing',
+    derived_evidence_id: 'EVID-DER-a1',
+  };
+  const clearBlockLogs = logs(
+    (_id, index) => index < 5 ? item(index === 0 ? 0 : 1, true) : item(0, false),
+    (id) => id === 'A1'
+      ? {
+          count: 0,
+          status: 'OK',
+          evidence: 'Scoped allocation observation in 4-row extract.',
+          evidence_quotes: [derivedApQuote],
+          assessment_status: 'assessed',
+          question_results: ['unknown', 'unknown', 'unknown'],
+          reasoning: '4-row billing sample shows allocation tags, insufficient to prove organization-wide absence.',
+          is_silent: true,
+          antipattern_absence_status: 'unknown_absent',
+          coverage_reason: 'Four-row extract confirms sample allocation only; anti-pattern absence is not assessed.',
+          evidence_check_status: 'supported',
+        }
+      : anti(0, false, 'unknown_absent'),
+  );
+  const result = calculateMetrics(clearBlockLogs);
+  const resolvedCount = result.resolution_maturity.criterion_resolutions.filter(r => r.state === 'RESOLVED').length;
+  const assessedCount = result.metrics.maturity_assessed_count + result.metrics.antipattern_assessed_count;
+  assert.equal(resolvedCount, 5, 'sufficiency model must resolve 5/60 criteria');
+  assert.equal(assessedCount, 5, 'metrics assessed count must agree at 5/60 (not 6/60)');
+  assert.equal(result.metrics.evidence_density, 8, 'evidence density must be 8% (5/60), not 10% (6/60)');
+  assert.equal(result.metrics.antipattern_assessed_count, 0, 'AP-A1 must remain Not assessed');
+  assert.equal(result.metrics.score_gap_breakdown.antipattern_not_assessed, 30);
+  assert.equal(clearBlockLogs.antipattern.A1.evidence_quotes.length, 1, 'scoped derived quote on AP-A1 must remain intact');
+  assert.match(result.assessment_sufficiency.blocking_reasons[0], /\(5\/60 assessed criteria\)/);
 }
 
 console.log('metrics unit tests passed');

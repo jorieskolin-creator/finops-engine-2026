@@ -432,7 +432,11 @@ const ForensicCriterion: React.FC<{
     )}
     {item?.evidence_quotes && item.evidence_quotes.length > 0 && (
       <div>
-        <p className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-1">Evidence</p>
+        <p className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-1">
+          {item.assessment_status === 'not_assessed' || (stream === 'antipattern' && inferAntiPatternAbsenceStatus(item) === 'unknown_absent')
+            ? 'Scoped observation (criterion not assessed)'
+            : 'Evidence'}
+        </p>
         <ul className="space-y-2">
           {item.evidence_quotes.map((q, i) => {
             const isImage = q.evidence_source === 'image';
