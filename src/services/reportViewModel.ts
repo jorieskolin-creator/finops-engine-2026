@@ -11,6 +11,16 @@ export interface ReportMetricCard {
   color: string;
 }
 
+export const isRoadmapContractOnlyBlock = (result: DiagnosticResult): boolean => {
+  const gate = result.quality_gate;
+  const sufficiency = result.phase_2_validation?.assessment_sufficiency;
+  if (gate?.decision !== 'BLOCK' || sufficiency?.decision !== 'PASS') return false;
+  if (!Array.isArray(gate.blocking_reasons) || gate.blocking_reasons.length === 0) return false;
+  return gate.blocking_reasons.every(reason =>
+    reason.startsWith('Phase 3: Required tactic contract is incomplete')
+  );
+};
+
 export interface ReportViewModel {
   sufficiency: {
     decision: 'PASS' | 'BLOCK';
@@ -72,8 +82,11 @@ export const buildReportViewModel = (result: DiagnosticResult): ReportViewModel 
     || result.phase_3_strategy.confidence_bracket
     || 'unknown';
   const gate = result.quality_gate.decision;
+  const roadmapContractOnly = isRoadmapContractOnlyBlock(result);
   const statement = gate === 'BLOCK'
-    ? 'The assessment completed, but unresolved validation or insufficient evidence prevents an actionable roadmap.'
+    ? roadmapContractOnly
+      ? `Evidence, Phase 1/2 analysis, and the ${result.phase_2_validation.crawl_walk_run} maturity score passed Assessment Sufficiency. Roadmap publication is blocked by a Phase 3 tactic-contract check, not by source evidence or analysis quality.`
+      : 'The assessment completed, but unresolved validation or insufficient evidence prevents an actionable roadmap.'
     : gate === 'WARN'
       ? 'The assessment is usable with the listed evidence and strategy limitations.'
       : 'The validated evidence supports the reported planning decision.';

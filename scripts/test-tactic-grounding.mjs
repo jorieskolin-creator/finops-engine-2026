@@ -94,6 +94,7 @@ await writeFile(
 );
 
 const {
+  buildMissingRequiredTacticAppendix,
   buildTacticSelectionContext,
   buildTacticSelectionPlan,
   classifyFinalRequiredTactics,
@@ -213,6 +214,17 @@ const rejectedContract = classifyFinalRequiredTactics(missingStrategy, plan, [{
 }]);
 assert.deepEqual(rejectedContract.citation_rejected, ['TAC-GOV-002']);
 assert.deepEqual(rejectedContract.missing, []);
+const repairAppendix = buildMissingRequiredTacticAppendix(['TAC-GOV-002'], plan, [{
+  action: 'rewritten',
+  claim: '[TAC-GOV-002] Create a new account-vending control.',
+  rationale: 'Locked findings show account vending exists, only tagging enforcement is missing.',
+  source_location: 'roadmap',
+  failure_type: 'other',
+  severity: 'WARN_TACTIC_HYGIENE',
+  tactic_disposition: 'citation_rejected',
+}]);
+assert.match(repairAppendix, /Previous Quality Checker rejection details/);
+assert.match(repairAppendix, /Locked findings show account vending exists, only tagging enforcement is missing\./);
 
 const result = sanitizeRoadmapTacticGrounding(strategyData, phase2, ['F']);
 assert.equal(result.adjustments.length, 0);

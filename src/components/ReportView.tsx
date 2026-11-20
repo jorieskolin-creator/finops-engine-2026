@@ -13,7 +13,7 @@ import {
 import { antiPatternStatusLabel, inferAntiPatternAbsenceStatus } from '../services/antiPatternSemantics';
 import { displayQualityGateDiagnostic, isReportableSourceCoverageGap, splitQualityGateDiagnostics } from '../services/reportDiagnosticsService';
 import { computeDomainSignalRows, DomainSignalTone } from '../services/domainSignalService';
-import { buildReportViewModel } from '../services/reportViewModel';
+import { buildReportViewModel, isRoadmapContractOnlyBlock } from '../services/reportViewModel';
 
 const InlineSvg: React.FC<{ html: string; className?: string }> = ({ html, className }) => (
   <div className={className} dangerouslySetInnerHTML={{ __html: html }} />
@@ -126,7 +126,7 @@ const RemediationStepBlock: React.FC<{ step: RemediationStep; index: number }> =
   );
 };
 
-const QualityGateBlock: React.FC<{ gate: QualityGateResult }> = ({ gate }) => {
+const QualityGateBlock: React.FC<{ gate: QualityGateResult; roadmapContractOnly?: boolean }> = ({ gate, roadmapContractOnly = false }) => {
   const palette = gate.decision === 'GO'
     ? 'border-emerald-200 bg-emerald-50 text-emerald-900'
     : gate.decision === 'BLOCK'
@@ -150,7 +150,9 @@ const QualityGateBlock: React.FC<{ gate: QualityGateResult }> = ({ gate }) => {
       ? gate.fact_check?.sanitized_claims?.length
         ? 'Assessment score remains valid. Unsupported strategy wording or actions were removed or retained only in the appendix.'
         : 'Assessment score remains valid. WARN-level strategy hygiene notes are included in the appendix for traceability.'
-      : 'Assessment is unsafe to act on until blocking issues are resolved.';
+      : roadmapContractOnly
+        ? 'Evidence and maturity analysis passed; only roadmap publication is blocked by the Phase 3 required-tactic contract.'
+        : 'Assessment is unsafe to act on until blocking issues are resolved.';
   return (
     <div className={`mb-5 p-4 rounded-xl border ${palette} flex flex-col md:flex-row md:items-center md:justify-between gap-3`}>
       <div>
@@ -562,7 +564,7 @@ const EvidenceCheckSummaryBlock: React.FC<{ result: DiagnosticResult }> = ({ res
   return (
     <div className="mb-8 p-6 rounded-xl border border-slate-200 bg-white">
       <h2 className="text-xl font-display font-bold text-slate-900 mb-2">Evidence Check</h2>
-      <QualityGateBlock gate={result.quality_gate} />
+      <QualityGateBlock gate={result.quality_gate} roadmapContractOnly={isRoadmapContractOnlyBlock(result)} />
       <p className="text-sm text-slate-600 mb-4">
         Evidence Check reviewed audited criteria before scoring. Empty domains are recorded as Not assessed.
       </p>

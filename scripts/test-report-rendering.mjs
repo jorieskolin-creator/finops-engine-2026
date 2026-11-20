@@ -143,6 +143,8 @@ assert.match(reportViewSource, /Scoped observation \(criterion not assessed\)/, 
 assert.match(exportSource, /Scoped source observations/, 'Master Data should render scoped source observations separately from confirmed gaps');
 assert.match(reportViewSource, /Scoped source observations/, 'React report should render scoped source observations separately from confirmed gaps');
 assert.match(exportSource, /deterministic findings-only · narrative skipped/, 'Master Data should disclose when below-floor BLOCK skipped narrative synthesis and fact-check');
+assert.match(exportSource, /only roadmap publication is blocked by the Phase 3 required-tactic contract/, 'Master Data should distinguish roadmap-contract BLOCK from evidence/analysis BLOCK');
+assert.match(reportViewSource, /only roadmap publication is blocked by the Phase 3 required-tactic contract/, 'React report should distinguish roadmap-contract BLOCK from evidence/analysis BLOCK');
 assert.match(exportSource, /observability-only in this milestone/, 'Master Data should disclose that acquisition readiness does not alter the Quality Gate');
 assert.match(exportSource, /renderAcquisitionQuality\(result\)/, 'Master Data generation should include the acquisition quality section');
 assert.match(exportSource, /Shadow deterministic A1\/AP-A1 observations/, 'Master Data should visibly label derived evidence as shadow-only');

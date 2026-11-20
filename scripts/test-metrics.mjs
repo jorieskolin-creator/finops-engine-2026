@@ -324,6 +324,17 @@ const logs = (maturityFactory, antiFactory) => ({
     30,
     'anti-pattern disposition states must partition all 30 anti-pattern criteria'
   );
+
+  const roadmapContractView = buildReportViewModel({
+    phase_1_audit_logs: logs(() => item(2, true), () => anti(0, false, 'tested_absent')),
+    phase_2_validation: { ...phase2, crawl_walk_run: 'Walk' },
+    phase_3_strategy: { diagnosis: { confidence: 'medium' }, planning_decision: { decision: 'NO_GO' } },
+    quality_gate: {
+      decision: 'BLOCK',
+      blocking_reasons: ['Phase 3: Required tactic contract is incomplete after final sanitation and bounded repair: TAC-ARCH-003, TAC-OPT-004.'],
+    },
+  });
+  assert.match(roadmapContractView.actionability.statement, /passed Assessment Sufficiency\. Roadmap publication is blocked by a Phase 3 tactic-contract check, not by source evidence or analysis quality/);
 }
 
 {
