@@ -4,7 +4,7 @@ Status: Evaluated from the current codebase. This is a working summary for revie
 
 Audience: engineers changing auth, API, governance, privacy, logging, or dispatch code; reviewers checking that a change stays inside the existing security contract.
 
-Related sources: `README.md` (access control and data-handling boundaries), `docs/architecture/ADR-001-execution-and-evidence-lineage.md` (dispatch lineage and fail-closed packet binding), `lib/auth.js`, `lib/governance.js`, `src/services/deterministicPrivacyService.ts`.
+Related sources: `AGENTS.md` (agent workflow and change boundaries), `README.md` (access control and data-handling boundaries), `docs/architecture/ADR-001-execution-and-evidence-lineage.md` (dispatch lineage and fail-closed packet binding), `lib/auth.js`, `lib/governance.js`, `src/services/deterministicPrivacyService.ts`.
 
 ## How to use this summary
 
@@ -60,12 +60,13 @@ Implementation: `lib/auth.js`, `api/login.js`, `api/logout.js`, `api/session.js`
 
 - Express JSON and urlencoded bodies are capped at `2mb`. Server comments state text-only intake; images and base64 payloads are prohibited.
 - Governed packet approval (`lib/governance.js`) enforces exact keys, versioned schema/policy IDs, identifier regexes, a single `type: text` part, destination `provider:external_model`, authorized model settings, and an authorized output contract.
+- `evidence_gap_analysis` requests (`lib/evidenceGapRequest.js`) accept only catalog domain, criterion, and concept IDs under `finops_evidence_gap_input_v1`, hydrate prompts strictly from approved catalog aliases, reject free-form text, and re-validate that catalog-only hydration before worker send.
 - Provider dispatch (`lib/providerGateway.js`) accepts only packet IDs and binding fields. The browser cannot supply prompt text at send time. Unknown JSON keys fail as `INVALID_DISPATCH_PACKET`. Internal pipeline calls must set `internal_pipeline_call: true`.
 - `/api/run` validates UUID run IDs, exact quality-snapshot keys/ranges, and exact shadow-telemetry keys/invariants.
 - `/api/log` accepts only known events and per-event metadata allowlists (`lib/operationalLogPolicy.js`). Strings over 160 characters, newlines, `data:`, and `base64` are dropped.
 - Source records, pages, structured tables, and visual OCR units fail closed on unknown schemas, competing payloads, duplicate pages, hidden sheets marked model-eligible, or incomplete OCR/redaction status.
 
-Implementation: `server.js`, `lib/governance.js`, `lib/providerGateway.js`, `api/run.js`, `api/log.js`, `src/services/sourceRegistryService.ts`.
+Implementation: `server.js`, `lib/governance.js`, `lib/evidenceGapRequest.js`, `lib/providerGateway.js`, `api/run.js`, `api/log.js`, `src/services/sourceRegistryService.ts`.
 
 ## 4. Injection, XSS, and untrusted content
 
@@ -101,9 +102,9 @@ Implementation: `src/services/deterministicPrivacyService.ts`, `src/services/sou
 - Dispatch reloads canonical bytes, recomputes SHA-256, and evaluates packet binding. Any mismatch is fail-closed and not eligible for provider fallback (`ADR-001` invariants 4–5).
 - Provider invocation is at-most-once after Redis `SEND_AUTHORIZED`. Post-send uncertainty becomes `outcome_unknown`; it is never automatically retried or used as fallback.
 - Output contracts are server-authorized JSON schemas with `additionalProperties: false` (`lib/outputContracts.js`). Client-supplied schemas are rejected.
-- Evidence-gap analysis may propose search terms only. Deterministic local matching searches the privacy-approved Source Registry; remote KB bodies are not inputs to that stage.
+- Evidence-gap analysis accepts only catalog IDs (`finops_evidence_gap_input_v1` in `lib/evidenceGapRequest.js`) and may propose search terms only. Deterministic local matching searches the privacy-approved Source Registry with customer FinOps scope and criterion corroboration; remote KB bodies are not inputs to that stage, and domains without eligible evidence skip model dispatch locally.
 
-Implementation: `lib/governance.js`, `lib/providerGateway.js`, `lib/providerInvocation.js`, `lib/executionWorker.js`, `lib/outputContracts.js`, `docs/architecture/ADR-001-execution-and-evidence-lineage.md`.
+Implementation: `lib/governance.js`, `lib/evidenceGapRequest.js`, `lib/providerGateway.js`, `lib/providerInvocation.js`, `lib/executionWorker.js`, `lib/outputContracts.js`, `docs/architecture/ADR-001-execution-and-evidence-lineage.md`.
 
 ## 7. Retention, cleanup, and logging
 
@@ -146,6 +147,8 @@ These focused tests encode the practices above. Prefer extending them over addin
 | `npm run test:source-registry` | Hostile filenames, XML escaping, schema fail-closed |
 | `npm run test:table-cell-withhold` | Sensitive table cells withheld from model context |
 | `npm run test:provider-invocation` | Server-side provider call shape and capability checks |
+| `npm run test:evidence-gap-analysis` | Catalog-only `finops_evidence_gap_input_v1` request hydration and rejection of free-form fields |
+| `npm run test:domain-dispatch` | Empty-domain model skip and corroborated local acquisition gap recovery |
 
 CI (`.github/workflows/test.yml`) runs `npm ci`, migrations, the full `npm test` suite, `npm run build`, and infrastructure integration against PostgreSQL 16 and Redis 7.
 

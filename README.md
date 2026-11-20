@@ -10,6 +10,7 @@ Use these sources when a description disagrees with older narrative decks:
 
 | Document | Authority |
 |----------|-----------|
+| `AGENTS.md` | Repository-specific AI agent instructions, verification gates, and change boundaries |
 | `docs/architecture/ADR-001-execution-and-evidence-lineage.md` | Lineage vocabulary and dispatch invariants |
 | `docs/architecture/ADR-002-resolution-based-maturity-model.md` | Active headline maturity and Assessment Sufficiency |
 | `docs/architecture/ADR-003-required-tactic-contract.md` | Required roadmap tactic dispositions |
@@ -17,7 +18,7 @@ Use these sources when a description disagrees with older narrative decks:
 | `src/knowledge_base/finops_taxonomy_registry.json` | Canonical A–F domains, streams, and evidence categories |
 | `docs/security/secure-coding-practices.md` | Evaluated secure-coding contract: secrets, auth, DLP, governed egress, logging, and review checklist |
 
-`architecture.html` is a visual 60-criteria catalog. It is not the scoring contract. Quality Gate `GO | WARN | BLOCK` does not cap or rewrite maturity. Unknown criteria stay `NA` in the active model; they are not averaged as zero across the full framework.
+`architecture.html`, `finops-engine-clean-room-protocol.html`, and `tactic-playbook.html` are visual reference artifacts, not active scoring or governance contracts. Quality Gate `GO | WARN | BLOCK` does not cap or rewrite maturity. Unknown criteria stay `NA` in the active model; they are not averaged as zero across the full framework.
 
 ## Local development
 
@@ -38,7 +39,7 @@ npx --yes vercel dev
 
 For UI-only work, run `npm run dev`. The UI will load, but assessments cannot complete unless `/api/*` is also available. To use the repository's Node adapter instead, export the required environment variables, run `npm run build && npm start` on port 3000, and run `npm run dev` separately for Vite and its `/api` proxy.
 
-Cursor Cloud Agents use the repo-managed environment in `.cursor/`: Ubuntu 24.04 with PostgreSQL 16, Redis, and Node.js 20, plus `install.sh` (`npm ci`) and `start.sh` (cluster, Redis, migrations). Real model dispatch still needs provider API keys as Cursor Secrets; the committed `dev-env.sh` defaults only boot the local control plane.
+Cursor Cloud Agents use the repo-managed environment in `.cursor/`: Ubuntu 24.04 with PostgreSQL 16, Redis, and Node.js 20, plus `install.sh` (`npm ci`) and `start.sh` (cluster, Redis, migrations). `.agents/setup` provides an equivalent Ubuntu/Debian bootstrap for local PostgreSQL, Redis, and migrations where `sudo` is present, and `AGENTS.md` defines the agent workflow and verification gates. Real model dispatch still needs provider API keys as secrets; the committed `dev-env.sh` defaults only boot the local control plane.
 
 ## Active model architecture
 
@@ -89,6 +90,7 @@ The UI is public, but assessment and supporting API operations require an HMAC-s
 | `/api/anthropic-generate` | POST | Packet-ID-only governed Anthropic dispatch. |
 | `/api/xai-generate` | POST | Packet-ID-only governed xAI dispatch. |
 | `/api/model-result` | POST | Recover a completed governed result from Redis. |
+| `/api/checkpoint` | GET/POST | List, persist, or recover output-inspected, hash-verified run checkpoints. |
 | `/api/run` | GET/POST/DELETE | Create, inspect, complete, fail, or delete an authoritative run. |
 | `/api/kb-index` | GET | Build or return the cached remote reference-KB index. |
 | `/api/log` | POST | Write authenticated client pipeline events to server logs. |
@@ -132,13 +134,15 @@ Vercel governed dispatch remains explicitly unsupported. Its independent API fun
 ## Build and focused tests
 
 ```bash
+npx tsc --noEmit
 npm run build
+npm test
 npm run test:evidence-check
 npm run test:model-routing
 npm run test:privacy
 ```
 
-`npm test` discovers and runs all focused `test:*` scripts, including the injected-adapter control-plane tests.
+`npm test` discovers and runs all focused `test:*` scripts offline, including the injected-adapter control-plane tests. When disposable PostgreSQL and Redis instances are configured via `DATABASE_URL` and `REDIS_URL` (as in `.github/workflows/test.yml`), run `npm run migrate && npm run integration` to verify live database migrations and execution-plane persistence.
 
 ## Scenario and boundary fixtures
 
