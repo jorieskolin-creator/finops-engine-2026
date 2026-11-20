@@ -16,6 +16,7 @@ import { EVIDENCE_DENSITY_BLOCK, runQualityGate, runQualityGateExplanation } fro
 import { calculateMetrics } from "./metricsService";
 import {
   buildRegenerateAppendix,
+  formatAcceptedFacts,
   buildRoadmapFactCheckPrompt,
   buildSummaryFactCheckPrompt,
   claimsForRepairScope,
@@ -672,35 +673,8 @@ ${referenceKbContext}
 ${tacticsContext}`;
 
 
-    const handoffSummary = `
-FINOPS DIAGNOSTIC REPORT SUMMARY (Computed by System):
--------------------------------------------------------
-Adjusted FinOps Maturity: ${validationData.metrics.adjusted_maturity === null ? 'N/A' : `${Math.round(validationData.metrics.adjusted_maturity)}/100`}${overallScoreAvailable ? '' : ' — diagnostic only; Assessment Sufficiency BLOCK'}
-Corroborated Maturity: ${validationData.metrics.corroborated_maturity === null ? 'N/A' : `${Math.round(validationData.metrics.corroborated_maturity)}%`}
-Observed Maturity: ${validationData.metrics.observed_maturity === null ? 'N/A' : `${Math.round(validationData.metrics.observed_maturity)}%`}
-Assessment Resolution: ${Math.round(validationData.metrics.assessment_resolution)}%
-Assessment Sufficiency: ${validationData.assessment_sufficiency.decision}
-Assessment Sufficiency Warnings: ${validationData.assessment_sufficiency.warning_reasons.join(' ') || 'None'}
-Maturity Classification: ${validationData.crawl_walk_run}
-Maturity Depth Index: ${Math.round(validationData.metrics.maturity_depth)}%
-Anti-Pattern Burden: ${Math.round(validationData.metrics.antipattern_burden)}%
-Anti-Pattern Burden Confidence: ${validationData.metrics.antipattern_burden_confidence || 'unknown'}
-Anti-Pattern Clearance: ${Math.round(validationData.metrics.antipattern_clearance)}%
-Anti-Pattern Coverage: ${Math.round(validationData.metrics.antipattern_coverage)}%
-Delivery Integrity: ${validationData.metrics.delivery_integrity}% (criteria the audit returned data for)
-Evidence Density: ${validationData.metrics.evidence_density}% (criteria with verified source coverage, including quote-backed gaps)
-Capability 0/3 Concentration: ${validationData.metrics.maturity_zero_ratio || 0}% (${validationData.metrics.maturity_zero_count || 0} of ${validationData.metrics.maturity_assessed_count || 0} assessed maturity criteria; an evidence-backed low-maturity signal, not missing evidence)
-Anti-Pattern Findings: ${validationData.metrics.antipattern_finding_count || 0} of 30 anti-patterns have confirmed or partial signals (${validationData.metrics.antipattern_finding_ratio || 0}%); ${validationData.metrics.score_gap_breakdown?.antipattern_tested_absent || 0} tested absences raise control, unknown absence does not
-Verified Anti-Pattern Absences: ${validationData.verified_antipattern_absences.length}
-Unknown / Not-Assessable Anti-Pattern Absences: ${validationData.unknown_antipattern_absences.length}
-Maturity Gaps: ${validationData.maturity_gaps.length}
-Silent Areas: ${validationData.silent_areas.length}
-
-UNRESOLVED REQUIRED VERIFICATION:
-${validationData.verification_unresolved.join('\n') || 'None'}
-
-SCORE EVIDENCE GAPS (unknown in maturity arithmetic and reducing resolution; not proof a capability is absent):
-${validationData.score_evidence_gaps.join('\n') || 'None'}
+    const acceptedFacts = formatAcceptedFacts(auditLogs, validationData);
+    const handoffSummary = `${acceptedFacts}
 
 PACKET RETRIEVAL WARNINGS (acquisition telemetry only; not a finding or roadmap restriction):
 ${packetWeakDomainIds.join(', ') || 'None'}
@@ -710,8 +684,6 @@ ${silentDomainIds.join(', ') || 'None'}
 Criterion evidence density by domain: ${Object.entries(validationData.assessment_sufficiency.domain_criterion_evidence_density).map(([domain, density]) => `${domain}=${density}%`).join(', ')}
 For silent domains, do not make broad maturity conclusions or prescribe remediation tactics. Provide only bounded evidence-collection actions. Continue normal diagnosis and remediation for non-silent domains.
 
-CATEGORY BREAKDOWN:
-${Object.entries(validationData.category_scores).map(([cat, score]) => unresolvedDomainIds.has(cat) ? `  ${cat}: verification unavailable (no validated domain score)` : `  ${cat}: ${score}/15`).join('\n')}
 `;
 
     const activatedTacticSelectionPlan = buildTacticSelectionPlan(auditLogs, silentDomainIds);
@@ -933,6 +905,7 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => unresolve
             contentToCheck: buildSummaryCheckText(strategy),
             remediationRoadmapText: '',
             sourceDocument: text,
+            acceptedFacts,
             phase1: auditLogs,
             phase2: validationData,
             imageCount: images.length,
@@ -963,6 +936,7 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => unresolve
             remediationRoadmapText: roadmapText,
             lockedFindingsText: compactLockedFindings(strategy),
             sourceDocument: text,
+            acceptedFacts,
             phase1: auditLogs,
             phase2: validationData,
             imageCount: images.length,
