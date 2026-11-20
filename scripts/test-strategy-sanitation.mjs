@@ -445,3 +445,46 @@ assert.match(
 );
 
 console.log('strategy sanitation regression tests passed');
+
+// A shared criterion can support a narrow reservation review after its
+// estate-wide governance premise was quarantined. Test every publishing field.
+const premise = 'There is no commitment governance.';
+const rebuild = 'Build commitment governance from scratch [B1].';
+const reservation = 'Review the identified reservation against its utilization threshold [B1].';
+const cultureQuestion = 'Request a variance decision record for Culture & Organization [E1].';
+const missingTacticAction = 'Establish a portfolio governance office using [TAC-GOV-004] [B1].';
+const basisByCriterion = new Map([
+  ['maturity.B1', { details: ['For this reservation the utilization threshold is 75%.'] }],
+  ['antipattern.B1', { details: ['The single sampled quarterly review was tested.'] }],
+  ['maturity.E1', { unknownStatus: 'UNKNOWN | unscored | NO_GOVERNED_EVIDENCE', details: [] }],
+]);
+const planningFixture = { phase_3_strategy: {
+  diagnosis: { primary_bottleneck: premise },
+  planning_decision: { decision: 'CONDITIONAL_GO', rationale: rebuild, safe_to_act_on: [rebuild, reservation], evidence_needed_before_action: [cultureQuestion] },
+  remediation_roadmap: [{ phase: 'Crawl', why: rebuild, what: reservation, actions: [rebuild, reservation, missingTacticAction], assumptions: [rebuild] }],
+} };
+const reviewedPremise = { claim: premise, source_location: 'diagnosis', classification: 'unsupported', severity: 'BLOCKING_UNSUPPORTED_FACT', failure_type: 'unsupported_org_claim', rationale: 'The accepted record describes a reservation review.' };
+const independentlySupported = ['roadmap', 'planning_decision'].map(location => ({
+  claim: reservation, source_location: location, classification: 'supported_by_audit',
+  rationale: 'maturity.B1 "For this reservation the utilization threshold is 75%."',
+}));
+const review = { basisByCriterion, excludedPremises: [], verifiedClaims: [
+  ...independentlySupported,
+  { claim: cultureQuestion, source_location: 'planning_decision', classification: 'supported_by_audit', rationale: 'maturity.E1 "UNKNOWN | unscored | NO_GOVERNED_EVIDENCE"' },
+  { claim: rebuild, source_location: 'roadmap', classification: 'supported_by_audit', rationale: 'antipattern.B1 "The single sampled quarterly review was tested."' },
+  { claim: missingTacticAction, source_location: 'roadmap', classification: 'supported_by_tactics_db', rationale: 'maturity.B1 "For this reservation the utilization threshold is 75%."' },
+] };
+const removedPremise = sanitizeStrategyAfterFactCheck(planningFixture, { ...factCheck, unsupported_claims: [reviewedPremise] }, review);
+const reconciled = removedPremise.strategyData.phase_3_strategy;
+assert.deepEqual(reconciled.planning_decision.safe_to_act_on, [reservation]);
+assert.deepEqual(reconciled.planning_decision.evidence_needed_before_action, [cultureQuestion]);
+assert.equal(reconciled.planning_decision.rationale, '');
+assert.deepEqual(reconciled.remediation_roadmap[0], { phase: 'Crawl', why: '', what: reservation, actions: [reservation], assumptions: [] });
+assert.doesNotMatch(JSON.stringify(reconciled), /from scratch|no commitment governance|TAC-GOV-004/);
+assert.ok(removedPremise.sanitized.filter(i => i.claim === missingTacticAction).every(i => !i.tactic_disposition));
+// A later successful check with no new unsupported claims still reconciles
+// the exact final candidate using retained quarantine history.
+const laterCandidate = structuredClone(removedPremise.strategyData);
+laterCandidate.phase_3_strategy.remediation_roadmap[0].actions.push(missingTacticAction);
+const finalCheck = sanitizeStrategyAfterFactCheck(laterCandidate, { ...removedPremise.factCheck, unsupported_claims: [] }, review);
+assert.deepEqual(finalCheck.strategyData.phase_3_strategy.remediation_roadmap[0].actions, [reservation]);

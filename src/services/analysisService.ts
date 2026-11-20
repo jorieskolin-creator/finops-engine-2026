@@ -16,7 +16,7 @@ import { EVIDENCE_DENSITY_BLOCK, runQualityGate, runQualityGateExplanation } fro
 import { calculateMetrics } from "./metricsService";
 import {
   buildRegenerateAppendix,
-  formatAcceptedFacts,
+  buildAcceptedFacts,
   buildRoadmapFactCheckPrompt,
   buildSummaryFactCheckPrompt,
   claimsForRepairScope,
@@ -673,7 +673,7 @@ ${referenceKbContext}
 ${tacticsContext}`;
 
 
-    const acceptedFacts = formatAcceptedFacts(auditLogs, validationData);
+    const { text: acceptedFacts, basisByCriterion } = buildAcceptedFacts(auditLogs, validationData);
     const handoffSummary = `${acceptedFacts}
 
 PACKET RETRIEVAL WARNINGS (acquisition telemetry only; not a finding or roadmap restriction):
@@ -726,6 +726,7 @@ For silent domains, do not make broad maturity conclusions or prescribe remediat
         `[Phase] ${phase?.phase || 'Unnamed phase'}`,
         phase?.why ? `[WHY]\n${phase.why}` : '',
         phase?.what ? `[WHAT]\n${phase.what}` : '',
+        phase?.assumptions?.length ? `[ASSUMPTIONS]\n${phase.assumptions.join('\n')}` : '',
         actions.length > 0 ? `[HOW]\n${actions.map((action: string) => `- ${action}`).join('\n')}` : '[HOW]\n(no actions)'
       ].filter(Boolean).join('\n');
     }).join('\n\n---\n\n');
@@ -885,6 +886,8 @@ For silent domains, do not make broad maturity conclusions or prescribe remediat
       merged: FactCheckResult;
       summary?: FactCheckResult;
       roadmap?: FactCheckResult;
+      verifiedPlanning?: FactCheckClaim[];
+      excludedPremises?: string[];
     }
 
     const runFactCheck = async (
@@ -930,10 +933,18 @@ For silent domains, do not make broad maturity conclusions or prescribe remediat
           });
           summaryCheck = parseFactCheckResponse(summaryResp.text, attemptNumber, SUMMARY_FACT_CHECK_CONTRACT);
         }
+        const excludedPremises = Array.from(new Set([
+          ...(previous?.excludedPremises || []),
+          ...(previous?.merged.unsupported_claims || []).filter(c => c.severity !== 'WARN_TACTIC_HYGIENE'
+            && !JSON.stringify(strategy).includes(c.claim)).map(c => c.claim),
+          ...(summaryCheck?.unsupported_claims || []).filter(c => c.severity !== 'WARN_TACTIC_HYGIENE').map(c => c.claim),
+        ]));
+        let verifiedPlanning = scope === 'summary' ? previous?.verifiedPlanning || [] : [];
         if (scope !== 'summary') {
           const roadmapPrompt = buildRoadmapFactCheckPrompt({
             contentToCheck: buildRoadmapCheckText(strategy),
             remediationRoadmapText: roadmapText,
+            excludedPremises,
             lockedFindingsText: compactLockedFindings(strategy),
             sourceDocument: text,
             acceptedFacts,
@@ -961,7 +972,8 @@ For silent domains, do not make broad maturity conclusions or prescribe remediat
             duration_ms: Date.now() - roadmapStarted,
             attempt: attemptNumber,
           });
-          roadmapCheck = parseFactCheckResponse(roadmapResp.text, attemptNumber, ROADMAP_FACT_CHECK_CONTRACT);
+          roadmapCheck = parseFactCheckResponse(roadmapResp.text, attemptNumber, ROADMAP_FACT_CHECK_CONTRACT,
+            claims => { verifiedPlanning = claims; });
         }
         if (!summaryCheck || !roadmapCheck) {
           throw Object.assign(new Error('Missing fact-check result for locked scope.'), { code: 'INVALID_FACT_CHECK_OUTPUT' });
@@ -969,6 +981,8 @@ For silent domains, do not make broad maturity conclusions or prescribe remediat
         return {
           summary: summaryCheck,
           roadmap: roadmapCheck,
+          verifiedPlanning,
+          excludedPremises,
           merged: mergeRequiredFactChecks(summaryCheck, roadmapCheck, attemptNumber),
         };
       } catch (e: any) {
@@ -1352,8 +1366,12 @@ For silent domains, do not make broad maturity conclusions or prescribe remediat
       }
     }
 
-    const applySanitation = (data: any, fc: FactCheckResult, event: string = 'strategy_sanitized') => {
-      const sanitation = sanitizeStrategyAfterFactCheck(data, fc);
+    const applySanitation = (data: any, fc: FactCheckResult, checks: SplitFactCheckResult, event: string) => {
+      const sanitation = sanitizeStrategyAfterFactCheck(data, fc, {
+        basisByCriterion,
+        verifiedClaims: checks.verifiedPlanning || [],
+        excludedPremises: checks.excludedPremises || [],
+      });
       if (sanitation.sanitized.length > 0) {
         const removed = sanitation.sanitized.filter(i => i.action === 'removed').length;
         const rewritten = sanitation.sanitized.filter(i => i.action === 'rewritten').length;
@@ -1370,7 +1388,7 @@ For silent domains, do not make broad maturity conclusions or prescribe remediat
       return sanitation;
     };
 
-    let sanitation = applySanitation(strategyData, factCheck, 'claims_sanitized');
+    let sanitation = applySanitation(strategyData, factCheck, acceptedFactChecks, 'claims_sanitized');
     strategyData = sanitation.strategyData;
     factCheck = sanitation.factCheck;
 
@@ -1396,8 +1414,10 @@ For silent domains, do not make broad maturity conclusions or prescribe remediat
             : '',
           'This is the single bounded post-sanitation roadmap repair. Preserve the locked evidence summary and diagnosis.',
         ].filter(Boolean).join('\n\n');
-        const repairedRoadmap = await callRoadmapSynthesis(strategyData, correction, repairPlan);
-        let repairedStrategy = normalizeStrategy(mergePhase3Outputs(strategyData, repairedRoadmap));
+        const repairedRoadmap = await callRoadmapSynthesis(strategyData.phase_3_strategy, correction, repairPlan);
+        const repairedGrounding = sanitizeRoadmapTacticGrounding(
+          mergePhase3Outputs(strategyData, repairedRoadmap), validationData, silentDomainIds);
+        let repairedStrategy = repairedGrounding.strategyData;
         const repairedChecks = await runFactCheck(
           repairedStrategy,
           factCheck.attempts + 1,
@@ -1414,11 +1434,13 @@ For silent domains, do not make broad maturity conclusions or prescribe remediat
             ...(factCheck.sanitized_claims || []),
             ...(repairedChecks.merged.sanitized_claims || []),
           ];
-          sanitation = applySanitation(repairedStrategy, repairedChecks.merged, 'required_tactic_repair_sanitized');
+          sanitation = applySanitation(repairedStrategy, repairedChecks.merged, repairedChecks, 'required_tactic_repair_sanitized');
           repairedStrategy = sanitation.strategyData;
           strategyData = repairedStrategy;
           factCheck = sanitation.factCheck;
           acceptedFactChecks = repairedChecks;
+          tacticGroundingWarnings.push(...repairedGrounding.warnings);
+          tacticGroundingAdjustments.push(...repairedGrounding.adjustments);
           requiredTacticContract = classifyFinalRequiredTactics(
             strategyData,
             tacticSelectionPlan,
@@ -1483,7 +1505,7 @@ For silent domains, do not make broad maturity conclusions or prescribe remediat
         factCheck.attempts + 1,
         'fact_check_high',
         escalateRoadmapOnly ? 'roadmap' : 'both',
-        escalateRoadmapOnly ? acceptedFactChecks : undefined
+        acceptedFactChecks
       );
       const highFactCheck = highFactChecks.merged;
       await checkpoint('fact_check', 'escalated', { fact_check: highFactCheck });
@@ -1493,7 +1515,7 @@ For silent domains, do not make broad maturity conclusions or prescribe remediat
           ...(factCheck.sanitized_claims || []),
           ...(highFactCheck.sanitized_claims || []),
         ];
-        sanitation = applySanitation(strategyData, highFactCheck, 'claims_quarantined');
+        sanitation = applySanitation(strategyData, highFactCheck, highFactChecks, 'claims_quarantined');
         strategyData = sanitation.strategyData;
         factCheck = sanitation.factCheck;
         groundingValidation = validatePhase3Grounding(strategyData, validationData, text);
