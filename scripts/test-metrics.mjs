@@ -364,6 +364,9 @@ const logs = (maturityFactory, antiFactory) => ({
   assert.equal(result.metrics.score_gap_breakdown.antipattern_not_assessed, 30);
   assert.equal(clearBlockLogs.antipattern.A1.evidence_quotes.length, 1, 'scoped derived quote on AP-A1 must remain intact');
   assert.match(result.assessment_sufficiency.blocking_reasons[0], /\(5\/60 assessed criteria\)/);
+  assert.deepEqual(result.confirmed_maturity_gaps, [], 'below-floor BLOCK must not promote 0/3 observations into confirmed_maturity_gaps');
+  assert.ok(result.scoped_observations.some(entry => entry.startsWith('[A1] Scoped observation')), '0/3 observation under BLOCK must be retained as a scoped observation');
+  assert.ok(result.scoped_observations.some(entry => entry.startsWith('[AP-A1] Scoped observation (anti-pattern not assessed)')), 'AP-A1 derived quote must be retained as a scoped observation');
 }
 
 console.log('metrics unit tests passed');

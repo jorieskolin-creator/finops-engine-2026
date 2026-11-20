@@ -41,7 +41,12 @@ import {
   TacticGroundingAdjustment,
   TacticSelectionPlan
 } from "./tacticGroundingService";
-import { sanitizeBlockedStrategy, sanitizeEvidenceSummaryUncertainty, sanitizeStrategyAfterFactCheck } from "./strategySanitationService";
+import {
+  buildDeterministicBlockedFindingsStrategy,
+  sanitizeBlockedStrategy,
+  sanitizeEvidenceSummaryUncertainty,
+  sanitizeStrategyAfterFactCheck,
+} from "./strategySanitationService";
 import {
   buildDomainPackets,
   buildSourceRegistry,
@@ -1029,7 +1034,8 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => unresolve
       confirmed_strengths: Object.entries(validationData.category_scores)
         .filter(([cat, score]) => !unresolvedDomainIds.has(cat) && !silentDomainIds.includes(cat as DomainId) && score >= 10)
         .map(([cat, score]) => `Domain ${cat} shows relatively strong maturity signal (${score}/15).`),
-      confirmed_gaps: confirmedMaturityGaps.slice(0, 8),
+      scoped_observations: (validationData.scoped_observations || []).slice(0, 8),
+      confirmed_gaps: overallScoreAvailable ? confirmedMaturityGaps.slice(0, 8) : [],
       confirmed_antipatterns: validationData.antipattern_findings.slice(0, 8),
       silent_or_missing_evidence: [
         ...validationData.verification_unresolved,
@@ -1039,11 +1045,15 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => unresolve
     });
 
     const buildFallbackDiagnosis = () => ({
-      primary_bottleneck: confirmedMaturityGaps[0] || validationData.antipattern_findings[0] || 'Available evidence did not establish an organizational bottleneck.',
-      root_causes: [
-        ...confirmedMaturityGaps.slice(0, 3),
-        ...validationData.antipattern_findings.slice(0, 3)
-      ].slice(0, 5),
+      primary_bottleneck: overallScoreAvailable
+        ? (confirmedMaturityGaps[0] || validationData.antipattern_findings[0] || 'Available evidence did not establish an organizational bottleneck.')
+        : 'Not established — Assessment Sufficiency did not pass, so no single criterion can be identified as the primary organizational bottleneck.',
+      root_causes: overallScoreAvailable
+        ? [
+            ...confirmedMaturityGaps.slice(0, 3),
+            ...validationData.antipattern_findings.slice(0, 3)
+          ].slice(0, 5)
+        : ['Root-cause ranking is withheld until Assessment Sufficiency passes.'],
       domain_diagnosis: Object.fromEntries(
         Object.entries(validationData.category_scores).map(([cat, score]) => [cat, silentDomainIds.includes(cat as DomainId)
           ? `Domain ${cat} is silent below 10% verified criterion evidence; no broad maturity conclusion or remediation is supported. Collect domain evidence.`
@@ -1088,34 +1098,13 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => unresolve
       ]
     });
 
-    const buildDeterministicLowConfidenceStrategy = () => {
-      const outcome = `The assessment completed deterministic acquisition and analysis, but evidence density was ${Math.round(validationData.metrics.evidence_density)}% and ${validationData.silent_areas.length} criteria remained silent. This supports a blocking decision, not a directive summary or roadmap.`;
-      const boundary = 'Decision: NO_GO. No remediation roadmap is issued. Gather the missing evidence identified below, validate the candidate themes, and rerun the assessment before authorizing implementation.';
-      return {
-        phase_3_strategy: {
-          executive_summaries: {
-            finops_lead: `${outcome}\n\n${boundary}`,
-            cfo: `${outcome}\n\nThe available evidence is insufficient to support investment prioritization or claimed financial outcomes. ${boundary}`,
-            engineering_lead: `${outcome}\n\nThe available evidence is insufficient to prescribe engineering controls or operating changes. ${boundary}`,
-          },
-          executive_summary: `${outcome}\n\n${boundary}`,
-          active_persona: DEFAULT_PERSONA,
-          evidence_summary: buildFallbackEvidenceSummary(),
-          diagnosis: buildFallbackDiagnosis(),
-          planning_decision: buildFallbackPlanningDecision(),
-          visual_scorecard: {
-            headline: 'Insufficient Evidence — Findings Only',
-            maturity_score: overallScoreAvailable
-              ? `${Math.round(validationData.metrics.adjusted_maturity!)}/100 adjusted maturity`
-              : `${validationData.metrics.adjusted_maturity === null ? 'N/A' : `${Math.round(validationData.metrics.adjusted_maturity)}/100 diagnostic`} — Assessment Sufficiency BLOCK`,
-            burden_score: `${Math.round(validationData.metrics.antipattern_burden)}% anti-pattern burden`,
-          },
-          remediation_roadmap: [],
-          findings_mode: buildFallbackFindingsMode(),
-          confidence_bracket: 'LOW',
-        },
-      };
-    };
+    const buildDeterministicLowConfidenceStrategy = () => buildDeterministicBlockedFindingsStrategy({
+      auditLogs,
+      validationData,
+      skippedDomains: aggregatedRawData.skipped_domains,
+      derivedEvidence: derivedAnalyticalEvidence,
+      bracketDetail,
+    });
 
     const normalizeStrategy = (raw: any): any => {
       if (!raw?.phase_3_strategy) return raw;
@@ -1150,7 +1139,11 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => unresolve
         }
       }
       const summary = raw.phase_3_strategy.evidence_summary;
-      summary.confirmed_gaps = confirmedMaturityGaps.slice(0, 8);
+      summary.scoped_observations = Array.from(new Set([
+        ...(summary.scoped_observations || []),
+        ...(validationData.scoped_observations || []),
+      ])).slice(0, 10);
+      summary.confirmed_gaps = overallScoreAvailable ? confirmedMaturityGaps.slice(0, 8) : [];
       summary.confirmed_antipatterns = validationData.antipattern_findings.slice(0, 8);
       return sanitizeEvidenceSummaryUncertainty(raw);
     };
@@ -1257,7 +1250,8 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => unresolve
 
     let strategyData: any;
     let deterministicSynthesisFallback = false;
-    if (validationData.metrics.evidence_density < EVIDENCE_DENSITY_BLOCK) {
+    const evidenceFloorBlocked = validationData.metrics.evidence_density < EVIDENCE_DENSITY_BLOCK;
+    if (evidenceFloorBlocked) {
       deterministicSynthesisFallback = true;
       strategyData = buildDeterministicLowConfidenceStrategy();
       serverLog(runId, 'warn', 'synthesis_deterministic_fallback', {
@@ -1284,84 +1278,103 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => unresolve
     await checkpoint('synthesis', 'accepted', { phase_3_strategy: strategyData.phase_3_strategy });
     emitProgress({ stage: 'synthesis', status: deterministicSynthesisFallback ? 'completed_with_warnings' : 'completed' });
     emitProgress({ stage: 'verification', status: 'in_progress' });
-    let acceptedFactChecks = await runFactCheck(strategyData, 1);
-    let factCheck = acceptedFactChecks.merged;
-    await checkpoint('fact_check', 'pass_1', { fact_check: factCheck });
-    let lastUnsupported: FactCheckClaim[] = factCheck.unsupported_claims;
-    if (!factCheck.failed) trajectory.push(snapshot(factCheck));
 
-    let attempt = 1;
-    while (
-      !factCheck.failed &&
-      lastUnsupported.length > 0 &&
-      attempt <= FACT_CHECK_MAX_RETRIES
-    ) {
-      console.log(`[FinOps] Fact-check pass ${attempt}: ${lastUnsupported.length} unsupported claims, regenerating...`);
-      try {
-        const requestedScope = confidenceBracket === 'LOW'
-          ? 'both'
-          : determineFactCheckRepairScope(lastUnsupported);
-        const summaryDefects = claimsForRepairScope(lastUnsupported, 'summary');
-        const roadmapDefects = claimsForRepairScope(lastUnsupported, 'roadmap');
-        const repairCorrections: Phase3Corrections = confidenceBracket === 'LOW'
-          ? { summary: buildRegenerateAppendix(lastUnsupported, 'both') }
-          : {
-              ...(requestedScope !== 'roadmap' ? {
-                summary: buildRegenerateAppendix(summaryDefects.length > 0 ? summaryDefects : lastUnsupported, 'summary')
-              } : {}),
-              ...(requestedScope !== 'summary' ? {
-                roadmap: buildRegenerateAppendix(roadmapDefects.length > 0 ? roadmapDefects : lastUnsupported, 'roadmap')
-              } : {}),
-            };
-        const candidateStrategy = await callPhase3Validated(repairCorrections, requestedScope, strategyData);
-        const candidateAttempt = attempt + 1;
-        const candidateChecks = await runFactCheck(
-          candidateStrategy,
-          candidateAttempt,
-          'fact_check',
-          requestedScope,
-          acceptedFactChecks
-        );
-        const candidateFactCheck = candidateChecks.merged;
-        attempt = candidateAttempt;
-        if (candidateFactCheck.failed) {
-          serverLog(runId, 'warn', 'synthesis_candidate_rejected', { attempt, reason_code: 'FACT_CHECK_FAILED' });
-          break;
-        }
-        trajectory.push(snapshot(candidateFactCheck));
-        if (!isStrictFactCheckImprovement(lastUnsupported, candidateFactCheck.unsupported_claims, requestedScope)) {
+    let acceptedFactChecks: SplitFactCheckResult = {
+      merged: {
+        attempts: 0,
+        total_claims: 0,
+        supported_count: 0,
+        unsupported_claims: [],
+        sanitized_claims: [],
+        trajectory: [],
+        failed: false,
+      },
+    };
+    let factCheck: FactCheckResult = acceptedFactChecks.merged;
+    let lastUnsupported: FactCheckClaim[] = [];
+
+    if (deterministicSynthesisFallback) {
+      await checkpoint('fact_check', 'pass_1', { fact_check: factCheck });
+    } else {
+      acceptedFactChecks = await runFactCheck(strategyData, 1);
+      factCheck = acceptedFactChecks.merged;
+      await checkpoint('fact_check', 'pass_1', { fact_check: factCheck });
+      lastUnsupported = factCheck.unsupported_claims;
+      if (!factCheck.failed) trajectory.push(snapshot(factCheck));
+
+      let attempt = 1;
+      while (
+        !factCheck.failed &&
+        lastUnsupported.length > 0 &&
+        attempt <= FACT_CHECK_MAX_RETRIES
+      ) {
+        console.log(`[FinOps] Fact-check pass ${attempt}: ${lastUnsupported.length} unsupported claims, regenerating...`);
+        try {
+          const requestedScope = confidenceBracket === 'LOW'
+            ? 'both'
+            : determineFactCheckRepairScope(lastUnsupported);
+          const summaryDefects = claimsForRepairScope(lastUnsupported, 'summary');
+          const roadmapDefects = claimsForRepairScope(lastUnsupported, 'roadmap');
+          const repairCorrections: Phase3Corrections = confidenceBracket === 'LOW'
+            ? { summary: buildRegenerateAppendix(lastUnsupported, 'both') }
+            : {
+                ...(requestedScope !== 'roadmap' ? {
+                  summary: buildRegenerateAppendix(summaryDefects.length > 0 ? summaryDefects : lastUnsupported, 'summary')
+                } : {}),
+                ...(requestedScope !== 'summary' ? {
+                  roadmap: buildRegenerateAppendix(roadmapDefects.length > 0 ? roadmapDefects : lastUnsupported, 'roadmap')
+                } : {}),
+              };
+          const candidateStrategy = await callPhase3Validated(repairCorrections, requestedScope, strategyData);
+          const candidateAttempt = attempt + 1;
+          const candidateChecks = await runFactCheck(
+            candidateStrategy,
+            candidateAttempt,
+            'fact_check',
+            requestedScope,
+            acceptedFactChecks
+          );
+          const candidateFactCheck = candidateChecks.merged;
+          attempt = candidateAttempt;
+          if (candidateFactCheck.failed) {
+            serverLog(runId, 'warn', 'synthesis_candidate_rejected', { attempt, reason_code: 'FACT_CHECK_FAILED' });
+            break;
+          }
+          trajectory.push(snapshot(candidateFactCheck));
+          if (!isStrictFactCheckImprovement(lastUnsupported, candidateFactCheck.unsupported_claims, requestedScope)) {
+            serverLog(runId, 'warn', 'synthesis_candidate_rejected', {
+              attempt,
+              reason_code: 'FACT_CHECK_NOT_IMPROVED',
+            });
+            break;
+          }
+          strategyData = candidateStrategy;
+          acceptedFactChecks = candidateChecks;
+          factCheck = candidateFactCheck;
+          lastUnsupported = factCheck.unsupported_claims;
+          await checkpoint('fact_check', `pass_${candidateAttempt}`, { fact_check: candidateFactCheck });
+          await checkpoint('synthesis', 'accepted', { phase_3_strategy: strategyData.phase_3_strategy });
+        } catch (error: any) {
           serverLog(runId, 'warn', 'synthesis_candidate_rejected', {
-            attempt,
-            reason_code: 'FACT_CHECK_NOT_IMPROVED',
+            attempt: attempt + 1,
+            reason_code: typeof error?.code === 'string' ? error.code : 'SYNTHESIS_REGENERATION_FAILED',
           });
           break;
         }
-        strategyData = candidateStrategy;
-        acceptedFactChecks = candidateChecks;
-        factCheck = candidateFactCheck;
-        lastUnsupported = factCheck.unsupported_claims;
-        await checkpoint('fact_check', `pass_${candidateAttempt}`, { fact_check: candidateFactCheck });
-        await checkpoint('synthesis', 'accepted', { phase_3_strategy: strategyData.phase_3_strategy });
-      } catch (error: any) {
-        serverLog(runId, 'warn', 'synthesis_candidate_rejected', {
-          attempt: attempt + 1,
-          reason_code: typeof error?.code === 'string' ? error.code : 'SYNTHESIS_REGENERATION_FAILED',
-        });
-        break;
       }
-    }
 
-    factCheck.attempts = attempt;
-    factCheck.trajectory = trajectory;
+      factCheck.attempts = attempt;
+      factCheck.trajectory = trajectory;
 
-    if (factCheck.failed) {
-      console.warn('[FinOps] Fact-check unavailable; failure details retained in the governed result, not operational logs.');
-    } else {
-      console.log(`[FinOps] Fact-check complete after ${factCheck.attempts} pass(es): ${factCheck.supported_count}/${factCheck.total_claims} claims supported, ${lastUnsupported.length} unsupported.`);
-      if (trajectory.length > 1) {
-        const traj = trajectory.map(p => `pass${p.attempt}:${p.supported_count}/${p.total_claims}supp,${p.unsupported_count}unsupp`).join(' → ');
-        console.log(`[FinOps] [${runId}] Fact-check trajectory: ${traj}`);
-        serverLog(runId, 'info', 'fact_check_trajectory', { trajectory: traj, passes: trajectory.length });
+      if (factCheck.failed) {
+        console.warn('[FinOps] Fact-check unavailable; failure details retained in the governed result, not operational logs.');
+      } else {
+        console.log(`[FinOps] Fact-check complete after ${factCheck.attempts} pass(es): ${factCheck.supported_count}/${factCheck.total_claims} claims supported, ${lastUnsupported.length} unsupported.`);
+        if (trajectory.length > 1) {
+          const traj = trajectory.map(p => `pass${p.attempt}:${p.supported_count}/${p.total_claims}supp,${p.unsupported_count}unsupp`).join(' → ');
+          console.log(`[FinOps] [${runId}] Fact-check trajectory: ${traj}`);
+          serverLog(runId, 'info', 'fact_check_trajectory', { trajectory: traj, passes: trajectory.length });
+        }
       }
     }
 
@@ -1543,8 +1556,16 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => unresolve
     await checkpoint('phase2', 'accepted', { phase_2_validation: validationData });
 
     // LLM-augmented explanation only when the deterministic gate flagged
-    // something. GO results don't need narrative — the metrics speak for them.
-    if (qualityGate.decision !== 'GO') {
+    // something on a synthesized run. Deterministic below-floor findings-only
+    // reports skip narrative/reviewer model calls altogether.
+    if (deterministicSynthesisFallback && qualityGate.decision !== 'GO') {
+      qualityGate.llm_explanation = {
+        summary: 'Deterministic findings-only report: narrative synthesis, regeneration, and fact-check model passes were skipped because assessed criterion coverage is below the 30% evidence floor.',
+        blocking_details: [],
+        warning_details: [],
+        fallback_used: true,
+      };
+    } else if (qualityGate.decision !== 'GO') {
       const qgExplainStarted = Date.now();
       const explanation = await runQualityGateExplanation(qualityGate, text, { runId });
       qualityGate.llm_explanation = explanation;

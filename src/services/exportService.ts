@@ -46,6 +46,9 @@ const factCheckStatusText = (gate: QualityGateResult): string => {
     const base = `${fc.supported_count}/${fc.total_claims} claims supported`;
     return fc.partial_failure_reason ? `${base} · partial check` : base;
   }
+  if (!fc.failed && fc.attempts === 0 && gate.decision === 'BLOCK') {
+    return 'deterministic findings-only · narrative skipped';
+  }
   return fc.failed ? 'fact-check unavailable' : '0 claims checked';
 };
 
@@ -549,6 +552,7 @@ const renderEvidenceBackedFindings = (result: DiagnosticResult): string => {
       <h3>${escapeHtml(evidence.headline)}</h3>
       <div class="summary-grid">
         ${list(strengthsSectionTitle(useSourceObservationTitle), evidence.confirmed_strengths)}
+        ${list('Scoped source observations', evidence.scoped_observations)}
         ${list('Confirmed gaps', evidence.confirmed_gaps)}
         ${list('Confirmed anti-patterns', evidence.confirmed_antipatterns)}
         ${list('Tested anti-pattern absences', testedAbsences)}
