@@ -432,6 +432,11 @@ const postGateBlocked = sanitizeBlockedStrategy(deterministicBlocked, clearBlock
 });
 assert.ok(postGateBlocked.phase_3_strategy.planning_decision.evidence_needed_before_action.some(item => item.includes('Unassessed domains (C, D, E, F)')));
 
+assert.equal(clearBlockPhase2.metrics.adjusted_maturity, 4.8);
+assert.equal(clearBlockPhase2.crawl_walk_run, 'Insufficient evidence');
+assert.equal(postGateBlocked.phase_3_strategy.planning_decision.decision, 'NO_GO');
+assert.deepEqual(postGateBlocked.phase_3_strategy.remediation_roadmap, []);
+
 const analysisSource = await readFile(new URL('../src/services/analysisService.ts', import.meta.url), 'utf8');
 assert.match(
   analysisSource,
