@@ -1,3 +1,4 @@
+import { createReportNarrative } from '../services/reportNarrativeService';
 import React, { useState } from 'react';
 import { AuditItem, DiagnosticResult, QualityGateResult, ConfidenceBracket, FindingsModeOutput, RemediationStep } from '../types';
 import { MarkdownRenderer, TacticLinkedText } from './DashboardComponents';
@@ -71,7 +72,7 @@ const FindingsPanel: React.FC<{ findings: FindingsModeOutput }> = ({ findings })
   );
 };
 
-const RemediationStepBlock: React.FC<{ step: RemediationStep; index: number }> = ({ step, index }) => {
+const RemediationStepBlock: React.FC<{ step: RemediationStep; narrative: (value: string) => React.ReactNode }> = ({ step, narrative }) => {
   const confLabel: Record<NonNullable<RemediationStep['confidence']>, { text: string; chip: string }> = {
     high:   { text: 'High confidence',   chip: 'bg-emerald-100 text-emerald-800' },
     medium: { text: 'Medium confidence', chip: 'bg-amber-100 text-amber-800' },
@@ -92,13 +93,13 @@ const RemediationStepBlock: React.FC<{ step: RemediationStep; index: number }> =
           {step.why && (
             <div className="bg-white border border-slate-200 rounded-lg p-4">
               <p className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-1.5">Why</p>
-              <p className="text-sm text-slate-700 leading-relaxed">{step.why}</p>
+              <p className="text-sm text-slate-700 leading-relaxed">{narrative(step.why)}</p>
             </div>
           )}
           {step.what && (
             <div className="bg-white border border-slate-200 rounded-lg p-4">
               <p className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-1.5">What</p>
-              <p className="text-sm text-slate-700 leading-relaxed">{step.what}</p>
+              <p className="text-sm text-slate-700 leading-relaxed">{narrative(step.what)}</p>
             </div>
           )}
         </div>
@@ -108,7 +109,7 @@ const RemediationStepBlock: React.FC<{ step: RemediationStep; index: number }> =
         {step.actions.map((action, i) => (
           <li key={i} className="flex items-start gap-3 text-sm text-slate-700">
             <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0"></span>
-            <span><TacticLinkedText content={action} /></span>
+            <span>{narrative(action)}</span>
           </li>
         ))}
       </ul>
@@ -117,7 +118,7 @@ const RemediationStepBlock: React.FC<{ step: RemediationStep; index: number }> =
           <p className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-1.5">Assumptions</p>
           <ul className="space-y-1 text-xs text-slate-600">
             {step.assumptions.map((a, i) => (
-              <li key={i} className="pl-3 border-l-2 border-slate-300">{a}</li>
+              <li key={i} className="pl-3 border-l-2 border-slate-300">{narrative(a)}</li>
             ))}
           </ul>
         </div>
@@ -604,6 +605,11 @@ export const ReportView: React.FC<ReportViewProps> = ({ result, onBack, onDownlo
   const m = result.phase_2_validation.metrics;
   const reportView = buildReportViewModel(result);
   const isInsufficientEvidence = reportView.sufficiency.decision === 'BLOCK';
+  const format = createReportNarrative(result);
+  const narrative = (value: string) => {
+    const { text, basis } = format(value);
+    return <>{text}{basis.length > 0 && <small className="block text-slate-500">Evidence basis · <TacticLinkedText content={basis.join(' · ')} /></small>}</>;
+  };
   const gauges = reportView.metrics;
 
   return (
@@ -770,26 +776,26 @@ export const ReportView: React.FC<ReportViewProps> = ({ result, onBack, onDownlo
               {primaryBottleneck && (
                 <div className="mb-5">
                   <p className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-1">Primary bottleneck</p>
-                  <p className="text-slate-800">{primaryBottleneck}</p>
+                  <p className="text-slate-800">{narrative(primaryBottleneck)}</p>
                 </div>
               )}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
                   <p className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-2">Root causes</p>
                   <ul className="space-y-1.5">
-                    {(diagnosis.root_causes || []).map((item, i) => <li key={i} className="text-sm text-slate-700">• {item}</li>)}
+                    {(diagnosis.root_causes || []).map((item, i) => <li key={i} className="text-sm text-slate-700">• {narrative(item)}</li>)}
                   </ul>
                 </div>
                 <div>
                   <p className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-2">Domain diagnosis</p>
                   <ul className="space-y-1.5">
-                    {computeDomainSignalRows(result).map(row => <li key={row.domain} className="text-sm text-slate-700"><span className="font-bold">{row.domain} · {row.title}:</span> Evidence {row.evidencePercent}%; maturity {row.maturityAvailable ? `${row.maturityPercent}%` : 'unresolved'}; anti-pattern finding rate {row.antiPatternAvailable ? `${row.antiPatternPercent}%` : 'unresolved'}{row.isSilent ? '; silent—evidence collection only' : ''}.</li>)}
+                    {computeDomainSignalRows(result).map(row => <li key={row.domain} className="text-sm text-slate-700"><span className="font-bold">{row.domain} · {row.title}:</span> Evidence {row.evidencePercent}%; maturity {row.maturityAvailable ? `${row.maturityPercent}%` : 'unresolved'}; anti-pattern finding rate {row.antiPatternAvailable ? `${row.antiPatternPercent}%` : 'unresolved'}{row.isSilent ? '; silent—evidence collection only' : ''}.{diagnosis.domain_diagnosis?.[row.domain]?.trim() && <p>{narrative(diagnosis.domain_diagnosis[row.domain])}</p>}</li>)}
                   </ul>
                 </div>
               </div>
               <div className="mt-5 p-4 rounded-lg bg-white border border-slate-200">
                 <p className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-1">Diagnostic confidence: {diagnosis.confidence}</p>
-                <p className="text-sm text-slate-700">{diagnosis.confidence_rationale}</p>
+                <p className="text-sm text-slate-700">{narrative(diagnosis.confidence_rationale || '')}</p>
               </div>
             </div>
           );
@@ -838,24 +844,24 @@ export const ReportView: React.FC<ReportViewProps> = ({ result, onBack, onDownlo
           return (
             <div className={`mb-12 p-6 rounded-xl border ${palette}`}>
               <h2 className="text-2xl font-display font-bold mb-2">Planning Decision: {decision.decision?.replace('_', ' ')}</h2>
-              <p className="text-sm mb-5 opacity-90">{displayPlanningDecisionRationale(
+              <p className="text-sm mb-5 opacity-90">{narrative(displayPlanningDecisionRationale(
                 decision.rationale || '',
                 result.quality_gate.decision,
                 result.quality_gate.evidence_check?.failed
-              )}</p>
+              ))}</p>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
                   <p className="text-xs font-bold uppercase tracking-widest mb-2 opacity-80">Safe to act on</p>
                   <ul className="space-y-1.5 text-sm">
                     {(decision.safe_to_act_on || []).length > 0
-                      ? decision.safe_to_act_on.map((item, i) => <li key={i}>• {item}</li>)
-                      : <li>• No action is authorized until the listed blockers are resolved.</li>}
+                      ? decision.safe_to_act_on.map((item, i) => <li key={i}>• {narrative(item)}</li>)
+                      : null}
                   </ul>
                 </div>
                 <div>
                   <p className="text-xs font-bold uppercase tracking-widest mb-2 opacity-80">Evidence needed before action</p>
                   <ul className="space-y-1.5 text-sm">
-                    {(decision.evidence_needed_before_action || []).map((item, i) => <li key={i}>• {item}</li>)}
+                    {(decision.evidence_needed_before_action || []).map((item, i) => <li key={i}>• {narrative(item)}</li>)}
                   </ul>
                 </div>
               </div>
@@ -888,7 +894,7 @@ export const ReportView: React.FC<ReportViewProps> = ({ result, onBack, onDownlo
                 <h2 className="text-2xl font-display font-bold text-slate-900 mb-6 pb-3 border-b border-slate-200">Remediation Roadmap</h2>
                 <div className="space-y-6">
                   {result.phase_3_strategy.remediation_roadmap.map((step, index) => (
-                    <RemediationStepBlock key={index} step={step} index={index} />
+                    <RemediationStepBlock key={index} step={step} narrative={narrative} />
                   ))}
                 </div>
               </div>

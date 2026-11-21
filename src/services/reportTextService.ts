@@ -125,8 +125,8 @@ export function formatReaderParagraph(value: string, criteria: Map<string, Reade
         return phrase(id, entry);
       });
       const suffix = value.slice(offset + token.length);
-      if (bracket && /\w\s+$/.test(before) && /^\s*(?:[.;,]|$)/.test(suffix)
-        && !/\b(?:assess|review|verify|validate|check|for|of|and|criterion|criteria|on|address)\s+$/i.test(before)) return '';
+      if (bracket && before.trim().split(/\s+/).length >= 4 && /\w\s+$/.test(before) && /^\s*(?:[.;,]|$)/.test(suffix)
+        && !/\b(?:assess|review|verify|validate|implement|inspect|investigate|check|for|of|and|criterion|criteria|on|address|to|is|with|from|by|supports|requires)\s+$/i.test(before)) return '';
       const words = names.join(' and ');
       return offset === 0 ? words.charAt(0).toUpperCase() + words.slice(1) : words;
     }).replace(/ +([.,;])/g, '$1').replace(/ {2,}/g, ' ').trim();

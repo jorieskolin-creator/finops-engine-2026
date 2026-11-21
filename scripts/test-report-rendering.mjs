@@ -188,3 +188,46 @@ assert.match(format('Check AP-E2.').basis[0], /not assessed/);
 assert.equal(format('[A1–A3, AP-E2]').basis.filter(s => s.startsWith('Assessment criterion')).length, 4);
 assert.equal(format('Model A3 on src-A3 uses 75%.').text, 'Model A3 on src-A3 uses 75%.');
 assert.equal(format('[A3-F5]').text, '[A3-F5]');
+
+// Exercise the actual report component and both download entry points on one serialized result.
+const surfaces = await build({
+  stdin: { resolveDir: process.cwd(), contents: `
+    export { ReportView } from './src/components/ReportView';
+    export { calculateMetrics } from './src/services/metricsService';
+    export { generateReportHtml, generateSummaryReportHtml } from './src/services/exportService';
+  ` }, bundle: true, platform: 'node', format: 'cjs', packages: 'external', write: false,
+  define: { 'import.meta.env': '{}' },
+});
+const { createRequire } = await import('node:module');
+const require = createRequire(import.meta.url);
+const compiledReport = { exports: {} };
+new Function('module','exports','require', surfaces.outputFiles[0].text)(compiledReport, compiledReport.exports, require);
+const { ReportView, calculateMetrics, generateReportHtml, generateSummaryReportHtml } = compiledReport.exports;
+const { createElement } = require('react');
+const { renderToStaticMarkup } = require('react-dom/server');
+const logs = { maturity: { A3: { count: 1, status: 'Partial', assessment_status: 'assessed', evidence_check_status: 'supported', evidence: 'Sample alert', evidence_quotes: [{ quote: 'Sample alert', source_id: 'src-001', chunk_id: 'c3' }] } }, antipattern: {} };
+const saved = {
+  meta: { engine_version: 'test', timestamp: 'fixture', model_config: {} },
+  phase_1_audit_logs: logs, phase_2_validation: calculateMetrics(logs),
+  phase_3_strategy: { confidence_bracket: 'MEDIUM', diagnosis: { domain_diagnosis: { A: 'The sampled alert reached an owner [A3].', E: '' }, root_causes: [], confidence: 'medium' },
+    planning_decision: { decision: 'CONDITIONAL_GO', rationale: 'Review [A3].', safe_to_act_on: [], evidence_needed_before_action: ['Check AP-E2.'] },
+    remediation_roadmap: [{ phase: 'Review', why: 'Validate the sample.', what: 'A reviewed alert.', actions: ['Inspect the sampled alert [A3].'], confidence: 'medium', assumptions: ['Owner confirms <scope>.'] }] },
+  quality_gate: { decision: 'WARN', blocking_reasons: [], warnings: [], notes: [], thresholds: {} },
+};
+const renderAll = result => {
+  const restored = JSON.parse(JSON.stringify(result));
+  return [renderToStaticMarkup(createElement(ReportView, { result: restored })), generateSummaryReportHtml(restored), generateReportHtml(restored)];
+};
+for (const html of renderAll(saved)) {
+  for (const phrase of ['The sampled alert reached an owner.', 'Assessment criterion A3 · assessed 1/3', 'Customer evidence src-001/c3',
+    'whether cost overruns trigger blame', 'AP-E2 · not assessed', 'Owner confirms &lt;scope&gt;.', 'Inspect the sampled alert.']) assert.ok(html.includes(phrase), phrase);
+}
+for (const [decision, bracket] of [['BLOCK', 'MEDIUM'], ['WARN', 'LOW']]) {
+  const control = structuredClone(saved);
+  control.quality_gate.decision = decision;
+  control.phase_3_strategy.effective_bracket = bracket;
+  for (const html of renderAll(control)) assert.doesNotMatch(html, /Inspect the sampled alert/);
+}
+const legacy = structuredClone(saved);
+delete legacy.phase_3_strategy.diagnosis.domain_diagnosis;
+for (const html of renderAll(legacy)) assert.doesNotMatch(html, /The sampled alert reached an owner/);
