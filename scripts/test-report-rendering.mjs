@@ -183,6 +183,14 @@ const format = createReportNarrative({
   phase_1_audit_logs: { maturity: { A3: { evidence_quotes: [{ quote: 'Sample', source_id: 'src-1', chunk_id: 'c3' }] } } },
 });
 assert.deepEqual(format('Review [A3].'), { text: 'Review cost anomaly detection and alerting.', basis: ['Assessment criterion A3 · assessed 1/3','Customer evidence src-1/c3'] });
+const topic = 'cost anomaly detection and alerting';
+for (const prefix of ['Prioritize', 'Improve', 'In the next cycle, prioritize', 'Ask the service owner to improve']) {
+  assert.equal(format(`${prefix} [A3].`).text, `${prefix} ${topic}.`);
+  assert.equal(format(`${prefix} [A3] and verify the alert route.`).text, `${prefix} ${topic} and verify the alert route.`);
+}
+assert.deepEqual(format('Improve cost anomaly detection and alerting [A3].'), format('Improve [A3].'));
+assert.equal(format('Review cost anomaly detection and alerting, then prioritize [A3].').text,
+  `Review ${topic}, then prioritize ${topic}.`);
 assert.match(format('Check AP-E2.').text, /whether cost overruns trigger blame/);
 assert.match(format('Check AP-E2.').basis[0], /not assessed/);
 assert.equal(format('[A1–A3, AP-E2]').basis.filter(s => s.startsWith('Assessment criterion')).length, 4);
@@ -209,9 +217,9 @@ const logs = { maturity: { A3: { count: 1, status: 'Partial', assessment_status:
 const saved = {
   meta: { engine_version: 'test', timestamp: 'fixture', model_config: {} },
   phase_1_audit_logs: logs, phase_2_validation: calculateMetrics(logs),
-  phase_3_strategy: { confidence_bracket: 'MEDIUM', diagnosis: { domain_diagnosis: { A: 'The sampled alert reached an owner [A3].', E: '' }, root_causes: [], confidence: 'medium' },
+  phase_3_strategy: { confidence_bracket: 'MEDIUM', diagnosis: { domain_diagnosis: { A: 'The sampled alert reached an owner. Review cost anomaly detection and alerting [A3].', E: '' }, root_causes: [], confidence: 'medium' },
     planning_decision: { decision: 'CONDITIONAL_GO', rationale: 'Review [A3].', safe_to_act_on: [], evidence_needed_before_action: ['Check AP-E2.'] },
-    remediation_roadmap: [{ phase: 'Review', why: 'Validate the sample.', what: 'A reviewed alert.', actions: ['Inspect the sampled alert [A3].'], confidence: 'medium', assumptions: ['Owner confirms <scope>.'] }] },
+    remediation_roadmap: [{ phase: 'Review', why: 'Validate the sample.', what: 'A reviewed alert.', actions: ['Ask the service owner to improve [A3].'], confidence: 'medium', assumptions: ['Owner confirms <scope>.'] }] },
   quality_gate: { decision: 'WARN', blocking_reasons: [], warnings: [], notes: [], thresholds: {} },
 };
 const renderAll = result => {
@@ -220,13 +228,13 @@ const renderAll = result => {
 };
 for (const html of renderAll(saved)) {
   for (const phrase of ['The sampled alert reached an owner.', 'Assessment criterion A3 · assessed 1/3', 'Customer evidence src-001/c3',
-    'whether cost overruns trigger blame', 'AP-E2 · not assessed', 'Owner confirms &lt;scope&gt;.', 'Inspect the sampled alert.']) assert.ok(html.includes(phrase), phrase);
+    'whether cost overruns trigger blame', 'AP-E2 · not assessed', 'Owner confirms &lt;scope&gt;.', 'Ask the service owner to improve cost anomaly detection and alerting.']) assert.ok(html.includes(phrase), phrase);
 }
 for (const [decision, bracket] of [['BLOCK', 'MEDIUM'], ['WARN', 'LOW']]) {
   const control = structuredClone(saved);
   control.quality_gate.decision = decision;
   control.phase_3_strategy.effective_bracket = bracket;
-  for (const html of renderAll(control)) assert.doesNotMatch(html, /Inspect the sampled alert/);
+  for (const html of renderAll(control)) assert.doesNotMatch(html, /Ask the service owner to improve/);
 }
 const legacy = structuredClone(saved);
 delete legacy.phase_3_strategy.diagnosis.domain_diagnosis;
