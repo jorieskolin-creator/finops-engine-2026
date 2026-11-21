@@ -1,3 +1,4 @@
+import { createReportNarrative } from './reportNarrativeService';
 
 import { AuditItem, DiagnosticResult, QualityGateResult } from '../types';
 import { BATCH_TITLES, FINOPS_TACTIC_PLAYBOOK_URL, MASTER_BINGO_FINOPS } from '../knowledge_base';
@@ -567,39 +568,50 @@ const renderEvidenceBackedFindings = (result: DiagnosticResult): string => {
     </section>`;
 };
 
-const renderCanonicalDomainDiagnosis = (result: DiagnosticResult): string =>
+const narrativeHtml = (result: DiagnosticResult) => {
+  const format = createReportNarrative(result);
+  return (value: string) => {
+    const { text, basis } = format(value);
+    return escapeHtml(text) + (basis.length ? `<small style="display:block">Evidence basis · ${basis.map(renderTacticAction).join(' · ')}</small>` : '');
+  };
+};
+
+const renderCanonicalDomainDiagnosis = (result: DiagnosticResult, narrative: (s: string) => string): string =>
   computeDomainSignalRows(result).map(row => `
     <li>
       <strong>${escapeHtml(row.domain)} · ${escapeHtml(row.title)}:</strong>
       Evidence coverage ${row.evidencePercent}%; observed maturity ${row.maturityAvailable ? `${row.maturityPercent}%` : 'unresolved'}; anti-pattern finding rate ${row.antiPatternAvailable ? `${row.antiPatternPercent}%` : 'unresolved'}.
       ${row.isSilent ? 'Silent domain: evidence collection only; no maturity conclusion or remediation prescription.' : ''}
+      ${result.phase_3_strategy.diagnosis?.domain_diagnosis?.[row.domain]?.trim() ? `<p>${narrative(result.phase_3_strategy.diagnosis.domain_diagnosis[row.domain])}</p>` : ''}
       ${row.antiPatternNotAssessed > 0 ? `${row.antiPatternNotAssessed} anti-pattern criterion${row.antiPatternNotAssessed === 1 ? ' was' : ' were'} not assessed.` : ''}
     </li>`).join('');
 
 const renderSummaryDiagnosis = (result: DiagnosticResult): string => {
+  const narrative = narrativeHtml(result);
   const diagnosis = result.phase_3_strategy.diagnosis;
   if (!diagnosis) return '';
   return `
     <section class="summary-section">
       <h2>Diagnosis</h2>
       <div class="summary-card">
-        ${diagnosis.primary_bottleneck ? `<div class="diagnosis-lead"><span>Primary bottleneck</span><p>${escapeHtml(diagnosis.primary_bottleneck)}</p></div>` : ''}
+        ${diagnosis.primary_bottleneck ? `<div class="diagnosis-lead"><span>Primary bottleneck</span><p>${narrative(diagnosis.primary_bottleneck)}</p></div>` : ''}
         <div class="two-col">
           <div>
             <h3>Root causes</h3>
-            <ul>${(diagnosis.root_causes || []).map(i => `<li>${escapeHtml(i)}</li>`).join('')}</ul>
+            <ul>${(diagnosis.root_causes || []).map(i => `<li>${narrative(i)}</li>`).join('')}</ul>
           </div>
           <div>
             <h3>Domain diagnosis</h3>
-            <ul>${renderCanonicalDomainDiagnosis(result)}</ul>
+            <ul>${renderCanonicalDomainDiagnosis(result, narrative)}</ul>
           </div>
         </div>
-        <div class="confidence-line"><strong>Diagnostic confidence: ${escapeHtml(diagnosis.confidence || 'unknown')}</strong>${diagnosis.confidence_rationale ? ` · ${escapeHtml(diagnosis.confidence_rationale)}` : ''}</div>
+        <div class="confidence-line"><strong>Diagnostic confidence: ${escapeHtml(diagnosis.confidence || 'unknown')}</strong>${diagnosis.confidence_rationale ? ` · ${narrative(diagnosis.confidence_rationale)}` : ''}</div>
       </div>
     </section>`;
 };
 
 const renderSummaryPlanningDecision = (result: DiagnosticResult): string => {
+  const narrative = narrativeHtml(result);
   const decision = result.phase_3_strategy.planning_decision;
   if (!decision) return '';
   const rationale = displayPlanningDecisionRationale(
@@ -610,20 +622,20 @@ const renderSummaryPlanningDecision = (result: DiagnosticResult): string => {
   return `
     <section class="summary-section">
       <h2>Planning Decision</h2>
-      <div class="decision-card decision-${String(decision.decision || '').toLowerCase()}">
+      <div class="decision-card decision-${escapeHtml(String(decision.decision || '').toLowerCase())}">
         <div>
           <span>Decision</span>
           <strong>${escapeHtml(String(decision.decision || '').replace('_', ' '))}</strong>
         </div>
-        <p>${escapeHtml(rationale)}</p>
+        <p>${narrative(rationale)}</p>
         <div class="two-col">
           <div>
             <h3>Safe to act on</h3>
-            <ul>${(decision.safe_to_act_on || []).map(i => `<li>${escapeHtml(i)}</li>`).join('')}</ul>
+            <ul>${(decision.safe_to_act_on || []).map(i => `<li>${narrative(i)}</li>`).join('')}</ul>
           </div>
           <div>
             <h3>Evidence needed before action</h3>
-            <ul>${(decision.evidence_needed_before_action || []).map(i => `<li>${escapeHtml(i)}</li>`).join('')}</ul>
+            <ul>${(decision.evidence_needed_before_action || []).map(i => `<li>${narrative(i)}</li>`).join('')}</ul>
           </div>
         </div>
       </div>
@@ -631,6 +643,7 @@ const renderSummaryPlanningDecision = (result: DiagnosticResult): string => {
 };
 
 const renderSummaryRoadmap = (result: DiagnosticResult): string => {
+  const narrative = narrativeHtml(result);
   const effectiveBracket = result.phase_3_strategy.effective_bracket ?? result.phase_3_strategy.confidence_bracket;
   const isBlocked = result.quality_gate.decision === 'BLOCK';
   const roadmap = result.phase_3_strategy.remediation_roadmap || [];
@@ -654,13 +667,15 @@ const renderSummaryRoadmap = (result: DiagnosticResult): string => {
             <div class="phase-kicker">Phase ${index + 1}</div>
             <h3>${escapeHtml(step.phase)}</h3>
             <div class="roadmap-context">
-              ${step.why ? `<div><span>Why</span><p>${escapeHtml(step.why)}</p></div>` : ''}
-              ${step.what ? `<div><span>What</span><p>${escapeHtml(step.what)}</p></div>` : ''}
+              ${step.why ? `<div><span class="roadmap-context-label">Why</span><p>${narrative(step.why)}</p></div>` : ''}
+              ${step.what ? `<div><span class="roadmap-context-label">What</span><p>${narrative(step.what)}</p></div>` : ''}
             </div>
             <div class="how-list">
-              <span>How</span>
-              <ul>${step.actions.map(a => `<li>${renderTacticAction(a)}</li>`).join('')}</ul>
+              <span class="roadmap-how-label">How</span>
+              <ul>${step.actions.map(a => `<li>${narrative(a)}</li>`).join('')}</ul>
             </div>
+            ${step.confidence ? `<p>Phase confidence · ${escapeHtml(step.confidence)}</p>` : ''}
+            ${step.assumptions?.length ? `<h4>Assumptions</h4><ul>${step.assumptions.map(a => `<li>${narrative(a)}</li>`).join('')}</ul>` : ''}
           </article>`).join('')}
       </div>
     </section>`;
@@ -1024,10 +1039,7 @@ export const generateReportHtml = (unsafeResult: DiagnosticResult): string => {
   const result = stripSourceFilenameMetadata(unsafeResult);
   const reportView = buildReportViewModel(result);
   const isBlocked = result.quality_gate.decision === 'BLOCK';
-  const effectiveBracket = result.phase_3_strategy.effective_bracket ?? result.phase_3_strategy.confidence_bracket;
-  const hasFindingsMode = effectiveBracket === 'LOW' && !!result.phase_3_strategy.findings_mode;
-  const roadmap = result.phase_3_strategy.remediation_roadmap || [];
-  const canRenderRoadmap = effectiveBracket !== 'LOW' && !isBlocked && roadmap.length > 0;
+
   const gauges = reportView.metrics;
 
   return `<!DOCTYPE html>
@@ -1269,36 +1281,8 @@ export const generateReportHtml = (unsafeResult: DiagnosticResult): string => {
   <h2>Evidence-Backed Findings</h2>
   ${renderEvidenceBackedFindings(result)}
 
-  ${(() => {
-    const diagnosis = result.phase_3_strategy.diagnosis;
-    if (!diagnosis) return '';
-    const primaryBottleneck = diagnosis.primary_bottleneck?.trim();
-    return `
-      <h2>Diagnosis</h2>
-      <div class="summary diagnosis">
-        <p class="persona-heading">Interpretation of evidence — not the implementation plan</p>
-        ${primaryBottleneck ? `<h3>Primary bottleneck</h3><p>${escapeHtml(primaryBottleneck)}</p>` : ''}
-        <div class="summary-grid">
-          <div class="summary-sub"><h3>Root causes</h3><ul>${(diagnosis.root_causes || []).map(i => `<li>${escapeHtml(i)}</li>`).join('')}</ul></div>
-          <div class="summary-sub"><h3>Domain diagnosis</h3><ul>${renderCanonicalDomainDiagnosis(result)}</ul></div>
-        </div>
-        <p><strong>Confidence (${escapeHtml(diagnosis.confidence)}):</strong> ${escapeHtml(diagnosis.confidence_rationale)}</p>
-      </div>`;
-  })()}
-
-  ${(() => {
-    const decision = result.phase_3_strategy.planning_decision;
-    if (!decision) return '';
-    return `
-      <h2>Planning Decision: ${escapeHtml(decision.decision?.replace('_', ' ') || '')}</h2>
-      <div class="summary planning-decision">
-        <p>${escapeHtml(decision.rationale)}</p>
-        <div class="summary-grid">
-          <div class="summary-sub"><h3>Safe to act on</h3><ul>${(decision.safe_to_act_on || []).map(i => `<li>${escapeHtml(i)}</li>`).join('')}</ul></div>
-          <div class="summary-sub"><h3>Evidence needed before action</h3><ul>${(decision.evidence_needed_before_action || []).map(i => `<li>${escapeHtml(i)}</li>`).join('')}</ul></div>
-        </div>
-      </div>`;
-  })()}
+  ${renderSummaryDiagnosis(result)}
+  ${renderSummaryPlanningDecision(result)}
 
   ${(() => {
     const claims = result.quality_gate?.fact_check?.unsupported_claims || [];
@@ -1322,26 +1306,7 @@ export const generateReportHtml = (unsafeResult: DiagnosticResult): string => {
       </div>`;
   })()}
 
-  ${hasFindingsMode ? renderFindingsMode(result) : ''}
-  ${canRenderRoadmap ? `
-    <h2>Remediation Roadmap</h2>
-    ${roadmap.map(step => `
-      <div class="roadmap-phase">
-        <h3>${escapeHtml(step.phase)}</h3>
-        ${step.why || step.what ? `<div class="roadmap-context">
-          ${step.why ? `<div class="roadmap-context-block"><div class="roadmap-context-label">Why</div><p>${escapeHtml(step.why)}</p></div>` : ''}
-          ${step.what ? `<div class="roadmap-context-block"><div class="roadmap-context-label">What</div><p>${escapeHtml(step.what)}</p></div>` : ''}
-        </div>` : ''}
-        <div class="roadmap-how-label">How</div>
-        <ul>${step.actions.map(a => `<li><span>${renderTacticAction(a)}</span></li>`).join('')}</ul>
-      </div>
-    `).join('')}
-  ` : (effectiveBracket === 'LOW' || isBlocked) && !hasFindingsMode ? `
-    <h2>Remediation Roadmap</h2>
-    <div class="coverage-gaps">
-      <p class="cg-lead">Directive roadmap actions were withheld because the effective confidence bracket is LOW or the Quality Gate blocked the generated plan. Use the evidence summary, planning decision, and validation plan before acting.</p>
-    </div>
-  ` : ''}
+  ${renderSummaryRoadmap(result)}
 
   ${renderEvidenceCheckSummary(result)}
   ${renderForensicSection('Forensic Audit: FinOps Maturity', 'maturity', result.phase_1_audit_logs.maturity)}
