@@ -171,3 +171,20 @@ assert.match(svgGaugeSource, /High = Good/, 'exported gauges should state score 
 console.log(functionalChecksRan
   ? 'report rendering unit tests passed'
   : 'report rendering textual tests passed (TypeScript compiler unavailable)');
+
+const { build } = await import('esbuild');
+const bundle = await build({ entryPoints: ['src/services/reportNarrativeService.ts'], bundle: true, format: 'esm', write: false, define: { 'import.meta.env': '{}' } });
+const { createReportNarrative } = await import('data:text/javascript;base64,' + Buffer.from(bundle.outputFiles[0].text).toString('base64'));
+const format = createReportNarrative({
+  phase_2_validation: { resolution_maturity: { criterion_resolutions: [
+    { stream: 'maturity', criterion_id: 'A3', state: 'RESOLVED', score_count: 1 },
+    { stream: 'antipattern', criterion_id: 'E2', state: 'UNKNOWN' }
+  ] } },
+  phase_1_audit_logs: { maturity: { A3: { evidence_quotes: [{ quote: 'Sample', source_id: 'src-1', chunk_id: 'c3' }] } } },
+});
+assert.deepEqual(format('Review [A3].'), { text: 'Review cost anomaly detection and alerting.', basis: ['Assessment criterion A3 · assessed 1/3','Customer evidence src-1/c3'] });
+assert.match(format('Check AP-E2.').text, /whether cost overruns trigger blame/);
+assert.match(format('Check AP-E2.').basis[0], /not assessed/);
+assert.equal(format('[A1–A3, AP-E2]').basis.filter(s => s.startsWith('Assessment criterion')).length, 4);
+assert.equal(format('Model A3 on src-A3 uses 75%.').text, 'Model A3 on src-A3 uses 75%.');
+assert.equal(format('[A3-F5]').text, '[A3-F5]');
