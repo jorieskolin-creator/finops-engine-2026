@@ -127,6 +127,44 @@ assert.equal(
   'true verified absence remains tested_absent'
 );
 
+assert.equal(
+  inferAntiPatternAbsenceStatus({
+    count: 0,
+    original_count: 0,
+    antipattern_absence_status: 'tested_absent',
+    evidence_check_status: 'supported',
+    coverage_reason: 'The only migration decision in the packet is on-point and would have shown intact on-premises sizing if this workload had been lift-and-shifted. It shows the opposite. Coverage is not weak, and there is no partial harmful signal in the assessed record.',
+    reasoning: 'Final anti-pattern assessment: Tested absent. Evidence-check resolved the scanner score from 0 to 0. Verifier status: supported. Coverage interpretation: Coverage is not weak, and there is no partial harmful signal in the assessed record.',
+  }),
+  'tested_absent',
+  'negated partial/weak coverage_reason on D1 must remain tested_absent rather than flipping to partially_present'
+);
+
+assert.equal(
+  inferAntiPatternAbsenceStatus({
+    count: 0,
+    original_count: 0,
+    antipattern_absence_status: 'tested_absent',
+    evidence_check_status: 'supported',
+    coverage_reason: 'The architecture review and Terraform release record are the relevant coverage for cost-blind decisions. Both show cost modeling or estimation rather than a decision made without it. No partial cost-blind signal is present.',
+    reasoning: 'Final anti-pattern assessment: Tested absent. Evidence-check resolved the scanner score from 0 to 0. Verifier status: supported. Coverage interpretation: No partial cost-blind signal is present.',
+  }),
+  'tested_absent',
+  'negated partial cost-blind wording on D2 must remain tested_absent rather than flipping to partially_present'
+);
+
+assert.equal(
+  inferAntiPatternAbsenceStatus({
+    count: 0,
+    antipattern_absence_status: 'tested_absent',
+    evidence_check_status: 'supported',
+    coverage_reason: 'No partial cost-blind signal is present.',
+    reasoning: 'Final anti-pattern assessment: Tested absent. Verifier status: supported.',
+  }),
+  'tested_absent',
+  'negated partial signal must not trigger hasAntiPatternPresenceSignal even without original_count'
+);
+
 const metrics = calculateMetrics({
   maturity: {},
   antipattern: {

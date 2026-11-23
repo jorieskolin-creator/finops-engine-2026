@@ -20,6 +20,15 @@ const hasSourceQuote = (item: AuditItem): boolean =>
       || (q.evidence_source === 'derived' && Boolean(q.derived_evidence_id && q.source_id)))
   );
 
+const cleanCriterionReasoning = (item: AuditItem): string => {
+  const raw = typeof item.adjustment_reason === 'string' && item.adjustment_reason.trim().length > 0
+    ? item.adjustment_reason
+    : (item.reasoning || '');
+  return raw
+    .replace(/^Final (?:maturity|anti-pattern) assessment:[^.]*\.\s*Evidence-check resolved the scanner score from \d+ to \d+(?: after a targeted rescan)?\.\s*Verifier status: [a-z]+\.\s*/i, '')
+    .trim();
+};
+
 export const hasVerifiedSourceCoverage = (item: AuditItem | undefined, stream: 'maturity' | 'antipattern'): boolean => {
   if (!item || item.verification_unresolved) return false;
   if (item.assessment_status === 'not_assessed') return false;
@@ -130,18 +139,19 @@ export const calculateMetrics = (
     if (categoryScores[catPrefix] !== undefined) categoryScores[catPrefix] += Math.max(item.count, 0);
     if (item.count === 0) {
       const hasGapEvidence = hasCapabilityEvidence;
+      const cleanReason = cleanCriterionReasoning(item);
       const fullScopeRefuted = !Array.isArray(item.question_results)
         || (item.question_results.length === 3 && item.question_results.every(result => result === 'not_supported'));
       if (!hasGapEvidence) {
         silentAreas.push(`Capability not demonstrated by supplied material: ${key}`);
-        maturityGaps.push(`[${key}] Not demonstrated by supplied material (not proof the capability is absent): ${item.reasoning}`);
+        maturityGaps.push(`[${key}] Not demonstrated by supplied material (not proof the capability is absent): ${cleanReason}`);
       } else if (!fullScopeRefuted) {
-        const scoped = `[${key}] Scoped observation (0/3; full criterion scope not established): ${item.reasoning || ''}`;
+        const scoped = `[${key}] Scoped observation (0/3; full criterion scope not established): ${cleanReason}`;
         maturityGaps.push(scoped);
         scopedObservations.push(scoped);
       } else {
-        candidateConfirmedMaturityGaps.push({ key, reasoning: item.reasoning || '' });
-        maturityGaps.push(`[${key}] Confirmed gap: ${item.reasoning || ''}`);
+        candidateConfirmedMaturityGaps.push({ key, reasoning: cleanReason });
+        maturityGaps.push(`[${key}] Confirmed gap: ${cleanReason}`);
       }
     }
   });
