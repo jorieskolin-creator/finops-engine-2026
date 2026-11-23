@@ -354,7 +354,7 @@ export async function runStage(stage: StageId, prompt: NormalizedPrompt, ctx: Ru
   const promptHash = hashString(`${stage}\n${role}\n${rolePrompt.outputContract || 'unstructured'}\n${rolePrompt.systemInstruction || ''}\n${rolePrompt.userText}`);
   const contextPacketHash = hashString(rolePrompt.userText);
   const fallbackChain = chain.map(profile => profile.id);
-  const executionContext = { ...ctx, stageExecutionId: newInternalCallId() };
+  let executionContext = { ...ctx, stageExecutionId: newInternalCallId() };
   for (const profile of chain) {
     try {
       const result = await callModel(profile, rolePrompt, stage, executionContext);
@@ -362,8 +362,10 @@ export async function runStage(stage: StageId, prompt: NormalizedPrompt, ctx: Ru
         try {
           rolePrompt.validateOutput(result.text);
         } catch (validationError: any) {
-          // The provider completed, so trying the fallback cannot duplicate an
-          // uncertain dispatch. Both attempts use this same validation contract.
+          // The provider completed (marking the current stage_execution_id succeeded
+          // in PostgreSQL), so rotate stageExecutionId before trying the fallback
+          // to avoid HTTP 409 INTERNAL_CALL_BINDING_MISMATCH.
+          executionContext = { ...ctx, stageExecutionId: newInternalCallId() };
           const code = typeof validationError?.code === 'string' && /^[A-Z][A-Z0-9_]{1,63}$/.test(validationError.code)
             ? validationError.code
             : 'INVALID_SEMANTIC_OUTPUT';
