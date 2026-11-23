@@ -267,16 +267,21 @@ ${STRATEGY_PERSONAS_BLOCK}
 8. **PRIVACY LANGUAGE:** Do not name individuals. Avoid repeating the assessed organization/legal entity name unless it is essential to preserve meaning; prefer neutral labels such as "the assessed organization", "the finance team", "the engineering team", or "the FinOps team".
 9. **JSON STRING SAFETY:** No double quotes inside JSON values. Use single quotes or asterisks.
 10. **ASSESSMENT-STATUS FIDELITY:** A criterion marked unsupported, verification_unresolved, or not_assessed is an evidence/verification gap. Never describe it as a confirmed weak, partial, missing, or immature control. Only an assessed, source-backed criterion may support current-state strength or deficiency language.
-11. **BOUNDED RESPONSE:** Keep each persona summary at or below 180 words. Use at most five bullets per evidence_summary list, at most three root causes, at most 55 words per domain diagnosis, and at most 80 words for confidence rationale. Do not repeat the same finding across multiple bullets in one section.
+11. **NATURAL-LANGUAGE NAMING (NO RAW IDs):** In executive_summaries, diagnosis.executive_summary, diagnosis.primary_bottleneck, diagnosis.root_causes, and diagnosis.domain_diagnosis, express every capability, anti-pattern, and domain in plain, natural FinOps language based on its meaning and purpose (for example, 'cost allocation and tagging', 'commitment-based discount management', 'cloud cost anomaly alerting', 'culture and organization', or 'GenAI cost allocation and unit economics'). Do NOT write raw criterion codes (such as A1, B5, D2, F3, AP-D1) or shorthand domain letters (such as 'Domain E' or 'D3-D5') in prose.
+12. **BOUNDED RESPONSE:** Keep each persona summary between 160 and 240 words. Keep diagnosis.executive_summary between 120 and 170 words, diagnosis.primary_bottleneck between 50 and 90 words, diagnosis.root_causes to at most 5 bullets, each domain_diagnosis to at most 85 words, confidence_rationale to at most 100 words, and each evidence_summary list to at most 6 bullets. Do not repeat the same finding across multiple bullets in one section.
 </strict_constraints>
 
 <task>
-1. Draft persona evidence summaries using this 3-paragraph structure:
+1. Draft persona evidence summaries using this 3-paragraph structure (in natural FinOps language without raw criterion IDs):
    **1. Current-State Snapshot:** Corroborated Maturity, Observed Maturity, Assessment Resolution, Adjusted FinOps Maturity, Assessment Sufficiency, and classification. Keep anti-pattern burden/coverage, delivery integrity, and evidence density as diagnostics. Explain that unknown evidence is excluded from observed values and reduces resolution; it does not prove capability absence or anti-pattern presence.
-   **2. Evidence-Backed Findings:** confirmed FinOps strengths, confirmed gaps, confirmed anti-pattern findings, verified anti-pattern absences, anti-patterns not assessable from source, and silent areas with domain scores where present. If the source has generic process facts but no FinOps evidence, describe them as source observations outside FinOps scope.
+   **2. Evidence-Backed Findings:** confirmed FinOps strengths, confirmed gaps, confirmed anti-pattern findings, verified anti-pattern absences, anti-patterns not assessable from source, and silent areas using canonical domain names and natural-language capability descriptions. If the source has generic process facts but no FinOps evidence, describe them as source observations outside FinOps scope.
    **3. Source Confidence & Boundaries:** what the evidence can and cannot prove. No recommendations.
 2. Populate evidence_summary with concise fact-only bullets.
-3. Populate diagnosis as interpretation only; no roadmap, no tactic IDs, no prescriptions. The domain_diagnosis keys A-F must use the canonical labels above and summarize only findings from the matching A-F criteria family.
+3. Populate diagnosis as interpretation only; no roadmap, no tactic IDs, no prescriptions:
+   - "executive_summary": 120-170 words providing a cohesive cross-lens executive synthesis of the diagnostic picture — weaving together the operational FinOps controls, financial governance and variance signals, and architecture/engineering/AI realities established in the evidence, plus where evidence limits bound confidence. Strictly fact-backed and written in natural language without raw criterion IDs.
+   - "primary_bottleneck": 50-90 words clearly explaining the single most consequential evidenced constraint holding back FinOps maturity or assessment resolution.
+   - "root_causes": up to 5 concise bullets directly supported by evidence or explicitly framed as evidence limits.
+   - "domain_diagnosis": keys A-F must use the canonical domain labels above and summarize only findings from the matching A-F criteria family in natural language.
 4. Populate visual_scorecard from Phase 2 metrics.
 </task>
 
@@ -285,9 +290,9 @@ STRICTLY return JSON:
 {
   "phase_3_strategy": {
     "executive_summaries": {
-      "finops_lead": "String, Markdown, fact-only 3-paragraph summary",
-      "cfo": "String, Markdown, fact-only 3-paragraph summary",
-      "engineering_lead": "String, Markdown, fact-only 3-paragraph summary"
+      "finops_lead": "String, Markdown, fact-only 3-paragraph summary (160-240 words, natural language, no raw IDs)",
+      "cfo": "String, Markdown, fact-only 3-paragraph summary (160-240 words, natural language, no raw IDs)",
+      "engineering_lead": "String, Markdown, fact-only 3-paragraph summary (160-240 words, natural language, no raw IDs)"
     },
     "evidence_summary": {
       "headline": "String, fact-only current-state headline",
@@ -299,7 +304,8 @@ STRICTLY return JSON:
       "silent_or_missing_evidence": ["String bullets"]
     },
     "diagnosis": {
-      "primary_bottleneck": "String, interpretation of the main evidenced blocker",
+      "executive_summary": "String, 120-170 words cross-lens executive synthesis grounded strictly in Phase 1/2 evidence (natural language, no raw IDs)",
+      "primary_bottleneck": "String, 50-90 words interpretation of the main evidenced blocker (natural language, no raw IDs)",
       "root_causes": ["String bullets; direct evidence only or clearly marked as evidence gaps"],
       "domain_diagnosis": { "A": "...", "B": "...", "C": "...", "D": "...", "E": "...", "F": "..." },
       "confidence": "high | medium | low",
@@ -356,24 +362,25 @@ ${FINOPS_METHODOLOGY_CONTEXT}
 14. **PRIVACY LANGUAGE:** Do not name individuals. Avoid repeating the assessed organization/legal entity name; use "the assessed organization" or functional labels such as finance, engineering, platform, or FinOps team.
 15. **JSON STRING SAFETY:** No double quotes inside JSON values. Use single quotes or asterisks.
 16. **ASSESSMENT-STATUS FIDELITY:** Treat unsupported, verification_unresolved, and not_assessed criteria only as evidence/verification gaps. Do not call them weak, partial, missing, or immature controls, and do not prescribe remediation for an unverified deficiency. An evidence-collection action is allowed; a control-remediation action requires a separate assessed finding.
-17. **EXPLICIT FINDING REFERENCES:** Every action must include one or more exact bracketed criterion references from LOCKED FINDINGS, such as [A5], [AP-B3], or [F1-F5]. These references are mandatory provenance, not tactic IDs. Do not cite a criterion that does not support the action. Evidence-collection actions must cite the corresponding assessment-gap criteria.
-18. **BOUNDED RESPONSE:** Keep each why and what paragraph between 50 and 90 words. Use 2-4 grounded actions per phase when available. Each action must be concise while retaining owner, artifact, acceptance condition, and risk control; avoid repeating phase narrative inside actions.
+17. **NATURAL-LANGUAGE PROSE WITH TRAILING PROVENANCE ON ACTIONS:** In planning_decision, why, what, deliverables, and assumptions, express capabilities, anti-patterns, and domains in natural FinOps language based on their meaning and purpose — do NOT write raw criterion codes (A1, B5, D2, F3) or shorthand domain letters ('Domain E'). Every HOW action in "actions" MUST still end with one or more exact bracketed finding provenance references (such as [A5], [AP-B3], or [E1-E5]) plus any justified [TAC-*] ID at the end of the action sentence so deterministic provenance tracing remains intact. Do not cite a criterion that does not support the action.
+18. **BOUNDED RESPONSE:** Keep each "why" paragraph between 60 and 110 words and each "what" paragraph between 100 and 160 words. Provide 2-4 concrete, fact-backed "deliverables" per active phase (return [] if a phase has no actions). Use 2-4 grounded HOW actions per phase when available; each action must retain owner, artifact, acceptance condition, and risk control without repeating phase narrative.
 </strict_constraints>
 
 <task>
-1. Populate planning_decision from the locked findings and confidence signals.
-2. Create a 4-phase remediation_roadmap using Crawl-Walk-Run sequencing. Keep all four phase headings, but actions arrays may be empty where the evidence does not support a grounded action:
+1. Populate planning_decision from the locked findings and confidence signals using natural FinOps language.
+2. Create a 4-phase remediation_roadmap using Crawl-Walk-Run sequencing. Keep all four phase headings, but actions and deliverables arrays may be empty where the evidence does not support a grounded step:
    - 1. Crawl — Foundation (0-3 Months)
    - 2. Walk — Optimization (3-6 Months)
    - 3. Walk — Embedding (6-12 Months)
    - 4. Run — Continuous (12+ Months)
 3. For every phase:
-   - "why": 50-90 words explaining why this phase exists, referencing only locked findings, confirmed gaps, confirmed anti-patterns, missing-evidence needs, diagnosis statements, and matching KB mechanisms.
-   - "what": 50-90 words describing the intended change/outcome without inventing unproven benefits or claiming a gap is fully closed unless the locked findings prove the acceptance criteria.
-   - "actions": the HOW layer — 2-4 concise, concrete bullets grounded in locked findings where possible. Every action must include exact bracketed finding references. Include all REQUIRED tactics from the Governed Tactic Selection Plan across the roadmap. Use the Tactic Activity Playbook for practical activity, owner, artifact, acceptance, and adapted risk-control language. Evaluate OPTIONAL tactics semantically; omit their IDs when applicability is not supported. If fewer than 2 grounded HOW actions exist for a phase, use fewer and do not pad with generic work.
+   - "why": 60-110 words explaining why this phase exists in natural language, referencing only locked findings, confirmed gaps, confirmed anti-patterns, missing-evidence needs, diagnosis statements, and verified scope limits.
+   - "what": 100-160 words describing the concrete operational, financial, and engineering target state and verification boundaries for this phase — anchored directly to locked findings (drawing across FinOps, Finance, and Engineering viewpoints where evidenced) without inventing unproven financial savings or claiming a gap is closed unless the locked findings prove closure.
+   - "deliverables": 2-4 concise, concrete, fact-backed target artifacts or decision outputs to be produced in this phase (for example, 'Validated commitment inventory reconciling eligible usage, coverage, utilization, and expiry for open reservation reviews' or 'Severity-based anomaly escalation matrix with named on-call recipients and response targets'). Frame deliverables as target outputs grounded in assessed findings or verification gaps; never assume missing source records already exist.
+   - "actions": the HOW layer — 2-4 concise, concrete bullets grounded in locked findings where possible. Write the action body in natural FinOps language and place the mandatory bracketed finding references (e.g. [B1]) and any justified [TAC-*] ID at the end of the action. Include all REQUIRED tactics from the Governed Tactic Selection Plan across the roadmap. Use the Tactic Activity Playbook for practical activity, owner, artifact, acceptance, and adapted risk-control language. Evaluate OPTIONAL tactics semantically; omit their IDs when applicability is not supported. If fewer than 2 grounded HOW actions exist for a phase, use fewer and do not pad with generic work.
    - "confidence": "high", "medium", or "low" according to how directly the locked findings support the phase.
-   - "assumptions": up to four short assumptions that must hold for the phase to apply; return an empty array when none are needed.
-   - Do not write blanket claims that every gap maps to a verified KB tactic. Use narrower wording: source-confirmed gaps drive the roadmap; tactic IDs are used only where an exact KB match is supported.
+   - "assumptions": up to four short assumptions that must hold for the phase to apply; return an empty array when none are needed. Never state as a fact that unverified records exist.
+   - Do not write meta-claims about tactic-matching coverage (such as 'tactic IDs are used only where an exact KB match is supported'). Focus strictly on the customer's FinOps findings and deliverables.
 4. If evidence is low or mixed, use validation actions first and mark assumptions/confidence when requested by the prompt appendix.
 </task>
 
@@ -383,15 +390,15 @@ STRICTLY return JSON:
   "phase_3_strategy": {
     "planning_decision": {
       "decision": "GO | CONDITIONAL_GO | NO_GO",
-      "rationale": "String explaining actionability from locked findings",
-      "safe_to_act_on": ["String bullets"],
-      "evidence_needed_before_action": ["String bullets"]
+      "rationale": "String explaining actionability from locked findings in natural language",
+      "safe_to_act_on": ["String bullets in natural language"],
+      "evidence_needed_before_action": ["String bullets in natural language"]
     },
     "remediation_roadmap": [
-      { "phase": "1. Crawl — Foundation (0-3 Months)", "why": "50-90 grounded words", "what": "50-90 grounded words", "actions": ["Owner performs a grounded action with artifact, acceptance, risk control, and [A3] [TAC-VIS-004] where applicable"], "confidence": "high|medium|low", "assumptions": [] },
-      { "phase": "2. Walk — Optimization (3-6 Months)", "why": "50-90 grounded words", "what": "50-90 grounded words", "actions": ["2-4 grounded HOW actions with exact finding references"], "confidence": "high|medium|low", "assumptions": [] },
-      { "phase": "3. Walk — Embedding (6-12 Months)", "why": "50-90 grounded words", "what": "50-90 grounded words", "actions": ["2-4 grounded HOW actions with exact finding references"], "confidence": "high|medium|low", "assumptions": [] },
-      { "phase": "4. Run — Continuous (12+ Months)", "why": "50-90 grounded words", "what": "50-90 grounded words", "actions": ["2-4 grounded HOW actions with exact finding references"], "confidence": "high|medium|low", "assumptions": [] }
+      { "phase": "1. Crawl — Foundation (0-3 Months)", "why": "60-110 grounded words", "what": "100-160 grounded words", "deliverables": ["2-4 concrete fact-backed target deliverables"], "actions": ["Owner performs a grounded action with artifact, acceptance, and risk control [A3] [TAC-VIS-004]"], "confidence": "high|medium|low", "assumptions": [] },
+      { "phase": "2. Walk — Optimization (3-6 Months)", "why": "60-110 grounded words", "what": "100-160 grounded words", "deliverables": ["2-4 concrete fact-backed target deliverables"], "actions": ["2-4 grounded HOW actions with trailing bracketed finding references"], "confidence": "high|medium|low", "assumptions": [] },
+      { "phase": "3. Walk — Embedding (6-12 Months)", "why": "60-110 grounded words", "what": "100-160 grounded words", "deliverables": ["2-4 concrete fact-backed target deliverables"], "actions": ["2-4 grounded HOW actions with trailing bracketed finding references"], "confidence": "high|medium|low", "assumptions": [] },
+      { "phase": "4. Run — Continuous (12+ Months)", "why": "60-110 grounded words", "what": "100-160 grounded words", "deliverables": ["2-4 concrete fact-backed target deliverables"], "actions": ["2-4 grounded HOW actions with trailing bracketed finding references"], "confidence": "high|medium|low", "assumptions": [] }
     ]
   }
 }
@@ -503,6 +510,7 @@ STRICTLY return JSON. The schema in FINDINGS mode:
       "silent_or_missing_evidence": ["String bullets"]
     },
     "diagnosis": {
+      "executive_summary": "String, provisional evidence-only executive overview in natural language",
       "primary_bottleneck": "String, provisional interpretation only",
       "root_causes": ["String bullets"],
       "domain_diagnosis": { "A": "...", "B": "...", "C": "...", "D": "...", "E": "...", "F": "..." },

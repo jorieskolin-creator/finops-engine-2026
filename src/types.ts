@@ -256,6 +256,7 @@ export interface RemediationStep {
   phase: string;
   why?: string;
   what?: string;
+  deliverables?: string[];
   actions: string[];
   // Populated when synthesis ran in CAUTIOUS (MEDIUM bracket) mode.
   confidence?: 'high' | 'medium' | 'low';
@@ -307,6 +308,7 @@ export interface AssessmentEvidenceSummary {
 export interface AssessmentDiagnosis {
   // Interpretation of the evidence summary. This explains why the assessed
   // state exists, but still does not prescribe an implementation plan.
+  executive_summary?: string;
   primary_bottleneck: string;
   root_causes: string[];
   domain_diagnosis: Record<string, string>;
