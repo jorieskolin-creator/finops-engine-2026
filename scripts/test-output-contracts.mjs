@@ -17,6 +17,7 @@ const evidence = {
       confirmed_gaps: [], confirmed_antipatterns: [], silent_or_missing_evidence: [],
     },
     diagnosis: {
+      executive_summary: 'Assessed operational, financial, and architectural records show uneven FinOps coverage with ownership gaps.',
       primary_bottleneck: 'Ownership', root_causes: [],
       domain_diagnosis: { A: 'A', B: 'B', C: 'C', D: 'D', E: 'E', F: 'F' },
       confidence: 'medium', confidence_rationale: 'Evidence is mixed.',
@@ -32,6 +33,37 @@ assert.throws(() => validateOutputContractText(OUTPUT_CONTRACT_IDS.evidenceSynth
 assert.throws(() => validateOutputContractText(OUTPUT_CONTRACT_IDS.evidenceSynthesis, JSON.stringify({ ...evidence, extra: true })), /INVALID_OUTPUT_CONTRACT/);
 assert.throws(() => validateOutputContractText(OUTPUT_CONTRACT_IDS.evidenceSynthesis, JSON.stringify({ phase_3_strategy: {} })), /INVALID_OUTPUT_CONTRACT/);
 assert.throws(() => authorizeOutputContract('roadmap_synthesis', OUTPUT_CONTRACT_IDS.evidenceSynthesis), /INVALID_OUTPUT_CONTRACT/);
+
+const roadmap = {
+  phase_3_strategy: {
+    planning_decision: {
+      decision: 'CONDITIONAL_GO',
+      rationale: 'Proceed with bounded actions grounded in verified evidence.',
+      safe_to_act_on: ['Validate open commitment inventory'],
+      evidence_needed_before_action: ['Collect culture and organization evidence'],
+    },
+    remediation_roadmap: [{
+      phase: '1. Crawl — Foundation (0-3 Months)',
+      why: 'Commitment coverage targets remain undocumented in the sampled scope.',
+      what: 'Build a validated commitment inventory reconciling eligible usage, coverage, and expiry before modeling purchases.',
+      deliverables: ['Validated commitment inventory reconciled to billing totals'],
+      actions: ['FinOps analyst and finance controller assemble the reservation inventory [B1].'],
+      confidence: 'medium',
+      assumptions: ['Billing records remain accessible to finance and FinOps'],
+    }],
+  },
+};
+assert.deepEqual(validateOutputContractText(OUTPUT_CONTRACT_IDS.roadmapSynthesis, JSON.stringify(roadmap)), roadmap);
+assert.throws(
+  () => validateOutputContractText(OUTPUT_CONTRACT_IDS.roadmapSynthesis, JSON.stringify({
+    phase_3_strategy: {
+      ...roadmap.phase_3_strategy,
+      remediation_roadmap: [{ ...roadmap.phase_3_strategy.remediation_roadmap[0], deliverables: undefined }],
+    },
+  })),
+  /INVALID_OUTPUT_CONTRACT/,
+  'strict roadmap schema must require deliverables array on every phase',
+);
 
 const gapQuery = {
   schema_version: 'finops_evidence_gap_query_v1',

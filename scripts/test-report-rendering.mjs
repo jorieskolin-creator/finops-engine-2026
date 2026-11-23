@@ -197,6 +197,20 @@ assert.equal(format('[A1–A3, AP-E2]').basis.filter(s => s.startsWith('Assessme
 assert.equal(format('Model A3 on src-A3 uses 75%.').text, 'Model A3 on src-A3 uses 75%.');
 assert.equal(format('[A3-F5]').text, '[A3-F5]');
 
+// Trailing provenance tag clusters on roadmap actions move cleanly into Evidence basis
+// without splicing concatenated titles or "the playbook tactic" into the sentence body.
+const cleanTrailingAction = format('FinOps lead models conservative commitment scenarios and records the exchange decision [A3] [TAC-OPT-001]; artifact: approved decision record.');
+assert.equal(
+  cleanTrailingAction.text,
+  'FinOps lead models conservative commitment scenarios and records the exchange decision; artifact: approved decision record.',
+);
+assert.ok(cleanTrailingAction.basis.includes('Assessment criterion A3 · assessed 1/3'));
+assert.ok(cleanTrailingAction.basis.includes('Playbook tactic [TAC-OPT-001]'));
+assert.equal(
+  format('FinOps lead applies [TAC-OPT-001] to [A3].').text,
+  'FinOps lead applies the playbook tactic to cost anomaly detection and alerting.',
+);
+
 // Exercise the actual report component and both download entry points on one serialized result.
 const surfaces = await build({
   stdin: { resolveDir: process.cwd(), contents: `
@@ -217,9 +231,9 @@ const logs = { maturity: { A3: { count: 1, status: 'Partial', assessment_status:
 const saved = {
   meta: { engine_version: 'test', timestamp: 'fixture', model_config: {} },
   phase_1_audit_logs: logs, phase_2_validation: calculateMetrics(logs),
-  phase_3_strategy: { confidence_bracket: 'MEDIUM', diagnosis: { domain_diagnosis: { A: 'The sampled alert reached an owner. Review cost anomaly detection and alerting [A3].', E: '' }, root_causes: [], confidence: 'medium' },
+  phase_3_strategy: { confidence_bracket: 'MEDIUM', diagnosis: { executive_summary: 'Cross-lens executive overview of assessed FinOps controls and evidence boundaries.', primary_bottleneck: 'Limited assessment resolution outside cost visibility.', domain_diagnosis: { A: 'The sampled alert reached an owner. Review cost anomaly detection and alerting [A3].', E: '' }, root_causes: [], confidence: 'medium' },
     planning_decision: { decision: 'CONDITIONAL_GO', rationale: 'Review [A3].', safe_to_act_on: [], evidence_needed_before_action: ['Check AP-E2.'] },
-    remediation_roadmap: [{ phase: 'Review', why: 'Validate the sample.', what: 'A reviewed alert.', actions: ['Ask the service owner to improve [A3].'], confidence: 'medium', assumptions: ['Owner confirms <scope>.'] }] },
+    remediation_roadmap: [{ phase: 'Review', why: 'Validate the sample.', what: 'A reviewed alert.', deliverables: ['Severity-based anomaly escalation matrix with named recipients.'], actions: ['Ask the service owner to improve [A3].'], confidence: 'medium', assumptions: ['Owner confirms <scope>.'] }] },
   quality_gate: { decision: 'WARN', blocking_reasons: [], warnings: [], notes: [], thresholds: {} },
 };
 const renderAll = result => {
@@ -227,7 +241,7 @@ const renderAll = result => {
   return [renderToStaticMarkup(createElement(ReportView, { result: restored })), generateSummaryReportHtml(restored), generateReportHtml(restored)];
 };
 for (const html of renderAll(saved)) {
-  for (const phrase of ['The sampled alert reached an owner.', 'Assessment criterion A3 · assessed 1/3', 'Customer evidence src-001/c3',
+  for (const phrase of ['Cross-lens executive overview of assessed FinOps controls and evidence boundaries.', 'Executive summary', 'Deliverables', 'Severity-based anomaly escalation matrix with named recipients.', 'The sampled alert reached an owner.', 'Assessment criterion A3 · assessed 1/3', 'Customer evidence src-001/c3',
     'whether cost overruns trigger blame', 'AP-E2 · not assessed', 'Owner confirms &lt;scope&gt;.', 'Ask the service owner to improve cost anomaly detection and alerting.']) assert.ok(html.includes(phrase), phrase);
 }
 for (const [decision, bracket] of [['BLOCK', 'MEDIUM'], ['WARN', 'LOW']]) {

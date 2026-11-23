@@ -23,6 +23,7 @@ interface AuditGridProps {
 
 interface RoadmapProps {
   steps: RemediationStep[];
+  formatText?: (value: string) => { text: string; basis: string[] };
 }
 
 interface RadarProps {
@@ -667,7 +668,7 @@ export const AuditGrid: React.FC<AuditGridProps> = ({ title, data, isAntipattern
   );
 };
 
-export const StrategicRoadmap: React.FC<RoadmapProps> = ({ steps }) => (
+export const StrategicRoadmap: React.FC<RoadmapProps> = ({ steps, formatText }) => (
   <div className="space-y-8 relative before:absolute before:inset-0 before:ml-5 before:-translate-x-px md:before:mx-auto md:before:translate-x-0 before:h-full before:w-0.5 before:bg-gradient-to-b before:from-transparent before:via-slate-700 before:to-transparent">
     {steps.map((step, index) => (
       <div key={index} className="relative flex items-center justify-between md:justify-normal md:odd:flex-row-reverse group is-active">
@@ -681,25 +682,46 @@ export const StrategicRoadmap: React.FC<RoadmapProps> = ({ steps }) => (
               {step.why && (
                 <div>
                   <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-emerald-300 mb-1">Why</p>
-                  <p className="text-sm text-slate-300 leading-relaxed">{step.why}</p>
+                  <p className="text-sm text-slate-300 leading-relaxed">{formatText ? formatText(step.why).text : step.why}</p>
                 </div>
               )}
               {step.what && (
                 <div>
                   <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-cyan-300 mb-1">What</p>
-                  <p className="text-sm text-slate-300 leading-relaxed">{step.what}</p>
+                  <p className="text-sm text-slate-300 leading-relaxed">{formatText ? formatText(step.what).text : step.what}</p>
                 </div>
               )}
             </div>
           )}
+          {step.deliverables && step.deliverables.length > 0 && (
+            <div className="mb-5">
+              <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-amber-300 mb-2">Deliverables</p>
+              <ul className="space-y-2">
+                {step.deliverables.map((item, i) => (
+                  <li key={i} className="flex items-start gap-2.5 text-sm text-slate-200 leading-relaxed">
+                    <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0"></span>
+                    <span>{formatText ? formatText(item).text : item}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
           <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-400 mb-3">How</p>
           <ul className="space-y-3">
-            {step.actions.map((action, i) => (
-              <li key={i} className="flex items-start gap-3 text-sm text-slate-300 leading-relaxed">
-                <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0 shadow-[0_0_5px_rgba(52,211,153,0.5)]"></span>
-                <div className="flex-1"><MarkdownRenderer content={action} /></div>
-              </li>
-            ))}
+            {step.actions.map((action, i) => {
+              const formatted = formatText ? formatText(action) : { text: action, basis: [] };
+              return (
+                <li key={i} className="flex items-start gap-3 text-sm text-slate-300 leading-relaxed">
+                  <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0 shadow-[0_0_5px_rgba(52,211,153,0.5)]"></span>
+                  <div className="flex-1">
+                    <MarkdownRenderer content={formatted.text} />
+                    {formatted.basis.length > 0 && (
+                      <p className="text-[11px] text-slate-500 mt-1">Evidence basis · <TacticLinkedText content={formatted.basis.join(' · ')} /></p>
+                    )}
+                  </div>
+                </li>
+              );
+            })}
           </ul>
         </div>
       </div>

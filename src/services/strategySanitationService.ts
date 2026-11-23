@@ -222,31 +222,35 @@ const extractCriterionKeys = (text: string): string[] => {
 
 const PREMISE_STOPWORDS = new Set([
   'about', 'above', 'accepted', 'across', 'action', 'actions', 'actual', 'actuals', 'after', 'against',
-  'alone', 'along', 'already', 'also', 'although', 'among', 'analysis', 'assessed', 'assessment',
-  'based', 'because', 'before', 'below', 'between', 'beyond', 'bounded', 'broad', 'cannot', 'check',
-  'checks', 'cited', 'claim', 'claims', 'cloud', 'collect', 'confirmed', 'control', 'controls',
-  'count', 'coverage', 'crawl', 'criteria', 'criterion', 'current', 'customer', 'decision', 'decisions',
-  'defined', 'demonstrated', 'density', 'direct', 'documented', 'does', 'domain', 'domains', 'during',
-  'established', 'evidence', 'evidenced', 'every', 'existing', 'fact', 'facts', 'figure', 'figures',
-  'final', 'finding', 'findings', 'finops', 'first', 'follow', 'found', 'full', 'fully', 'further',
-  'governed', 'having', 'however', 'identified', 'implementation', 'include', 'included', 'includes',
-  'including', 'incomplete', 'independent', 'instead', 'into', 'issue', 'items', 'itself', 'level',
-  'limited', 'locked', 'management', 'material', 'maturity', 'means', 'measured', 'metric', 'metrics',
-  'missing', 'model', 'monthly', 'narrow', 'needed', 'neither', 'never', 'noted', 'notes', 'observation',
-  'observations', 'observed', 'organization', 'organizational', 'other', 'outcome', 'outcomes', 'overall',
-  'owner', 'owners', 'packet', 'partial', 'phase', 'phases', 'planning', 'point', 'present', 'primary',
-  'prior', 'process', 'prove', 'proven', 'provides', 'question', 'questions', 'quote', 'quoted', 'rather',
-  'record', 'recorded', 'records', 'reflect', 'related', 'relevant', 'remain', 'remains', 'remediation',
-  'report', 'reported', 'required', 'requires', 'resolution', 'resolved', 'resource', 'resources',
-  'result', 'results', 'review', 'reviewed', 'reviews', 'roadmap', 'sample', 'sampled', 'scanner',
-  'scope', 'scoped', 'score', 'scored', 'scores', 'section', 'several', 'should', 'shown', 'shows',
-  'signal', 'silent', 'since', 'single', 'source', 'sources', 'spend', 'stage', 'stated', 'statement',
-  'states', 'status', 'still', 'strategy', 'subcriteria', 'subcriterion', 'summary', 'supplied',
-  'support', 'supported', 'supports', 'surface', 'tactic', 'tactics', 'target', 'targets', 'teams',
-  'tested', 'their', 'there', 'therefore', 'these', 'those', 'three', 'through', 'total', 'treat',
-  'treated', 'treats', 'under', 'unknown', 'unproven', 'unscored', 'until', 'unverified', 'using',
-  'valid', 'validate', 'validation', 'value', 'verified', 'verifier', 'where', 'whether', 'which',
-  'while', 'within', 'without', 'would',
+  'alone', 'along', 'already', 'also', 'although', 'among', 'analysis', 'assessed', 'assessment', 'azure',
+  'based', 'because', 'before', 'below', 'between', 'beyond', 'billing', 'bounded', 'broad', 'budget',
+  'budgets', 'cannot', 'check', 'checks', 'cited', 'claim', 'claims', 'cloud', 'collect', 'commitment',
+  'commitments', 'confirmed', 'control', 'controls', 'count', 'coverage', 'crawl', 'criteria', 'criterion',
+  'current', 'customer', 'decision', 'decisions', 'defined', 'deliverable', 'deliverables', 'demonstrated',
+  'density', 'direct', 'documented', 'does', 'domain', 'domains', 'during', 'engineering', 'established',
+  'evidence', 'evidenced', 'every', 'exception', 'exceptions', 'existing', 'fact', 'facts', 'figure',
+  'figures', 'final', 'finance', 'finding', 'findings', 'finops', 'first', 'follow', 'forecast', 'found',
+  'framework', 'full', 'fully', 'further', 'governed', 'guardrail', 'guardrails', 'having', 'however',
+  'identified', 'implementation', 'include', 'included', 'includes', 'including', 'incomplete',
+  'independent', 'instead', 'into', 'inventory', 'issue', 'items', 'itself', 'level', 'levels', 'limited',
+  'locked', 'management', 'material', 'maturity', 'means', 'measured', 'metric', 'metrics', 'missing',
+  'model', 'monthly', 'narrow', 'needed', 'neither', 'never', 'noted', 'notes', 'observation',
+  'observations', 'observed', 'optimization', 'organization', 'organizational', 'other', 'outcome',
+  'outcomes', 'overall', 'owner', 'owners', 'packet', 'partial', 'payments', 'phase', 'phases', 'planning',
+  'platform', 'point', 'policies', 'policy', 'portfolio', 'present', 'primary', 'prior', 'process',
+  'program', 'prove', 'proven', 'provides', 'question', 'questions', 'quote', 'quoted', 'rather', 'record',
+  'recorded', 'records', 'reflect', 'register', 'related', 'relevant', 'remain', 'remains', 'remediation',
+  'report', 'reported', 'required', 'requires', 'reservation', 'reservations', 'resolution', 'resolved',
+  'resource', 'resources', 'result', 'results', 'review', 'reviewed', 'reviews', 'roadmap', 'routing',
+  'sample', 'sampled', 'scanner', 'scope', 'scoped', 'score', 'scored', 'scores', 'section', 'several',
+  'should', 'showback', 'shown', 'shows', 'signal', 'silent', 'since', 'single', 'source', 'sources',
+  'spend', 'stage', 'stated', 'statement', 'states', 'status', 'still', 'strategy', 'subcriteria',
+  'subcriterion', 'summary', 'supplied', 'support', 'supported', 'supports', 'surface', 'tactic', 'tactics',
+  'tagging', 'target', 'targets', 'teams', 'tested', 'their', 'there', 'therefore', 'these', 'those',
+  'three', 'through', 'total', 'treat', 'treated', 'treats', 'under', 'unknown', 'unproven', 'unscored',
+  'until', 'unverified', 'using', 'utilisation', 'utilization', 'valid', 'validate', 'validation', 'value',
+  'variance', 'verified', 'verifier', 'where', 'whether', 'which', 'while', 'within', 'without',
+  'workload', 'workloads', 'would',
 ]);
 
 const extractPremiseTokens = (text: string): string[] =>
@@ -292,9 +296,8 @@ const reconcilePlanning = (
     for (const match of value.matchAll(TACTIC_REFERENCE_RX)) {
       if (premiseTactics.has(match[1])) return true;
     }
-    for (const token of extractPremiseTokens(value)) {
-      if (premiseTokens.has(token)) return true;
-    }
+    const distinctMatches = new Set(extractPremiseTokens(value).filter(token => premiseTokens.has(token)));
+    if (distinctMatches.size >= 2 || (premiseTokens.size === 1 && distinctMatches.size === 1)) return true;
     return false;
   };
 
@@ -313,7 +316,7 @@ const reconcilePlanning = (
     for (const phase of strategy.remediation_roadmap) {
       if (typeof phase?.why === 'string') allCandidateStrings.push(phase.why);
       if (typeof phase?.what === 'string') allCandidateStrings.push(phase.what);
-      for (const key of ['actions', 'assumptions'] as const) {
+      for (const key of ['deliverables', 'actions', 'assumptions'] as const) {
         if (Array.isArray(phase?.[key])) allCandidateStrings.push(...phase[key]);
       }
     }
@@ -388,7 +391,7 @@ const reconcilePlanning = (
   if (Array.isArray(strategy?.remediation_roadmap)) {
     for (const phase of strategy.remediation_roadmap) {
       for (const key of ['why', 'what']) if (!keep(phase[key], 'roadmap')) phase[key] = '';
-      for (const key of ['actions', 'assumptions']) {
+      for (const key of ['deliverables', 'actions', 'assumptions']) {
         if (Array.isArray(phase[key])) phase[key] = phase[key].filter((s: string) => keep(s, 'roadmap'));
       }
     }
@@ -400,6 +403,14 @@ const isPremise = (item: StrategySanitationItem): boolean =>
   (item.action === 'quarantined' || item.action === 'removed')
   && Boolean(item.failure_type)
   && item.severity !== 'WARN_TACTIC_HYGIENE'
+  && !isTacticHygieneClaim({
+    claim: item.claim,
+    classification: 'unsupported',
+    rationale: item.rationale,
+    source_location: item.source_location,
+    failure_type: item.failure_type,
+    severity: item.severity,
+  })
   && !isDomainTaxonomyHygieneClaim({
     claim: item.claim,
     classification: 'unsupported',
@@ -481,8 +492,21 @@ export const sanitizeStrategyAfterFactCheck = (
     if (!priorPremises.some(item => item.claim === claim.claim && item.source_location === claim.source_location)) remaining.push(claim);
   }
 
+  const originalAssumptions = new Set<string>(
+    (strategyData?.phase_3_strategy?.remediation_roadmap || [])
+      .flatMap((phase: any) => Array.isArray(phase?.assumptions) ? phase.assumptions : [])
+      .map((item: unknown) => normalizeStatement(String(item || '')).toLowerCase())
+      .filter(Boolean)
+  );
+  const isAssumptionOnlyRemoval = (item: StrategySanitationItem): boolean =>
+    item.source_location === 'roadmap' && originalAssumptions.has(normalizeStatement(item.claim).toLowerCase());
+
   if (planningReview) {
-    const excludedPremises = [...planningReview.excludedPremises, ...priorPremises.map(p => p.claim), ...sanitized.filter(isPremise).map(p => p.claim)];
+    const excludedPremises = [
+      ...planningReview.excludedPremises,
+      ...priorPremises.filter(p => !isAssumptionOnlyRemoval(p)).map(p => p.claim),
+      ...sanitized.filter(item => isPremise(item) && !isAssumptionOnlyRemoval(item)).map(p => p.claim),
+    ];
     if (excludedPremises.length) reconcilePlanning(data.phase_3_strategy, { ...planningReview, excludedPremises }, sanitized);
   }
 
@@ -715,6 +739,7 @@ export const buildDeterministicBlockedFindingsStrategy = ({
         ].slice(0, 8),
       },
       diagnosis: {
+        executive_summary: `Verified customer evidence covered ${assessedCount} of 60 assessment criteria (${density}% density), which is below the sufficiency floor for a maturity classification or remediation roadmap. Only bounded observations from the assessed scopes are reported below; unassessed domains remain verification gaps.`,
         primary_bottleneck: `Not established — assessed criterion coverage (${assessedCount}/60, ${density}%) is below the minimum sufficiency floor, so no criterion can be identified as the primary organizational bottleneck.`,
         root_causes: [
           'Root-cause attribution is withheld until missing domain and criterion evidence is supplied.',

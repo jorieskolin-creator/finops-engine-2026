@@ -574,3 +574,59 @@ assert.deepEqual(finalCheck.strategyData.phase_3_strategy.remediation_roadmap[0]
     'multi-criterion E1 to E5 evidence request must survive against UNKNOWN Phase 2 basis',
   );
 }
+
+// Regression for run 1d1d72f3: quarantining a forward-looking roadmap assumption
+// must remove ONLY that assumption without wiping out clean WHY, WHAT, deliverables,
+// or actions across phases.
+{
+  const assumptionText = 'Crawl evidence confirms the commitment inventory is reliable enough to model downside risk';
+  const cleanWhy = 'Commitment coverage targets and exchange decisions are currently undocumented in the sampled scope.';
+  const cleanWhat = 'Produce a validated reservation inventory and conservative commitment decision model.';
+  const cleanDeliverable = 'Validated reservation inventory reconciling eligible usage, coverage, utilization and expiry.';
+  const cleanAction = 'FinOps analyst and finance controller assemble the reservation inventory [B1].';
+
+  const assumptionFixture = {
+    phase_3_strategy: {
+      planning_decision: {
+        decision: 'CONDITIONAL_GO',
+        rationale: 'Proceed with bounded commitment validation.',
+        safe_to_act_on: [cleanDeliverable],
+        evidence_needed_before_action: [],
+      },
+      remediation_roadmap: [{
+        phase: '1. Crawl — Foundation (0-3 Months)',
+        why: cleanWhy,
+        what: cleanWhat,
+        deliverables: [cleanDeliverable],
+        actions: [cleanAction],
+        assumptions: [assumptionText],
+      }],
+    },
+  };
+
+  const sanitizedAssumption = sanitizeStrategyAfterFactCheck(
+    assumptionFixture,
+    {
+      ...factCheck,
+      unsupported_claims: [{
+        claim: assumptionText,
+        source_location: 'roadmap',
+        classification: 'unsupported',
+        severity: 'BLOCKING_UNSAFE_ROADMAP',
+        failure_type: 'unsupported_org_claim',
+        rationale: 'Locked findings do not establish inventory reliability.',
+      }],
+    },
+    {
+      basisByCriterion: new Map([['maturity.B1', { details: ['The team reviews reservations quarterly.'] }]]),
+      excludedPremises: [],
+      verifiedClaims: [],
+    },
+  );
+  const phase = sanitizedAssumption.strategyData.phase_3_strategy.remediation_roadmap[0];
+  assert.deepEqual(phase.assumptions, [], 'unsupported assumption itself is removed');
+  assert.equal(phase.why, cleanWhy, 'clean phase WHY must survive assumption removal');
+  assert.equal(phase.what, cleanWhat, 'clean phase WHAT must survive assumption removal');
+  assert.deepEqual(phase.deliverables, [cleanDeliverable], 'clean deliverables must survive assumption removal');
+  assert.deepEqual(phase.actions, [cleanAction], 'clean actions must survive assumption removal');
+}
