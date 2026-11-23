@@ -71,6 +71,15 @@ export interface RoadmapFactCheckInputs extends FactCheckInputs {
 
 const MAX_SOURCE_CHARS = 100000;
 
+const CANONICAL_DOMAIN_TITLES: Record<string, string> = {
+  A: 'Cost Visibility & Allocation',
+  B: 'Rate & Usage Optimization',
+  C: 'Governance & Policy',
+  D: 'Architecture & Engineering',
+  E: 'Culture & Organization',
+  F: 'GenAI & AI Cost Management',
+};
+
 // Extract company names from a tactic's case_study field. Most entries follow
 // "COMPANY: ..." but we also pick up any ALL-CAPS word (Spotify, Netflix etc.
 // are usually capitalized) as a fallback.
@@ -117,7 +126,9 @@ const compactMetrics = (phase2: Phase2Validation): string => {
     .map(([category, score]) => {
       const hasScore = !records.some(r => r.domain_id === category && r.state === 'VERIFICATION_UNRESOLVED')
         && records.some(r => r.domain_id === category && r.stream === 'maturity' && r.state === 'RESOLVED');
-      return `  ${category}: ${hasScore ? `${score}/15 (assessed points on domain surface)` : 'NA'}`;
+      const title = CANONICAL_DOMAIN_TITLES[category];
+      const label = title ? `${category} (${title})` : category;
+      return `  ${label}: ${hasScore ? `${score}/15 (assessed points on domain surface)` : 'NA'}`;
     }).join('\n');
   return [
     `corroborated_maturity=${m.corroborated_maturity === null ? 'NA' : `${Math.round(m.corroborated_maturity)}%`}`,
@@ -537,7 +548,7 @@ ROADMAP GROUNDING:
 <rules>
 - Do NOT re-score the evidence summary. Treat LOCKED_FINDINGS as the current-state baseline.
 - Check each planning rationale, safe-to-act item, evidence request, Why, What, action and assumption against surviving customer evidence. Excluded premises and their paraphrases cannot justify any statement, even if repeated in LOCKED_FINDINGS. A shared criterion ID or an applicable tactic alone cannot establish the premise. A narrower review may stand on the accepted evidence for the same criterion.
-- For independently supported statements, return the entire field or list item verbatim as the claim. In the rationale cite the exact stream and criterion followed by a short verbatim supporting excerpt in double quotes, e.g. maturity.B1 "monthly utilization review of the sampled reservation". Supply each material criterion and check scope and qualifiers. For an evidence request grounded in an unknown, quote its complete status (UNKNOWN | unscored | NO_GOVERNED_EVIDENCE). For unsupported statements, flag the unsupported premise or action. Prioritize affected statements within the existing claim limit.
+- For independently supported statements, return the entire field or list item verbatim as the claim (without any leading "- " markdown bullet prefix). Classify full statements grounded in surviving customer/audit evidence as "supported_by_audit" or "supported_by_source" (even when the action also cites a valid [TAC-*] ID; reserve "supported_by_tactics_db" for standalone tactic-lookup checks when <excluded_premises> is empty). In the rationale cite the exact stream and criterion followed by a short verbatim supporting excerpt in double quotes, e.g. maturity.B1 "monthly utilization review of the sampled reservation". Supply each material criterion and check scope and qualifiers. For an evidence request grounded in an unknown, quote its complete status (UNKNOWN | unscored | NO_GOVERNED_EVIDENCE). For unsupported statements, flag the unsupported premise or action. Prioritize affected statements within the claim limit.
 - Ask: do the WHY, WHAT, and HOW sections answer the findings? If a phase rationale, intended outcome, or action does not address a confirmed gap, anti-pattern, missing-evidence item, or diagnosis statement, classify it as unsupported.
 - Planning decision must be proportionate to confidence. If the plan says GO while locked findings contain major uncertainty, unsupported claims, or evidence gaps, flag the GO rationale as unsupported or overconfident.
 - Tactic IDs are allowed only in roadmap actions and must exist in the tactics DB.
@@ -546,10 +557,10 @@ ROADMAP GROUNDING:
 - Activity-playbook details support roadmap HOW language only. They do not support new claims about what the audited organization currently has or does.
 - If the action is grounded but the output uses a wrong label/category for the finding, classify unsupported with severity "WARN_MISCLASSIFIED_BUT_REAL".
 - If a criterion is unsupported, verification_unresolved, or not_assessed, the roadmap may collect evidence for it but may not describe it as a confirmed weak/partial control or prescribe deficiency remediation without another assessed locked finding.
-- Evaluate each required tactic's supplied use and do-not-use conditions. If locked findings establish a do-not-use condition, classify the tactic action as unsupported with severity "WARN_TACTIC_HYGIENE" so it can be recorded as contraindicated rather than forced into the final roadmap.
-- Every claim MUST set "tactic_disposition". For an unsupported roadmap claim with severity "WARN_TACTIC_HYGIENE" that contains a tactic ID, use "contraindicated" only when a supplied Playbook do-not-use condition is established by locked findings; otherwise use "citation_rejected" for a misplaced, mismatched, or unsupported tactic reference. For every other claim use "not_applicable".
+- Evaluate each required tactic's supplied use and do-not-use conditions. If locked findings establish a supplied Playbook do-not-use condition or directly refute the tactic's supplied use_when condition through verified customer controls, classify the tactic action as unsupported with severity "WARN_TACTIC_HYGIENE" so it can be recorded as contraindicated rather than forced into the final roadmap.
+- Every claim MUST set "tactic_disposition". For an unsupported roadmap claim with severity "WARN_TACTIC_HYGIENE" that contains a tactic ID, use "contraindicated" only when a supplied Playbook do-not-use condition is established by locked findings or when verified customer controls in locked findings directly refute the tactic's supplied use_when condition; otherwise use "citation_rejected" for a misplaced, mismatched, or unsupported tactic reference. For every other claim use "not_applicable".
 - WHY and WHAT may summarize context and intended change, but they may not invent new current-state claims, unsupported financial impacts, or claim that a gap is fully closed unless LOCKED_FINDINGS provide acceptance criteria proving closure.
-- Maximum 15 claims per pass — focus on consequential grounding errors.
+- ${(inputs.excludedPremises?.length || 0) > 0 ? 'Maximum 60 claims per pass when <excluded_premises> is non-empty so all affected planning and roadmap statements can be verified alongside unsupported claims.' : 'Maximum 15 claims per pass — focus on consequential grounding errors.'}
 - For every unsupported claim, emit failure_type, severity, and missing_material.
 - For supported claims, emit severity "SUPPORTED", failure_type "not_applicable", and an empty missing_material string.
 - Output JSON ONLY, no prose.

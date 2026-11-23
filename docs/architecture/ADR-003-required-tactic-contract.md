@@ -20,7 +20,9 @@ Every required tactic ends with exactly one disposition:
 
 - `accepted`: the final roadmap contains the required tactic ID;
 - `contraindicated`: roadmap sanitation removed the ID after the Quality
-  Checker explicitly established a supplied Playbook do-not-use condition;
+  Checker explicitly established a supplied Playbook do-not-use condition or
+  confirmed that verified customer controls in locked findings directly refute
+  the tactic's supplied use condition;
 - `citation_rejected`: roadmap sanitation removed the ID because its citation
   or use was unsupported or mismatched; or
 - `missing`: the final roadmap omits the ID without a valid reviewed
