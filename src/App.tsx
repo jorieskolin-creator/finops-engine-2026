@@ -22,6 +22,7 @@ import { checkSession, logout } from './services/authService';
 import { acknowledgeRun, deleteRun, getRun } from './services/runLifecycleService';
 import { recoverCheckpointResult } from './services/checkpointRecoveryService';
 import { buildReportViewModel } from './services/reportViewModel';
+import { createReportNarrative } from './services/reportNarrativeService';
 import demoSimulation from '../test/demo-simulation.txt?raw';
 
 const DEMO_SIMULATION_LABEL = 'Engine Simulation — Northstar Retail Demo Pack';
@@ -326,6 +327,14 @@ const PrivacyReviewPanel: React.FC<{
           <section>
             <h4 className="text-sm font-bold uppercase tracking-widest text-emerald-300 mb-4">Diagnosis</h4>
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              <label className="block lg:col-span-2">
+                <span className={labelClass}>Executive summary</span>
+                <textarea
+                  className={textareaClass}
+                  value={diagnosis.executive_summary || ''}
+                  onChange={(e) => onChange(draft => { if (draft.phase_3_strategy.diagnosis) draft.phase_3_strategy.diagnosis.executive_summary = e.target.value; })}
+                />
+              </label>
               <label className="block">
                 <span className={labelClass}>Primary bottleneck</span>
                 <textarea
@@ -434,6 +443,14 @@ const PrivacyReviewPanel: React.FC<{
                         className={textareaClass}
                         value={step.what || ''}
                         onChange={(e) => onChange(draft => { draft.phase_3_strategy.remediation_roadmap[index].what = e.target.value; })}
+                      />
+                    </label>
+                    <label className="block">
+                      <span className={labelClass}>Deliverables</span>
+                      <textarea
+                        className={textareaClass}
+                        value={arrayToText(step.deliverables)}
+                        onChange={(e) => onChange(draft => { draft.phase_3_strategy.remediation_roadmap[index].deliverables = textToArray(e.target.value); })}
                       />
                     </label>
                     <label className="block">
@@ -1557,7 +1574,7 @@ const App: React.FC = () => {
                         </button>
                       ))}
                     </div>
-                    <MarkdownRenderer content={result.phase_3_strategy.executive_summaries?.[activePersona] || result.phase_3_strategy.executive_summary} />
+                    <MarkdownRenderer content={createReportNarrative(result)(result.phase_3_strategy.executive_summaries?.[activePersona] || result.phase_3_strategy.executive_summary).text} />
                     {result.phase_3_strategy.evidence_summary && (
                       <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-3">
                         {result.phase_3_strategy.evidence_summary.key_metrics?.map((metric, i) => (
@@ -1692,7 +1709,10 @@ const App: React.FC = () => {
                   );
                 })()}
 
-                {result.phase_3_strategy.diagnosis && (
+                {result.phase_3_strategy.diagnosis && (() => {
+                  const formatDashboardNarrative = createReportNarrative(result);
+                  const diag = result.phase_3_strategy.diagnosis;
+                  return (
                   <div className="glass-panel p-8 md:p-10 rounded-[2rem] bg-slate-900/40 border border-white/10">
                     <div className="flex items-start gap-4 mb-5">
                       <div className="flex items-center justify-center w-10 h-10 rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 font-bold text-sm flex-shrink-0">02</div>
@@ -1701,22 +1721,29 @@ const App: React.FC = () => {
                         <p className="text-xs text-slate-400 mt-1">Interpretation of the evidence. Recommendations remain separated in the roadmap tab.</p>
                       </div>
                     </div>
-                    <div className="pl-14 space-y-4">
+                    <div className="pl-14 space-y-5">
+                      {diag.executive_summary?.trim() && (
+                        <div>
+                          <p className="text-[10px] font-bold uppercase tracking-widest text-emerald-300 mb-2">Executive summary</p>
+                          <p className="text-sm text-slate-200 leading-relaxed">{formatDashboardNarrative(diag.executive_summary).text}</p>
+                        </div>
+                      )}
                       <div>
                         <p className="text-[10px] font-bold uppercase tracking-widest text-cyan-300 mb-2">Primary bottleneck</p>
-                        <p className="text-sm text-slate-200">{result.phase_3_strategy.diagnosis.primary_bottleneck}</p>
+                        <p className="text-sm text-slate-200 leading-relaxed">{formatDashboardNarrative(diag.primary_bottleneck).text}</p>
                       </div>
                       <div>
                         <p className="text-[10px] font-bold uppercase tracking-widest text-cyan-300 mb-2">Root causes</p>
                         <ul className="space-y-1.5">
-                          {result.phase_3_strategy.diagnosis.root_causes?.map((cause, i) => (
-                            <li key={i} className="flex items-start gap-2 text-sm text-slate-300"><span className="mt-1.5 w-1 h-1 rounded-full bg-cyan-400 shrink-0"></span><span>{cause}</span></li>
+                          {diag.root_causes?.map((cause, i) => (
+                            <li key={i} className="flex items-start gap-2 text-sm text-slate-300"><span className="mt-1.5 w-1 h-1 rounded-full bg-cyan-400 shrink-0"></span><span>{formatDashboardNarrative(cause).text}</span></li>
                           ))}
                         </ul>
                       </div>
                     </div>
                   </div>
-                )}
+                  );
+                })()}
 
                 {result.phase_3_strategy.planning_decision && (
                   <div className="glass-panel p-8 md:p-10 rounded-[2rem] bg-slate-900/40 border border-emerald-500/20">
@@ -1724,7 +1751,7 @@ const App: React.FC = () => {
                       <div className="flex items-center justify-center w-10 h-10 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-bold text-sm flex-shrink-0">03</div>
                       <div>
                         <h3 className="text-lg font-display font-bold text-white">Planning Decision: {result.phase_3_strategy.planning_decision.decision?.replace('_', ' ')}</h3>
-                        <p className="text-xs text-slate-400 mt-1">{result.phase_3_strategy.planning_decision.rationale}</p>
+                        <p className="text-xs text-slate-400 mt-1">{createReportNarrative(result)(result.phase_3_strategy.planning_decision.rationale || '').text}</p>
                       </div>
                     </div>
                   </div>
@@ -1798,7 +1825,7 @@ const App: React.FC = () => {
                       <h2 className="text-4xl font-display font-bold text-white mb-4">Optimization Roadmap</h2>
                       <p className="text-slate-400">A structured Crawl-Walk-Run path to FinOps excellence.</p>
                     </div>
-                    <StrategicRoadmap steps={result.phase_3_strategy.remediation_roadmap} />
+                    <StrategicRoadmap steps={result.phase_3_strategy.remediation_roadmap} formatText={createReportNarrative(result)} />
                   </div>
                 )}
               </div>

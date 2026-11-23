@@ -594,6 +594,7 @@ const renderSummaryDiagnosis = (result: DiagnosticResult): string => {
     <section class="summary-section">
       <h2>Diagnosis</h2>
       <div class="summary-card">
+        ${diagnosis.executive_summary?.trim() ? `<div class="diagnosis-lead"><span>Executive summary</span><p>${narrative(diagnosis.executive_summary)}</p></div>` : ''}
         ${diagnosis.primary_bottleneck ? `<div class="diagnosis-lead"><span>Primary bottleneck</span><p>${narrative(diagnosis.primary_bottleneck)}</p></div>` : ''}
         <div class="two-col">
           <div>
@@ -670,6 +671,7 @@ const renderSummaryRoadmap = (result: DiagnosticResult): string => {
               ${step.why ? `<div><span class="roadmap-context-label">Why</span><p>${narrative(step.why)}</p></div>` : ''}
               ${step.what ? `<div><span class="roadmap-context-label">What</span><p>${narrative(step.what)}</p></div>` : ''}
             </div>
+            ${step.deliverables?.length ? `<div class="how-list"><span class="roadmap-context-label">Deliverables</span><ul>${step.deliverables.map(d => `<li>${narrative(d)}</li>`).join('')}</ul></div>` : ''}
             <div class="how-list">
               <span class="roadmap-how-label">How</span>
               <ul>${step.actions.map(a => `<li>${narrative(a)}</li>`).join('')}</ul>

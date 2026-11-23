@@ -104,6 +104,19 @@ const RemediationStepBlock: React.FC<{ step: RemediationStep; narrative: (value:
           )}
         </div>
       )}
+      {step.deliverables && step.deliverables.length > 0 && (
+        <div className="mb-4 bg-white border border-slate-200 rounded-lg p-4">
+          <p className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">Deliverables</p>
+          <ul className="space-y-2">
+            {step.deliverables.map((item, i) => (
+              <li key={i} className="flex items-start gap-2.5 text-sm text-slate-700">
+                <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-cyan-600 shrink-0"></span>
+                <span>{narrative(item)}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
       <p className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">How</p>
       <ul className="space-y-3 mb-4">
         {step.actions.map((action, i) => (
@@ -768,11 +781,18 @@ export const ReportView: React.FC<ReportViewProps> = ({ result, onBack, onDownlo
         {(() => {
           const diagnosis = result.phase_3_strategy.diagnosis;
           if (!diagnosis) return null;
+          const executiveSummary = diagnosis.executive_summary?.trim();
           const primaryBottleneck = diagnosis.primary_bottleneck?.trim();
           return (
             <div className="mb-12 p-6 rounded-xl bg-slate-50 border border-slate-200">
               <h2 className="text-2xl font-display font-bold text-slate-900 mb-2">Diagnosis</h2>
               <p className="text-sm text-slate-600 mb-5">Interpretation of the evidence. This section explains causes and bottlenecks, but does not prescribe the implementation plan.</p>
+              {executiveSummary && (
+                <div className="mb-5 p-4 rounded-lg bg-white border border-slate-200">
+                  <p className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-1.5">Executive summary</p>
+                  <p className="text-sm text-slate-800 leading-relaxed">{narrative(executiveSummary)}</p>
+                </div>
+              )}
               {primaryBottleneck && (
                 <div className="mb-5">
                   <p className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-1">Primary bottleneck</p>
