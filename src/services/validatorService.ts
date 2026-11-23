@@ -190,8 +190,19 @@ export const validatePhase3Grounding = (strategyData: any, phase2: Phase2Validat
   // this check only fires on numbers that look invented to a deterministic
   // pattern matcher.
   const percentPattern = /(\d+)%/g;
-  const metricsValues = Object.values(phase2.metrics) as number[];
-  const roundedMetrics = new Set(metricsValues.map(v => Math.round(v)));
+  const numericPhase2Values: number[] = [
+    ...Object.values(phase2.metrics || {}),
+    ...Object.values(phase2.assessment_sufficiency?.domain_criterion_evidence_density || {}),
+    ...Object.values(phase2.assessment_sufficiency?.domain_resolution || {}),
+    ...Object.values(phase2.assessment_sufficiency?.thresholds || {}),
+    ...(phase2.resolution_maturity?.domains || []).flatMap(domain => [
+      domain.corroborated_maturity,
+      domain.observed_maturity,
+      domain.resolution,
+      domain.adjusted_maturity,
+    ]),
+  ].filter((v): v is number => typeof v === 'number' && Number.isFinite(v));
+  const roundedMetrics = new Set(numericPhase2Values.map(v => Math.round(v)));
   // category_scores are 0–15 ints. The strategy may quote them as raw "X/15"
   // (handled below) or as percentages — accept both forms.
   const categoryScoresRaw = Object.values(phase2.category_scores || {}) as number[];

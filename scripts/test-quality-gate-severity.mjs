@@ -3,6 +3,7 @@ import { mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import ts from '../node_modules/typescript/lib/typescript.js';
+import { emitTypescript } from './ts-emit.mjs';
 
 const compile = (source) => ts.transpileModule(source, {
   compilerOptions: {
@@ -337,6 +338,40 @@ assert.equal(isBlockingUnsupportedClaim(verifiedTacticsHygieneClaim), false);
   assert.match(routing, /silent domains \(E\) permit evidence collection only/);
   assert.equal(weakSourceCoverage.blocking_reasons.length, 0);
   assert.ok(weakSourceCoverage.warnings.some(reason => reason.startsWith('Source routing coverage')));
+
+  // Phase 3 percentage grounding must accept Phase 2 domain densities/resolutions (90%)
+  // and sufficiency thresholds (60%) while still warning on genuinely invented figures (77%).
+  const validatorOut = await emitTypescript(new URL('../src/services/validatorService.ts', import.meta.url).pathname, join(dir, 'validator'));
+  const { validatePhase3Grounding } = await import(`file://${validatorOut}`);
+  const grounding = validatePhase3Grounding(
+    {
+      phase_3_strategy: {
+        executive_summaries: {
+          finops_lead: 'Domain A has 90% criterion evidence density against the 60% confidence target, while overall density is 40%.',
+          cfo: 'Overall resolution is 40%, below the 60% target, and an invented 77% figure should still warn.',
+          engineering_lead: 'Domain A observed maturity is 46% across assessed criteria, while overall density is 40%.',
+        },
+        remediation_roadmap: [{ phase: 'Crawl', actions: ['Apply [TAC-OPT-001] to [B1].'] }],
+      },
+    },
+    {
+      metrics: { evidence_density: 40, assessment_resolution: 40 },
+      category_scores: { A: 5, B: 3, C: 4, D: 3, E: 0, F: 1 },
+      assessment_sufficiency: {
+        domain_criterion_evidence_density: { A: 90, B: 30, C: 50, D: 20, E: 0, F: 50 },
+        domain_resolution: { A: 90, B: 30, C: 50, D: 20, E: 0, F: 50 },
+        thresholds: { criterion_evidence_density: 24, overall_resolution: 24, evidence_warning_below: 60, silent_domain_density_below: 10 },
+      },
+      resolution_maturity: {
+        domains: [{ domain_id: 'A', corroborated_maturity: 47, observed_maturity: 45.5, resolution: 90, adjusted_maturity: 43.1 }],
+      },
+    },
+    '',
+  );
+  assert.equal(grounding.warnings.some(w => w.includes('90%')), false, 'Domain A 90% density must be recognized as grounded');
+  assert.equal(grounding.warnings.some(w => w.includes('60%')), false, '60% sufficiency threshold must be recognized as grounded');
+  assert.equal(grounding.warnings.some(w => w.includes('46%')), false, 'Domain A rounded observed maturity (46%) must be recognized as grounded');
+  assert.equal(grounding.warnings.some(w => w.includes('77%')), true, 'genuinely ungrounded percentage must still produce a warning');
 }
 
 console.log('quality gate severity unit tests passed');
