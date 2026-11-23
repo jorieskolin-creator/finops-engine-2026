@@ -12,8 +12,15 @@ import {
   normalizeCapabilityId,
   normalizeCriterionId,
   sanitizeKbDocument,
+  sanitizeKbRubricText as sanitizeServerKbText,
   validateKbMetadata,
 } from '../lib/kbIndex.js';
+import {
+  approveRequestArtifact,
+  POLICY_VERSION,
+  STAGE_PACKET_REQUEST_VERSION,
+} from '../lib/governance.js';
+import { OUTPUT_CONTRACT_IDS } from '../lib/outputContracts.js';
 import { fetchBlobBytes, listBlobPdfs } from '../api/kb-index.js';
 
 const baseMeta = {
@@ -275,7 +282,10 @@ try {
 {
   const kbOutDir = await mkdtemp(join(tmpdir(), 'finops-kb-runtime-'));
   const kbModulePath = await emitTypescript(new URL('../src/knowledge_base/index.ts', import.meta.url).pathname, kbOutDir);
-  const { formatRemoteKbContext } = await import(`file://${kbModulePath}`);
+  const {
+    formatRemoteKbContext,
+    sanitizeKbRubricText: sanitizeClientKbText,
+  } = await import(`file://${kbModulePath}`);
 
   const richApD1Doc = {
     ...apD1Doc,
@@ -357,6 +367,92 @@ try {
     assert.ok(
       expectedIdsFromPathname(examplePath),
       `taxonomy kb_document_naming example must match canonical parser: ${examplePath}`,
+    );
+  }
+
+  // Regression gate for run 1f5e30a3 / dee78cf4 (Domain E & F RESIDUAL_CLASSIFICATION_REJECTED):
+  // Full-section KB PDFs containing FinOps compound modifiers, illustrative rates/contracts,
+  // sample billing/invoice IDs, or sandbox API key examples must sanitize cleanly and pass
+  // lib/governance.js approveRequestArtifact across all stages.
+  const hostileDomainFRubric = `Canonical Definition
+AI token consumption must not remain invoice-level or billing account-level black-box spend.
+Evidence Requirements
+Weak Evidence
+Provider invoice: token spend appears only as a monthly lump sum; billing account - shared services has no owner split.
+Example payload {"billing_account": "BA-99881", "invoice_number": "INV-202605"} without workload tags.
+False Positive Guards
+Do not infer FinOps maturity from a negotiated discount rate of 15% to 25% or EDP pricing tier
+with 10% threshold, or contract value: $250,000 without unit economics.
+Prohibited Inference Rules
+Never include sandbox keys (api_key = sk-example1234567890abcdef, Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9),
+multimodal payloads (data:image/png;base64,AAAA or {"type": "image"}), SSN 123-45-6789,
+credit card number: 4111-2222-3333 in governed telemetry, or home address: 12 Example Street.
+Validation Questions
+Are invoice-based reconciliations linked to feature-level token telemetry?
+Scoring Guidance Notes
+Score 0/3 when only provider invoice: monthly totals exist.
+Risk Notes
+Contract value of €500,000 on AI commits without routing guardrails creates lock-in risk.
+Remediation / Tactic Notes
+Enforce gateway attribution before negotiating discount_rate = 20%.`;
+
+  assert.equal(
+    sanitizeServerKbText(hostileDomainFRubric),
+    sanitizeClientKbText(hostileDomainFRubric),
+    'server ingestion and client prompt KB sanitizers must remain identical',
+  );
+
+  const sanitizedDomainFDoc = sanitizeKbDocument({
+    pathname: fAntiPath,
+    text: `${JSON.stringify(fAntiMeta, null, 2)}\n\n${hostileDomainFRubric.replace(/\n/g, ' ')}`,
+    sectionText: `${JSON.stringify(fAntiMeta, null, 2)}\n\n${hostileDomainFRubric}`,
+    pdfSha256: 'sha256_f2',
+    extractedTextSha256: 'sha256_f2_text',
+    extraction: { totalPages: 6, processedPages: 6, sparsePages: [], pageLimitReached: false },
+  });
+
+  // Verify readable FinOps prose is preserved while synthetic triggers are neutralized
+  assert.match(sanitizedDomainFDoc.sections.canonical_definition, /invoice level/);
+  assert.match(sanitizedDomainFDoc.sections.canonical_definition, /billing account level/);
+  assert.match(sanitizedDomainFDoc.sections.weak_evidence_examples, /Provider invoice \u2014 token spend/);
+  assert.match(sanitizedDomainFDoc.sections.false_positive_guards, /\[EXAMPLE_RATE\]/);
+  assert.match(sanitizedDomainFDoc.sections.false_positive_guards, /\[EXAMPLE_VALUE\]/);
+  assert.match(sanitizedDomainFDoc.sections.prohibited_inference_rules, /in governed telemetry/);
+
+  const domainFIndex = {
+    status: { source: 'remote_blob', document_count: 60, failure_count: 0 },
+    documents: completeDocuments.map(d => (d.criterion_id === 'AP-F2' ? sanitizedDomainFDoc : d)),
+    failures: [],
+  };
+
+  const basePacketReq = {
+    schema_version: STAGE_PACKET_REQUEST_VERSION,
+    policy_version: POLICY_VERSION,
+    run_id: '1f5e30a3-dafb-4d8c-ade4-c8b39f3f261b',
+    provider: 'anthropic',
+    model: 'claude-sonnet-5',
+    destination: 'anthropic:external_model',
+    system_instruction: 'Audit Domain F safely.',
+  };
+
+  for (const [stage, label, settings, outputContract] of [
+    ['forensic_audit', 'forensic_audit', { max_tokens: 16384 }, undefined],
+    ['evidence_check', 'evidence_check', { max_tokens: 16384 }, undefined],
+    ['roadmap_synthesis', 'roadmap_synthesis', { max_tokens: 32768 }, OUTPUT_CONTRACT_IDS.roadmapSynthesis],
+  ]) {
+    const kbPrompt = formatRemoteKbContext(domainFIndex, {
+      ...(stage === 'roadmap_synthesis' ? { criterionIds: ['AP-F2'] } : { batchId: 'F' }),
+      label,
+    });
+    assert.doesNotThrow(
+      () => approveRequestArtifact({
+        ...basePacketReq,
+        stage,
+        settings,
+        ...(outputContract ? { output_contract: outputContract } : {}),
+        parts: [{ type: 'text', text: kbPrompt }],
+      }),
+      `Domain F KB context for stage ${stage} must pass governed packet approval without RESIDUAL_CLASSIFICATION_REJECTED`,
     );
   }
 }
