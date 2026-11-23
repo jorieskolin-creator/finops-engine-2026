@@ -215,3 +215,15 @@ assert.match(stress.text, /maturity\.B1 \| assessed 1\/3[^\n]*scope detail withh
 assert.equal(stress.basisByCriterion.has('maturity.B1'), false);
 assert.ok(buildRoadmapFactCheckPrompt({ acceptedFacts: stress.text, phase1: fullAudit, phase2, sourceDocument: 'x'.repeat(120000),
   lockedFindingsText: 'locked', contentToCheck: '', remediationRoadmapText: '' }).length < 500000);
+const scopedExcludedPrompt = buildRoadmapFactCheckPrompt({
+  acceptedFacts: stress.text,
+  phase1: fullAudit,
+  phase2,
+  excludedPremises: ['There is no commitment governance.'],
+  sourceDocument: 'source',
+  lockedFindingsText: 'locked',
+  contentToCheck: '',
+  remediationRoadmapText: '',
+});
+assert.match(scopedExcludedPrompt, /Maximum 25 claims per pass/);
+assert.match(scopedExcludedPrompt, /Do NOT emit supported verdicts for unaffected statements/);

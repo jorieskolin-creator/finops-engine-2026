@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
-import { invokeProvider } from '../lib/providerInvocation.js';
+import http from 'node:http';
+import { defaultNodeFetch, invokeProvider } from '../lib/providerInvocation.js';
 import { OUTPUT_CONTRACT_IDS } from '../lib/outputContracts.js';
 
 const packet = {
@@ -203,5 +204,140 @@ await invokeProvider({
 const anthropicSchemaText = JSON.stringify(anthropicFindingsRequest.output_config.format.schema);
 assert.doesNotMatch(anthropicSchemaText, /"(?:minimum|maximum|maxItems|minLength|maxLength)"/);
 assert.doesNotMatch(anthropicSchemaText, /"minItems"/);
+
+// SSE streaming tests for all three providers (prevents 300s undici headersTimeout)
+const sseStreamResponse = chunks => ({
+  ok: true,
+  status: 200,
+  headers: { get: name => name.toLowerCase() === 'content-type' ? 'text/event-stream; charset=utf-8' : null },
+  body: (async function* () {
+    for (const chunk of chunks) yield new TextEncoder().encode(chunk);
+  })(),
+});
+
+{
+  let xaiStreamReq;
+  const xaiStreamed = await invokeProvider({ ...packet, model: 'grok-4.7' }, {
+    env: { XAI_API_KEY: 'test-xai-key' },
+    fetchFn: async (_url, options) => {
+      xaiStreamReq = JSON.parse(options.body);
+      return sseStreamResponse([
+        ': keepalive\n\n',
+        'data: {"choices":[{"delta":{"reasoning_content":"thinking..."}}]}\n\n',
+        'data: {"choices":[{"delta":{"content":"{\\"ok\\":"}}]}\n\n',
+        'data: {"choices":[{"delta":{"content":"true}"},"finish_reason":"stop"}]}\n\n',
+        'data: {"choices":[],"usage":{"prompt_tokens":100,"completion_tokens":20,"completion_tokens_details":{"reasoning_tokens":500}}}\n\n',
+        'data: [DONE]\n\n',
+      ]);
+    },
+  });
+  assert.equal(xaiStreamReq.stream, true);
+  assert.deepEqual(xaiStreamReq.stream_options, { include_usage: true });
+  assert.equal(xaiStreamed.text, '{"ok":true}');
+  assert.deepEqual(xaiStreamed.usage, { input_tokens: 100, output_tokens: 20, reasoning_tokens: 500 });
+}
+
+await assert.rejects(
+  invokeProvider({ ...packet, model: 'grok-4.7' }, {
+    env: { XAI_API_KEY: 'test-xai-key' },
+    fetchFn: async () => sseStreamResponse([
+      'data: {"choices":[{"delta":{"content":"{\\"ok\\""},"finish_reason":"length"}]}\n\n',
+      'data: [DONE]\n\n',
+    ]),
+  }),
+  error => error?.code === 'INCOMPLETE_RESPONSE' && error?.terminationReason === 'MAX_OUTPUT_TOKENS',
+);
+
+await assert.rejects(
+  invokeProvider({ ...packet, model: 'grok-4.7' }, {
+    env: { XAI_API_KEY: 'test-xai-key' },
+    fetchFn: async () => sseStreamResponse([
+      'data: {"choices":[{"delta":{"content":"{\\"partial\\":true"}}]}\n\n',
+    ]),
+  }),
+  error => error?.code === 'INCOMPLETE_RESPONSE' && error?.terminationReason === 'PROVIDER_INCOMPLETE',
+);
+
+{
+  let openaiStreamReq;
+  const openaiStreamed = await invokeProvider({ ...packet, provider: 'openai', model: 'gpt-6.1-terra' }, {
+    env: { OPENAI_API_KEY: 'test-openai-key' },
+    fetchFn: async (_url, options) => {
+      openaiStreamReq = JSON.parse(options.body);
+      return sseStreamResponse([
+        'event: response.output_text.delta\ndata: {"type":"response.output_text.delta","delta":"{\\"status\\":"}\n\n',
+        'event: response.output_text.delta\ndata: {"type":"response.output_text.delta","delta":"\\"ok\\"}"}\n\n',
+        'event: response.completed\ndata: {"type":"response.completed","response":{"status":"completed","usage":{"input_tokens":50,"output_tokens":10,"output_tokens_details":{"reasoning_tokens":200}}}}\n\n',
+      ]);
+    },
+  });
+  assert.equal(openaiStreamReq.stream, true);
+  assert.equal(openaiStreamed.text, '{"status":"ok"}');
+  assert.deepEqual(openaiStreamed.usage, { input_tokens: 50, output_tokens: 10, reasoning_tokens: 200 });
+}
+
+{
+  let anthropicStreamReq;
+  const anthropicStreamed = await invokeProvider({
+    ...packet,
+    provider: 'anthropic',
+    model: 'claude-sonnet-5-5',
+    settings: { max_tokens: 16384 },
+  }, {
+    env: { ANTHROPIC_API_KEY: 'test-anthropic-key' },
+    fetchFn: async (_url, options) => {
+      anthropicStreamReq = JSON.parse(options.body);
+      return sseStreamResponse([
+        'event: message_start\ndata: {"type":"message_start","message":{"usage":{"input_tokens":80}}}\n\n',
+        'event: ping\ndata: {"type":"ping"}\n\n',
+        'event: content_block_delta\ndata: {"type":"content_block_delta","delta":{"type":"thinking_delta","thinking":"plan"}}\n\n',
+        'event: content_block_delta\ndata: {"type":"content_block_delta","delta":{"type":"text_delta","text":"{\\"ok\\":true}"}}\n\n',
+        'event: message_delta\ndata: {"type":"message_delta","delta":{"stop_reason":"end_turn"},"usage":{"output_tokens":15}}\n\n',
+        'event: message_stop\ndata: {"type":"message_stop"}\n\n',
+      ]);
+    },
+  });
+  assert.equal(anthropicStreamReq.stream, true);
+  assert.equal(anthropicStreamed.text, '{"ok":true}');
+  assert.deepEqual(anthropicStreamed.usage, { input_tokens: 80, output_tokens: 15 });
+}
+
+// Exercise defaultNodeFetch against a real local HTTP SSE stream (split chunks + timeout abort)
+{
+  const server = http.createServer((req, res) => {
+    if (req.url === '/slow') {
+      res.writeHead(200, { 'Content-Type': 'text/event-stream' });
+      return; // intentionally never ends to test AbortError on timeout
+    }
+    res.writeHead(200, { 'Content-Type': 'text/event-stream; charset=utf-8' });
+    res.write('data: {"choices":[{"delta":{"content":"{\\"streamed\\":"}}]}\n');
+    setTimeout(() => {
+      res.write('\ndata: {"choices":[{"delta":{"content":"true}"},"finish_reason":"stop"}]}\n\ndata: [DONE]\n\n');
+      res.end();
+    }, 20);
+  });
+  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+  const { port } = server.address();
+  try {
+    const streamedOverTcp = await invokeProvider({ ...packet, model: 'grok-4.7' }, {
+      env: { XAI_API_KEY: 'test-xai-key' },
+      fetchFn: (_url, opts) => defaultNodeFetch(`http://127.0.0.1:${port}/sse`, opts),
+      timeoutMs: 5000,
+    });
+    assert.equal(streamedOverTcp.text, '{"streamed":true}');
+
+    await assert.rejects(
+      invokeProvider({ ...packet, model: 'grok-4.7' }, {
+        env: { XAI_API_KEY: 'test-xai-key' },
+        fetchFn: (_url, opts) => defaultNodeFetch(`http://127.0.0.1:${port}/slow`, opts),
+        timeoutMs: 80,
+      }),
+      error => error?.name === 'AbortError',
+      'exceeding timeoutMs on defaultNodeFetch must reject with AbortError (mapped to OUTCOME_UNKNOWN)',
+    );
+  } finally {
+    server.close();
+  }
+}
 
 console.log('provider invocation behavioral tests passed');
