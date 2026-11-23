@@ -306,9 +306,9 @@ const shadowHash = (value: string): string => {
 };
 
 const stageForLabel = (label?: string): KnowledgePacketStage => {
-  if (label?.includes('evidence')) return 'evidence_check';
   if (label?.includes('roadmap') || label?.includes('strategy')) return 'roadmap_synthesis';
   if (label?.includes('synthesis')) return 'synthesis';
+  if (label?.includes('evidence')) return 'evidence_check';
   return 'forensic_audit';
 };
 
@@ -448,10 +448,56 @@ export const buildShadowKnowledgePacket = (
   };
 };
 
-const formatKbDoc = (doc: RemoteKnowledgeBaseDocument, maxChars: number): string => {
+const formatKbDoc = (
+  doc: RemoteKnowledgeBaseDocument,
+  maxChars: number,
+  stage: KnowledgePacketStage = 'forensic_audit',
+): string => {
   const allowed = doc.allowed_uses?.length ? doc.allowed_uses.join(', ') : 'rubric_context';
   const forbidden = doc.forbidden_uses?.length ? doc.forbidden_uses.join(', ') : 'customer_current_state_claim, source_evidence_quote';
   const categories = doc.evidence_categories?.length ? doc.evidence_categories.join(', ') : '(not declared)';
+  const sections = doc.sections || {};
+  const orderedStageKeys = STAGE_SECTION_KEYS[stage] || STAGE_SECTION_KEYS.forensic_audit;
+  const availableStageKeys = orderedStageKeys.filter(key => Boolean(sections[key]?.trim()));
+
+  let renderedBody = '';
+  if (availableStageKeys.length > 0) {
+    const priorityKeys = new Set<string>([
+      ...(REQUIRED_STAGE_SECTIONS[stage] || []),
+      ...(doc.stream === 'antipattern' && stage !== 'roadmap_synthesis'
+        ? ['state_interpretation', 'prohibited_inference_rules']
+        : []),
+      'strong_evidence_examples',
+      'moderate_evidence_examples',
+      'weak_evidence_examples',
+      'contradictory_evidence_examples',
+      'accepted_evidence_types',
+    ]);
+    const prioritizedOrder = [
+      ...availableStageKeys.filter(key => priorityKeys.has(key)),
+      ...availableStageKeys.filter(key => !priorityKeys.has(key)),
+    ];
+    const selectedKeys = new Set<string>();
+    let usedChars = 0;
+    for (const key of prioritizedOrder) {
+      const value = sections[key]!.trim();
+      const blockLen = value.length + key.length + 34;
+      if (selectedKeys.size > 0 && usedChars + blockLen > maxChars) continue;
+      selectedKeys.add(key);
+      usedChars += blockLen;
+    }
+    renderedBody = orderedStageKeys
+      .filter(key => selectedKeys.has(key))
+      .map(key => `[KB_SECTION name="${key}"]\n${normalizeKbText(sections[key]!.trim(), maxChars)}\n[/KB_SECTION]`)
+      .join('\n\n');
+  } else {
+    const cleanedExcerpt = String(doc.body_excerpt || '')
+      .replace(/\[\/?KB_PDF_PAGE[^\]]*\]/g, ' ')
+      .replace(/[ \t]{2,}/g, ' ')
+      .trim();
+    renderedBody = normalizeKbText(cleanedExcerpt, maxChars);
+  }
+
   return [
     `[${doc.stream.toUpperCase()} ${doc.criterion_id}] ${doc.title}`,
     `Domain: ${doc.domain_id} ${doc.domain_name}`,
@@ -459,19 +505,53 @@ const formatKbDoc = (doc: RemoteKnowledgeBaseDocument, maxChars: number): string
     `Evidence categories: ${categories}`,
     `Allowed uses: ${allowed}`,
     `Forbidden uses: ${forbidden}`,
-    'Reference content:',
-    normalizeKbText(doc.body_excerpt || '', maxChars),
+    `Stage rubric (${stage}):`,
+    renderedBody,
   ].join('\n');
 };
 
-const formatRemoteKbContext = (
+export interface ReferenceKbContextOptions {
+  batchId?: string;
+  criterionIds?: string[];
+  excludeDomainIds?: string[];
+  maxDocChars?: number;
+  maxTotalChars?: number;
+  label?: string;
+}
+
+const DEFAULT_SECTIONED_DOC_MAX_CHARS = 12_000;
+const DEFAULT_FALLBACK_DOC_MAX_CHARS = 4_000;
+const DEFAULT_TOTAL_KB_CONTEXT_MAX_CHARS = 120_000;
+
+const normalizeRequestedCriterionId = (value: string): string => {
+  const upper = String(value || '').trim().toUpperCase().replace(/\s+/g, '');
+  return upper.startsWith('AP-') || /^[A-F][1-5]$/.test(upper)
+    ? upper
+    : upper.replace(/^ANTIPATTERN\./, 'AP-').replace(/^MATURITY\./, '');
+};
+
+export const formatRemoteKbContext = (
   index: RemoteKnowledgeBaseIndex,
-  options: { batchId?: string; maxDocChars?: number; label?: string } = {}
+  options: ReferenceKbContextOptions = {}
 ): string => {
   const batchId = options.batchId;
-  const maxDocChars = options.maxDocChars ?? (batchId ? 1400 : 650);
+  const stage = stageForLabel(options.label);
+  const excludedDomains = new Set(options.excludeDomainIds || []);
+  const hasExplicitCriterionFilter = Array.isArray(options.criterionIds);
+  const requestedCriteria = hasExplicitCriterionFilter
+    ? new Set(options.criterionIds!.map(normalizeRequestedCriterionId).filter(Boolean))
+    : null;
+
+  if (hasExplicitCriterionFilter && requestedCriteria!.size === 0) {
+    return `<REFERENCE_KNOWLEDGE_BASE status="${index.status.source}" scope="No active criteria" stage="${stage}" usage="rubric_reference_only_not_customer_evidence">
+No active criterion-specific Knowledge Base sections were required for this stage.
+</REFERENCE_KNOWLEDGE_BASE>`;
+  }
+
   const documents = (index.documents || [])
-    .filter(doc => !batchId || doc.domain_id === batchId)
+    .filter(doc => (!batchId || doc.domain_id === batchId)
+      && !excludedDomains.has(doc.domain_id)
+      && (!requestedCriteria || requestedCriteria.has(String(doc.criterion_id || '').toUpperCase())))
     .sort((a, b) => `${a.stream}.${a.criterion_id}`.localeCompare(`${b.stream}.${b.criterion_id}`));
 
   if (documents.length === 0) {
@@ -481,9 +561,28 @@ Remote PDF Knowledge Base unavailable or empty (${reason}). Use built-in criteri
 </REFERENCE_KNOWLEDGE_BASE>`;
   }
 
-  const scope = batchId ? `Batch ${batchId}` : 'All domains';
-  return `<REFERENCE_KNOWLEDGE_BASE status="${index.status.source}" scope="${scope}" usage="rubric_reference_only_not_customer_evidence">
-Remote PDF Knowledge Base loaded: ${index.status.document_count} document(s), ${index.status.failure_count} parse/validation issue(s).
+  const maxTotalChars = options.maxTotalChars ?? DEFAULT_TOTAL_KB_CONTEXT_MAX_CHARS;
+  const perDocFairShare = Math.max(2_400, Math.floor(maxTotalChars / Math.max(documents.length, 1)));
+  const scopeParts = [
+    batchId ? `Batch ${batchId}` : 'Selected domains',
+    requestedCriteria ? `${documents.length} criterion rubric(s)` : `${documents.length} document(s)`,
+  ];
+  const renderedDocs: string[] = [];
+  let totalChars = 0;
+  for (const doc of documents) {
+    const hasStructuredSections = Boolean(doc.sections && Object.keys(doc.sections).length > 0);
+    const docLimit = options.maxDocChars ?? Math.min(
+      hasStructuredSections ? DEFAULT_SECTIONED_DOC_MAX_CHARS : DEFAULT_FALLBACK_DOC_MAX_CHARS,
+      perDocFairShare,
+    );
+    const formatted = formatKbDoc(doc, docLimit, stage);
+    if (renderedDocs.length > 0 && totalChars + formatted.length > maxTotalChars) break;
+    renderedDocs.push(formatted);
+    totalChars += formatted.length;
+  }
+
+  return `<REFERENCE_KNOWLEDGE_BASE status="${index.status.source}" scope="${scopeParts.join(' · ')}" stage="${stage}" usage="rubric_reference_only_not_customer_evidence">
+Remote PDF Knowledge Base loaded: ${index.status.document_count} document(s), ${index.status.failure_count} parse/validation issue(s); ${renderedDocs.length} stage-scoped rubric packet(s) included.
 
 BOUNDARIES:
 - Use this KB only for rubric interpretation, evidence requirements, false-positive checks, validation questions, and roadmap/remediation patterns.
@@ -491,7 +590,7 @@ BOUNDARIES:
 - Never copy KB text into source_evidence_quote.
 - Evidence summaries and diagnosis must remain grounded in uploaded source material, Phase 1 evidence quotes, and Phase 2 metrics.
 
-${documents.map(doc => formatKbDoc(doc, maxDocChars)).join('\n\n---\n\n')}
+${renderedDocs.join('\n\n---\n\n')}
 </REFERENCE_KNOWLEDGE_BASE>`;
 };
 
@@ -529,7 +628,7 @@ export const knowledgeBaseService = {
     return remoteKbIndexPromise;
   },
 
-  async fetchReferenceKnowledgeBaseContext(options: { batchId?: string; maxDocChars?: number; label?: string } = {}): Promise<string> {
+  async fetchReferenceKnowledgeBaseContext(options: ReferenceKbContextOptions = {}): Promise<string> {
     const index = await this.fetchReferenceKnowledgeBaseIndex();
     const shadowPacket = buildShadowKnowledgePacket(index, {
       batchId: options.batchId,
