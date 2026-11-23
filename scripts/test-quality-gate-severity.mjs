@@ -309,7 +309,7 @@ assert.equal(isBlockingUnsupportedClaim(verifiedTacticsHygieneClaim), false);
 
   const weakSourceCoverage = runQualityGate(
     phase1,
-    phase2,
+    { ...phase2, assessment_sufficiency: { silent_domain_ids: ['E'] } },
     validationOk,
     validationOk,
     evidenceCheckOk,
@@ -327,11 +327,14 @@ assert.equal(isBlockingUnsupportedClaim(verifiedTacticsHygieneClaim), false);
       dlp_high_risk_hits: 0,
       dlp_caution_hits: 0,
       packets: {
-        A: { included_chunk_count: 1, total_candidate_chunks: 3, weak_coverage: true, char_count: 100 }
+        B: { included_chunk_count: 1, total_candidate_chunks: 3, weak_coverage: true, char_count: 100 }
       }
     }
   );
   assert.equal(weakSourceCoverage.decision, 'WARN', 'weak domain coverage must be scoped rather than blocking the entire assessment');
+  const routing = weakSourceCoverage.warnings.find(reason => reason.startsWith('Source routing coverage'));
+  assert.match(routing, /packet\(s\) \(B\).*assessed criterion within its verified scope/);
+  assert.match(routing, /silent domains \(E\) permit evidence collection only/);
   assert.equal(weakSourceCoverage.blocking_reasons.length, 0);
   assert.ok(weakSourceCoverage.warnings.some(reason => reason.startsWith('Source routing coverage')));
 }

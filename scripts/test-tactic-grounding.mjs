@@ -185,6 +185,7 @@ assert.deepEqual(findRoadmapActionsMissingCriterionReferences({ phase_3_strategy
 const missingStrategy = structuredClone(strategyData);
 missingStrategy.phase_3_strategy.remediation_roadmap[0].actions = missingStrategy.phase_3_strategy.remediation_roadmap[0].actions.filter(action => !action.includes('TAC-GOV-002'));
 assert.deepEqual(findMissingRequiredTacticIds(missingStrategy, plan), ['TAC-GOV-002']);
+assert.equal(classifyFinalRequiredTactics(strategyData, plan).dispositions.find(t => t.tactic_id === 'TAC-GOV-002').disposition, 'accepted');
 const missingContract = classifyFinalRequiredTactics(missingStrategy, plan);
 assert.deepEqual(missingContract.contraindicated, []);
 assert.deepEqual(missingContract.citation_rejected, []);

@@ -154,3 +154,62 @@ assert.match(analysisSource, /'fact_check',\s*'roadmap',\s*acceptedFactChecks/, 
 assert.match(analysisSource, /const summaryStrategy = summary\?\.phase_3_strategy \|\| summary \|\| \{\}/, 'roadmap repair merge must preserve locked summaries when given the full strategy wrapper');
 
 console.log('fact-check validation tests passed');
+
+// The accepted resolution, including both streams of a pair, owns the disposition.
+const { buildAcceptedFacts, buildSummaryFactCheckPrompt, buildRoadmapFactCheckPrompt } = await import(`file://${modulePath}`);
+const ids = [...'ABCDEF'].flatMap(domain => [1, 2, 3, 4, 5].map(n => domain + n));
+const rows = ids.flatMap(criterion_id => ['maturity', 'antipattern'].map(stream => ({
+  stream, criterion_id, domain_id: criterion_id[0], state: 'UNKNOWN', score_count: null, reason: 'NO_GOVERNED_EVIDENCE',
+})));
+const audit = { maturity: {}, antipattern: {} };
+for (const row of rows) {
+  const { stream, criterion_id: id } = row;
+  if ((stream === 'maturity' && ['B1', 'D3'].includes(id)) || (stream === 'antipattern' && id === 'D3')) {
+    Object.assign(row, { state: 'RESOLVED', score_count: id === 'D3' && stream === 'maturity' ? 1 : 0, reason: 'PROVENANCE_BOUND_EVIDENCE' });
+  }
+  audit[stream][id] = { evidence_quotes: [] };
+}
+audit.maturity.B1.adjustment_reason = '75% is the utilization review threshold for one reservation. A portfolio coverage target is unverified.';
+audit.maturity.B1.evidence_quotes = [{ source_id: 'src-001', chunk_id: 'c1', source_document: 'private-filename', quote: 'Review utilization of this reservation.' }];
+audit.maturity.D3.adjustment_reason = 'The sampled worker uses queue-depth horizontal scaling, with a floor of two and a ceiling of twelve.';
+audit.antipattern.D3.coverage_reason = 'Only the sampled worker configuration was tested.';
+rows.find(r => r.stream === 'antipattern' && r.criterion_id === 'D3').antipattern_absence_status = 'tested_absent';
+audit.maturity.E1.reasoning = 'Rejected scanner claim';
+const phase2 = {
+  metrics: { maturity_zero_count: 1, maturity_assessed_count: 2, maturity_zero_ratio: 50 },
+  assessment_sufficiency: { decision: 'BLOCK', silent_domain_ids: ['E'], criterion_evidence_density: 5 },
+  resolution_maturity: { criterion_resolutions: rows, pair_results: Array(30), overall: { fully_resolved_pair_count: 1, partially_resolved_pair_count: 1 } },
+  scoped_observations: ['[B1] Scoped observation (0/3; full criterion scope not established)'],
+  silent_areas: [], score_evidence_gaps: [], maturity_gaps: [], antipattern_findings: [], verified_antipattern_absences: [], unknown_antipattern_absences: [],
+};
+const { text: facts, basisByCriterion } = buildAcceptedFacts(audit, phase2);
+assert.ok(basisByCriterion.get('maturity.B1').details.includes(audit.maturity.B1.adjustment_reason));
+assert.equal(facts.match(/^(?:maturity|antipattern)\.[A-F][1-5] \|/gm).length, 60);
+assert.match(facts, /1 of 2 assessed maturity criteria scored 0\/3/);
+assert.match(facts, /maturity\.B1 \| assessed 0\/3.*scoped observation.*utilization review threshold.*portfolio coverage target is unverified.*src-001\/c1/);
+assert.match(facts, /maturity\.D3 \| assessed 1\/3.*sampled worker uses queue-depth horizontal scaling/);
+assert.match(facts, /antipattern\.D3 \| assessed 0\/3 \| tested_absent.*sampled worker configuration/);
+assert.match(facts, /maturity\.E1 \| UNKNOWN \| unscored/);
+assert.doesNotMatch(facts, /Rejected scanner claim|private-filename/);
+for (const build of [buildSummaryFactCheckPrompt, buildRoadmapFactCheckPrompt]) {
+  const prompt = build({ phase1: audit, phase2, sourceDocument: 'x'.repeat(120000), lockedFindingsText: 'locked', contentToCheck: '', remediationRoadmapText: '' });
+  assert.ok(prompt.includes(facts));
+  assert.ok(prompt.length < 500000, 'full 60-criterion packet must fit governed text limit');
+}
+
+// Stress all rows at once, including scope qualifications that have to be withheld whole.
+const fullAudit = { maturity: {}, antipattern: {} };
+const fullRecords = rows.map(r => ({ ...r, state: 'RESOLVED', score_count: 1 }));
+for (const r of fullRecords) {
+  fullAudit[r.stream][r.criterion_id] = {
+    coverage_reason: 'Within the sampled period. '.repeat(12), adjustment_reason: 'Sampled utilization record. '.repeat(24),
+    evidence_quotes: [{ source_id: 'src-test', chunk_id: 'chunk-test', quote: 'A bounded observation. '.repeat(10) }],
+  };
+}
+fullAudit.maturity.B1.coverage_reason += ' Longer than the scope limit. '.repeat(10);
+const stress = buildAcceptedFacts(fullAudit, { ...phase2, resolution_maturity: { ...phase2.resolution_maturity, criterion_resolutions: fullRecords } });
+assert.equal(stress.text.match(/^(?:maturity|antipattern)\.[A-F][1-5] \|/gm).length, 60);
+assert.match(stress.text, /maturity\.B1 \| assessed 1\/3[^\n]*scope detail withheld; omit narrative claim \| src-test\/chunk-test/);
+assert.equal(stress.basisByCriterion.has('maturity.B1'), false);
+assert.ok(buildRoadmapFactCheckPrompt({ acceptedFacts: stress.text, phase1: fullAudit, phase2, sourceDocument: 'x'.repeat(120000),
+  lockedFindingsText: 'locked', contentToCheck: '', remediationRoadmapText: '' }).length < 500000);

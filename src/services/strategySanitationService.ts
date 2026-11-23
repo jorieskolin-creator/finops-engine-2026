@@ -1,3 +1,4 @@
+import type { AcceptedCriterionBasis } from './factCheckService';
 import { AuditItem, DerivedAnalyticalEvidence, DomainId, FactCheckClaim, FactCheckResult, Phase1AuditLogs, Phase2Validation, StrategySanitationItem } from '../types';
 import {
   isBlockingUnsupportedClaim,
@@ -196,11 +197,74 @@ const preserveRoadmapActionWithoutRejectedTactic = (strategy: any, claim: FactCh
   return changed;
 };
 
+interface PlanningReview {
+  basisByCriterion: ReadonlyMap<string, AcceptedCriterionBasis>;
+  verifiedClaims: FactCheckClaim[];
+  excludedPremises: string[];
+}
+
+// Keep the review transient. A verdict must cover the whole surviving statement
+// and cite substantive evidence from the exact accepted stream and criterion.
+const reconcilePlanning = (
+  strategy: any, review: PlanningReview, sanitized: StrategySanitationItem[],
+): void => {
+  const supported = (text: string, location: 'planning_decision' | 'roadmap', evidenceRequest: boolean) => review.verifiedClaims.some(verdict => {
+    if (verdict.source_location !== location || compact(verdict.claim) !== compact(text)
+      || !['supported_by_audit', 'supported_by_source'].includes(verdict.classification)) return false;
+    const references = [...verdict.rationale.matchAll(/\b((?:maturity|antipattern)\.[A-F][1-5])\s+"([^"\n]+)"/g)];
+    if (!references.length) return false;
+    const cited = new Set(references.map(match => match[1]));
+    for (const [, ap, domain, start, end] of text.matchAll(/\b(AP-)?([A-F])([1-5])(?:\s*-\s*(?:\2)?([1-5]))?\b/g)) {
+      const last = Number(end || start);
+      for (let n = Math.min(Number(start), last); n <= Math.max(Number(start), last); n++) {
+        if (!cited.has(`${ap ? 'antipattern' : 'maturity'}.${domain}${n}`)) return false;
+      }
+    }
+    return references.every(([, key, excerpt]) => {
+      const basis = review.basisByCriterion.get(key);
+      if (!basis) return false;
+      if (basis.unknownStatus) return evidenceRequest && excerpt === basis.unknownStatus;
+      return /\s/.test(excerpt.trim()) && basis.details.some(detail => detail.includes(excerpt));
+    });
+  });
+  const keep = (value: string, location: 'roadmap' | 'planning_decision', evidenceRequest = false) => {
+    if (!value) return true;
+    const containsExcluded = review.excludedPremises.some(premise => compact(premise).length > 0
+      && compact(value).toLowerCase().includes(compact(premise).toLowerCase()));
+    if (!containsExcluded && supported(value, location, evidenceRequest || value.trim().endsWith('?'))) return true;
+    sanitized.push({ action: 'removed', claim: value, source_location: location,
+      rationale: 'No independent full-statement verification within the surviving customer evidence after premise quarantine.' });
+    return false;
+  };
+  const decision = strategy?.planning_decision;
+  if (decision) {
+    if (!keep(decision.rationale, 'planning_decision')) decision.rationale = '';
+    for (const key of ['safe_to_act_on', 'evidence_needed_before_action']) {
+      if (Array.isArray(decision[key])) decision[key] = decision[key].filter((s: string) => keep(s, 'planning_decision', key === 'evidence_needed_before_action'));
+    }
+  }
+  if (Array.isArray(strategy?.remediation_roadmap)) {
+    for (const phase of strategy.remediation_roadmap) {
+      for (const key of ['why', 'what']) if (!keep(phase[key], 'roadmap')) phase[key] = '';
+      for (const key of ['actions', 'assumptions']) {
+        if (Array.isArray(phase[key])) phase[key] = phase[key].filter((s: string) => keep(s, 'roadmap'));
+      }
+    }
+    strategy.remediation_roadmap = strategy.remediation_roadmap.filter((phase: any) => phase.actions?.length);
+  }
+};
+
+const isPremise = (item: StrategySanitationItem): boolean =>
+  (item.action === 'quarantined' || item.action === 'removed')
+  && Boolean(item.failure_type) && item.severity !== 'WARN_TACTIC_HYGIENE';
+
 export const sanitizeStrategyAfterFactCheck = (
   strategyData: any,
   factCheck: FactCheckResult,
+  planningReview?: PlanningReview,
 ): { strategyData: any; factCheck: FactCheckResult; sanitized: StrategySanitationItem[] } => {
-  if (factCheck.failed || factCheck.unsupported_claims.length === 0) {
+  const priorPremises = (factCheck.sanitized_claims || []).filter(isPremise);
+  if (factCheck.failed || (!factCheck.unsupported_claims.length && !priorPremises.length && !planningReview?.excludedPremises.length)) {
     return { strategyData, factCheck, sanitized: [] };
   }
 
@@ -261,7 +325,14 @@ export const sanitizeStrategyAfterFactCheck = (
       continue;
     }
 
-    remaining.push(claim);
+    // A roadmap-only recheck reuses the original summary verdict. A premise
+    // already removed from that locked summary must not become a new blocker.
+    if (!priorPremises.some(item => item.claim === claim.claim && item.source_location === claim.source_location)) remaining.push(claim);
+  }
+
+  if (planningReview) {
+    const excludedPremises = [...planningReview.excludedPremises, ...priorPremises.map(p => p.claim), ...sanitized.filter(isPremise).map(p => p.claim)];
+    if (excludedPremises.length) reconcilePlanning(data.phase_3_strategy, { ...planningReview, excludedPremises }, sanitized);
   }
 
   return {

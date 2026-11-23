@@ -16,6 +16,7 @@ import { EVIDENCE_DENSITY_BLOCK, runQualityGate, runQualityGateExplanation } fro
 import { calculateMetrics } from "./metricsService";
 import {
   buildRegenerateAppendix,
+  buildAcceptedFacts,
   buildRoadmapFactCheckPrompt,
   buildSummaryFactCheckPrompt,
   claimsForRepairScope,
@@ -672,35 +673,8 @@ ${referenceKbContext}
 ${tacticsContext}`;
 
 
-    const handoffSummary = `
-FINOPS DIAGNOSTIC REPORT SUMMARY (Computed by System):
--------------------------------------------------------
-Adjusted FinOps Maturity: ${validationData.metrics.adjusted_maturity === null ? 'N/A' : `${Math.round(validationData.metrics.adjusted_maturity)}/100`}${overallScoreAvailable ? '' : ' — diagnostic only; Assessment Sufficiency BLOCK'}
-Corroborated Maturity: ${validationData.metrics.corroborated_maturity === null ? 'N/A' : `${Math.round(validationData.metrics.corroborated_maturity)}%`}
-Observed Maturity: ${validationData.metrics.observed_maturity === null ? 'N/A' : `${Math.round(validationData.metrics.observed_maturity)}%`}
-Assessment Resolution: ${Math.round(validationData.metrics.assessment_resolution)}%
-Assessment Sufficiency: ${validationData.assessment_sufficiency.decision}
-Assessment Sufficiency Warnings: ${validationData.assessment_sufficiency.warning_reasons.join(' ') || 'None'}
-Maturity Classification: ${validationData.crawl_walk_run}
-Maturity Depth Index: ${Math.round(validationData.metrics.maturity_depth)}%
-Anti-Pattern Burden: ${Math.round(validationData.metrics.antipattern_burden)}%
-Anti-Pattern Burden Confidence: ${validationData.metrics.antipattern_burden_confidence || 'unknown'}
-Anti-Pattern Clearance: ${Math.round(validationData.metrics.antipattern_clearance)}%
-Anti-Pattern Coverage: ${Math.round(validationData.metrics.antipattern_coverage)}%
-Delivery Integrity: ${validationData.metrics.delivery_integrity}% (criteria the audit returned data for)
-Evidence Density: ${validationData.metrics.evidence_density}% (criteria with verified source coverage, including quote-backed gaps)
-Capability 0/3 Concentration: ${validationData.metrics.maturity_zero_ratio || 0}% (${validationData.metrics.maturity_zero_count || 0} of ${validationData.metrics.maturity_assessed_count || 0} assessed maturity criteria; an evidence-backed low-maturity signal, not missing evidence)
-Anti-Pattern Findings: ${validationData.metrics.antipattern_finding_count || 0} of 30 anti-patterns have confirmed or partial signals (${validationData.metrics.antipattern_finding_ratio || 0}%); ${validationData.metrics.score_gap_breakdown?.antipattern_tested_absent || 0} tested absences raise control, unknown absence does not
-Verified Anti-Pattern Absences: ${validationData.verified_antipattern_absences.length}
-Unknown / Not-Assessable Anti-Pattern Absences: ${validationData.unknown_antipattern_absences.length}
-Maturity Gaps: ${validationData.maturity_gaps.length}
-Silent Areas: ${validationData.silent_areas.length}
-
-UNRESOLVED REQUIRED VERIFICATION:
-${validationData.verification_unresolved.join('\n') || 'None'}
-
-SCORE EVIDENCE GAPS (unknown in maturity arithmetic and reducing resolution; not proof a capability is absent):
-${validationData.score_evidence_gaps.join('\n') || 'None'}
+    const { text: acceptedFacts, basisByCriterion } = buildAcceptedFacts(auditLogs, validationData);
+    const handoffSummary = `${acceptedFacts}
 
 PACKET RETRIEVAL WARNINGS (acquisition telemetry only; not a finding or roadmap restriction):
 ${packetWeakDomainIds.join(', ') || 'None'}
@@ -710,8 +684,6 @@ ${silentDomainIds.join(', ') || 'None'}
 Criterion evidence density by domain: ${Object.entries(validationData.assessment_sufficiency.domain_criterion_evidence_density).map(([domain, density]) => `${domain}=${density}%`).join(', ')}
 For silent domains, do not make broad maturity conclusions or prescribe remediation tactics. Provide only bounded evidence-collection actions. Continue normal diagnosis and remediation for non-silent domains.
 
-CATEGORY BREAKDOWN:
-${Object.entries(validationData.category_scores).map(([cat, score]) => unresolvedDomainIds.has(cat) ? `  ${cat}: verification unavailable (no validated domain score)` : `  ${cat}: ${score}/15`).join('\n')}
 `;
 
     const activatedTacticSelectionPlan = buildTacticSelectionPlan(auditLogs, silentDomainIds);
@@ -754,6 +726,7 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => unresolve
         `[Phase] ${phase?.phase || 'Unnamed phase'}`,
         phase?.why ? `[WHY]\n${phase.why}` : '',
         phase?.what ? `[WHAT]\n${phase.what}` : '',
+        phase?.assumptions?.length ? `[ASSUMPTIONS]\n${phase.assumptions.join('\n')}` : '',
         actions.length > 0 ? `[HOW]\n${actions.map((action: string) => `- ${action}`).join('\n')}` : '[HOW]\n(no actions)'
       ].filter(Boolean).join('\n');
     }).join('\n\n---\n\n');
@@ -913,6 +886,8 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => unresolve
       merged: FactCheckResult;
       summary?: FactCheckResult;
       roadmap?: FactCheckResult;
+      verifiedPlanning?: FactCheckClaim[];
+      excludedPremises?: string[];
     }
 
     const runFactCheck = async (
@@ -933,6 +908,7 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => unresolve
             contentToCheck: buildSummaryCheckText(strategy),
             remediationRoadmapText: '',
             sourceDocument: text,
+            acceptedFacts,
             phase1: auditLogs,
             phase2: validationData,
             imageCount: images.length,
@@ -957,12 +933,21 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => unresolve
           });
           summaryCheck = parseFactCheckResponse(summaryResp.text, attemptNumber, SUMMARY_FACT_CHECK_CONTRACT);
         }
+        const excludedPremises = Array.from(new Set([
+          ...(previous?.excludedPremises || []),
+          ...(previous?.merged.unsupported_claims || []).filter(c => c.severity !== 'WARN_TACTIC_HYGIENE'
+            && !JSON.stringify(strategy).includes(c.claim)).map(c => c.claim),
+          ...(summaryCheck?.unsupported_claims || []).filter(c => c.severity !== 'WARN_TACTIC_HYGIENE').map(c => c.claim),
+        ]));
+        let verifiedPlanning = scope === 'summary' ? previous?.verifiedPlanning || [] : [];
         if (scope !== 'summary') {
           const roadmapPrompt = buildRoadmapFactCheckPrompt({
             contentToCheck: buildRoadmapCheckText(strategy),
             remediationRoadmapText: roadmapText,
+            excludedPremises,
             lockedFindingsText: compactLockedFindings(strategy),
             sourceDocument: text,
+            acceptedFacts,
             phase1: auditLogs,
             phase2: validationData,
             imageCount: images.length,
@@ -987,7 +972,8 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => unresolve
             duration_ms: Date.now() - roadmapStarted,
             attempt: attemptNumber,
           });
-          roadmapCheck = parseFactCheckResponse(roadmapResp.text, attemptNumber, ROADMAP_FACT_CHECK_CONTRACT);
+          roadmapCheck = parseFactCheckResponse(roadmapResp.text, attemptNumber, ROADMAP_FACT_CHECK_CONTRACT,
+            claims => { verifiedPlanning = claims; });
         }
         if (!summaryCheck || !roadmapCheck) {
           throw Object.assign(new Error('Missing fact-check result for locked scope.'), { code: 'INVALID_FACT_CHECK_OUTPUT' });
@@ -995,6 +981,8 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => unresolve
         return {
           summary: summaryCheck,
           roadmap: roadmapCheck,
+          verifiedPlanning,
+          excludedPremises,
           merged: mergeRequiredFactChecks(summaryCheck, roadmapCheck, attemptNumber),
         };
       } catch (e: any) {
@@ -1378,8 +1366,12 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => unresolve
       }
     }
 
-    const applySanitation = (data: any, fc: FactCheckResult, event: string = 'strategy_sanitized') => {
-      const sanitation = sanitizeStrategyAfterFactCheck(data, fc);
+    const applySanitation = (data: any, fc: FactCheckResult, checks: SplitFactCheckResult, event: string) => {
+      const sanitation = sanitizeStrategyAfterFactCheck(data, fc, {
+        basisByCriterion,
+        verifiedClaims: checks.verifiedPlanning || [],
+        excludedPremises: checks.excludedPremises || [],
+      });
       if (sanitation.sanitized.length > 0) {
         const removed = sanitation.sanitized.filter(i => i.action === 'removed').length;
         const rewritten = sanitation.sanitized.filter(i => i.action === 'rewritten').length;
@@ -1396,7 +1388,7 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => unresolve
       return sanitation;
     };
 
-    let sanitation = applySanitation(strategyData, factCheck, 'claims_sanitized');
+    let sanitation = applySanitation(strategyData, factCheck, acceptedFactChecks, 'claims_sanitized');
     strategyData = sanitation.strategyData;
     factCheck = sanitation.factCheck;
 
@@ -1422,8 +1414,10 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => unresolve
             : '',
           'This is the single bounded post-sanitation roadmap repair. Preserve the locked evidence summary and diagnosis.',
         ].filter(Boolean).join('\n\n');
-        const repairedRoadmap = await callRoadmapSynthesis(strategyData, correction, repairPlan);
-        let repairedStrategy = normalizeStrategy(mergePhase3Outputs(strategyData, repairedRoadmap));
+        const repairedRoadmap = await callRoadmapSynthesis(strategyData.phase_3_strategy, correction, repairPlan);
+        const repairedGrounding = sanitizeRoadmapTacticGrounding(
+          mergePhase3Outputs(strategyData, repairedRoadmap), validationData, silentDomainIds);
+        let repairedStrategy = repairedGrounding.strategyData;
         const repairedChecks = await runFactCheck(
           repairedStrategy,
           factCheck.attempts + 1,
@@ -1440,11 +1434,13 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => unresolve
             ...(factCheck.sanitized_claims || []),
             ...(repairedChecks.merged.sanitized_claims || []),
           ];
-          sanitation = applySanitation(repairedStrategy, repairedChecks.merged, 'required_tactic_repair_sanitized');
+          sanitation = applySanitation(repairedStrategy, repairedChecks.merged, repairedChecks, 'required_tactic_repair_sanitized');
           repairedStrategy = sanitation.strategyData;
           strategyData = repairedStrategy;
           factCheck = sanitation.factCheck;
           acceptedFactChecks = repairedChecks;
+          tacticGroundingWarnings.push(...repairedGrounding.warnings);
+          tacticGroundingAdjustments.push(...repairedGrounding.adjustments);
           requiredTacticContract = classifyFinalRequiredTactics(
             strategyData,
             tacticSelectionPlan,
@@ -1509,7 +1505,7 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => unresolve
         factCheck.attempts + 1,
         'fact_check_high',
         escalateRoadmapOnly ? 'roadmap' : 'both',
-        escalateRoadmapOnly ? acceptedFactChecks : undefined
+        acceptedFactChecks
       );
       const highFactCheck = highFactChecks.merged;
       await checkpoint('fact_check', 'escalated', { fact_check: highFactCheck });
@@ -1519,7 +1515,7 @@ ${Object.entries(validationData.category_scores).map(([cat, score]) => unresolve
           ...(factCheck.sanitized_claims || []),
           ...(highFactCheck.sanitized_claims || []),
         ];
-        sanitation = applySanitation(strategyData, highFactCheck, 'claims_quarantined');
+        sanitation = applySanitation(strategyData, highFactCheck, highFactChecks, 'claims_quarantined');
         strategyData = sanitation.strategyData;
         factCheck = sanitation.factCheck;
         groundingValidation = validatePhase3Grounding(strategyData, validationData, text);

@@ -105,7 +105,7 @@ export const calculateMetrics = (
     if (!hasCapabilityEvidence) {
       maturityNotDemonstrated++;
       scoreEvidenceGaps.push(
-        `[${key}] Not demonstrated by the supplied material. This contributes zero to the score but is not proof that the capability is absent. Evidence needed: ${item.reasoning || item.evidence || 'current-state capability evidence.'}`
+        `[${key}] Not demonstrated by the supplied material. This criterion remains unscored and reduces assessment resolution. Evidence needed: ${item.reasoning || item.evidence || 'current-state capability evidence.'}`
       );
     } else if (item.count === 3) {
       assessedMaturityItemCount++;
@@ -187,7 +187,7 @@ export const calculateMetrics = (
         }
       }
       scoreEvidenceGaps.push(
-        `[${key}] Anti-pattern control was not assessed. This contributes zero to the score, and no finding must be interpreted as tested absence. Evidence needed: ${item.coverage_reason || item.reasoning || 'material covering this anti-pattern.'}`
+        `[${key}] Anti-pattern control was not assessed. This criterion remains unscored and reduces assessment resolution. Absence remains unverified. Evidence needed: ${item.coverage_reason || item.reasoning || 'material covering this anti-pattern.'}`
       );
     }
     if (absenceStatus === 'partially_present') {
