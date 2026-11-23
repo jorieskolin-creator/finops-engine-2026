@@ -20,6 +20,7 @@ await build({
       export { renderDelimitedTableForAnalysis } from './src/services/tableService';
       export { calculateMetrics } from './src/services/metricsService';
       export { sanitizeEvidenceSources } from './src/services/deterministicPrivacyService';
+      export { StageExecutionError } from './src/services/modelRouter';
       export { applyBoundedRetrieval } from './src/services/boundedRetrievalService';
       export { planAcquisitionGapQueries, retrieveAcquisitionGaps } from './src/services/acquisitionGapRetrievalService';
       export { inferAntiPatternAbsenceStatus } from './src/services/antiPatternSemantics';`,
@@ -32,12 +33,20 @@ await build({
       context.onLoad({ filter: /.*/, namespace: 'mock-model' }, () => ({ contents: `
         export const runStage = (...args) => globalThis.dispatchTestModel(...args);
         export const serverLog = () => {};
-        export class StageExecutionError extends Error {}
+        export class StageExecutionError extends Error {
+          constructor(code, fallbackAllowed = false) {
+            super(code);
+            this.name = 'StageExecutionError';
+            this.code = code;
+            this.fallbackAllowed = fallbackAllowed;
+          }
+        }
       ` }));
     },
   }],
 });
 const engine = await import(pathToFileURL(out));
+const { StageExecutionError: MockStageExecutionError } = await import(pathToFileURL(out));
 engine.knowledgeBaseService.fetchReferenceKnowledgeBaseContext = async () => '';
 const calls = [];
 let plannerUnavailable = false;
@@ -156,6 +165,42 @@ assert.equal(fallback.recovery[0].outcome, 'PLANNER_UNAVAILABLE');
 assert.deepEqual(calls, [['C', 'evidence_gap_analysis']]);
 assert.equal(fallback.phase.evidence_check.skipped_count, 60);
 plannerUnavailable = false;
+
+{
+  // Deterministic 4xx governance rejections (e.g. RESIDUAL_CLASSIFICATION_REJECTED) and
+  // post-fence OUTCOME_UNKNOWN errors must not burn a second batch retry attempt.
+  const prevModel = globalThis.dispatchTestModel;
+  let forensicAttempts = 0;
+  globalThis.dispatchTestModel = async (stage) => {
+    if (stage === 'forensic_audit') {
+      forensicAttempts++;
+      throw new MockStageExecutionError('RESIDUAL_CLASSIFICATION_REJECTED', false);
+    }
+    throw new Error(`Unexpected stage ${stage}`);
+  };
+  try {
+    const records = engine.sanitizeEvidenceSources([...sources, billing]).sources;
+    const registry = engine.buildSourceRegistry(records);
+    const derived = engine.deriveAllEvidenceSignals(records, registry).evidence;
+    const packets = engine.buildDomainPackets(registry);
+    const integrity = engine.validateEvidenceAcquisition(records, registry, packets);
+    const status = engine.sourceRegistryRuntimeStatus(registry, packets, 0, engine.scanRegistryDlp(registry), privacy, integrity);
+    const stages = engine.buildEvidenceLaneStagePackets({
+      source_packets: packets,
+      source_packet_hashes: integrity.packet_hashes,
+      derived_evidence: derived,
+      acquisition_limitations: registry.acquisition_limitations,
+      privacy_decision: privacy,
+      acquisition_readiness: status.acquisition_readiness,
+    });
+    const failedPhase = await engine.runPhase1Audit(() => {}, { runId: 'non-retryable-test' }, { packets: stages });
+    assert.equal(forensicAttempts, 1, 'deterministic governance rejection must not execute a second batch attempt');
+    assert.deepEqual(failedPhase.failed_batches, ['A']);
+    assert.match(failedPhase.evidence_check.failure_reason, /RESIDUAL_CLASSIFICATION_REJECTED/);
+  } finally {
+    globalThis.dispatchTestModel = prevModel;
+  }
+}
 
 // Optional replay of the supplied files, without adding their content to Git.
 if (process.env.FINOPS_CLEAR_BLOCK_REPLAY_DIR) {
