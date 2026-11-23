@@ -7,10 +7,32 @@ import ts from '../node_modules/typescript/lib/typescript.js';
 const sourcePath = new URL('../src/services/evidenceSupport.ts', import.meta.url);
 const source = await readFile(sourcePath, 'utf8');
 const evidenceCheckServiceSource = await readFile(new URL('../src/services/evidenceCheckService.ts', import.meta.url), 'utf8');
+const orchestratorSource = await readFile(new URL('../src/orchestrator.ts', import.meta.url), 'utf8');
+const analysisServiceSource = await readFile(new URL('../src/services/analysisService.ts', import.meta.url), 'utf8');
 assert.doesNotMatch(
   evidenceCheckServiceSource,
   /text\.substring\(0,\s*50000\)/,
   'the verifier and anti-pattern adjudicator must receive the complete governed domain packet'
+);
+assert.doesNotMatch(
+  evidenceCheckServiceSource,
+  /maxDocChars:\s*1100/,
+  'evidence_check must receive full structured domain KB sections without 1100-char head truncation'
+);
+assert.doesNotMatch(
+  orchestratorSource,
+  /maxDocChars:\s*userPromptOverride\s*\?\s*1000\s*:\s*1400/,
+  'forensic_audit and targeted_rescan must not head-truncate domain KB documents at 1000/1400 chars'
+);
+assert.match(
+  orchestratorSource,
+  /targetedCriterionIds\s*\?\s*\{\s*criterionIds:\s*targetedCriterionIds\s*\}/,
+  'targeted_rescan must scope KB rubric retrieval to the rescanned criterion IDs'
+);
+assert.match(
+  analysisServiceSource,
+  /fetchReferenceKnowledgeBaseContext\(\{\s*criterionIds:\s*activatedTacticSelectionPlan\.active_criteria,\s*excludeDomainIds:\s*silentDomainIds,\s*label:\s*'roadmap_synthesis'/s,
+  'Phase 3 roadmap synthesis must retrieve structured KB rubrics for active criteria while excluding silent domains'
 );
 const compiled = ts.transpileModule(source, {
   compilerOptions: {
