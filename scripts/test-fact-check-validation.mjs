@@ -187,6 +187,7 @@ const { text: facts, basisByCriterion } = buildAcceptedFacts(audit, phase2);
 assert.ok(basisByCriterion.get('maturity.B1').details.includes(audit.maturity.B1.adjustment_reason));
 assert.equal(facts.match(/^(?:maturity|antipattern)\.[A-F][1-5] \|/gm).length, 60);
 assert.match(facts, /1 of 2 assessed maturity criteria scored 0\/3/);
+assert.match(facts, /Scoring mechanism: unknown or not_assessed criteria are excluded from observed maturity and lower assessment resolution/, 'accepted facts must ground the required resolution-scoring explanation');
 assert.match(facts, /D \(Architecture & Engineering\): 1\/15/, 'accepted facts must include canonical domain display names');
 assert.match(facts, /maturity\.B1 \| assessed 0\/3.*scoped observation.*utilization review threshold.*portfolio coverage target is unverified.*src-001\/c1/);
 assert.match(facts, /maturity\.D3 \| assessed 1\/3.*sampled worker uses queue-depth horizontal scaling/);

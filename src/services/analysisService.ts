@@ -727,10 +727,12 @@ For silent domains, do not make broad maturity conclusions or prescribe remediat
 
     const buildRoadmapGroundingText = (roadmap: any[]): string => roadmap.map((phase: any) => {
       const actions = Array.isArray(phase?.actions) ? phase.actions : [];
+      const deliverables = Array.isArray(phase?.deliverables) ? phase.deliverables : [];
       return [
         `[Phase] ${phase?.phase || 'Unnamed phase'}`,
         phase?.why ? `[WHY]\n${phase.why}` : '',
         phase?.what ? `[WHAT]\n${phase.what}` : '',
+        deliverables.length > 0 ? `[DELIVERABLES]\n${deliverables.map((d: string) => `- ${d}`).join('\n')}` : '',
         phase?.assumptions?.length ? `[ASSUMPTIONS]\n${phase.assumptions.join('\n')}` : '',
         actions.length > 0 ? `[HOW]\n${actions.map((action: string) => `- ${action}`).join('\n')}` : '[HOW]\n(no actions)'
       ].filter(Boolean).join('\n');
@@ -1040,6 +1042,9 @@ For silent domains, do not make broad maturity conclusions or prescribe remediat
     });
 
     const buildFallbackDiagnosis = () => ({
+      executive_summary: overallScoreAvailable
+        ? `Assessment sufficiency passed with ${Math.round(validationData.metrics.evidence_density)}% criterion evidence density and ${Math.round(validationData.metrics.assessment_resolution)}% overall resolution, supporting a ${validationData.crawl_walk_run} classification (${Math.round(validationData.metrics.adjusted_maturity!)}/100 adjusted maturity). Interpret strengths and gaps strictly within the verified customer scope.`
+        : 'Assessment sufficiency did not pass because verified customer evidence coverage remained below the publication threshold. Interpret all recorded observations strictly as bounded scope facts until missing domain records are supplied.',
       primary_bottleneck: overallScoreAvailable
         ? (confirmedMaturityGaps[0] || validationData.antipattern_findings[0] || 'Available evidence did not establish an organizational bottleneck.')
         : 'Not established — Assessment Sufficiency did not pass, so no single criterion can be identified as the primary organizational bottleneck.',

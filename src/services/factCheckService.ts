@@ -206,6 +206,7 @@ export const buildAcceptedFacts = (phase1: Phase1AuditLogs, phase2: Phase2Valida
   });
   const text = [
     compactMetrics(phase2),
+    'Scoring mechanism: unknown or not_assessed criteria are excluded from observed maturity and lower assessment resolution; silence or unknown absence does not prove capability absence or anti-pattern presence.',
     'Accepted criterion facts. Limit each claim to its recorded scope. Omit claims whose supporting detail is unavailable. Unknown subcriteria are unverified.',
     ...rows,
   ].join('\n');
@@ -547,7 +548,7 @@ ROADMAP GROUNDING:
 
 <rules>
 - Do NOT re-score the evidence summary. Treat LOCKED_FINDINGS as the current-state baseline.
-- Check each planning rationale, safe-to-act item, evidence request, Why, What, action and assumption against surviving customer evidence. Excluded premises and their paraphrases cannot justify any statement, even if repeated in LOCKED_FINDINGS. A shared criterion ID or an applicable tactic alone cannot establish the premise. A narrower review may stand on the accepted evidence for the same criterion.
+- Check each planning rationale, safe-to-act item, evidence request, Why, What, deliverable, action and assumption against surviving customer evidence. Excluded premises and their paraphrases cannot justify any statement, even if repeated in LOCKED_FINDINGS. A shared criterion ID or an applicable tactic alone cannot establish the premise. A narrower review may stand on the accepted evidence for the same criterion.
 - For independently supported statements that share a criterion or topic with <excluded_premises>, return the entire field or list item verbatim as the claim (without any leading "- " markdown bullet prefix). Classify full statements grounded in surviving customer/audit evidence as "supported_by_audit" or "supported_by_source" (even when the action also cites a valid [TAC-*] ID; reserve "supported_by_tactics_db" for standalone tactic-lookup checks when <excluded_premises> is empty). Do NOT emit supported verdicts for unaffected statements on unrelated criteria — those survive automatically. In the rationale cite the exact stream and criterion followed by a short verbatim supporting excerpt in double quotes, e.g. maturity.B1 "monthly utilization review of the sampled reservation". Supply each material criterion and check scope and qualifiers. For an evidence request grounded in an unknown, quote its complete status (UNKNOWN | unscored | NO_GOVERNED_EVIDENCE). For unsupported statements, flag the unsupported premise or action. Prioritize affected statements within the claim limit.
 - Ask: do the WHY, WHAT, and HOW sections answer the findings? If a phase rationale, intended outcome, or action does not address a confirmed gap, anti-pattern, missing-evidence item, or diagnosis statement, classify it as unsupported.
 - Planning decision must be proportionate to confidence. If the plan says GO while locked findings contain major uncertainty, unsupported claims, or evidence gaps, flag the GO rationale as unsupported or overconfident.
