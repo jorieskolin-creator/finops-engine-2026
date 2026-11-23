@@ -52,6 +52,12 @@ assert.deepEqual(filterOperationalMetadata('targeted_rescan_unavailable', {
 assert.deepEqual(filterOperationalMetadata('evidence_check_unavailable', {
   batch: 'C', attempts: 2, error_code: 'DEPENDENCY_UNCERTAINTY', valid_items: 8, expected_items: 10, source_text: 'private source content',
 }), { batch: 'C', attempts: 2, error_code: 'DEPENDENCY_UNCERTAINTY', valid_items: 8, expected_items: 10 });
+assert.deepEqual(filterOperationalMetadata('domain_audit_skipped', {
+  batch: 'E', reason_code: 'NO_ELIGIBLE_EVIDENCE', source_packet_hash: 'fnv1a_abc', raw_text: 'secret',
+}), { batch: 'E', reason_code: 'NO_ELIGIBLE_EVIDENCE', source_packet_hash: 'fnv1a_abc' });
+assert.deepEqual(filterOperationalMetadata('delivery_mark_failed', {
+  duration_ms: 1200, error_code: 'RUN_INACTIVE', quality_gate: 'WARN', model_mode: 'ai_role_policy', payload: 'secret',
+}), { duration_ms: 1200, error_code: 'RUN_INACTIVE', quality_gate: 'WARN', model_mode: 'ai_role_policy' });
 assert.equal(safeOperationalIdentifier('gpt-5.2/model:v1'), 'gpt-5.2/model:v1');
 assert.equal(safeOperationalIdentifier('private.pdf'), '?');
 assert.equal(safeOperationalIdentifier('private.pdf\nsource contents'), '?');

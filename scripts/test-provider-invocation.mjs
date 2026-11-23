@@ -259,6 +259,20 @@ await assert.rejects(
 );
 
 {
+  const xaiEmptyKey = 'test-xai-placeholder';
+  await assert.rejects(
+    invokeProvider({ ...packet, model: 'grok-4.7' }, {
+      env: { XAI_API_KEY: xaiEmptyKey },
+      fetchFn: async () => sseStreamResponse([
+        'data: {"choices":[{"delta":{"reasoning_content":"all tokens spent thinking"},"finish_reason":"stop"}]}\n\n',
+        'data: [DONE]\n\n',
+      ]),
+    }),
+    error => error?.code === 'INCOMPLETE_RESPONSE' && error?.terminationReason === 'EMPTY_MODEL_OUTPUT',
+  );
+}
+
+{
   let openaiStreamReq;
   const openaiStreamed = await invokeProvider({ ...packet, provider: 'openai', model: 'gpt-6.1-terra' }, {
     env: { OPENAI_API_KEY: 'test-openai-key' },

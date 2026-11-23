@@ -54,6 +54,9 @@ for(const [field,expectedField,code,value] of [['run_id','runId','PACKET_RUN_MIS
 const diagnostics=packetRuntimeDiagnostics(packet,approvedPacketBytes(packet));assert.equal(diagnostics.declared_packet_hash,packet.packet_hash);assert.equal(diagnostics.recomputed_content_hash,packet.packet_hash);assert.equal(typeof diagnostics.serialized_bytes,'number');assert.doesNotMatch(JSON.stringify(diagnostics),/monthly invoice review|EDP pricing|billing account governance/);
 for(const mutate of [o=>({...o,text:'changed'}),o=>({...o,source_packet_hash:'0'.repeat(64)}),o=>({...o,schema_version:'old'})])assert.throws(()=>validateGovernedOutput(mutate(output),{source_packet_hash:packet.packet_hash}),/INVALID_GOVERNED_OUTPUT/);
 for(const text of ['password=[REDACTED:password]','data:image/png;base64,AAAA','contract value: $250000','invoice number: INV-99887','bad\uD800',''])assert.throws(()=>inspectOutput(text,packet),/OUTPUT_INSPECTION_REJECTED/);
+assert.throws(()=>inspectOutput('',packet),err=>err?.code==='OUTPUT_INSPECTION_REJECTED'&&err?.terminationReason==='EMPTY_OUTPUT');
+assert.throws(()=>inspectOutput('invoice number: INV-99887',packet),err=>err?.code==='OUTPUT_INSPECTION_REJECTED'&&err?.terminationReason==='PROHIBITED_RESIDUAL_CLASSIFICATION');
+for(const benignVerifierText of ['billing account - unknown','invoice: reconciled','billing account: src-007-c001','{"billing_account":"scoped"}'])assert.equal(inspectOutput(benignVerifierText,packet).text,benignVerifierText,'non-numeric prose labels and governed chunk locators after billing account/invoice must not false-positive');
 assert.throws(()=>authorizeDestination('forensic_audit','anthropic','claude-sonnet-5',{max_tokens:1}),/INVALID_MODEL_SETTINGS/);
 const xaiRequest={...request,provider:'xai',model:'grok-4.6',destination:'xai:external_model',system_instruction:'Return JSON only',settings:{max_tokens:16384,reasoning_effort:'medium'}};
 assert.equal(approveRequest(xaiRequest).provider,'xai');

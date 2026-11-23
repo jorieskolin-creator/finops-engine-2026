@@ -174,7 +174,11 @@ const removeTacticReferences = (value: string, tacticIds: Set<string>): string =
     .trim();
 };
 
-const preserveRoadmapActionWithoutRejectedTactic = (strategy: any, claim: FactCheckClaim): boolean => {
+const preserveRoadmapActionWithoutRejectedTactic = (
+  strategy: any,
+  claim: FactCheckClaim,
+  preservedOut?: Set<string>,
+): boolean => {
   const roadmap = strategy?.phase_3_strategy?.remediation_roadmap;
   if (!Array.isArray(roadmap)) return false;
   const tacticIds = new Set(Array.from(claim.claim.matchAll(TACTIC_REFERENCE_RX), match => match[1]));
@@ -191,6 +195,7 @@ const preserveRoadmapActionWithoutRejectedTactic = (strategy: any, claim: FactCh
       if (!matches) return actionText ? [action] : [];
       const rewritten = removeTacticReferences(String(action), tacticIds);
       changed ||= rewritten !== String(action);
+      if (rewritten && preservedOut) preservedOut.add(normalizeStatement(rewritten).toLowerCase());
       return rewritten ? [rewritten] : [];
     });
   }
@@ -201,6 +206,7 @@ interface PlanningReview {
   basisByCriterion: ReadonlyMap<string, AcceptedCriterionBasis>;
   verifiedClaims: FactCheckClaim[];
   excludedPremises: string[];
+  preservedRoadmapActions?: ReadonlySet<string>;
 }
 
 const normalizeStatement = (value: string): string =>
@@ -222,31 +228,35 @@ const extractCriterionKeys = (text: string): string[] => {
 
 const PREMISE_STOPWORDS = new Set([
   'about', 'above', 'accepted', 'across', 'action', 'actions', 'actual', 'actuals', 'after', 'against',
-  'alone', 'along', 'already', 'also', 'although', 'among', 'analysis', 'assessed', 'assessment', 'azure',
-  'based', 'because', 'before', 'below', 'between', 'beyond', 'billing', 'bounded', 'broad', 'budget',
-  'budgets', 'cannot', 'check', 'checks', 'cited', 'claim', 'claims', 'cloud', 'collect', 'commitment',
-  'commitments', 'confirmed', 'control', 'controls', 'count', 'coverage', 'crawl', 'criteria', 'criterion',
-  'current', 'customer', 'decision', 'decisions', 'defined', 'deliverable', 'deliverables', 'demonstrated',
-  'density', 'direct', 'documented', 'does', 'domain', 'domains', 'during', 'engineering', 'established',
-  'evidence', 'evidenced', 'every', 'exception', 'exceptions', 'existing', 'fact', 'facts', 'figure',
-  'figures', 'final', 'finance', 'finding', 'findings', 'finops', 'first', 'follow', 'forecast', 'found',
+  'allocation', 'alone', 'along', 'already', 'also', 'although', 'among', 'analysis', 'anti-pattern',
+  'architecture', 'assessed', 'assessment', 'asserted', 'azure', 'based', 'because', 'before', 'below',
+  'between', 'beyond', 'billing', 'bounded', 'broad', 'budget', 'budgets', 'cannot', 'check', 'checks',
+  'cited', 'claim', 'claims', 'cloud', 'collect', 'commitment', 'commitments', 'confidence', 'confirmed',
+  'context', 'control', 'controls', 'cost-per-task', 'could', 'count', 'cover', 'coverage', 'covers',
+  'crawl', 'criteria', 'criterion', 'culture', 'current', 'customer', 'daily', 'decision', 'decisions',
+  'defined', 'deliverable', 'deliverables', 'delivery', 'demonstrated', 'density', 'direct', 'directly',
+  'documented', 'does', 'domain', 'domains', 'during', 'engineering', 'established', 'evidence',
+  'evidenced', 'every', 'exception', 'exceptions', 'existing', 'fact', 'facts', 'figure', 'figures',
+  'final', 'finance', 'finding', 'findings', 'finops', 'first', 'follow', 'forecast', 'found',
   'framework', 'full', 'fully', 'further', 'governed', 'guardrail', 'guardrails', 'having', 'however',
   'identified', 'implementation', 'include', 'included', 'includes', 'including', 'incomplete',
-  'independent', 'instead', 'into', 'inventory', 'issue', 'items', 'itself', 'level', 'levels', 'limited',
-  'locked', 'management', 'material', 'maturity', 'means', 'measured', 'metric', 'metrics', 'missing',
-  'model', 'monthly', 'narrow', 'needed', 'neither', 'never', 'noted', 'notes', 'observation',
-  'observations', 'observed', 'optimization', 'organization', 'organizational', 'other', 'outcome',
-  'outcomes', 'overall', 'owner', 'owners', 'packet', 'partial', 'payments', 'phase', 'phases', 'planning',
-  'platform', 'point', 'policies', 'policy', 'portfolio', 'present', 'primary', 'prior', 'process',
-  'program', 'prove', 'proven', 'provides', 'question', 'questions', 'quote', 'quoted', 'rather', 'record',
-  'recorded', 'records', 'reflect', 'register', 'related', 'relevant', 'remain', 'remains', 'remediation',
-  'report', 'reported', 'required', 'requires', 'reservation', 'reservations', 'resolution', 'resolved',
-  'resource', 'resources', 'result', 'results', 'review', 'reviewed', 'reviews', 'roadmap', 'routing',
-  'sample', 'sampled', 'scanner', 'scope', 'scoped', 'score', 'scored', 'scores', 'section', 'several',
-  'should', 'showback', 'shown', 'shows', 'signal', 'silent', 'since', 'single', 'source', 'sources',
-  'spend', 'stage', 'stated', 'statement', 'states', 'status', 'still', 'strategy', 'subcriteria',
-  'subcriterion', 'summary', 'supplied', 'support', 'supported', 'supports', 'surface', 'tactic', 'tactics',
-  'tagging', 'target', 'targets', 'teams', 'tested', 'their', 'there', 'therefore', 'these', 'those',
+  'independent', 'instead', 'integrity', 'into', 'inventory', 'investment', 'issue', 'items', 'itself',
+  'level', 'levels', 'limited', 'locked', 'management', 'material', 'maturity', 'means', 'measured',
+  'medium', 'metric', 'metrics', 'missing', 'model', 'month', 'monthly', 'narrow', 'needed', 'neither',
+  'never', 'noted', 'notes', 'observation', 'observations', 'observed', 'optimization', 'organization',
+  'organizational', 'other', 'outcome', 'outcomes', 'overall', 'owner', 'owners', 'packet', 'partial',
+  'passing', 'payments', 'phase', 'phases', 'planning', 'platform', 'point', 'policies', 'policy',
+  'portfolio', 'present', 'primary', 'prior', 'process', 'program', 'prove', 'proven', 'provides',
+  'question', 'questions', 'quote', 'quoted', 'rather', 'record', 'recorded', 'records', 'recurring',
+  'reflect', 'register', 'related', 'relevant', 'remain', 'remains', 'remediation', 'report', 'reported',
+  'reporting', 'required', 'requires', 'reservation', 'reservations', 'resolution', 'resolved',
+  'resource', 'resources', 'result', 'results', 'review', 'reviewed', 'reviews', 'roadmap', 'route',
+  'routes', 'routing', 'sample', 'sampled', 'savings', 'scanner', 'scope', 'scoped', 'scopes', 'score',
+  'scored', 'scores', 'section', 'several', 'should', 'showback', 'shown', 'shows', 'signal', 'silent',
+  'since', 'single', 'source', 'source-backed', 'sources', 'spend', 'stage', 'stated', 'statement',
+  'states', 'status', 'still', 'strategy', 'subcriteria', 'subcriterion', 'sufficiency', 'summary',
+  'supplied', 'support', 'supported', 'supports', 'surface', 'synthetic', 'tactic', 'tactics', 'tagging',
+  'target', 'targets', 'teams', 'tested', 'their', 'there', 'therefore', 'these', 'those', 'though',
   'three', 'through', 'total', 'treat', 'treated', 'treats', 'under', 'unknown', 'unproven', 'unscored',
   'until', 'unverified', 'using', 'utilisation', 'utilization', 'valid', 'validate', 'validation', 'value',
   'variance', 'verified', 'verifier', 'where', 'whether', 'which', 'while', 'within', 'without',
@@ -257,6 +267,9 @@ const extractPremiseTokens = (text: string): string[] =>
   (text.toLowerCase().match(/\b[a-z][a-z0-9-]{4,}\b/g) || [])
     .filter(token => !PREMISE_STOPWORDS.has(token) && !/^tac-[a-z]+-\d+/.test(token));
 
+const splitSentences = (text: string): string[] =>
+  text.split(/(?<=[.!?])\s+/).map(s => s.trim()).filter(Boolean);
+
 const isPureEvidenceCollectionStatement = (text: string, evidenceRequest: boolean): boolean => {
   if (TACTIC_REFERENCE_RX.test(text)) {
     TACTIC_REFERENCE_RX.lastIndex = 0;
@@ -264,9 +277,16 @@ const isPureEvidenceCollectionStatement = (text: string, evidenceRequest: boolea
   }
   TACTIC_REFERENCE_RX.lastIndex = 0;
   if (evidenceRequest || text.trim().endsWith('?')) return true;
-  return /\b(?:collect|gather|request|confirm\s+(?:full\s+)?scope|scope[- ]confirmation|scope[- ]verification|evidence\s+register|evidence\s+request|re-?check|re-?run\s+the\s+assessment|verification\s+gap)\b/i.test(text)
+  return /\b(?:collect|gather|request|confirm\s+(?:full\s+)?scope|scope[- ]confirmation|scope[- ]verification|evidence\s+register|evidence\s+requests?|re-?check|(?:re-?run|repeat)\s+the\s+(?:[\w-]+\s+)?assessment|verification\s+gap)\b/i.test(text)
     && !/\b(?:from\s+scratch|broken|confirmed\s+deficiency|confirmed\s+weakness)\b/i.test(text);
 };
+
+interface CompiledPremise {
+  normalized: string;
+  criteria: Set<string>;
+  tactics: Set<string>;
+  tokens: Set<string>;
+}
 
 // Keep the review transient. Statements tainted by quarantined premises must
 // carry whole-statement verification grounded in accepted criterion evidence,
@@ -274,36 +294,55 @@ const isPureEvidenceCollectionStatement = (text: string, evidenceRequest: boolea
 const reconcilePlanning = (
   strategy: any, review: PlanningReview, sanitized: StrategySanitationItem[],
 ): void => {
-  const premiseCriteria = new Set<string>();
-  const premiseTactics = new Set<string>();
-  const premiseTokens = new Set<string>();
-  for (const premise of review.excludedPremises) {
-    for (const key of extractCriterionKeys(premise)) premiseCriteria.add(key);
-    for (const match of premise.matchAll(TACTIC_REFERENCE_RX)) premiseTactics.add(match[1]);
-    for (const token of extractPremiseTokens(premise)) premiseTokens.add(token);
-  }
+  const preservedActions = review.preservedRoadmapActions || new Set<string>();
+  const compiledPremises: CompiledPremise[] = review.excludedPremises
+    .map(premise => {
+      const normalized = normalizeStatement(premise).toLowerCase();
+      const sentences = splitSentences(premise);
+      const wordCount = normalized ? normalized.split(/\s+/).length : 0;
+      // Multi-sentence composite summary/rationale paragraphs match by substring,
+      // explicit criterion IDs, or tactic IDs — never as a global bag of words.
+      const tokens = (sentences.length <= 1 && wordCount <= 28)
+        ? new Set(extractPremiseTokens(premise))
+        : new Set<string>();
+      return {
+        normalized,
+        criteria: new Set(extractCriterionKeys(premise)),
+        tactics: new Set(Array.from(premise.matchAll(TACTIC_REFERENCE_RX), match => match[1])),
+        tokens,
+      };
+    })
+    .filter(cp => cp.normalized.length > 0);
 
   const directlyOverlapsPremise = (value: string): boolean => {
     const normalized = normalizeStatement(value).toLowerCase();
-    if (!normalized) return false;
-    if (review.excludedPremises.some(p => {
-      const np = normalizeStatement(p).toLowerCase();
-      return np.length > 0 && normalized.includes(np);
-    })) return true;
-    for (const key of extractCriterionKeys(value)) {
-      if (premiseCriteria.has(key)) return true;
+    if (!normalized || preservedActions.has(normalized)) return false;
+    const valueCriteria = extractCriterionKeys(value);
+    const valueTactics = Array.from(value.matchAll(TACTIC_REFERENCE_RX), match => match[1]);
+    const valueTokens = new Set(extractPremiseTokens(value));
+
+    for (const cp of compiledPremises) {
+      if (normalized.includes(cp.normalized)) return true;
+      if (valueCriteria.some(key => cp.criteria.has(key))) return true;
+      if (valueTactics.some(tid => cp.tactics.has(tid))) return true;
+      if (cp.tokens.size > 0) {
+        let overlapCount = 0;
+        for (const token of valueTokens) {
+          if (cp.tokens.has(token)) overlapCount++;
+        }
+        const needed = cp.tokens.size === 1 ? 1 : cp.tokens.size <= 3 ? 2 : Math.ceil(cp.tokens.size * 0.6);
+        if (overlapCount >= needed) return true;
+      }
     }
-    for (const match of value.matchAll(TACTIC_REFERENCE_RX)) {
-      if (premiseTactics.has(match[1])) return true;
-    }
-    const distinctMatches = new Set(extractPremiseTokens(value).filter(token => premiseTokens.has(token)));
-    if (distinctMatches.size >= 2 || (premiseTokens.size === 1 && distinctMatches.size === 1)) return true;
     return false;
   };
 
-  // Transitive criterion taint: if any candidate statement overlaps an excluded
-  // premise, every statement citing that same criterion must prove independent support.
-  const affectedCriteria = new Set<string>(premiseCriteria);
+  // Transitive criterion taint: if any candidate statement directly overlaps an
+  // excluded premise, statements citing that same criterion must prove independent support.
+  const affectedCriteria = new Set<string>();
+  for (const cp of compiledPremises) {
+    for (const key of cp.criteria) affectedCriteria.add(key);
+  }
   const allCandidateStrings: string[] = [];
   const decision = strategy?.planning_decision;
   if (decision) {
@@ -314,8 +353,8 @@ const reconcilePlanning = (
   }
   if (Array.isArray(strategy?.remediation_roadmap)) {
     for (const phase of strategy.remediation_roadmap) {
-      if (typeof phase?.why === 'string') allCandidateStrings.push(phase.why);
-      if (typeof phase?.what === 'string') allCandidateStrings.push(phase.what);
+      if (typeof phase?.why === 'string') allCandidateStrings.push(...splitSentences(phase.why));
+      if (typeof phase?.what === 'string') allCandidateStrings.push(...splitSentences(phase.what));
       for (const key of ['deliverables', 'actions', 'assumptions'] as const) {
         if (Array.isArray(phase?.[key])) allCandidateStrings.push(...phase[key]);
       }
@@ -328,6 +367,8 @@ const reconcilePlanning = (
   }
 
   const isAffectedByQuarantine = (value: string): boolean => {
+    const normalized = normalizeStatement(value).toLowerCase();
+    if (preservedActions.has(normalized)) return false;
     if (directlyOverlapsPremise(value)) return true;
     return extractCriterionKeys(value).some(key => affectedCriteria.has(key));
   };
@@ -382,15 +423,25 @@ const reconcilePlanning = (
       rationale: 'No independent full-statement verification within the surviving customer evidence after premise quarantine.' });
     return false;
   };
+  const keepParagraph = (value: string, location: 'roadmap' | 'planning_decision'): string => {
+    if (!value) return value;
+    const sentences = splitSentences(value);
+    if (sentences.length <= 1) return keep(value, location) ? value : '';
+    if (supported(value, location, false)) return value;
+    return sentences.filter(sentence => keep(sentence, location)).join(' ').trim();
+  };
+
   if (decision) {
-    if (!keep(decision.rationale, 'planning_decision')) decision.rationale = '';
+    if (typeof decision.rationale === 'string') decision.rationale = keepParagraph(decision.rationale, 'planning_decision');
     for (const key of ['safe_to_act_on', 'evidence_needed_before_action']) {
       if (Array.isArray(decision[key])) decision[key] = decision[key].filter((s: string) => keep(s, 'planning_decision', key === 'evidence_needed_before_action'));
     }
   }
   if (Array.isArray(strategy?.remediation_roadmap)) {
     for (const phase of strategy.remediation_roadmap) {
-      for (const key of ['why', 'what']) if (!keep(phase[key], 'roadmap')) phase[key] = '';
+      for (const key of ['why', 'what']) {
+        if (typeof phase[key] === 'string') phase[key] = keepParagraph(phase[key], 'roadmap');
+      }
       for (const key of ['deliverables', 'actions', 'assumptions']) {
         if (Array.isArray(phase[key])) phase[key] = phase[key].filter((s: string) => keep(s, 'roadmap'));
       }
@@ -399,9 +450,12 @@ const reconcilePlanning = (
   }
 };
 
+const PERSONA_SUMMARY_LOCATIONS = new Set(['cfo', 'finops_lead', 'engineering_lead']);
+
 const isPremise = (item: StrategySanitationItem): boolean =>
   (item.action === 'quarantined' || item.action === 'removed')
   && Boolean(item.failure_type)
+  && !PERSONA_SUMMARY_LOCATIONS.has(String(item.source_location || ''))
   && item.severity !== 'WARN_TACTIC_HYGIENE'
   && !isTacticHygieneClaim({
     claim: item.claim,
@@ -433,6 +487,7 @@ export const sanitizeStrategyAfterFactCheck = (
   let data = clone(strategyData);
   const remaining: FactCheckClaim[] = [];
   const sanitized: StrategySanitationItem[] = [];
+  const preservedRoadmapActions = new Set<string>(planningReview?.preservedRoadmapActions || []);
 
   for (const claim of factCheck.unsupported_claims) {
     if (!isBlockingUnsupportedClaim(claim)) {
@@ -440,7 +495,7 @@ export const sanitizeStrategyAfterFactCheck = (
         if (
           claim.source_location === 'roadmap'
           && claim.severity === 'WARN_TACTIC_HYGIENE'
-          && preserveRoadmapActionWithoutRejectedTactic(data, claim)
+          && preserveRoadmapActionWithoutRejectedTactic(data, claim, preservedRoadmapActions)
         ) {
           sanitized.push(makeItem(claim, 'rewritten'));
           continue;
@@ -507,7 +562,13 @@ export const sanitizeStrategyAfterFactCheck = (
       ...priorPremises.filter(p => !isAssumptionOnlyRemoval(p)).map(p => p.claim),
       ...sanitized.filter(item => isPremise(item) && !isAssumptionOnlyRemoval(item)).map(p => p.claim),
     ];
-    if (excludedPremises.length) reconcilePlanning(data.phase_3_strategy, { ...planningReview, excludedPremises }, sanitized);
+    if (excludedPremises.length) {
+      reconcilePlanning(
+        data.phase_3_strategy,
+        { ...planningReview, excludedPremises, preservedRoadmapActions },
+        sanitized,
+      );
+    }
   }
 
   return {

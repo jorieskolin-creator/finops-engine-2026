@@ -630,3 +630,143 @@ assert.deepEqual(finalCheck.strategyData.phase_3_strategy.remediation_roadmap[0]
   assert.deepEqual(phase.deliverables, [cleanDeliverable], 'clean deliverables must survive assumption removal');
   assert.deepEqual(phase.actions, [cleanAction], 'clean actions must survive assumption removal');
 }
+
+// Regression for run 0087d3d4:
+// 1. Multi-sentence composite planning_decision.rationale and persona-summary claims must NOT
+//    dump valid FinOps vocabulary into a global bag-of-words that wipes out unrelated phases.
+// 2. Roadmap actions explicitly rewritten and preserved under WARN_TACTIC_HYGIENE must NOT be
+//    deleted or used to transitively taint criteria in reconcilePlanning().
+// 3. Multi-sentence WHY/WHAT paragraphs preserve clean sentences when one bad sentence is excised.
+// 4. Silent-domain [E1-E5] evidence-request actions ("evidence requests", "repeat the ... assessment") survive.
+{
+  const longRationale = 'Assessed findings are source-backed, with sufficiency passing and delivery integrity at 100%, so several actions follow directly from confirmed gaps: the underused reservation with no recorded exchange, anomaly detection that is not shown as repeatable, a cost-per-task figure that is not a primary metric, and no token or inference spend reporting. Confidence is medium, though. Evidence density and assessment resolution are both 30%, below the 60% target. The records are synthetic and cover two Azure scopes in one month. Culture and Organization has no evidence, and 29 anti-pattern checks could not be assessed. No savings or investment figures are asserted.';
+  const personaSummaryNuance = 'An architecture decision compared a fixed-size worker with a managed event worker on cost, p95 latency (211 ms against 250 ms) and recovery (7 against 10 minutes).';
+  const badWhatSentence = 'The allocation suspense balance has an owner, an expiry for its exception, and a measured view of policy violations in audit mode.';
+  const cleanWhatSentences = 'By the end of this phase, the FinOps team, finance, and engineering share a validated view of what is and is not evidenced. Commitment owners hold a recorded disposition for the underused reservation instead of an open review item.';
+  const tacticHygieneAction = 'Finance controller and engineering service owners run tag policy rules in audit mode against the EUR 1,412.50 of shared spend in allocation suspense, recording owner, rationale, and expiry [A1] [A2] [TAC-VIS-001]';
+  const b1Action = 'Finance controller and cloud platform owner reconcile the reservation inventory for eligible usage, utilization, expiry, and owner, then record an exchange or retain decision for ENT-RI-00032 [B1]';
+  const domainERangeAction = 'FinOps lead and finance partner compile a register of evidence requests for Culture and Organization and for criteria with no governed evidence [E1-E5]';
+  const phase2B1Action = 'FinOps lead and finance controller segment stable eligible usage and model conservative purchase scenarios [B1] [TAC-OPT-001]';
+  const phase4RepeatAction = 'FinOps lead and finance controller repeat the evidence-bounded assessment across the previously silent and unassessed areas [E1-E5]';
+
+  const run0087Fixture = {
+    phase_3_strategy: {
+      executive_summaries: { engineering_lead: personaSummaryNuance },
+      diagnosis: {
+        primary_bottleneck: 'Evidence resolution is 30%.',
+        root_causes: ['token spend reporting and recurring unit economics were not shown'],
+        domain_diagnosis: {},
+        confidence: 'medium',
+      },
+      planning_decision: {
+        decision: 'CONDITIONAL_GO',
+        rationale: longRationale,
+        safe_to_act_on: ['Assign an owner and expiry to the EUR 1,412.50 of shared spend in allocation suspense'],
+        evidence_needed_before_action: ['Evidence beyond two Azure scopes, since the source records are labelled synthetic'],
+      },
+      remediation_roadmap: [
+        {
+          phase: '1. Crawl — Foundation (0-3 Months)',
+          why: 'The assessment classifies maturity as Crawl, with 30% assessment resolution and 30% criterion evidence density. Several gaps are confirmed on that scoped evidence: a reservation at 36.3% utilization has no recorded exchange.',
+          what: `${cleanWhatSentences} ${badWhatSentence}`,
+          deliverables: [
+            'Reservation inventory and disposition record covering eligible usage, utilization, expiry, and approver for the underused commitment',
+            'Allocation suspense exception register with owner, rationale, and expiry date',
+          ],
+          actions: [domainERangeAction, b1Action, tacticHygieneAction],
+          assumptions: ['Records requested for silent areas exist and can be shared'],
+        },
+        {
+          phase: '2. Walk — Optimization (3-6 Months)',
+          why: 'With the Crawl records in place, this phase addresses commitment portfolio management and a primary cost-per-task metric.',
+          what: 'The target state is a commitment portfolio with a coverage target distinct from the existing utilization threshold.',
+          deliverables: ['Commitment coverage policy and quarterly review log'],
+          actions: [phase2B1Action],
+          assumptions: [],
+        },
+        {
+          phase: '4. Run — Continuous (12+ Months)',
+          why: 'Run-level outcomes can only be justified once earlier evidence exists across the 29 anti-pattern checks.',
+          what: 'The target state is an updated assessment that covers the originally silent and partially assessed areas.',
+          deliverables: ['Updated evidence-bounded FinOps assessment pack'],
+          actions: [phase4RepeatAction],
+          assumptions: [],
+        },
+      ],
+    },
+  };
+
+  const run0087Basis = new Map([
+    ['maturity.A1', { details: ['Application-tag enforcement and a tagging-remediation SLA are not established.'] }],
+    ['maturity.A2', { details: ['Finance and teams acknowledged the May showback and the shared exception.'] }],
+    ['maturity.B1', { details: ['ENT-RI-00032 at 36.3% utilization has no recorded exchange.'] }],
+    ['maturity.E1', { unknownStatus: 'UNKNOWN | unscored | NO_GOVERNED_EVIDENCE', details: [] }],
+    ['maturity.E2', { unknownStatus: 'UNKNOWN | unscored | NO_GOVERNED_EVIDENCE', details: [] }],
+    ['maturity.E3', { unknownStatus: 'UNKNOWN | unscored | NO_GOVERNED_EVIDENCE', details: [] }],
+    ['maturity.E4', { unknownStatus: 'UNKNOWN | unscored | NO_GOVERNED_EVIDENCE', details: [] }],
+    ['maturity.E5', { unknownStatus: 'UNKNOWN | unscored | NO_GOVERNED_EVIDENCE', details: [] }],
+  ]);
+
+  const run0087Sanitized = sanitizeStrategyAfterFactCheck(
+    run0087Fixture,
+    {
+      ...factCheck,
+      unsupported_claims: [
+        {
+          claim: 'token spend reporting and recurring unit economics were not shown',
+          source_location: 'diagnosis',
+          classification: 'unsupported',
+          severity: 'BLOCKING_UNSUPPORTED_FACT',
+          failure_type: 'other',
+          rationale: 'src-011 shows token counts by endpoint.',
+        },
+        {
+          claim: personaSummaryNuance,
+          source_location: 'engineering_lead',
+          classification: 'unsupported',
+          severity: 'WARN_MISCLASSIFIED_BUT_REAL',
+          failure_type: 'other',
+          rationale: 'Pilot replay vs ADR comparison.',
+        },
+        {
+          claim: longRationale,
+          source_location: 'planning_decision',
+          classification: 'unsupported',
+          severity: 'WARN_MISCLASSIFIED_BUT_REAL',
+          failure_type: 'unsupported_org_claim',
+          rationale: 'Contains excluded absolute AI reporting phrase.',
+        },
+        {
+          claim: badWhatSentence,
+          source_location: 'roadmap',
+          classification: 'unsupported',
+          severity: 'BLOCKING_UNSAFE_ROADMAP',
+          failure_type: 'other',
+          rationale: 'Policy violations in audit mode is unsupported.',
+        },
+        {
+          claim: tacticHygieneAction,
+          source_location: 'roadmap',
+          classification: 'unsupported',
+          severity: 'WARN_TACTIC_HYGIENE',
+          failure_type: 'other',
+          tactic_disposition: 'citation_rejected',
+          rationale: 'TAC-VIS-001 use_when requires missing mandatory tags.',
+        },
+      ],
+    },
+    { basisByCriterion: run0087Basis, excludedPremises: [], verifiedClaims: [] },
+  );
+
+  const phases = run0087Sanitized.strategyData.phase_3_strategy.remediation_roadmap;
+  assert.equal(phases.length, 3, 'all three roadmap phases must survive without collateral wipeout');
+  assert.ok(phases[0].why.length > 40, 'Phase 1 WHY must survive');
+  assert.equal(phases[0].what, cleanWhatSentences, 'Phase 1 WHAT must keep clean sentences after bad sentence is excised');
+  assert.equal(phases[0].deliverables.length, 2, 'Phase 1 deliverables must survive');
+  assert.equal(phases[0].actions.length, 3, 'Phase 1 [E1-E5], [B1], and rewritten [A1][A2] actions must all survive');
+  assert.doesNotMatch(phases[0].actions[2], /TAC-VIS-001/, 'rejected tactic ID is stripped while rewritten action survives');
+  assert.deepEqual(phases[1].actions, [phase2B1Action], 'Phase 2 [B1] [TAC-OPT-001] action must survive');
+  assert.deepEqual(phases[2].actions, [phase4RepeatAction], 'Phase 4 [E1-E5] repeat-assessment action must survive');
+  assert.equal(run0087Sanitized.strategyData.phase_3_strategy.planning_decision.safe_to_act_on.length, 1);
+  assert.equal(run0087Sanitized.strategyData.phase_3_strategy.planning_decision.evidence_needed_before_action.length, 1);
+}
