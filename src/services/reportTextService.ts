@@ -106,15 +106,19 @@ export function formatReaderParagraph(value: string, criteria: Map<string, Reade
     const name = entry.title.replace(/ & /g, ' and ').replace(/\b[A-Z][a-z]+\b/g, word => word.toLowerCase());
     return id.startsWith('AP-') && entry.status === 'not assessed' ? `whether the pattern “${name}” occurs` : name;
   };
+  const grammaticalLead = /\b(?:reviews?|improves?|prioritizes?|checks?|validates?|assesses|assess|verifies|verify|addresses|address|implements?|extends?|confirms?|documents?|establishes|establish|collects?|gathers?|re-?checks?|monitors?|tracks?|applies|apply|for|of|on|to|in|against|from|across|about|and|or|regarding|covering|around)\s+$/i;
+  const tacticObjectLead = /\b(?:applies|apply|implements?|uses?|adopts?|deploys?|pilots?|executes?|runs?|via|through|using|under|with)\s+$/i;
   const text = value.replace(/\[[^\]\n]+\](?!\()|(?<![\w./-])(?:AP-[A-F][1-5]|[A-F][1-5]|TAC-[A-Z]+-\d{3}(?:-[A-Z]+)?)(?![\w/-]|\.\w)/g,
     (token, offset: number) => {
       const bracket = token.startsWith('[');
       const key = bracket ? token.slice(1, -1) : token;
+      const before = value.slice(0, offset);
+      const suffix = value.slice(offset + token.length);
       if (tactics.has(key)) {
         basis.add(`Playbook tactic [${key}]`);
+        if (bracket && !tacticObjectLead.test(before)) return '';
         return 'the playbook tactic';
       }
-      const before = value.slice(0, offset);
       if (!bracket && !key.startsWith('AP-') && !/\b(?:criterion|criteria|capability|finding)\s+$/i.test(before)) return token;
       const ids = criterionIds(key);
       if (!ids.length || ids.some(id => !criteria.has(id))) return token;
@@ -124,13 +128,19 @@ export function formatReaderParagraph(value: string, criteria: Map<string, Reade
         for (const locator of entry.locators) basis.add(`Customer evidence ${locator}`);
         return phrase(id, entry);
       });
-      const suffix = value.slice(offset + token.length);
       const words = names.join(' and ');
       // An adjacent, already-spelled-out criterion makes its ID redundant.
-      // Sentence length and the preceding verb cannot establish that.
       const normalize = (text: string) => text.replace(/ & /g, ' and ').replace(/\s+/g, ' ').trim().toLowerCase();
       if (bracket && /^\s*(?:[.,;:!?)]|$)/.test(suffix)
         && (` ${normalize(before)}`).endsWith(` ${normalize(words)}`)) return '';
+      // Trailing provenance clusters appended after a complete noun phrase (e.g.
+      // "...decision [B1] [TAC-OPT-001]; artifact:" or "...evidence [E1] [E2]; artifact:")
+      // belong in the Evidence basis footer rather than spliced mid-sentence.
+      const trailingProvenanceTag = bracket
+        && offset > 0
+        && !grammaticalLead.test(before)
+        && /^(?:\s*\[[^\]\n]+\])*\s*(?:[.,;:!?)]|$)/.test(suffix);
+      if (trailingProvenanceTag) return '';
       return offset === 0 ? words.charAt(0).toUpperCase() + words.slice(1) : words;
     }).replace(/ +([.,;:!?)])/g, '$1').replace(/ {2,}/g, ' ').trim();
   return { text, basis: Array.from(basis) };
