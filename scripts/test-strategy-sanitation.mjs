@@ -488,3 +488,89 @@ const laterCandidate = structuredClone(removedPremise.strategyData);
 laterCandidate.phase_3_strategy.remediation_roadmap[0].actions.push(missingTacticAction);
 const finalCheck = sanitizeStrategyAfterFactCheck(laterCandidate, { ...removedPremise.factCheck, unsupported_claims: [] }, review);
 assert.deepEqual(finalCheck.strategyData.phase_3_strategy.remediation_roadmap[0].actions, [reservation]);
+
+// Regression for run ef617ca3: quarantining a narrow A3 alert-magnitude premise
+// must remove tainted A3 prescriptions unless verified on surviving A3 facts,
+// WITHOUT wiping out unaffected B2/A1 roadmap actions, Domain E evidence-collection
+// actions, or bullet-prefixed verified claims when roadmapFactCheck focuses its
+// claim budget on affected statements.
+{
+  const a3Premise = 'add affected account and magnitude context to anomaly alerts';
+  const taintedA3Action = 'FinOps analyst applies [TAC-VIS-004] to [A3]: define alert account and magnitude context.';
+  const narrowedA3Action = 'FinOps analyst adds affected account context to anomaly alerts [A3].';
+  const unaffectedB2Action = 'FinOps analyst and service owners apply [TAC-OPT-002] to [B2]: extend PL-W12 right-sizing into a regular candidate register.';
+  const domainECollection = 'FinOps lead collects Domain E evidence for [E1] [E2] [E3] [E4] [E5] from stakeholder records; no remediation tactic is prescribed.';
+  const cleanAssumption = 'Source owners can supply records within the quarter.';
+
+  const basis = new Map([
+    ['maturity.A3', { details: ['The cited alert does not establish account context.'] }],
+    ['maturity.B2', { details: ['One 14-day PL-W12 right-sizing change was closed.'] }],
+    ['maturity.E1', { unknownStatus: 'UNKNOWN | unscored | NO_GOVERNED_EVIDENCE', details: [] }],
+    ['maturity.E2', { unknownStatus: 'UNKNOWN | unscored | NO_GOVERNED_EVIDENCE', details: [] }],
+    ['maturity.E3', { unknownStatus: 'UNKNOWN | unscored | NO_GOVERNED_EVIDENCE', details: [] }],
+    ['maturity.E4', { unknownStatus: 'UNKNOWN | unscored | NO_GOVERNED_EVIDENCE', details: [] }],
+    ['maturity.E5', { unknownStatus: 'UNKNOWN | unscored | NO_GOVERNED_EVIDENCE', details: [] }],
+  ]);
+
+  const multiPhaseStrategy = {
+    phase_3_strategy: {
+      planning_decision: {
+        decision: 'CONDITIONAL_GO',
+        rationale: 'Proceed with bounded actions on verified gaps while collecting silent-domain evidence.',
+        safe_to_act_on: [unaffectedB2Action, taintedA3Action],
+        evidence_needed_before_action: ['Domain E evidence for E1 to E5 before any culture conclusion'],
+      },
+      remediation_roadmap: [{
+        phase: 'Phase 1 — Crawl',
+        why: 'Focus on assessed gaps and missing evidence.',
+        what: `Extend right-sizing, ${a3Premise}, and collect silent-domain records.`,
+        actions: [taintedA3Action, narrowedA3Action, unaffectedB2Action, domainECollection],
+        assumptions: [cleanAssumption],
+      }],
+    },
+  };
+
+  const a3Sanitized = sanitizeStrategyAfterFactCheck(
+    multiPhaseStrategy,
+    {
+      ...factCheck,
+      unsupported_claims: [{
+        claim: a3Premise,
+        source_location: 'roadmap',
+        classification: 'unsupported',
+        severity: 'WARN_MISCLASSIFIED_BUT_REAL',
+        failure_type: 'other',
+        rationale: 'src-007 already records the EUR 388.71 magnitude; only account context is unsupported.',
+      }],
+    },
+    {
+      basisByCriterion: basis,
+      excludedPremises: [],
+      verifiedClaims: [{
+        // Leading "- " from [HOW] rendering and lowercase excerpt start must still match
+        claim: `- ${narrowedA3Action}`,
+        source_location: 'roadmap',
+        classification: 'supported_by_audit',
+        rationale: 'maturity.A3 "the cited alert does not establish account context"',
+      }],
+    },
+  );
+
+  const survivingRoadmap = a3Sanitized.strategyData.phase_3_strategy.remediation_roadmap;
+  assert.equal(survivingRoadmap.length, 1, 'roadmap phase must survive targeted premise quarantine');
+  assert.deepEqual(
+    survivingRoadmap[0].actions,
+    [narrowedA3Action, unaffectedB2Action, domainECollection],
+    'tainted A3 action is removed while narrowed A3 action, unaffected B2 action, and Domain E evidence collection survive',
+  );
+  assert.deepEqual(survivingRoadmap[0].assumptions, [cleanAssumption]);
+  assert.deepEqual(
+    a3Sanitized.strategyData.phase_3_strategy.planning_decision.safe_to_act_on,
+    [unaffectedB2Action],
+  );
+  assert.equal(
+    a3Sanitized.strategyData.phase_3_strategy.planning_decision.evidence_needed_before_action.length,
+    1,
+    'multi-criterion E1 to E5 evidence request must survive against UNKNOWN Phase 2 basis',
+  );
+}

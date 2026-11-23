@@ -12,7 +12,12 @@ import { runPhase1Audit } from "../orchestrator";
 import { knowledgeBaseService, BATCH_DEFINITIONS, FINOPS_TACTICS_LOCAL, FINOPS_TACTIC_ACTIVITY_PLAYBOOK, FINOPS_TAXONOMY_REGISTRY, buildTacticIdTable, validTacticIdSet } from "../knowledge_base";
 import { DiagnosticResult, Phase1AuditLogs, Phase2Validation, AuditItem, EvidenceQuote, EvidenceCategory, EVIDENCE_CATEGORIES, PersonaId, PERSONA_IDS, PipelineProgressStage, PipelineProgressUpdate, SourceRecord, DomainId } from "../types";
 import { validatePhase1Output, validatePhase3Grounding } from "./validatorService";
-import { EVIDENCE_DENSITY_BLOCK, runQualityGate, runQualityGateExplanation } from "./qualityGateService";
+import {
+  EVIDENCE_DENSITY_BLOCK,
+  isDomainTaxonomyHygieneClaim,
+  runQualityGate,
+  runQualityGateExplanation,
+} from "./qualityGateService";
 import { calculateMetrics } from "./metricsService";
 import {
   buildRegenerateAppendix,
@@ -936,8 +941,10 @@ For silent domains, do not make broad maturity conclusions or prescribe remediat
         const excludedPremises = Array.from(new Set([
           ...(previous?.excludedPremises || []),
           ...(previous?.merged.unsupported_claims || []).filter(c => c.severity !== 'WARN_TACTIC_HYGIENE'
+            && !isDomainTaxonomyHygieneClaim(c)
             && !JSON.stringify(strategy).includes(c.claim)).map(c => c.claim),
-          ...(summaryCheck?.unsupported_claims || []).filter(c => c.severity !== 'WARN_TACTIC_HYGIENE').map(c => c.claim),
+          ...(summaryCheck?.unsupported_claims || []).filter(c => c.severity !== 'WARN_TACTIC_HYGIENE'
+            && !isDomainTaxonomyHygieneClaim(c)).map(c => c.claim),
         ]));
         let verifiedPlanning = scope === 'summary' ? previous?.verifiedPlanning || [] : [];
         if (scope !== 'summary') {
@@ -1388,6 +1395,11 @@ For silent domains, do not make broad maturity conclusions or prescribe remediat
       return sanitation;
     };
 
+    const hasRoadmapActions = (candidate: any): boolean =>
+      Array.isArray(candidate?.phase_3_strategy?.remediation_roadmap)
+      && candidate.phase_3_strategy.remediation_roadmap.some((phase: any) => Array.isArray(phase?.actions) && phase.actions.length > 0);
+
+    let preSanitationRoadmapCandidate = hasRoadmapActions(strategyData) ? strategyData : undefined;
     let sanitation = applySanitation(strategyData, factCheck, acceptedFactChecks, 'claims_sanitized');
     strategyData = sanitation.strategyData;
     factCheck = sanitation.factCheck;
@@ -1426,6 +1438,9 @@ For silent domains, do not make broad maturity conclusions or prescribe remediat
           acceptedFactChecks,
         );
         if (!repairedChecks.merged.failed) {
+          if (hasRoadmapActions(repairedStrategy)) {
+            preSanitationRoadmapCandidate = repairedStrategy;
+          }
           repairedChecks.merged.trajectory = [
             ...(factCheck.trajectory || []),
             snapshot(repairedChecks.merged),
@@ -1489,11 +1504,20 @@ For silent domains, do not make broad maturity conclusions or prescribe remediat
     let qualityGate = runQualityGate(auditLogs, validationData, phase1Validation, groundingValidation, aggregatedRawData.evidence_check, factCheck, sourceRegistryStatus);
     const isRoadmapContractBlocker = (reason: string): boolean =>
       reason.startsWith('Phase 3: Required tactic contract is incomplete');
+    const isSanitizedEmptyRoadmapBlocker = (reason: string): boolean =>
+      Boolean(preSanitationRoadmapCandidate) && reason === 'Phase 3: Remediation roadmap missing or empty';
     const factCheckOnlyBlock = qualityGate.decision === 'BLOCK'
       && qualityGate.blocking_reasons.length > 0
-      && qualityGate.blocking_reasons.every(reason => reason.startsWith('Fact-check:') || isRoadmapContractBlocker(reason));
-    const escalateRoadmapOnly = qualityGate.blocking_reasons.every(isRoadmapContractBlocker);
+      && qualityGate.blocking_reasons.every(reason =>
+        reason.startsWith('Fact-check:') || isRoadmapContractBlocker(reason) || isSanitizedEmptyRoadmapBlocker(reason)
+      );
+    const escalateRoadmapOnly = qualityGate.blocking_reasons.every(reason =>
+      isRoadmapContractBlocker(reason) || isSanitizedEmptyRoadmapBlocker(reason)
+    );
     if (factCheckOnlyBlock && !factCheck.failed) {
+      const candidateForEscalation = !hasRoadmapActions(strategyData) && preSanitationRoadmapCandidate
+        ? mergePhase3Outputs(strategyData, preSanitationRoadmapCandidate)
+        : strategyData;
       serverLog(runId, 'warn', 'fact_check_escalated', {
         from_stage: 'fact_check',
         to_stage: 'fact_check_high',
@@ -1501,7 +1525,7 @@ For silent domains, do not make broad maturity conclusions or prescribe remediat
         blocking_reasons: qualityGate.blocking_reasons.length,
       });
       const highFactChecks = await runFactCheck(
-        strategyData,
+        candidateForEscalation,
         factCheck.attempts + 1,
         'fact_check_high',
         escalateRoadmapOnly ? 'roadmap' : 'both',
@@ -1515,7 +1539,7 @@ For silent domains, do not make broad maturity conclusions or prescribe remediat
           ...(factCheck.sanitized_claims || []),
           ...(highFactCheck.sanitized_claims || []),
         ];
-        sanitation = applySanitation(strategyData, highFactCheck, highFactChecks, 'claims_quarantined');
+        sanitation = applySanitation(candidateForEscalation, highFactCheck, highFactChecks, 'claims_quarantined');
         strategyData = sanitation.strategyData;
         factCheck = sanitation.factCheck;
         groundingValidation = validatePhase3Grounding(strategyData, validationData, text);

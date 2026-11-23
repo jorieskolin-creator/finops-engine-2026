@@ -24,6 +24,7 @@ for (const stage of MODEL_STAGES) {
 const runCase = async (runStage, { stage, role, expectedModels, rejectPrimary }) => {
   const approvals = new Map();
   const approvedRequests = [];
+  const succeededStageExecutions = new Set();
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async (url, options = {}) => {
     if (url === '/api/model-routing') return Response.json(routing);
@@ -38,10 +39,14 @@ const runCase = async (runStage, { stage, role, expectedModels, rejectPrimary })
     }
     if (/^\/api\/(anthropic|openai|xai)-generate$/.test(String(url))) {
       const request = JSON.parse(options.body);
+      if (request.stage_execution_id && succeededStageExecutions.has(request.stage_execution_id)) {
+        return Response.json({ error: 'INTERNAL_CALL_BINDING_MISMATCH' }, { status: 409 });
+      }
       const approval = approvals.get(request.packet_id);
       assert.equal(url, `/api/${approval.provider}-generate`);
       const text = JSON.stringify({ valid: !(rejectPrimary && approvedRequests.length === 1) });
       const output = inspectOutput(text, approval);
+      if (request.stage_execution_id) succeededStageExecutions.add(request.stage_execution_id);
       return new Response(`${JSON.stringify({ type: 'done', output, usage: {} })}\n`);
     }
     throw new Error(`Unexpected URL: ${url}`);
@@ -69,6 +74,13 @@ const runCase = async (runStage, { stage, role, expectedModels, rejectPrimary })
     }
     assert.equal(new Set(approvedRequests.map(request => request.parts[0].text)).size, 1);
     assert.equal(new Set(approvedRequests.map(request => request.system_instruction)).size, 1);
+    if (rejectPrimary) {
+      assert.equal(
+        new Set(approvedRequests.map(request => request.stage_execution_id)).size,
+        2,
+        'post-completion validateOutput fallback must mint a fresh stage_execution_id rather than colliding with HTTP 409',
+      );
+    }
   } finally {
     globalThis.fetch = originalFetch;
   }

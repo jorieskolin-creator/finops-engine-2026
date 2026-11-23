@@ -203,40 +203,182 @@ interface PlanningReview {
   excludedPremises: string[];
 }
 
-// Keep the review transient. A verdict must cover the whole surviving statement
-// and cite substantive evidence from the exact accepted stream and criterion.
+const normalizeStatement = (value: string): string =>
+  compact(value).replace(/^[-*•]\s+/, '').trim();
+
+const CRITERION_MENTION_RX = /\b(AP-)?([A-F])([1-5])(?:\s*(?:-|to|through|–)\s*(?:\2)?([1-5]))?\b/g;
+
+const extractCriterionKeys = (text: string): string[] => {
+  const keys = new Set<string>();
+  for (const [, ap, domain, start, end] of text.matchAll(CRITERION_MENTION_RX)) {
+    const first = Math.min(Number(start), Number(end || start));
+    const last = Math.max(Number(start), Number(end || start));
+    for (let n = first; n <= last; n++) {
+      keys.add(`${ap ? 'antipattern' : 'maturity'}.${domain}${n}`);
+    }
+  }
+  return Array.from(keys);
+};
+
+const PREMISE_STOPWORDS = new Set([
+  'about', 'above', 'accepted', 'across', 'action', 'actions', 'actual', 'actuals', 'after', 'against',
+  'alone', 'along', 'already', 'also', 'although', 'among', 'analysis', 'assessed', 'assessment',
+  'based', 'because', 'before', 'below', 'between', 'beyond', 'bounded', 'broad', 'cannot', 'check',
+  'checks', 'cited', 'claim', 'claims', 'cloud', 'collect', 'confirmed', 'control', 'controls',
+  'count', 'coverage', 'crawl', 'criteria', 'criterion', 'current', 'customer', 'decision', 'decisions',
+  'defined', 'demonstrated', 'density', 'direct', 'documented', 'does', 'domain', 'domains', 'during',
+  'established', 'evidence', 'evidenced', 'every', 'existing', 'fact', 'facts', 'figure', 'figures',
+  'final', 'finding', 'findings', 'finops', 'first', 'follow', 'found', 'full', 'fully', 'further',
+  'governed', 'having', 'however', 'identified', 'implementation', 'include', 'included', 'includes',
+  'including', 'incomplete', 'independent', 'instead', 'into', 'issue', 'items', 'itself', 'level',
+  'limited', 'locked', 'management', 'material', 'maturity', 'means', 'measured', 'metric', 'metrics',
+  'missing', 'model', 'monthly', 'narrow', 'needed', 'neither', 'never', 'noted', 'notes', 'observation',
+  'observations', 'observed', 'organization', 'organizational', 'other', 'outcome', 'outcomes', 'overall',
+  'owner', 'owners', 'packet', 'partial', 'phase', 'phases', 'planning', 'point', 'present', 'primary',
+  'prior', 'process', 'prove', 'proven', 'provides', 'question', 'questions', 'quote', 'quoted', 'rather',
+  'record', 'recorded', 'records', 'reflect', 'related', 'relevant', 'remain', 'remains', 'remediation',
+  'report', 'reported', 'required', 'requires', 'resolution', 'resolved', 'resource', 'resources',
+  'result', 'results', 'review', 'reviewed', 'reviews', 'roadmap', 'sample', 'sampled', 'scanner',
+  'scope', 'scoped', 'score', 'scored', 'scores', 'section', 'several', 'should', 'shown', 'shows',
+  'signal', 'silent', 'since', 'single', 'source', 'sources', 'spend', 'stage', 'stated', 'statement',
+  'states', 'status', 'still', 'strategy', 'subcriteria', 'subcriterion', 'summary', 'supplied',
+  'support', 'supported', 'supports', 'surface', 'tactic', 'tactics', 'target', 'targets', 'teams',
+  'tested', 'their', 'there', 'therefore', 'these', 'those', 'three', 'through', 'total', 'treat',
+  'treated', 'treats', 'under', 'unknown', 'unproven', 'unscored', 'until', 'unverified', 'using',
+  'valid', 'validate', 'validation', 'value', 'verified', 'verifier', 'where', 'whether', 'which',
+  'while', 'within', 'without', 'would',
+]);
+
+const extractPremiseTokens = (text: string): string[] =>
+  (text.toLowerCase().match(/\b[a-z][a-z0-9-]{4,}\b/g) || [])
+    .filter(token => !PREMISE_STOPWORDS.has(token) && !/^tac-[a-z]+-\d+/.test(token));
+
+const isPureEvidenceCollectionStatement = (text: string, evidenceRequest: boolean): boolean => {
+  if (TACTIC_REFERENCE_RX.test(text)) {
+    TACTIC_REFERENCE_RX.lastIndex = 0;
+    return false;
+  }
+  TACTIC_REFERENCE_RX.lastIndex = 0;
+  if (evidenceRequest || text.trim().endsWith('?')) return true;
+  return /\b(?:collect|gather|request|confirm\s+(?:full\s+)?scope|scope[- ]confirmation|scope[- ]verification|evidence\s+register|evidence\s+request|re-?check|re-?run\s+the\s+assessment|verification\s+gap)\b/i.test(text)
+    && !/\b(?:from\s+scratch|broken|confirmed\s+deficiency|confirmed\s+weakness)\b/i.test(text);
+};
+
+// Keep the review transient. Statements tainted by quarantined premises must
+// carry whole-statement verification grounded in accepted criterion evidence,
+// while unaffected statements on clean criteria are preserved.
 const reconcilePlanning = (
   strategy: any, review: PlanningReview, sanitized: StrategySanitationItem[],
 ): void => {
-  const supported = (text: string, location: 'planning_decision' | 'roadmap', evidenceRequest: boolean) => review.verifiedClaims.some(verdict => {
-    if (verdict.source_location !== location || compact(verdict.claim) !== compact(text)
-      || !['supported_by_audit', 'supported_by_source'].includes(verdict.classification)) return false;
-    const references = [...verdict.rationale.matchAll(/\b((?:maturity|antipattern)\.[A-F][1-5])\s+"([^"\n]+)"/g)];
-    if (!references.length) return false;
-    const cited = new Set(references.map(match => match[1]));
-    for (const [, ap, domain, start, end] of text.matchAll(/\b(AP-)?([A-F])([1-5])(?:\s*-\s*(?:\2)?([1-5]))?\b/g)) {
-      const last = Number(end || start);
-      for (let n = Math.min(Number(start), last); n <= Math.max(Number(start), last); n++) {
-        if (!cited.has(`${ap ? 'antipattern' : 'maturity'}.${domain}${n}`)) return false;
+  const premiseCriteria = new Set<string>();
+  const premiseTactics = new Set<string>();
+  const premiseTokens = new Set<string>();
+  for (const premise of review.excludedPremises) {
+    for (const key of extractCriterionKeys(premise)) premiseCriteria.add(key);
+    for (const match of premise.matchAll(TACTIC_REFERENCE_RX)) premiseTactics.add(match[1]);
+    for (const token of extractPremiseTokens(premise)) premiseTokens.add(token);
+  }
+
+  const directlyOverlapsPremise = (value: string): boolean => {
+    const normalized = normalizeStatement(value).toLowerCase();
+    if (!normalized) return false;
+    if (review.excludedPremises.some(p => {
+      const np = normalizeStatement(p).toLowerCase();
+      return np.length > 0 && normalized.includes(np);
+    })) return true;
+    for (const key of extractCriterionKeys(value)) {
+      if (premiseCriteria.has(key)) return true;
+    }
+    for (const match of value.matchAll(TACTIC_REFERENCE_RX)) {
+      if (premiseTactics.has(match[1])) return true;
+    }
+    for (const token of extractPremiseTokens(value)) {
+      if (premiseTokens.has(token)) return true;
+    }
+    return false;
+  };
+
+  // Transitive criterion taint: if any candidate statement overlaps an excluded
+  // premise, every statement citing that same criterion must prove independent support.
+  const affectedCriteria = new Set<string>(premiseCriteria);
+  const allCandidateStrings: string[] = [];
+  const decision = strategy?.planning_decision;
+  if (decision) {
+    if (typeof decision.rationale === 'string') allCandidateStrings.push(decision.rationale);
+    for (const key of ['safe_to_act_on', 'evidence_needed_before_action'] as const) {
+      if (Array.isArray(decision[key])) allCandidateStrings.push(...decision[key]);
+    }
+  }
+  if (Array.isArray(strategy?.remediation_roadmap)) {
+    for (const phase of strategy.remediation_roadmap) {
+      if (typeof phase?.why === 'string') allCandidateStrings.push(phase.why);
+      if (typeof phase?.what === 'string') allCandidateStrings.push(phase.what);
+      for (const key of ['actions', 'assumptions'] as const) {
+        if (Array.isArray(phase?.[key])) allCandidateStrings.push(...phase[key]);
       }
     }
-    return references.every(([, key, excerpt]) => {
-      const basis = review.basisByCriterion.get(key);
-      if (!basis) return false;
-      if (basis.unknownStatus) return evidenceRequest && excerpt === basis.unknownStatus;
-      return /\s/.test(excerpt.trim()) && basis.details.some(detail => detail.includes(excerpt));
+  }
+  for (const candidate of allCandidateStrings) {
+    if (directlyOverlapsPremise(candidate)) {
+      for (const key of extractCriterionKeys(candidate)) affectedCriteria.add(key);
+    }
+  }
+
+  const isAffectedByQuarantine = (value: string): boolean => {
+    if (directlyOverlapsPremise(value)) return true;
+    return extractCriterionKeys(value).some(key => affectedCriteria.has(key));
+  };
+
+  const supported = (text: string, location: 'planning_decision' | 'roadmap', evidenceRequest: boolean) => {
+    const normalizedText = normalizeStatement(text);
+    const collectionAllowed = isPureEvidenceCollectionStatement(text, evidenceRequest);
+    const mentionedKeys = extractCriterionKeys(text);
+
+    const hasExplicitVerdict = review.verifiedClaims.some(verdict => {
+      if (verdict.source_location !== location || normalizeStatement(verdict.claim) !== normalizedText
+        || !['supported_by_audit', 'supported_by_source'].includes(verdict.classification)) return false;
+      const references = [...verdict.rationale.matchAll(/\b((?:maturity|antipattern)\.[A-F][1-5])\s+"([^"\n]+)"/g)];
+      if (!references.length) return false;
+      const cited = new Set(references.map(match => match[1]));
+      for (const key of mentionedKeys) {
+        if (!cited.has(key)) return false;
+      }
+      return references.every(([, key, excerpt]) => {
+        const basis = review.basisByCriterion.get(key);
+        if (!basis) return false;
+        if (basis.unknownStatus) return collectionAllowed && compact(excerpt) === compact(basis.unknownStatus);
+        const normalizedExcerpt = compact(excerpt).toLowerCase();
+        return /\s/.test(excerpt.trim()) && basis.details.some(detail => compact(detail).toLowerCase().includes(normalizedExcerpt));
+      });
     });
-  });
+    if (hasExplicitVerdict) return true;
+
+    // Pure bounded evidence-collection items whose cited criteria are all genuinely
+    // UNKNOWN in Phase 2 need not repeat the unknownStatus string N times in rationale.
+    if (collectionAllowed && mentionedKeys.length > 0 && mentionedKeys.every(key => Boolean(review.basisByCriterion.get(key)?.unknownStatus))) {
+      return true;
+    }
+    return false;
+  };
+
   const keep = (value: string, location: 'roadmap' | 'planning_decision', evidenceRequest = false) => {
     if (!value) return true;
-    const containsExcluded = review.excludedPremises.some(premise => compact(premise).length > 0
-      && compact(value).toLowerCase().includes(compact(premise).toLowerCase()));
-    if (!containsExcluded && supported(value, location, evidenceRequest || value.trim().endsWith('?'))) return true;
+    const normalizedValue = normalizeStatement(value).toLowerCase();
+    const containsExcluded = review.excludedPremises.some(premise => {
+      const normalizedPremise = normalizeStatement(premise).toLowerCase();
+      return normalizedPremise.length > 0 && normalizedValue.includes(normalizedPremise);
+    });
+    if (containsExcluded) {
+      sanitized.push({ action: 'removed', claim: value, source_location: location,
+        rationale: 'No independent full-statement verification within the surviving customer evidence after premise quarantine.' });
+      return false;
+    }
+    if (!isAffectedByQuarantine(value)) return true;
+    if (supported(value, location, evidenceRequest || value.trim().endsWith('?'))) return true;
     sanitized.push({ action: 'removed', claim: value, source_location: location,
       rationale: 'No independent full-statement verification within the surviving customer evidence after premise quarantine.' });
     return false;
   };
-  const decision = strategy?.planning_decision;
   if (decision) {
     if (!keep(decision.rationale, 'planning_decision')) decision.rationale = '';
     for (const key of ['safe_to_act_on', 'evidence_needed_before_action']) {
@@ -256,7 +398,16 @@ const reconcilePlanning = (
 
 const isPremise = (item: StrategySanitationItem): boolean =>
   (item.action === 'quarantined' || item.action === 'removed')
-  && Boolean(item.failure_type) && item.severity !== 'WARN_TACTIC_HYGIENE';
+  && Boolean(item.failure_type)
+  && item.severity !== 'WARN_TACTIC_HYGIENE'
+  && !isDomainTaxonomyHygieneClaim({
+    claim: item.claim,
+    classification: 'unsupported',
+    rationale: item.rationale,
+    source_location: item.source_location,
+    failure_type: item.failure_type,
+    severity: item.severity,
+  });
 
 export const sanitizeStrategyAfterFactCheck = (
   strategyData: any,

@@ -402,4 +402,34 @@ const logs = (maturityFactory, antiFactory) => ({
   assert.deepEqual(result.assessment_sufficiency.silent_domain_ids, ['D', 'E', 'F']);
 }
 
+{
+  // Downgraded 0/3 scoped maturity observations must expose clean verifier rationale
+  // without internal "Final maturity assessment: NOK..." headers that summary fact-check
+  // would otherwise quarantine as fabricated premises.
+  const downgradedScopedLogs = logs(
+    (id) => id === 'F2'
+      ? {
+          count: 0,
+          original_count: 1,
+          verified_count: 0,
+          status: 'NOK',
+          assessment_status: 'assessed',
+          evidence_check_status: 'weak',
+          question_results: ['unknown', 'unknown', 'not_supported'],
+          evidence: 'Mean routine task cost was EUR 0.006 versus EUR 0.018.',
+          evidence_quotes: [{ quote: 'Mean routine task cost was EUR 0.006 versus EUR 0.018', source_id: 'src-002', chunk_id: 'src-002-c001', evidence_source: 'text' }],
+          adjustment_reason: 'The quote is a one-time route-release metric, not organization-wide unit economics.',
+          reasoning: 'Final maturity assessment: NOK. Evidence-check resolved the scanner score from 1 to 0. Verifier status: weak. The quote is a one-time route-release metric, not organization-wide unit economics.',
+          is_silent: false,
+        }
+      : item(2, true),
+    () => anti(0, false, 'tested_absent'),
+  );
+  const result = calculateMetrics(downgradedScopedLogs);
+  const f2Scoped = result.scoped_observations.find(entry => entry.startsWith('[F2]'));
+  assert.ok(f2Scoped, 'F2 scoped observation should be emitted');
+  assert.doesNotMatch(f2Scoped, /Final maturity assessment:|Evidence-check resolved the scanner score/i);
+  assert.match(f2Scoped, /one-time route-release metric/);
+}
+
 console.log('metrics unit tests passed');

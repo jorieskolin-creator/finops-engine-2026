@@ -93,8 +93,12 @@ const confirmedCriterionFindings = (auditLogs: Phase1AuditLogs): Map<string, str
     }
   }
   for (const [rawCriterionId, item] of Object.entries(auditLogs.antipattern)) {
+    const zeroScannerAndVerified = typeof item.original_count === 'number'
+      && Math.round(item.original_count) === 0
+      && Math.round(item.count ?? 0) === 0;
     if (
-      item.assessment_status !== 'not_assessed'
+      !zeroScannerAndVerified
+      && item.assessment_status !== 'not_assessed'
       && hasVerifiedSourceCoverage(item, 'antipattern')
       && ['confirmed_present', 'partially_present'].includes(inferAntiPatternAbsenceStatus(item))
     ) {
@@ -207,6 +211,27 @@ export const findRoadmapActionsMissingCriterionReferences = (strategyData: any):
     .map((action: unknown) => typeof action === 'string' ? action.trim() : String(action ?? '').trim())
     .filter((action: string) => action.length > 0 && !CRITERION_REFERENCE_RX.test(action));
 
+const isConfirmedPlaybookRefutation = (
+  tacticId: string,
+  sanitizedClaims: StrategySanitationItem[],
+): StrategySanitationItem | undefined => {
+  const matching = sanitizedClaims.filter(claim =>
+    claim.source_location === 'roadmap'
+    && ['quarantined', 'removed', 'rewritten'].includes(claim.action)
+    && Array.from(claim.claim.matchAll(TACTIC_RX), m => m[1]).includes(tacticId)
+  );
+  const useWhenUnmet = matching.find(claim =>
+    claim.tactic_disposition === 'citation_rejected'
+    && /\buse[_ -]when\b[^.!?\n]{0,40}\b(?:not\s+met|unmet)\b/i.test(claim.rationale)
+  );
+  const repairRefuted = matching.find(claim =>
+    claim !== useWhenUnmet
+    && (claim.action === 'removed' || claim.action === 'quarantined')
+    && /\b(?:refutes?|shows the opposite|no partial [a-z -]+ signal is present)\b/i.test(claim.rationale)
+  );
+  return useWhenUnmet && repairRefuted ? repairRefuted : undefined;
+};
+
 export const classifyFinalRequiredTactics = (
   strategyData: any,
   plan: TacticSelectionPlan,
@@ -220,12 +245,33 @@ export const classifyFinalRequiredTactics = (
       && claim.tactic_disposition != null
       && ['quarantined', 'removed', 'rewritten'].includes(claim.action))
     .forEach(claim => Array.from(claim.claim.matchAll(TACTIC_RX), match => match[1])
-      .forEach(tacticId => reviewedByTactic.set(tacticId, claim)));
+      .forEach(tacticId => {
+        const prev = reviewedByTactic.get(tacticId);
+        if (prev?.tactic_disposition === 'contraindicated' && claim.tactic_disposition !== 'contraindicated') return;
+        reviewedByTactic.set(tacticId, claim);
+      }));
   const dispositions = plan.required.map(candidate => {
     if (!absent.includes(candidate.tactic_id)) {
       return { tactic_id: candidate.tactic_id, activated_by: candidate.activated_by, disposition: 'accepted' as const };
     }
     const review = reviewedByTactic.get(candidate.tactic_id);
+    if (review?.tactic_disposition === 'contraindicated') {
+      return {
+        tactic_id: candidate.tactic_id,
+        activated_by: candidate.activated_by,
+        disposition: 'contraindicated' as const,
+        ...(review.rationale ? { rationale: review.rationale } : {}),
+      };
+    }
+    const confirmedRefutation = isConfirmedPlaybookRefutation(candidate.tactic_id, sanitizedClaims);
+    if (confirmedRefutation) {
+      return {
+        tactic_id: candidate.tactic_id,
+        activated_by: candidate.activated_by,
+        disposition: 'contraindicated' as const,
+        ...(confirmedRefutation.rationale ? { rationale: confirmedRefutation.rationale } : {}),
+      };
+    }
     return {
       tactic_id: candidate.tactic_id,
       activated_by: candidate.activated_by,

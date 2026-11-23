@@ -17,11 +17,19 @@ const clampScore = (value: unknown): number => {
   return Math.min(Math.max(Math.round(value), 0), 3);
 };
 
+const stripNegatedPresenceSpans = (clause: string): string =>
+  clause
+    .replace(/\bfinal anti-pattern assessment:\s*(?:tested absent|not assessed)\b/g, ' ')
+    .replace(/\b(?:packet\s+)?coverage\s+is\s+(?:not\s+)?weak\b/g, ' ')
+    .replace(/\bweak\s+(?:packet|source|routing)\s+coverage\b/g, ' ')
+    .replace(/\b(?:no|not|neither|never|without|zero|lacks?|refutes?|contradicts?|absent)\b[^,;]{0,45}\b(?:weak\s+or\s+partial|partial\s+or\s+weak|partial|weak)\b[^,;]{0,65}/g, ' ')
+    .replace(/\b(?:partial|weak)\b[^,;]{0,65}\b(?:is\s+not|are\s+not|was\s+not|were\s+not|not\s+present|not\s+found|not\s+detected|not\s+evidenced|absent)\b/g, ' ');
+
 export const hasAntiPatternPresenceSignal = (value: unknown): boolean => {
   if (typeof value !== 'string') return false;
-  const text = value.toLowerCase();
-  if (!text.trim()) return false;
-  const phraseMatch = [
+  const raw = value.toLowerCase().trim();
+  if (!raw) return false;
+  const phrases = [
     'partial finding',
     'partially present',
     'partial presence',
@@ -35,8 +43,13 @@ export const hasAntiPatternPresenceSignal = (value: unknown): boolean => {
     'indicates partial',
     'some evidence of',
     'some related evidence'
-  ].some(phrase => text.includes(phrase));
-  return phraseMatch || /\b(partial|weak)\b.{0,80}\b(anti-pattern|harmful|signal|finding|presence|present|evidence|cost-blind|tunnel vision|monolith|server-hugging|it['’]?s problem)\b/.test(text);
+  ];
+  const pattern = /\b(partial|weak)\b.{0,80}\b(anti-pattern|harmful|signal|finding|presence|present|evidence|cost-blind|tunnel vision|monolith|server-hugging|it['’]?s problem)\b/;
+  return raw.split(/[.!?;]+/).some(sentence => {
+    const cleaned = stripNegatedPresenceSpans(sentence).trim();
+    if (!cleaned) return false;
+    return phrases.some(phrase => cleaned.includes(phrase)) || pattern.test(cleaned);
+  });
 };
 
 export const resolveAntiPatternAbsenceStatus = (input: {
@@ -98,11 +111,25 @@ export const inferAntiPatternAbsenceStatus = (item: Partial<AuditItem> | undefin
   if (count > 0) return 'partially_present';
 
   const explicit = normalizeAntiPatternAbsenceStatus(item?.antipattern_absence_status);
+  const text = `${item?.coverage_reason || ''} ${item?.reasoning || ''}`.toLowerCase();
+  const notAssessedText = text.includes('not assessed') || text.includes('insufficient to verify absence');
+
+  // Preserve the Evidence Check invariant: when the scanner found 0/3 and
+  // verified count is 0/3, verifier wording cannot manufacture a partial finding.
+  if (typeof item?.original_count === 'number' && Math.round(item.original_count) === 0 && count === 0) {
+    if (notAssessedText) return 'unknown_absent';
+    return (
+      explicit === 'tested_absent'
+      && (item?.evidence_check_status === undefined || item?.evidence_check_status === 'supported')
+      && typeof item?.coverage_reason === 'string'
+      && item.coverage_reason.trim().length > 0
+    ) ? 'tested_absent' : 'unknown_absent';
+  }
+
   if (explicit === 'confirmed_present' || explicit === 'partially_present') return explicit;
 
-  const text = `${item?.coverage_reason || ''} ${item?.reasoning || ''}`.toLowerCase();
   if (hasAntiPatternPresenceSignal(text)) return 'partially_present';
-  if (text.includes('not assessed') || text.includes('insufficient to verify absence')) return 'unknown_absent';
+  if (notAssessedText) return 'unknown_absent';
   if (
     explicit === 'tested_absent'
     && item?.evidence_check_status === 'supported'

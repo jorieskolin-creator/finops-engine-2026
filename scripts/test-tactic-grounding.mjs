@@ -156,6 +156,7 @@ assert.equal(buildTacticSelectionPlan({ maturity: { C3: item('C3', 0, { evidence
 assert.equal(buildTacticSelectionPlan({ maturity: { C3: item('C3', 0) }, antipattern: {} }, ['C']).required.length, 0, 'silent-domain maturity must not activate remediation');
 assert.ok(buildTacticSelectionPlan({ maturity: {}, antipattern: { C1: item('AP-C1', 1, { antipattern_absence_status: 'partially_present' }) } }).required.some(candidate => candidate.tactic_id === 'TAC-GOV-002'), 'partial anti-pattern presence must activate PRIMARY');
 assert.equal(buildTacticSelectionPlan({ maturity: {}, antipattern: { C1: item('AP-C1', 0, { antipattern_absence_status: 'tested_absent', coverage_reason: 'Relevant controls tested' }) } }).required.length, 0, 'tested-absent anti-pattern must not activate remediation');
+assert.equal(buildTacticSelectionPlan({ maturity: {}, antipattern: { C1: item('AP-C1', 0, { original_count: 0, antipattern_absence_status: 'partially_present' }) } }).required.length, 0, 'scanner 0/3 + verified 0/3 anti-pattern must never activate mandatory remediation');
 assert.equal(buildTacticSelectionPlan({ maturity: { A1: item('A1', 0, { reasoning: 'Create a TAC-GOV-003 register and policy' }) }, antipattern: {} }).optional.length, 0, 'artifact wording alone must not create a cross-category candidate');
 const context = buildTacticSelectionContext(plan);
 assert.match(context, /REQUIRED \[TAC-GOV-002\]/);
@@ -215,6 +216,27 @@ const rejectedContract = classifyFinalRequiredTactics(missingStrategy, plan, [{
 }]);
 assert.deepEqual(rejectedContract.citation_rejected, ['TAC-GOV-002']);
 assert.deepEqual(rejectedContract.missing, []);
+const refutedUseWhenContract = classifyFinalRequiredTactics(missingStrategy, plan, [
+  {
+    action: 'rewritten',
+    claim: 'Check [TAC-GOV-002] against [AP-C1].',
+    rationale: 'TAC-GOV-002 use_when is not met: accepted evidence refutes unmanaged accounts.',
+    source_location: 'roadmap',
+    failure_type: 'other',
+    severity: 'WARN_TACTIC_HYGIENE',
+    tactic_disposition: 'citation_rejected',
+  },
+  {
+    action: 'removed',
+    claim: 'Validate coverage for [TAC-GOV-002] against [AP-C1].',
+    rationale: 'Excluded bounded applicability check; antipattern.C1 states "No partial unmanaged-account signal is present."',
+    source_location: 'roadmap',
+    failure_type: 'other',
+    severity: 'BLOCKING_UNSAFE_ROADMAP',
+  },
+]);
+assert.deepEqual(refutedUseWhenContract.contraindicated, ['TAC-GOV-002'], 'confirmed Playbook use_when refutation across initial + repair sanitation must resolve as contraindicated');
+assert.deepEqual(refutedUseWhenContract.citation_rejected, []);
 const repairAppendix = buildMissingRequiredTacticAppendix(['TAC-GOV-002'], plan, [{
   action: 'rewritten',
   claim: '[TAC-GOV-002] Create a new account-vending control.',
