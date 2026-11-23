@@ -36,6 +36,14 @@ assert.equal(generated.failed, false);
 assert.deepEqual(JSON.parse(globalThis.__gapPrompt.userText), request);
 assert.equal(globalThis.__gapPrompt.systemInstruction, undefined);
 
+globalThis.__gapResponse = {
+  schema_version: 'finops_evidence_gap_query_v1', domain_id: 'D',
+  queries: [{ criterion_id: 'maturity.D1', themes: ['GenAI & AI scaling', 'p95.latency'], terms: ['cost_center', 'token/request %'] }],
+};
+const punctuated = await analyzeEvidenceGaps(request, { runId: 'run-1' });
+assert.equal(punctuated.failed, false, 'standard FinOps/GenAI punctuation (&, ., _, %) must be accepted in gap queries');
+assert.deepEqual(punctuated.termsByCriterion['maturity.D1'], ['GenAI & AI scaling', 'p95.latency', 'cost_center', 'token/request %']);
+
 globalThis.__gapStage = 'not-called';
 const notTriggered = await analyzeEvidenceGaps({ ...request, gaps: [] }, { runId: 'run-1' });
 assert.equal(globalThis.__gapStage, 'not-called');

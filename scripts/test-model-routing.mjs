@@ -80,7 +80,10 @@ assert.deepEqual(config.routes.fact_check.map(value => `${value.provider}:${valu
   'anthropic:claude-sonnet-5',
 ]);
 assert.deepEqual(config.routes.evidence_adjudication[0].reasoningEffort, 'high');
-assert.deepEqual(config.routes.fact_check[0].reasoningEffort, 'medium');
+assert.deepEqual(config.routes.fact_check[0].reasoningEffort, 'low');
+assert.equal(config.routes.fact_check[0].maxTokens, 32768, 'XAI QUALITY_CHECKER uses low reasoning effort with 32768 maxTokens');
+assert.equal(config.routes.evidence_check[0].reasoningEffort, 'low');
+assert.equal(config.routes.evidence_check[0].maxTokens, 32768);
 assert.equal(config.routes.synthesis[0].maxTokens, 24576, 'Anthropic synthesis alone receives the larger completion budget');
 assert.equal(config.routes.synthesis[1].maxTokens, 16384, 'the Grok synthesis fallback retains its role default');
 assert.equal(config.routes.forensic_audit[0].maxTokens, 16384, 'other Anthropic Workhorse stages retain their role default');

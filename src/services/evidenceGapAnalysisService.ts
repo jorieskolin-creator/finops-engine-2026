@@ -14,6 +14,8 @@ interface GapQueryOutput {
   queries: Array<{ criterion_id: string; themes: string[]; terms: string[] }>;
 }
 
+const VALID_GAP_TERM_RX = /^[\p{L}\p{N}().,:&'_%+/ -]+$/u;
+
 export const analyzeEvidenceGaps = async (request: EvidenceGapRequest, ctx: RunContext): Promise<{
   termsByCriterion: Record<string, string[]>;
   model_used?: string;
@@ -26,7 +28,7 @@ export const analyzeEvidenceGaps = async (request: EvidenceGapRequest, ctx: RunC
     if (output.domain_id !== request.domain_id || output.queries.length !== requested.size
       || new Set(output.queries.map(query => query.criterion_id)).size !== requested.size
       || output.queries.some(query => !requested.has(query.criterion_id)
-        || [...query.themes, ...query.terms].some(term => term !== term.trim() || !/^[\p{L}\p{N}() /-]+$/u.test(term)))) {
+        || [...query.themes, ...query.terms].some(term => term !== term.trim() || !VALID_GAP_TERM_RX.test(term)))) {
       throw new Error('INVALID_EVIDENCE_GAP_QUERY');
     }
     return output;
