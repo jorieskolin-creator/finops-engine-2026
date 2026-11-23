@@ -161,6 +161,35 @@ const mergeBatchResult = (base: BatchAuditResult, patch: BatchAuditResult): Batc
   antipattern: { ...(base.antipattern || {}), ...(patch.antipattern || {}) },
 });
 
+const NON_RETRYABLE_STAGE_CODES = new Set([
+  'RESIDUAL_CLASSIFICATION_REJECTED',
+  'SECRET_MATERIAL_REJECTED',
+  'IMAGE_PAYLOAD_DISABLED',
+  'SPLIT_IDENTIFIER_REJECTED',
+  'INVALID_TEXT',
+  'INVALID_PACKET',
+  'INVALID_PACKET_KEYS',
+  'INVALID_IDENTIFIER',
+  'INVALID_PARTS',
+  'INVALID_MODEL_SETTINGS',
+  'DESTINATION_NOT_AUTHORIZED',
+  'DESTINATION_NOT_CONFIGURED',
+  'OUTPUT_CONTRACT_NOT_AUTHORIZED',
+  'UNSUPPORTED_SCHEMA_VERSION',
+  'UNSUPPORTED_POLICY_VERSION',
+  'STAGE_PACKET_REJECTED',
+  'OUTCOME_UNKNOWN',
+  'DEPENDENCY_UNCERTAINTY',
+  'RUN_INACTIVE',
+  'CANCELLED',
+  'EXPIRED',
+]);
+
+const isNonRetryableStageError = (error: unknown): boolean =>
+  error instanceof StageExecutionError
+  && !error.fallbackAllowed
+  && NON_RETRYABLE_STAGE_CODES.has(error.code);
+
 const batchFailureCode = (error: unknown): string => {
   if (error instanceof StageExecutionError) return error.code;
   const message = error instanceof Error ? error.message : '';
@@ -248,6 +277,7 @@ const runTargetedRescan = async (
       return await runSingleBatch(batchId, text, images, ctx, prompt, 'targeted_rescan', { maturity: maturityIds, antipattern: antipatternIds });
     } catch (error) {
       lastError = error;
+      if (isNonRetryableStageError(error)) break;
     }
   }
   throw lastError;
@@ -464,6 +494,7 @@ export const runPhase1Audit = async (
           attempt,
           error_code: errorCode,
         });
+        if (isNonRetryableStageError(error)) break;
       }
     }
     if (lastError) {

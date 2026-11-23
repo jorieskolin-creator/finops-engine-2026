@@ -249,6 +249,57 @@ const normalizeKbText = (text: string, maxChars: number): string => {
     : compacted;
 };
 
+const KB_FINANCIAL_TRIGGER_VALUE_RX = /(\b(?:negotiated(?:[_\s]+discount)?[_\s]+rates?|discount[_\s]+rate|contract[_\s]+value|edp[_\s]+pricing)\b[\s\S]{0,72}?)([$€£]\s?\d[\d,.]*|\d+(?:\.\d+)?\s*%)/gi;
+
+export const sanitizeKbRubricText = (value: string): string => {
+  let sanitized = String(value || '');
+  if (!sanitized) return '';
+
+  sanitized = sanitized
+    .replace(/&quot;|&#34;/gi, '"')
+    .replace(/&apos;|&#39;/gi, "'")
+    .replace(/data:image\//gi, 'data-image/')
+    .replace(/;base64,/gi, ';base64-encoded,')
+    .replace(/(["'])type\1\s*:\s*(["'])(?:image|input_image)\2/gi, '$1type$1: $2visual_example$2')
+    .replace(/(["'])(data|image_url)\1\s*:\s*(["'])[A-Za-z0-9+/]{256,}\3/gi, '$1$2$1: $3[EXAMPLE_PAYLOAD_OMITTED]$3')
+    .replace(/-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z ]*PRIVATE KEY-----/g, '[EXAMPLE_PRIVATE_KEY]')
+    .replace(/-----BEGIN [A-Z ]*PRIVATE KEY-----/g, '[EXAMPLE_PRIVATE_KEY]')
+    .replace(/\b(?:AKIA|ASIA)[A-Z0-9]{16}\b/g, '[EXAMPLE_CLOUD_KEY]')
+    .replace(/\bgh[pousr]_[A-Za-z0-9]{20,}\b/g, '[EXAMPLE_TOKEN]')
+    .replace(/\bsk-[A-Za-z0-9_-]{16,}\b/g, '[EXAMPLE_API_KEY]')
+    .replace(/\b(Bearer)\s+[A-Za-z0-9._~+/-]{8,}/gi, '$1 [EXAMPLE_TOKEN]')
+    .replace(/["']?\b(password|passwd|secret|api[_ -]?key|access[_ -]?token|auth[_ -]?token)\b["']?\s*[:=]\s*["']?\S+/gi, '$1 [EXAMPLE_CREDENTIAL]')
+    .replace(/\b\d{3}-\d{2}-\d{4}\b/g, '[EXAMPLE_ID]')
+    .replace(/["']?\b(passport(?:[_\s]+(?:number|no\.?|id))?)\b["']?\s*[:#=-]\s*["']?[A-Za-z0-9][A-Za-z0-9_-]{5,}["']?/gi, '$1 [EXAMPLE_ID]')
+    .replace(/["']?\b((?:bank|credit[_\s]+card|routing)[_\s]+(?:account[_\s]+)?(?:number|no\.?|id))\b["']?\s*[:#=-]\s*["']?[A-Za-z0-9][A-Za-z0-9_-]*(?:[ \t]+\d[\d_-]*)*["']?/gi, '$1 [EXAMPLE_ID]')
+    .replace(/["']?\b((?:home|residential)[_\s]+address)\b["']?\s*[:#=-]\s*[^\n]{5,160}/gi, '$1 [EXAMPLE_ADDRESS]')
+    .replace(/\b(billing[_\s]+account|invoice)-([a-z]{4,})\b/gi, (_match, prefix: string, suffix: string) => (
+      /\d/.test(suffix) || suffix === suffix.toUpperCase() ? `${prefix} [EXAMPLE_ID]` : `${prefix} ${suffix}`
+    ))
+    .replace(
+      /["']?\b((?:billing[_\s]+account|invoice)(?:[_\s]+(?:number|no\.?|id))?)\b["']?([_\s]+(?:number|no\.?|id))?\s*[:#=-]\s*["']?([A-Za-z0-9][A-Za-z0-9_-]{4,})["']?/gi,
+      (match, label: string, extraIdWord: string | undefined, token: string) => {
+        const hasIdKeyword = /\b(?:number|no\.?|id)\b/i.test(`${label} ${extraIdWord || ''}`) || /^["']/.test(match);
+        const looksLikeCode = /\d|_|-/.test(token) || token === token.toUpperCase();
+        if (hasIdKeyword || looksLikeCode) {
+          return `${label.replace(/_/g, ' ')}${extraIdWord ? extraIdWord.replace(/_/g, ' ') : ''} [EXAMPLE_ID]`;
+        }
+        return `${label} \u2014 ${token}`;
+      }
+    );
+
+  for (let pass = 0; pass < 20; pass++) {
+    KB_FINANCIAL_TRIGGER_VALUE_RX.lastIndex = 0;
+    const next = sanitized.replace(KB_FINANCIAL_TRIGGER_VALUE_RX, (_m, prefix: string, literal: string) => (
+      `${prefix}${String(literal).trim().endsWith('%') ? '[EXAMPLE_RATE]' : '[EXAMPLE_VALUE]'}`
+    ));
+    if (next === sanitized) break;
+    sanitized = next;
+  }
+
+  return sanitized;
+};
+
 const SHADOW_SECTION_LIMIT = 6000;
 const SHADOW_PACKET_LIMIT = 45_000;
 
@@ -488,13 +539,15 @@ const formatKbDoc = (
     }
     renderedBody = orderedStageKeys
       .filter(key => selectedKeys.has(key))
-      .map(key => `[KB_SECTION name="${key}"]\n${normalizeKbText(sections[key]!.trim(), maxChars)}\n[/KB_SECTION]`)
+      .map(key => `[KB_SECTION name="${key}"]\n${normalizeKbText(sanitizeKbRubricText(sections[key]!.trim()), maxChars)}\n[/KB_SECTION]`)
       .join('\n\n');
   } else {
-    const cleanedExcerpt = String(doc.body_excerpt || '')
-      .replace(/\[\/?KB_PDF_PAGE[^\]]*\]/g, ' ')
-      .replace(/[ \t]{2,}/g, ' ')
-      .trim();
+    const cleanedExcerpt = sanitizeKbRubricText(
+      String(doc.body_excerpt || '')
+        .replace(/\[\/?KB_PDF_PAGE[^\]]*\]/g, ' ')
+        .replace(/[ \t]{2,}/g, ' ')
+        .trim()
+    );
     renderedBody = normalizeKbText(cleanedExcerpt, maxChars);
   }
 
