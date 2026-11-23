@@ -74,9 +74,15 @@ const runSingleBatch = async (
   const definitions = BATCH_DEFINITIONS[batchId];
   const systemInstruction = generateBatchSystemInstruction(batchId, definitions.title);
   const userPrompt = userPromptOverride || generateBatchUserPrompt(batchId, definitions);
+  const targetedCriterionIds = expectedIds
+    ? [
+        ...expectedIds.maturity,
+        ...expectedIds.antipattern.map(id => (id.startsWith('AP-') ? id : `AP-${id}`)),
+      ]
+    : undefined;
   const referenceKbContext = await knowledgeBaseService.fetchReferenceKnowledgeBaseContext({
     batchId,
-    maxDocChars: userPromptOverride ? 1000 : 1400,
+    ...(targetedCriterionIds ? { criterionIds: targetedCriterionIds } : {}),
     label: userPromptOverride ? 'targeted_rescan' : 'forensic_audit',
   });
 

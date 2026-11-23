@@ -1757,10 +1757,13 @@ export interface KnowledgeTaxonomyRegistry {
   evidence_categories: EvidenceCategory[];
   kb_document_naming: {
     pattern: string;
+    expected_document_count?: number;
     examples: string[];
     required_front_matter: {
+      required_fields?: string[];
       forbidden_uses: string[];
     };
+    required_sections_by_stage?: Record<string, string[]>;
   };
   usage_boundaries: {
     reference_kb_allowed_uses: string[];

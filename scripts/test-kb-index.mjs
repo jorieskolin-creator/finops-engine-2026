@@ -1,4 +1,8 @@
 import assert from 'node:assert/strict';
+import { mkdtemp, readFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { emitTypescript } from './ts-emit.mjs';
 import {
   buildKbStatus,
   extractKbSections,
@@ -266,6 +270,95 @@ try {
   assert.equal(boundedListing.limitReached, true);
 } finally {
   globalThis.fetch = originalFetch;
+}
+
+{
+  const kbOutDir = await mkdtemp(join(tmpdir(), 'finops-kb-runtime-'));
+  const kbModulePath = await emitTypescript(new URL('../src/knowledge_base/index.ts', import.meta.url).pathname, kbOutDir);
+  const { formatRemoteKbContext } = await import(`file://${kbModulePath}`);
+
+  const richApD1Doc = {
+    ...apD1Doc,
+    sections: {
+      ...apD1Doc.sections,
+      risk_notes: 'Aggressive lift-and-shift refactoring without dependency mapping risks outages.',
+      remediation_tactic_notes: 'Sequence TAC-ARCH-001 pilots on stable high-cost workloads with rollback gates.',
+    },
+  };
+  const unsectionedDoc = {
+    ...doc,
+    sections: {},
+    body_excerpt: '[KB_PDF_PAGE page="1"] Unsectioned fallback rubric text for A1. [/KB_PDF_PAGE]',
+  };
+  const runtimeIndex = {
+    status: { source: 'remote_blob', document_count: 60, failure_count: 0 },
+    documents: [
+      ...completeDocuments.map(d => (
+        d.criterion_id === 'AP-D1' ? richApD1Doc : { ...d, sections: richApD1Doc.sections }
+      )).filter(d => d.criterion_id !== 'A1'),
+      unsectionedDoc,
+    ],
+    failures: [],
+  };
+
+  // Domain forensic_audit must deliver late-PDF rubric sections despite >8,000-char Purpose intro
+  const domainDAudit = formatRemoteKbContext(runtimeIndex, { batchId: 'D', label: 'forensic_audit' });
+  assert.match(domainDAudit, /stage="forensic_audit"/);
+  assert.match(domainDAudit, /\[KB_SECTION name="false_positive_guards"\][\s\S]*recent migration/);
+  assert.match(domainDAudit, /\[KB_SECTION name="validation_questions"\][\s\S]*rightsized operationally/);
+  assert.match(domainDAudit, /\[KB_SECTION name="prohibited_inference_rules"\][\s\S]*must not be treated as proof/);
+  assert.match(domainDAudit, /\[KB_SECTION name="scoring_guidance"\][\s\S]*persistent inherited inefficiency/);
+  assert.doesNotMatch(domainDAudit, /\[truncated\]/, 'complete domain sections must not be head-truncated');
+
+  // Targeted criterion filter must retrieve only the requested criterion IDs
+  const targetedContext = formatRemoteKbContext(runtimeIndex, {
+    batchId: 'D',
+    criterionIds: ['AP-D1'],
+    label: 'targeted_rescan',
+  });
+  assert.match(targetedContext, /1 criterion rubric\(s\)/);
+  assert.match(targetedContext, /\[ANTIPATTERN AP-D1\]/);
+  assert.doesNotMatch(targetedContext, /\[MATURITY D1\]/);
+
+  // evidence_synthesis label must map to 'synthesis' (not 'evidence_check') and exclude silent domains
+  const synthesisContext = formatRemoteKbContext(runtimeIndex, {
+    criterionIds: ['AP-D1', 'E1'],
+    excludeDomainIds: ['E'],
+    label: 'evidence_synthesis',
+  });
+  assert.match(synthesisContext, /stage="synthesis"/);
+  assert.match(synthesisContext, /\[ANTIPATTERN AP-D1\]/);
+  assert.doesNotMatch(synthesisContext, /\[MATURITY E1\]/, 'silent domains must be excluded');
+
+  // roadmap_synthesis / phase3_strategy must deliver bottom-of-PDF risk_notes and remediation_tactic_notes
+  const roadmapContext = formatRemoteKbContext(runtimeIndex, {
+    criterionIds: ['AP-D1'],
+    excludeDomainIds: ['E'],
+    label: 'phase3_strategy',
+  });
+  assert.match(roadmapContext, /stage="roadmap_synthesis"/);
+  assert.match(roadmapContext, /\[KB_SECTION name="risk_notes"\][\s\S]*dependency mapping risks outages/);
+  assert.match(roadmapContext, /\[KB_SECTION name="remediation_tactic_notes"\][\s\S]*Sequence TAC-ARCH-001 pilots/);
+
+  // Unsectioned documents must fall back cleanly with PDF page markers stripped
+  const fallbackDocContext = formatRemoteKbContext(runtimeIndex, {
+    batchId: 'A',
+    criterionIds: ['A1'],
+    label: 'forensic_audit',
+  });
+  assert.match(fallbackDocContext, /Unsectioned fallback rubric text for A1\./);
+  assert.doesNotMatch(fallbackDocContext, /KB_PDF_PAGE/);
+  // Taxonomy registry naming examples must match expectedIdsFromPathname in lib/kbIndex.js
+  const taxonomyRegistry = JSON.parse(
+    await readFile(new URL('../src/knowledge_base/finops_taxonomy_registry.json', import.meta.url), 'utf8')
+  );
+  assert.equal(taxonomyRegistry.kb_document_naming.expected_document_count, 60);
+  for (const examplePath of taxonomyRegistry.kb_document_naming.examples) {
+    assert.ok(
+      expectedIdsFromPathname(examplePath),
+      `taxonomy kb_document_naming example must match canonical parser: ${examplePath}`,
+    );
+  }
 }
 
 console.log('KB index tests passed');

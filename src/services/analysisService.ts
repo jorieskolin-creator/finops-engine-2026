@@ -651,9 +651,15 @@ export const analyzeDocument = async (
 
     emitProgress({ stage: 'synthesis', status: 'in_progress' });
     const tacticsContext = await tacticsPromise;
+    const activatedTacticSelectionPlan = buildTacticSelectionPlan(auditLogs, silentDomainIds);
+    const tacticSelectionPlan = confidenceBracket === 'LOW'
+      ? { ...activatedTacticSelectionPlan, required: [], optional: [] }
+      : activatedTacticSelectionPlan;
+    const tacticSelectionContext = buildTacticSelectionContext(tacticSelectionPlan);
     const referenceKbContext = await knowledgeBaseService.fetchReferenceKnowledgeBaseContext({
-      maxDocChars: 650,
-      label: 'phase3_strategy',
+      criterionIds: activatedTacticSelectionPlan.active_criteria,
+      excludeDomainIds: silentDomainIds,
+      label: 'roadmap_synthesis',
     });
 
     const definitionsContext = JSON.stringify(BATCH_DEFINITIONS, null, 2);
@@ -690,12 +696,6 @@ Criterion evidence density by domain: ${Object.entries(validationData.assessment
 For silent domains, do not make broad maturity conclusions or prescribe remediation tactics. Provide only bounded evidence-collection actions. Continue normal diagnosis and remediation for non-silent domains.
 
 `;
-
-    const activatedTacticSelectionPlan = buildTacticSelectionPlan(auditLogs, silentDomainIds);
-    const tacticSelectionPlan = confidenceBracket === 'LOW'
-      ? { ...activatedTacticSelectionPlan, required: [], optional: [] }
-      : activatedTacticSelectionPlan;
-    const tacticSelectionContext = buildTacticSelectionContext(tacticSelectionPlan);
 
     const compactLockedFindings = (strategy: any): string => JSON.stringify({
       executive_summaries: strategy?.executive_summaries || {},

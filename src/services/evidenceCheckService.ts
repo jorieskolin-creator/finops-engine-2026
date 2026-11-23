@@ -425,7 +425,6 @@ export const runEvidenceCheck = async (
     try {
     const referenceKbContext = await knowledgeBaseService.fetchReferenceKnowledgeBaseContext({
       batchId,
-      maxDocChars: 1100,
       label: 'evidence_check',
     });
     const resp = await runStage('evidence_check', {
