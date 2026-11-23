@@ -177,6 +177,7 @@ rows.find(r => r.stream === 'antipattern' && r.criterion_id === 'D3').antipatter
 audit.maturity.E1.reasoning = 'Rejected scanner claim';
 const phase2 = {
   metrics: { maturity_zero_count: 1, maturity_assessed_count: 2, maturity_zero_ratio: 50 },
+  category_scores: { A: 5, B: 0, C: 0, D: 1, E: 0, F: 0 },
   assessment_sufficiency: { decision: 'BLOCK', silent_domain_ids: ['E'], criterion_evidence_density: 5 },
   resolution_maturity: { criterion_resolutions: rows, pair_results: Array(30), overall: { fully_resolved_pair_count: 1, partially_resolved_pair_count: 1 } },
   scoped_observations: ['[B1] Scoped observation (0/3; full criterion scope not established)'],
@@ -186,6 +187,7 @@ const { text: facts, basisByCriterion } = buildAcceptedFacts(audit, phase2);
 assert.ok(basisByCriterion.get('maturity.B1').details.includes(audit.maturity.B1.adjustment_reason));
 assert.equal(facts.match(/^(?:maturity|antipattern)\.[A-F][1-5] \|/gm).length, 60);
 assert.match(facts, /1 of 2 assessed maturity criteria scored 0\/3/);
+assert.match(facts, /D \(Architecture & Engineering\): 1\/15/, 'accepted facts must include canonical domain display names');
 assert.match(facts, /maturity\.B1 \| assessed 0\/3.*scoped observation.*utilization review threshold.*portfolio coverage target is unverified.*src-001\/c1/);
 assert.match(facts, /maturity\.D3 \| assessed 1\/3.*sampled worker uses queue-depth horizontal scaling/);
 assert.match(facts, /antipattern\.D3 \| assessed 0\/3 \| tested_absent.*sampled worker configuration/);
