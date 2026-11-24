@@ -72,71 +72,61 @@ const FindingsPanel: React.FC<{ findings: FindingsModeOutput }> = ({ findings })
   );
 };
 
-const RemediationStepBlock: React.FC<{ step: RemediationStep; narrative: (value: string) => React.ReactNode }> = ({ step, narrative }) => {
-  const confLabel: Record<NonNullable<RemediationStep['confidence']>, { text: string; chip: string }> = {
-    high:   { text: 'High confidence',   chip: 'bg-emerald-100 text-emerald-800' },
-    medium: { text: 'Medium confidence', chip: 'bg-amber-100 text-amber-800' },
-    low:    { text: 'Low confidence',    chip: 'bg-rose-100 text-rose-800' },
-  };
+const RemediationStepBlock: React.FC<{ step: RemediationStep; index: number; narrative: (value: string) => React.ReactNode }> = ({ step, index, narrative }) => {
   return (
-    <div className="p-6 bg-slate-50 rounded-xl border border-slate-200">
-      <div className="flex items-center justify-between flex-wrap gap-2 mb-4">
-        <h3 className="font-bold text-lg text-slate-900">{step.phase}</h3>
-        {step.confidence && (
-          <span className={`text-xs font-bold uppercase tracking-wider px-2 py-1 rounded ${confLabel[step.confidence].chip}`}>
-            {confLabel[step.confidence].text}
-          </span>
-        )}
-      </div>
+    <article className="p-6 bg-white rounded-2xl border border-slate-200 border-l-4 border-l-emerald-500 shadow-sm">
+      <div className="text-[11px] font-extrabold uppercase tracking-[0.1em] text-slate-500 mb-1">Phase {index + 1}</div>
+      <h3 className="font-bold text-xl text-slate-900 mb-4">{step.phase}</h3>
       {(step.why || step.what) && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 my-4">
           {step.why && (
-            <div className="bg-white border border-slate-200 rounded-lg p-4">
-              <p className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-1.5">Why</p>
+            <div className="bg-slate-50 border border-slate-200 rounded-xl p-4">
+              <p className="text-[11px] font-extrabold uppercase tracking-[0.1em] text-slate-500 mb-1.5">Why</p>
               <p className="text-sm text-slate-700 leading-relaxed">{narrative(step.why)}</p>
             </div>
           )}
           {step.what && (
-            <div className="bg-white border border-slate-200 rounded-lg p-4">
-              <p className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-1.5">What</p>
+            <div className="bg-slate-50 border border-slate-200 rounded-xl p-4">
+              <p className="text-[11px] font-extrabold uppercase tracking-[0.1em] text-slate-500 mb-1.5">What</p>
               <p className="text-sm text-slate-700 leading-relaxed">{narrative(step.what)}</p>
             </div>
           )}
         </div>
       )}
       {step.deliverables && step.deliverables.length > 0 && (
-        <div className="mb-4 bg-white border border-slate-200 rounded-lg p-4">
-          <p className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">Deliverables</p>
-          <ul className="space-y-2">
+        <div className="mt-4">
+          <p className="text-[11px] font-extrabold uppercase tracking-[0.1em] text-slate-500 mb-2">Deliverables</p>
+          <ul className="list-disc pl-5 space-y-1.5 text-sm text-slate-700">
             {step.deliverables.map((item, i) => (
-              <li key={i} className="flex items-start gap-2.5 text-sm text-slate-700">
-                <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-cyan-600 shrink-0"></span>
-                <span>{narrative(item)}</span>
-              </li>
+              <li key={i} className="leading-relaxed">{narrative(item)}</li>
             ))}
           </ul>
         </div>
       )}
-      <p className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">How</p>
-      <ul className="space-y-3 mb-4">
-        {step.actions.map((action, i) => (
-          <li key={i} className="flex items-start gap-3 text-sm text-slate-700">
-            <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0"></span>
-            <span>{narrative(action)}</span>
-          </li>
-        ))}
-      </ul>
+      <div className="mt-4">
+        <p className="text-[11px] font-extrabold uppercase tracking-[0.1em] text-slate-500 mb-2">How</p>
+        <ul className="list-disc pl-5 space-y-2.5 text-sm text-slate-700">
+          {step.actions.map((action, i) => (
+            <li key={i} className="leading-relaxed">{narrative(action)}</li>
+          ))}
+        </ul>
+      </div>
+      {step.confidence && (
+        <p className="mt-4 text-sm text-slate-600">
+          Phase confidence · <strong className="text-slate-800">{step.confidence}</strong>
+        </p>
+      )}
       {step.assumptions && step.assumptions.length > 0 && (
-        <div className="pt-3 border-t border-slate-200">
-          <p className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-1.5">Assumptions</p>
-          <ul className="space-y-1 text-xs text-slate-600">
+        <div className="mt-4 pt-3 border-t border-slate-200">
+          <p className="text-[11px] font-extrabold uppercase tracking-[0.1em] text-slate-500 mb-1.5">Assumptions</p>
+          <ul className="list-disc pl-5 space-y-1 text-sm text-slate-600">
             {step.assumptions.map((a, i) => (
-              <li key={i} className="pl-3 border-l-2 border-slate-300">{narrative(a)}</li>
+              <li key={i}>{narrative(a)}</li>
             ))}
           </ul>
         </div>
       )}
-    </div>
+    </article>
   );
 };
 
@@ -697,15 +687,6 @@ export const ReportView: React.FC<ReportViewProps> = ({ result, onBack, onDownlo
               />
             ))}
           </div>
-          {(result.phase_2_validation.score_evidence_gaps?.length ?? 0) > 0 && (
-            <div className="mt-4 p-4 bg-amber-50 border border-amber-200 rounded-lg text-sm text-slate-700">
-              <strong className="text-slate-900">Evidence needed to interpret maturity</strong>
-              <p className="mt-1">These items contribute zero because they were not demonstrated by the supplied material. They are questions for follow-up, not proof that capabilities are absent.</p>
-              <ul className="list-disc pl-5 mt-2 space-y-1">
-                {result.phase_2_validation.score_evidence_gaps.slice(0, 12).map(gap => <li key={gap}>{gap}</li>)}
-              </ul>
-            </div>
-          )}
         </div>
 
         <div className="mb-12">
@@ -784,40 +765,53 @@ export const ReportView: React.FC<ReportViewProps> = ({ result, onBack, onDownlo
           const executiveSummary = diagnosis.executive_summary?.trim();
           const primaryBottleneck = diagnosis.primary_bottleneck?.trim();
           return (
-            <div className="mb-12 p-6 rounded-xl bg-slate-50 border border-slate-200">
-              <h2 className="text-2xl font-display font-bold text-slate-900 mb-2">Diagnosis</h2>
-              <p className="text-sm text-slate-600 mb-5">Interpretation of the evidence. This section explains causes and bottlenecks, but does not prescribe the implementation plan.</p>
-              {executiveSummary && (
-                <div className="mb-5 p-4 rounded-lg bg-white border border-slate-200">
-                  <p className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-1.5">Executive summary</p>
-                  <p className="text-sm text-slate-800 leading-relaxed">{narrative(executiveSummary)}</p>
+            <section className="mb-12">
+              <h2 className="text-2xl font-display font-bold text-slate-900 mb-4">Diagnosis</h2>
+              <div className="p-6 rounded-2xl bg-white border border-slate-200 shadow-sm">
+                {executiveSummary && (
+                  <div className="mb-5 pl-4 border-l-[3px] border-emerald-500">
+                    <span className="block text-[11px] font-extrabold uppercase tracking-[0.1em] text-slate-500">Executive summary</span>
+                    <p className="mt-1 text-sm text-slate-700 leading-relaxed">{narrative(executiveSummary)}</p>
+                  </div>
+                )}
+                {primaryBottleneck && (
+                  <div className="mb-5 pl-4 border-l-[3px] border-emerald-500">
+                    <span className="block text-[11px] font-extrabold uppercase tracking-[0.1em] text-slate-500">Primary bottleneck</span>
+                    <p className="mt-1 text-sm text-slate-700 leading-relaxed">{narrative(primaryBottleneck)}</p>
+                  </div>
+                )}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div>
+                    <h3 className="text-base font-bold text-slate-900 mb-2">Root causes</h3>
+                    <ul className="list-disc pl-5 space-y-1.5 text-sm text-slate-700">
+                      {(diagnosis.root_causes || []).map((item, i) => <li key={i} className="leading-relaxed">{narrative(item)}</li>)}
+                    </ul>
+                  </div>
+                  <div>
+                    <h3 className="text-base font-bold text-slate-900 mb-2">Domain diagnosis</h3>
+                    <ul className="list-disc pl-5 space-y-2 text-sm text-slate-700">
+                      {computeDomainSignalRows(result).map(row => (
+                        <li key={row.domain} className="leading-relaxed">
+                          <strong className="text-slate-900">{row.domain} · {row.title}:</strong>{' '}
+                          Evidence coverage {row.evidencePercent}%; observed maturity {row.maturityAvailable ? `${row.maturityPercent}%` : 'unresolved'}; anti-pattern finding rate {row.antiPatternAvailable ? `${row.antiPatternPercent}%` : 'unresolved'}.
+                          {row.isSilent ? ' Silent domain: evidence collection only; no maturity conclusion or remediation prescription.' : ''}
+                          {diagnosis.domain_diagnosis?.[row.domain]?.trim() && (
+                            <p className="my-1 text-slate-700">{narrative(diagnosis.domain_diagnosis[row.domain])}</p>
+                          )}
+                          {row.antiPatternNotAssessed > 0 && (
+                            <span>{row.antiPatternNotAssessed} anti-pattern criterion{row.antiPatternNotAssessed === 1 ? ' was' : ' were'} not assessed.</span>
+                          )}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
                 </div>
-              )}
-              {primaryBottleneck && (
-                <div className="mb-5">
-                  <p className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-1">Primary bottleneck</p>
-                  <p className="text-slate-800">{narrative(primaryBottleneck)}</p>
-                </div>
-              )}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div>
-                  <p className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-2">Root causes</p>
-                  <ul className="space-y-1.5">
-                    {(diagnosis.root_causes || []).map((item, i) => <li key={i} className="text-sm text-slate-700">• {narrative(item)}</li>)}
-                  </ul>
-                </div>
-                <div>
-                  <p className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-2">Domain diagnosis</p>
-                  <ul className="space-y-1.5">
-                    {computeDomainSignalRows(result).map(row => <li key={row.domain} className="text-sm text-slate-700"><span className="font-bold">{row.domain} · {row.title}:</span> Evidence {row.evidencePercent}%; maturity {row.maturityAvailable ? `${row.maturityPercent}%` : 'unresolved'}; anti-pattern finding rate {row.antiPatternAvailable ? `${row.antiPatternPercent}%` : 'unresolved'}{row.isSilent ? '; silent—evidence collection only' : ''}.{diagnosis.domain_diagnosis?.[row.domain]?.trim() && <p>{narrative(diagnosis.domain_diagnosis[row.domain])}</p>}</li>)}
-                  </ul>
+                <div className="mt-5 pt-4 border-t border-slate-200 text-sm text-slate-600">
+                  <strong className="text-slate-800">Diagnostic confidence: {diagnosis.confidence || 'unknown'}</strong>
+                  {diagnosis.confidence_rationale ? <> · {narrative(diagnosis.confidence_rationale)}</> : null}
                 </div>
               </div>
-              <div className="mt-5 p-4 rounded-lg bg-white border border-slate-200">
-                <p className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-1">Diagnostic confidence: {diagnosis.confidence}</p>
-                <p className="text-sm text-slate-700">{narrative(diagnosis.confidence_rationale || '')}</p>
-              </div>
-            </div>
+            </section>
           );
         })()}
 
@@ -856,36 +850,38 @@ export const ReportView: React.FC<ReportViewProps> = ({ result, onBack, onDownlo
         {(() => {
           const decision = result.phase_3_strategy.planning_decision;
           if (!decision) return null;
-          const palette = decision.decision === 'GO'
-            ? 'bg-emerald-50 border-emerald-200 text-emerald-900'
-            : decision.decision === 'CONDITIONAL_GO'
-              ? 'bg-amber-50 border-amber-200 text-amber-900'
-              : 'bg-rose-50 border-rose-200 text-rose-900';
+          const borderAccent = decision.decision === 'NO_GO' ? 'border-l-rose-500' : 'border-l-emerald-500';
           return (
-            <div className={`mb-12 p-6 rounded-xl border ${palette}`}>
-              <h2 className="text-2xl font-display font-bold mb-2">Planning Decision: {decision.decision?.replace('_', ' ')}</h2>
-              <p className="text-sm mb-5 opacity-90">{narrative(displayPlanningDecisionRationale(
-                decision.rationale || '',
-                result.quality_gate.decision,
-                result.quality_gate.evidence_check?.failed
-              ))}</p>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <section className="mb-12">
+              <h2 className="text-2xl font-display font-bold text-slate-900 mb-4">Planning Decision</h2>
+              <div className={`p-6 rounded-2xl bg-white border border-slate-200 border-l-4 ${borderAccent} shadow-sm`}>
                 <div>
-                  <p className="text-xs font-bold uppercase tracking-widest mb-2 opacity-80">Safe to act on</p>
-                  <ul className="space-y-1.5 text-sm">
-                    {(decision.safe_to_act_on || []).length > 0
-                      ? decision.safe_to_act_on.map((item, i) => <li key={i}>• {narrative(item)}</li>)
-                      : null}
-                  </ul>
+                  <span className="block text-[11px] font-extrabold uppercase tracking-[0.1em] text-slate-500">Decision</span>
+                  <strong className="block text-3xl font-bold tracking-tight text-slate-900">{decision.decision?.replace('_', ' ')}</strong>
                 </div>
-                <div>
-                  <p className="text-xs font-bold uppercase tracking-widest mb-2 opacity-80">Evidence needed before action</p>
-                  <ul className="space-y-1.5 text-sm">
-                    {(decision.evidence_needed_before_action || []).map((item, i) => <li key={i}>• {narrative(item)}</li>)}
-                  </ul>
+                <p className="text-sm text-slate-700 leading-relaxed mt-3 mb-5">{narrative(displayPlanningDecisionRationale(
+                  decision.rationale || '',
+                  result.quality_gate.decision,
+                  result.quality_gate.evidence_check?.failed
+                ))}</p>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div>
+                    <h3 className="text-base font-bold text-slate-900 mb-2">Safe to act on</h3>
+                    <ul className="list-disc pl-5 space-y-1.5 text-sm text-slate-700">
+                      {(decision.safe_to_act_on || []).length > 0
+                        ? decision.safe_to_act_on.map((item, i) => <li key={i} className="leading-relaxed">{narrative(item)}</li>)
+                        : null}
+                    </ul>
+                  </div>
+                  <div>
+                    <h3 className="text-base font-bold text-slate-900 mb-2">Evidence needed before action</h3>
+                    <ul className="list-disc pl-5 space-y-1.5 text-sm text-slate-700">
+                      {(decision.evidence_needed_before_action || []).map((item, i) => <li key={i} className="leading-relaxed">{narrative(item)}</li>)}
+                    </ul>
+                  </div>
                 </div>
               </div>
-            </div>
+            </section>
           );
         })()}
 
@@ -897,27 +893,29 @@ export const ReportView: React.FC<ReportViewProps> = ({ result, onBack, onDownlo
           }
           if (effective === 'LOW' || result.quality_gate.decision === 'BLOCK') {
             return (
-              <div className="mb-12 p-6 bg-rose-50/50 rounded-xl border border-rose-200">
-                <h2 className="text-2xl font-display font-bold text-slate-900 mb-2">Remediation Roadmap Withheld</h2>
-                <p className="text-sm text-slate-600">
-                  Directive roadmap actions were withheld because the effective confidence bracket is LOW or the Quality Gate blocked the generated plan.
-                  Use the evidence summary, planning decision, and validation plan before acting.
-                </p>
-              </div>
+              <section className="mb-12">
+                <h2 className="text-2xl font-display font-bold text-slate-900 mb-4">Remediation Roadmap</h2>
+                <div className="p-6 bg-white rounded-2xl border border-slate-200 border-l-4 border-l-rose-500 shadow-sm">
+                  <strong className="block text-slate-900 mb-1">Directive roadmap withheld</strong>
+                  <p className="text-sm text-slate-600">
+                    Use the evidence summary, diagnosis, planning decision, and validation plan before acting. The engine withheld implementation actions because the effective confidence level or Quality Gate does not support a directive roadmap.
+                  </p>
+                </div>
+              </section>
             );
           }
           // HIGH/MEDIUM: render the roadmap, with per-phase confidence + assumptions
           // surfaced when the synthesis populated them.
           if (result.phase_3_strategy.remediation_roadmap.length > 0) {
             return (
-              <div className="mb-12">
-                <h2 className="text-2xl font-display font-bold text-slate-900 mb-6 pb-3 border-b border-slate-200">Remediation Roadmap</h2>
-                <div className="space-y-6">
+              <section className="mb-12">
+                <h2 className="text-2xl font-display font-bold text-slate-900 mb-4">Remediation Roadmap</h2>
+                <div className="space-y-5">
                   {result.phase_3_strategy.remediation_roadmap.map((step, index) => (
-                    <RemediationStepBlock key={index} step={step} narrative={narrative} />
+                    <RemediationStepBlock key={index} step={step} index={index} narrative={narrative} />
                   ))}
                 </div>
-              </div>
+              </section>
             );
           }
           return null;
@@ -940,6 +938,20 @@ export const ReportView: React.FC<ReportViewProps> = ({ result, onBack, onDownlo
         />
 
         <QualityGateAppendix gate={result.quality_gate} />
+
+        {(result.phase_2_validation.score_evidence_gaps?.length ?? 0) > 0 && (
+          <section className="mb-12">
+            <h2 className="text-2xl font-display font-bold text-slate-900 mb-4">Evidence needed to interpret maturity</h2>
+            <div className="p-6 rounded-2xl bg-white border border-slate-200 shadow-sm text-sm text-slate-700">
+              <p className="mb-3 text-slate-600">
+                These criteria contribute zero because they were not demonstrated by the supplied material. They are follow-up questions, not proof that capabilities are absent or anti-patterns are present.
+              </p>
+              <ul className="list-disc pl-5 space-y-1.5">
+                {result.phase_2_validation.score_evidence_gaps.map(gap => <li key={gap}>{gap}</li>)}
+              </ul>
+            </div>
+          </section>
+        )}
 
         <div className="text-center py-8 border-t border-slate-200 text-sm text-slate-400">
           <p>FinOps Engine v.{result.meta.engine_version}</p>

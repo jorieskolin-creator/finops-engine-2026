@@ -122,6 +122,14 @@ assert.equal((exportSource.match(/grid-template-columns: repeat\(3, minmax\(0, 1
 assert.doesNotMatch(exportSource, /Anti-pattern disposition|renderAntiPatternDisposition/, 'HTML reports should omit the redundant anti-pattern disposition card');
 assert.doesNotMatch(summaryExportSource, /renderScoreEvidenceGaps/, 'Summary Report should leave detailed evidence questions to Master Data');
 assert.match(exportSource, /renderScoreEvidenceGaps\(result\)/, 'Master Data should show all deterministic evidence questions');
+for (const sharedSelector of ['.summary-card', '.diagnosis-lead', '.decision-card', '.summary-roadmap-phase', '.roadmap-list', '.two-col', '.evidence-basis']) {
+  assert.ok(masterDataExportSource.includes(sharedSelector), `Master Data stylesheet must include ${sharedSelector} so Diagnosis, Planning Decision, and Remediation Roadmap match Summary Report readability`);
+}
+assert.doesNotMatch(masterDataExportSource, /\.roadmap-phase\s+li\s*\{\s*display:\s*flex/, 'Master Data must not apply display:flex to roadmap <li> items, which squishes Evidence basis next to action text');
+assert.ok(
+  masterDataExportSource.indexOf('renderRunTraceAppendix(result)') < masterDataExportSource.indexOf('renderScoreEvidenceGaps(result)'),
+  'Master Data must render Evidence needed to interpret maturity as the final section after RunTrace Provenance',
+);
 assert.match(exportSource, /Evidence sufficiency/, 'context packet tables should distinguish evidence sufficiency from candidate inclusion');
 assert.doesNotMatch(exportSource, /source\.source_name/, 'HTML exports must not render source filenames');
 assert.match(exportSource, /stripSourceFilenameMetadata\(unsafeResult\)/, 'both HTML generators must remove legacy filename metadata at the export boundary');
@@ -230,7 +238,7 @@ const { renderToStaticMarkup } = require('react-dom/server');
 const logs = { maturity: { A3: { count: 1, status: 'Partial', assessment_status: 'assessed', evidence_check_status: 'supported', evidence: 'Sample alert', evidence_quotes: [{ quote: 'Sample alert', source_id: 'src-001', chunk_id: 'c3' }] } }, antipattern: {} };
 const saved = {
   meta: { engine_version: 'test', timestamp: 'fixture', model_config: {} },
-  phase_1_audit_logs: logs, phase_2_validation: calculateMetrics(logs),
+  phase_1_audit_logs: logs, phase_2_validation: { ...calculateMetrics(logs), score_evidence_gaps: ['[A1] Not demonstrated by the supplied material.'] },
   phase_3_strategy: { confidence_bracket: 'MEDIUM', diagnosis: { executive_summary: 'Cross-lens executive overview of assessed FinOps controls and evidence boundaries.', primary_bottleneck: 'Limited assessment resolution outside cost visibility.', domain_diagnosis: { A: 'The sampled alert reached an owner. Review cost anomaly detection and alerting [A3].', E: '' }, root_causes: [], confidence: 'medium' },
     planning_decision: { decision: 'CONDITIONAL_GO', rationale: 'Review [A3].', safe_to_act_on: [], evidence_needed_before_action: ['Check AP-E2.'] },
     remediation_roadmap: [{ phase: 'Review', why: 'Validate the sample.', what: 'A reviewed alert.', deliverables: ['Severity-based anomaly escalation matrix with named recipients.'], actions: ['Ask the service owner to improve [A3].'], confidence: 'medium', assumptions: ['Owner confirms <scope>.'] }] },
@@ -240,9 +248,16 @@ const renderAll = result => {
   const restored = JSON.parse(JSON.stringify(result));
   return [renderToStaticMarkup(createElement(ReportView, { result: restored })), generateSummaryReportHtml(restored), generateReportHtml(restored)];
 };
-for (const html of renderAll(saved)) {
+const renderedSurfaces = renderAll(saved);
+for (const html of renderedSurfaces) {
   for (const phrase of ['Cross-lens executive overview of assessed FinOps controls and evidence boundaries.', 'Executive summary', 'Deliverables', 'Severity-based anomaly escalation matrix with named recipients.', 'The sampled alert reached an owner.', 'Assessment criterion A3 · assessed 1/3', 'Customer evidence src-001/c3',
     'whether cost overruns trigger blame', 'AP-E2 · not assessed', 'Owner confirms &lt;scope&gt;.', 'Ask the service owner to improve cost anomaly detection and alerting.']) assert.ok(html.includes(phrase), phrase);
+}
+for (const [label, html] of [['ReportView', renderedSurfaces[0]], ['Master Data HTML', renderedSurfaces[2]]]) {
+  const roadmapIdx = html.indexOf('Remediation Roadmap');
+  const forensicIdx = html.indexOf('Forensic Audit: Anti-Patterns');
+  const evidenceNeededIdx = html.indexOf('Evidence needed to interpret maturity');
+  assert.ok(roadmapIdx > 0 && forensicIdx > roadmapIdx && evidenceNeededIdx > forensicIdx, `${label} must place Evidence needed to interpret maturity as the last section after Roadmap and Forensic Audit`);
 }
 for (const [decision, bracket] of [['BLOCK', 'MEDIUM'], ['WARN', 'LOW']]) {
   const control = structuredClone(saved);
