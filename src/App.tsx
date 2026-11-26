@@ -1034,7 +1034,7 @@ const App: React.FC = () => {
             )}
           </div>
           {authenticated && (
-            <div className="mt-6"><GoldenStandardStatus check={openingRetrievalCheck} /></div>
+            <div className="mt-6"><GoldenStandardStatus check={openingRetrievalCheck} deepMode={deepMode} /></div>
           )}
           <div className="mt-8 grid grid-cols-1 sm:grid-cols-2 gap-3">
             <button
@@ -1194,7 +1194,7 @@ const App: React.FC = () => {
 
       {authenticated && (
         <div className="mx-auto mt-4 w-[calc(100%-2rem)] max-w-7xl">
-          <GoldenStandardStatus check={openingRetrievalCheck} />
+          <GoldenStandardStatus check={openingRetrievalCheck} deepMode={deepMode} />
         </div>
       )}
 

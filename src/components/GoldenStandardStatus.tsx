@@ -1,3 +1,4 @@
+import { ClearBlockGoldenStandard } from './ClearBlockGoldenStandard';
 import type { OpeningRetrievalCheck } from '../monitoring/useOpeningRetrievalCheck';
 import type { RetrievalVerificationResult } from '../monitoring/retrievalVerification';
 
@@ -18,7 +19,7 @@ const statusColors = {
   Incomplete: 'bg-amber-400/10 text-amber-200',
 };
 
-export function GoldenStandardStatus({ check }: { check: OpeningRetrievalCheck | null }) {
+export function GoldenStandardStatus({ check, deepMode }: { check: OpeningRetrievalCheck | null; deepMode: boolean }) {
   const result = check?.result;
   const status = result?.status ?? 'Running';
   const reason = result?.reason;
@@ -60,10 +61,7 @@ export function GoldenStandardStatus({ check }: { check: OpeningRetrievalCheck |
           </p>
         )}
       </div>
-      <div className="rounded-2xl border border-white/10 bg-slate-900/80 px-4 py-3">
-        <h2 className="text-sm font-semibold text-slate-100">Last full Golden Standard test</h2>
-        <p className="mt-2 text-sm text-slate-400">No full-suite result available.</p>
-      </div>
+      <ClearBlockGoldenStandard deepMode={deepMode} />
     </section>
   );
 }
