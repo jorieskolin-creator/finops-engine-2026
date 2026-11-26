@@ -1,7 +1,17 @@
 import type { CaseId } from './goldenStandardSuite';
 
-export function numericObservations(caseId: CaseId, files: Array<{ name: string; text: string }>) {
-  const text = (prefix: string) => files.find(file => file.name.startsWith(prefix))?.text.replace(/\s+/g, ' ') ?? '';
+export function numericObservations(
+  caseId: CaseId,
+  files: Array<{ name: string; text: string; sourceId?: string }>,
+  admittedSourceIds?: ReadonlySet<string>,
+) {
+  const isAdmitted = (file: { sourceId?: string }) =>
+    !admittedSourceIds || !file.sourceId || admittedSourceIds.has(file.sourceId);
+  const text = (prefix: string) => {
+    const matched = files.find(file => file.name.startsWith(prefix));
+    if (!matched || !isAdmitted(matched)) return '';
+    return matched.text.replace(/\s+/g, ' ');
+  };
   const values = (source: string, pattern: RegExp) => {
     const match = source.match(pattern);
     return match ? match.slice(1).map(value => Number(value.replace(/,/g, ''))) : [];
