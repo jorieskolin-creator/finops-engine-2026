@@ -22,8 +22,11 @@ assert.match(loadingComponent, /Domains with eligible evidence are audited in pa
 assert.doesNotMatch(loadingComponent, /Claude|GPT|Sonnet|Opus|model/i);
 assert.doesNotMatch(app, /Claude|GPT|Sonnet|Opus/);
 assert.doesNotMatch(app, /Assessment Suite v1\.0/);
-assert.equal((app.match(/FinOps Engine v\.2\.0\.0/g) || []).length, 2, 'header and footer should use the current product version');
-assert.match(app, /href="https:\/\/evidence-driven-finops-assessment\.vercel\.app\/"/, 'engine explanation button should use the current public URL');
+assert.match(app, /const APP_VERSION_LABEL = 'FinOps Engine v\.3\.0\.0'/);
+assert.match(app, /<header\b[\s\S]*?\{APP_VERSION_LABEL\}[\s\S]*?<\/header>/, 'header should use the current product version');
+assert.match(app, /<footer\b[\s\S]*?\{APP_VERSION_LABEL\}[\s\S]*?<\/footer>/, 'footer should use the current product version');
+assert.doesNotMatch(app, /FinOps Engine v\.2\.0\.0|How the FinOps Assessment Engine thinks|evidence-driven-finops-assessment\.vercel\.app/);
+assert.doesNotMatch(app, /Engine - Simulation|demo-simulation\.txt|pendingSimulationRef/, 'the upload UI should no longer offer or run the demo simulation');
 assert.doesNotMatch(report, /Model routing mode:|Models:/);
 assert.doesNotMatch(exportedReport, /Model routing mode:|Models:|Model mode /);
 assert.match(orchestrator, /onProgress\(0, totalBatches\)/, 'parallel domain work must be announced before batches settle');

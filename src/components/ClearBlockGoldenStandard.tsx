@@ -8,8 +8,7 @@ import { deleteRun } from '../services/runLifecycleService';
 
 let operationActive = false;
 const key = 'finops:golden-standard:clear-block:v1';
-const button = 'rounded-lg border border-slate-600 px-3 py-1.5 text-sm font-medium text-slate-100 hover:bg-slate-800 disabled:opacity-50';
-const field = 'w-full rounded-lg border border-slate-600 bg-slate-900 px-2 py-1.5 text-sm text-slate-100';
+const field = 'finops-field w-full';
 
 function readSession(): ClearBlockSession | null {
   try { return JSON.parse(sessionStorage.getItem(key) ?? 'null'); } catch { return null; }
@@ -18,10 +17,10 @@ function readSession(): ClearBlockSession | null {
 function ReportExcerpts({ title, lines }: { title: string; lines: string[] }) {
   return (
     <div>
-      <h5 className="font-semibold text-slate-100">{title}</h5>
+      <h5 className="font-semibold text-finops-ink">{title}</h5>
       {lines.length ? <ul className="mt-1 list-disc space-y-1 pl-4">
         {lines.map((line, index) => <li key={index}>{line}</li>)}
-      </ul> : <p className="mt-1 text-slate-400">No text appeared in this section.</p>}
+      </ul> : <p className="mt-1 text-finops-muted">No text appeared in this section.</p>}
     </div>
   );
 }
@@ -38,7 +37,7 @@ export function ClearBlockReview({ result, disabled, onSave }: {
   const [note, setNote] = useState(saved?.note ?? '');
   const identity = referenceIdentity(comparison);
   const checks = comparison?.narrativeChecks;
-  if (!checks?.length || !narrative || !identity) return <p className="mt-3 text-slate-400">Run the case to capture the diagnosis and roadmap for review.</p>;
+  if (!checks?.length || !narrative || !identity) return <p className="mt-3 text-finops-muted">Run the case to capture the diagnosis and roadmap for review.</p>;
 
   function submit(event: FormEvent) {
     event.preventDefault();
@@ -51,18 +50,18 @@ export function ClearBlockReview({ result, disabled, onSave }: {
   }
 
   return (
-    <form onSubmit={submit} className="mt-4 space-y-3 border-t border-slate-700 pt-3">
-      <h4 className="font-semibold text-slate-100">Diagnosis and roadmap review · {narrativeStatus(comparison, saved)}</h4>
+    <form onSubmit={submit} className="mt-4 space-y-3 border-t border-finops-line pt-3">
+      <h4 className="font-semibold text-finops-ink">Diagnosis and roadmap review · {narrativeStatus(comparison, saved)}</h4>
       <p>Accept equivalent wording. Mark required content as Missing if it is absent. For an optional claim that was omitted, choose Supported if the report respects the stated limit. Read the full Summary for consequential claims and actions beyond these excerpts.</p>
       <div className="grid gap-4 xl:grid-cols-2">
-        <div className="min-w-0 space-y-3 rounded-lg border border-slate-700 p-3">
-          <h5 className="font-semibold text-slate-100">Reference expectations</h5>
+        <div className="min-w-0 space-y-3 rounded-lg border border-finops-line bg-finops-surface p-3">
+          <h5 className="font-semibold text-finops-ink">Reference expectations</h5>
           {checks.map(check => (
-            <fieldset key={check.id} className="space-y-1 border-b border-slate-700 pb-2">
-              <legend className="font-medium text-slate-100">{check.label}</legend>
+            <fieldset key={check.id} className="min-w-0 space-y-1 border-b border-finops-line pb-2">
+              <legend className="font-medium text-finops-ink">{check.label}</legend>
               {check.expected.map((line, index) => <p key={index}>{line}</p>)}
               {check.sources?.map(source => (
-                <p key={source.file} className="break-words text-xs text-slate-400">{source.file} · {source.locator}</p>
+                <p key={source.file} className="break-words text-xs text-finops-muted">{source.file} · {source.locator}</p>
               ))}
               <select aria-label={`Disposition for ${check.label}`} className={field} disabled={disabled}
                 value={judgments[check.id] ?? 'Needs judgment'}
@@ -72,7 +71,7 @@ export function ClearBlockReview({ result, disabled, onSave }: {
             </fieldset>
           ))}
         </div>
-        <div className="min-w-0 space-y-3 break-words rounded-lg border border-slate-700 p-3">
+        <div className="min-w-0 space-y-3 break-words rounded-lg border border-finops-line bg-finops-surface p-3">
           <ReportExcerpts title="Observed Summary diagnosis and findings" lines={narrative.diagnosis} />
           <ReportExcerpts title="Observed Summary planning and roadmap" lines={narrative.planning} />
           <details>
@@ -87,8 +86,8 @@ export function ClearBlockReview({ result, disabled, onSave }: {
       <label className="block">Review note (optional)
         <textarea className={field} value={note} onChange={event => setNote(event.currentTarget.value)} disabled={disabled} maxLength={2000} rows={2} />
       </label>
-      <button type="submit" className={button} disabled={disabled || !reviewer.trim()}>Save review</button>
-      {saved && <p className="text-xs text-slate-400">Saved for {saved.reviewer} · {new Date(saved.reviewedAt).toLocaleString()}</p>}
+      <button type="submit" className="finops-primary" disabled={disabled || !reviewer.trim()}>Save review</button>
+      {saved && <p className="text-xs text-finops-muted">Saved for {saved.reviewer} · {new Date(saved.reviewedAt).toLocaleString()}</p>}
     </form>
   );
 }
@@ -187,33 +186,33 @@ export function ClearBlockGoldenStandard({ deepMode, legacy = false }: { deepMod
 
   if (legacy && !session) return null;
   return (
-    <div className={`min-w-0 rounded-2xl border border-white/10 bg-slate-900/80 px-4 py-3 ${legacy ? 'lg:col-span-2' : ''}`}>
-      <h2 className="text-sm font-semibold text-slate-100">{legacy ? 'Previous Clear BLOCK session' : 'Last full Golden Standard test'}</h2>
-      <p className="mt-2 text-sm text-slate-300" role="status">
+    <div className={`min-w-0 rounded-xl border border-finops-line bg-finops-soft p-4 ${legacy ? 'lg:col-span-2' : ''}`}>
+      <h3 className="text-sm font-bold">{legacy ? 'Previous Clear BLOCK session' : 'Last full Golden Standard test'}</h3>
+      <p className="mt-2 text-sm text-finops-muted" role="status">
         {busy ? 'Working on Clear BLOCK…' : notice
           ?? (result?.comparison ? `Clear BLOCK · ${status}${differences ? ` · ${differences} deterministic differences` : ''}` : result ? 'Clear BLOCK · Incomplete · comparison unavailable'
             : session ? 'The previous check was interrupted.' : 'No full-case result available.')}
       </p>
       <div className="mt-3 flex flex-wrap gap-2">
         {requiresCleanup && !busy
-          ? <button type="button" className={button} onClick={() => void closePrevious()}>Close previous check</button>
-          : !legacy && <button type="button" className={button} disabled={busy} onClick={() => void start()}>Run Clear BLOCK</button>}
-        {result && <button type="button" className={button} onClick={downloadSummary}>Download Summary</button>}
+          ? <button type="button" className="finops-button" onClick={() => void closePrevious()}>Close previous check</button>
+          : !legacy && <button type="button" className="finops-primary" disabled={busy} onClick={() => void start()}>Run Clear BLOCK</button>}
+        {result && <button type="button" className="finops-button" onClick={downloadSummary}>Download Summary</button>}
       </div>
       {result && (
-        <details className="mt-3 text-sm text-slate-300">
+        <details className="mt-3 text-sm text-finops-muted">
           <summary className="cursor-pointer">Reference comparison</summary>
-          <p className="my-2 text-xs text-slate-400">{new Date(result.completedAt).toLocaleString()} · {result.runId}</p>
+          <p className="my-2 text-xs text-finops-muted">{new Date(result.completedAt).toLocaleString()} · {result.runId}</p>
           {result.comparison && (
             <>
               <p className="my-2">
                 Reference {result.comparison.referenceVersion} · {result.comparison.referenceApproved ? 'Approved' : 'Review candidate'}
               </p>
               {result.comparison.referenceSha256 &&
-                <p className="my-2 break-all text-xs text-slate-400">{result.comparison.packageVersion} · SHA-256 {result.comparison.referenceSha256}</p>}
+                <p className="my-2 break-all text-xs text-finops-muted">{result.comparison.packageVersion} · SHA-256 {result.comparison.referenceSha256}</p>}
               <ul className="space-y-1">
                 {result.comparison.checks.map(check => (
-                  <li key={check.label} className={check.matches ? 'text-emerald-200' : 'text-amber-200'}>
+                  <li key={check.label} className={check.matches ? 'text-finops-forest' : 'text-amber-900'}>
                     {check.label} · Expected {String(check.expected)} · Observed {String(check.observed)} · {check.matches ? 'Match' : 'Mismatch'}
                   </li>
                 ))}

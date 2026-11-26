@@ -40,15 +40,18 @@ export const LoginModal: React.FC<LoginModalProps> = ({ open, onClose, onSuccess
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-finops-ink/50 backdrop-blur-sm"
       onClick={onClose}
     >
       <div
-        className="w-full max-w-md mx-4 rounded-2xl border border-slate-700 bg-slate-900 p-8 shadow-2xl"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="unlock-title"
+        className="finops-card mx-4 w-full max-w-md p-6 sm:p-8"
         onClick={(e) => e.stopPropagation()}
       >
-        <h2 className="text-xl font-bold text-white mb-2">Unlock assessment</h2>
-        <p className="text-sm text-slate-400 mb-6">
+        <h2 id="unlock-title" className="mb-2 text-xl font-bold">Unlock assessment</h2>
+        <p className="mb-6 text-sm text-finops-muted">
           The assessment runs against paid AI APIs. Enter the access password to continue.
         </p>
         <form onSubmit={submit}>
@@ -58,18 +61,19 @@ export const LoginModal: React.FC<LoginModalProps> = ({ open, onClose, onSuccess
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             placeholder="Password"
+            aria-label="Access password"
             autoComplete="current-password"
-            className="w-full px-4 py-3 rounded-lg bg-slate-800 border border-slate-700 text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500"
+            className="finops-field w-full"
             disabled={busy}
           />
           {error && (
-            <div className="mt-3 text-sm text-rose-400">{error}</div>
+            <div role="alert" className="mt-3 text-sm text-rose-800">{error}</div>
           )}
           <div className="mt-6 flex gap-3 justify-end">
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 rounded-lg text-slate-300 hover:text-white"
+              className="finops-button"
               disabled={busy}
             >
               Cancel
@@ -77,7 +81,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({ open, onClose, onSuccess
             <button
               type="submit"
               disabled={busy || !password}
-              className="px-5 py-2 rounded-lg font-semibold text-slate-900 bg-emerald-400 hover:bg-emerald-300 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="finops-primary"
             >
               {busy ? 'Signing in…' : 'Unlock'}
             </button>

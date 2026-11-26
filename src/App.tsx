@@ -1,13 +1,13 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { analyzeDocument } from './services/analysisService';
-import { scanInputText, sanitizeInput } from './services/preFlightService';
+import { scanInputText } from './services/preFlightService';
 import type { PdfParseQuality } from './services/pdfService';
 import { parseEvidenceFile, toEvidenceSourceRecords, type ParsedEvidenceFile } from './services/evidenceIntakeService';
 import { downloadAssessmentJson, downloadMasterDataReport, downloadRunTraceJson, downloadSummaryReport } from './services/exportService';
 import { extractDiagnosticResultFromHtmlReport, isDiagnosticResultPayload, parseDiagnosticResultJson, serializeDiagnosticResultForHtml } from './services/reportImportService';
 import { findGeneratedReportPrivacyFindings, scrubDiagnosticResultForPrivacy } from './services/privacyService';
 import { PerformanceMonitor } from './services/debugService';
-import { DiagnosticResult, ScanResult, PersonaId, PERSONA_IDS, PERSONA_LABELS, PipelineProgressStage, PipelineProgressUpdate, SourceRecord } from './types';
+import { DiagnosticResult, ScanResult, PersonaId, PERSONA_IDS, PERSONA_LABELS, PipelineProgressStage, PipelineProgressUpdate } from './types';
 import { METRIC_DESCRIPTIONS } from './constants';
 import { GaugeCard, AuditGrid, StrategicRoadmap, ComparisonChart, ReferenceLibrary, QualityGateBanner, BenchmarkingChart, TransferProtocol, MarkdownRenderer, NeuralLoadingGrid } from './components/DashboardComponents';
 import { ReportView } from './components/ReportView';
@@ -20,9 +20,8 @@ import { acknowledgeRun, deleteRun, getRun } from './services/runLifecycleServic
 import { recoverCheckpointResult } from './services/checkpointRecoveryService';
 import { buildReportViewModel } from './services/reportViewModel';
 import { createReportNarrative } from './services/reportNarrativeService';
-import demoSimulation from '../test/demo-simulation.txt?raw';
 
-const DEMO_SIMULATION_LABEL = 'Engine Simulation — Northstar Retail Demo Pack';
+const APP_VERSION_LABEL = 'FinOps Engine v.3.0.0';
 const SAVED_ASSESSMENT_KEY = 'finops:last-assessment:v1';
 const SAVED_ASSESSMENT_META_KEY = 'finops:last-assessment-meta:v1';
 const LAST_CRASH_KEY = 'finops:last-crash:v1';
@@ -137,33 +136,31 @@ const acquisitionErrorCode = (error: unknown): string => {
 };
 
 const PrivacyProtocolCard = () => (
-  <div className="max-w-[85rem] mx-auto mt-12 mb-20 animate-fade-in relative z-10 px-4">
-    <div className="flex items-center justify-center gap-2 mb-8 opacity-90">
-      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_10px_rgba(16,185,129,0.8)]"></span>
-      <span className="text-[10px] font-bold uppercase tracking-[0.25em] text-emerald-400">Data Handling Overview</span>
-    </div>
-    <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+  <section id="data-handling" aria-labelledby="data-handling-title" className="finops-card scroll-mt-32 p-5 sm:p-7">
+    <p className="finops-kicker">Privacy and retention</p>
+    <h2 id="data-handling-title" className="mt-1 text-xl font-bold tracking-tight">Data Handling Overview</h2>
+    <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
       {[
         { icon: 'M13 10V3L4 14h7v7l9-11h-7z', title: "Browser Parsing", desc: "Files parsed on this device" },
         { icon: 'M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z', title: "Provider Processing", desc: "Parsed content sent to configured LLMs" },
         { icon: 'M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z', title: "Session Recovery", desc: "Report saved in this browser tab" },
         { icon: 'M3.98 8.223A10.477 10.477 0 001.934 12C3.226 16.338 7.244 19.5 12 19.5c.993 0 1.953-.138 2.863-.395M6.228 6.228A10.45 10.45 0 0112 4.5c4.756 0 8.773 3.162 10.065 7.498a10.523 10.523 0 01-4.293 5.774M6.228 6.228L3 3m3.228 3.228l3.65 3.65m7.894 7.894L21 21m-3.228-3.228l-3.65-3.65m0 0a3 3 0 10-4.243-4.243m4.242 4.242L9.88 9.88', title: "Deterministic Privacy", desc: "Complete acquired content checked before AI" }
       ].map((item, idx) => (
-        <div key={idx} className="bg-slate-900/70 backdrop-blur-sm p-4 rounded-2xl border border-white/10 flex items-center gap-4 shadow-sm hover:shadow-[0_0_15px_rgba(255,255,255,0.05)] transition-all hover:bg-slate-800/70">
-          <div className="w-10 h-10 rounded-xl bg-slate-800 flex items-center justify-center text-slate-400 border border-white/5">
-            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d={item.icon} /></svg>
+        <div key={idx} className="flex items-start gap-3 rounded-xl border border-finops-line bg-finops-soft p-3">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-finops-sage text-finops-forest">
+            <svg aria-hidden="true" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d={item.icon} /></svg>
           </div>
           <div>
-            <h5 className="text-xs font-bold text-slate-200 uppercase tracking-wide">{item.title}</h5>
-            <p className="text-[10px] text-slate-400 font-medium">{item.desc}</p>
+            <h3 className="text-sm font-bold">{item.title}</h3>
+            <p className="text-xs text-finops-muted">{item.desc}</p>
           </div>
         </div>
       ))}
     </div>
-    <p className="mt-5 text-center text-[11px] leading-relaxed text-slate-400 max-w-4xl mx-auto">
+    <p className="mt-4 border-t border-finops-line pt-4 text-sm leading-relaxed text-finops-muted">
       Files, full tables, images and sparse PDF pages are processed locally. Images and sparse pages use local OCR; OCR does not interpret graph structure or other non-text visual semantics, which remain explicitly withheld. Deterministic privacy controls scan and redact acquired content before governed packets are assembled. The first generative-model call occurs only after that boundary passes. Provider retention depends on the configured account terms. Canonical governed packet bodies remain temporarily in PostgreSQL, while accepted analysis checkpoints may remain temporarily in Redis for interruption recovery. Packet bodies and Redis transient content are deleted after the browser acknowledges final report delivery, on explicit deletion, or at expiry; content-free PostgreSQL metadata and hashes remain for audit retention.
     </p>
-  </div>
+  </section>
 );
 
 const PrivacyReviewPanel: React.FC<{
@@ -476,7 +473,6 @@ const App: React.FC = () => {
   const [privacyNotice, setPrivacyNotice] = useState<string | null>(null);
   const [organizationRedactionTerm, setOrganizationRedactionTerm] = useState('');
   const pendingAnalyzeRef = useRef(false);
-  const pendingSimulationRef = useRef(false);
   const nextRecoverySourceRef = useRef<SavedAssessmentMeta['source']>('completed_assessment');
   const fileInputRef = useRef<HTMLInputElement>(null);
   const clearFileInput = () => {
@@ -808,16 +804,14 @@ const App: React.FC = () => {
 
   const removeFile = (id: string) => setFiles(files.filter(f => f.id !== id));
 
-  const runAnalyze = async (opts?: { textOverride?: string; sourcesOverride?: SourceRecord[]; label?: string }) => {
+  const runAnalyze = async () => {
     setLoading(true);
     setPipelineProgress({});
     setCompletedDomains([]);
     setError(null);
     PerformanceMonitor.start('FullAnalysis');
     try {
-      const sources: SourceRecord[] = opts?.sourcesOverride ?? (opts?.textOverride !== undefined
-        ? [{ schema_version:'source_record_v1', source_id:'src-001', source_name:'Document 001', kind:'text', text:opts.textOverride }]
-        : toEvidenceSourceRecords(files));
+      const sources = toEvidenceSourceRecords(files);
       const data = await analyzeDocument(sources, update => {
         setPipelineProgress(current => ({ ...current, [update.stage]: update }));
         if (update.stage === 'analysis' && update.domain_id) {
@@ -830,9 +824,6 @@ const App: React.FC = () => {
         }
       });
       if (!data.phase_2_validation?.metrics) throw new Error("Analysis returned incomplete data.");
-      if (opts?.label) {
-        data.meta = { ...data.meta, document_analyzed: opts.label };
-      }
       const source_parse_warnings = [...new Set([
         ...(data.meta.source_parse_warnings || []),
         ...sourceParseWarningsForFiles(files)
@@ -866,23 +857,6 @@ const App: React.FC = () => {
       return;
     }
     await runAnalyze();
-  };
-
-  const startEngineSimulation = () => {
-    runAnalyze({
-      textOverride: sanitizeInput(demoSimulation),
-      label: DEMO_SIMULATION_LABEL
-    });
-  };
-
-  const handleEngineSimulation = () => {
-    if (loading) return;
-    if (!authenticated) {
-      pendingSimulationRef.current = true;
-      setShowLogin(true);
-      return;
-    }
-    startEngineSimulation();
   };
 
   const reset = () => {
@@ -1133,26 +1107,21 @@ const App: React.FC = () => {
       onClearSaved={clearSavedAssessmentAndRestart}
       onError={recordUiCrash}
     >
-    <div className="min-h-screen font-sans relative overflow-x-hidden selection:bg-emerald-500/30 selection:text-white flex flex-col">
-      <header className="sticky top-0 z-50 glass-panel border-b border-white/5 transition-all duration-300 backdrop-blur-xl">
-        <div className="max-w-7xl mx-auto px-6 py-4 flex justify-between items-center">
-          <div className="flex items-center gap-3 cursor-pointer group" onClick={() => setActiveTab('overview')}>
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-600 to-teal-700 border border-white/10 flex items-center justify-center font-bold text-white shadow-lg shadow-emerald-900/20 text-xl transition-all duration-300 group-hover:scale-105 group-hover:rotate-3 group-hover:shadow-emerald-500/20 group-hover:border-emerald-500/50">
-              F
-            </div>
-            <div className="leading-tight">
-              <h1 className="text-lg font-display font-bold tracking-tight text-white group-hover:text-emerald-400 transition-colors">FinOps Engine</h1>
-              <span className="text-[10px] uppercase tracking-widest text-emerald-200 font-semibold group-hover:text-white transition-colors">FinOps Engine v.2.0.0</span>
-            </div>
-          </div>
+    <div className={`relative flex min-h-screen flex-col overflow-x-clip font-sans ${result ? 'bg-slate-900' : 'bg-finops-canvas text-finops-ink'}`}>
+      <header className="sticky top-0 z-40 border-b border-finops-line bg-finops-surface text-finops-ink">
+        <div className="mx-auto flex max-w-screen-2xl flex-wrap items-center justify-between gap-3 px-4 py-3 sm:px-8">
+          <button type="button" onClick={() => setActiveTab('overview')} className="flex items-center gap-3 rounded-lg text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-finops-forest">
+            <span aria-hidden="true" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-finops-forest text-sm font-black text-finops-lime">FO</span>
+            <span className="leading-tight">
+              <span className="finops-kicker block">Governed assessment</span>
+              <span className="block text-sm font-bold tracking-tight">{APP_VERSION_LABEL}</span>
+            </span>
+          </button>
 
-          <div className="flex items-center gap-4">
-            <div className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-950/30 border border-emerald-900/50 shadow-sm">
-              <span className="relative flex h-2 w-2">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-              </span>
-              <span className="text-[10px] font-bold uppercase tracking-widest text-emerald-400">System Online</span>
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+            <div className="hidden items-center gap-2 rounded-full border border-finops-line px-3 py-1.5 text-xs font-medium text-finops-muted lg:flex">
+              <span className="h-1.5 w-1.5 rounded-full bg-finops-forest" aria-hidden="true" />
+              System Online
             </div>
 
             <button
@@ -1165,26 +1134,23 @@ const App: React.FC = () => {
                   setShowLogin(true);
                 }
               }}
-              className={`hidden md:flex items-center gap-2 px-3 py-1.5 rounded-full border text-[10px] font-bold uppercase tracking-widest transition-colors ${
-                authenticated
-                  ? 'bg-emerald-950/30 border-emerald-900/50 text-emerald-400 hover:text-white hover:border-emerald-500'
-                  : 'bg-slate-900/50 border-slate-700 text-slate-400 hover:text-white hover:border-amber-500'
-              }`}
-              title={authenticated ? 'Click to log out' : 'Click to log in'}
+              type="button"
+              className="finops-button"
+              aria-label={authenticated ? 'Log out' : 'Log in'}
             >
-              <span>{authenticated ? '🔓' : '🔒'}</span>
+              <span aria-hidden="true">{authenticated ? '🔓' : '🔒'}</span>
               <span>{authenticated ? 'Unlocked' : 'Locked'}</span>
             </button>
 
             {!result && (
-              <button onClick={() => setActiveTab(activeTab === 'reference' ? 'overview' : 'reference')} className="text-xs font-bold uppercase tracking-widest text-slate-400 hover:text-white transition-colors px-4 py-2 rounded-lg hover:bg-white/5">
+              <button type="button" onClick={() => setActiveTab(activeTab === 'reference' ? 'overview' : 'reference')} className="finops-button">
                 {activeTab === 'reference' ? 'Close Reference' : 'View Criteria'}
               </button>
             )}
 
             {(result || files.length > 0) && (
-              <button onClick={reset} disabled={loading} className={`text-sm font-bold transition-all duration-300 flex items-center gap-2 group px-4 py-2 rounded-full border shadow-lg ${loading ? 'bg-slate-800 border-slate-700 text-slate-500 cursor-not-allowed' : 'bg-white text-slate-900 border-white hover:border-rose-500 hover:bg-rose-500 hover:text-white hover:shadow-rose-500/40'}`}>
-                <span className={`transition-transform duration-500 ${!loading && 'group-hover:-rotate-180'}`}>&#8635;</span>
+              <button type="button" onClick={reset} disabled={loading} className="finops-button">
+                <span aria-hidden="true">&#8635;</span>
                 {loading ? 'Analyzing...' : 'Reset Session'}
               </button>
             )}
@@ -1192,20 +1158,14 @@ const App: React.FC = () => {
         </div>
       </header>
 
-      {authenticated && (
-        <div className="mx-auto mt-4 w-[calc(100%-2rem)] max-w-7xl">
-          <GoldenStandardStatus check={openingRetrievalCheck} deepMode={deepMode} />
-        </div>
-      )}
-
       {recoveryNotice && (
-        <div className="relative z-30 mx-auto mt-4 w-[calc(100%-2rem)] max-w-7xl rounded-2xl border border-emerald-500/30 bg-emerald-950/80 px-5 py-3 text-sm text-emerald-100 shadow-lg shadow-emerald-950/20 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+        <div className="finops-card relative z-30 mx-auto mt-4 flex w-[calc(100%-2rem)] max-w-[74rem] flex-col gap-3 bg-finops-sage px-5 py-3 text-sm md:flex-row md:items-center md:justify-between">
           <span>{recoveryNotice}</span>
           <div className="flex flex-wrap gap-2">
             <button
               type="button"
               onClick={() => setRecoveryNotice(null)}
-              className="rounded-lg border border-emerald-400/30 px-3 py-1.5 text-xs font-bold uppercase tracking-wider text-emerald-100 hover:bg-emerald-400/10"
+              className="finops-button"
             >
               Dismiss
             </button>
@@ -1216,7 +1176,7 @@ const App: React.FC = () => {
                 setHasSavedAssessment(false);
                 setRecoveryNotice(null);
               }}
-              className="rounded-lg border border-white/10 px-3 py-1.5 text-xs font-bold uppercase tracking-wider text-slate-300 hover:bg-white/10"
+              className="finops-button"
             >
               Clear saved assessment
             </button>
@@ -1224,66 +1184,52 @@ const App: React.FC = () => {
         </div>
       )}
 
-      <main className="max-w-7xl mx-auto px-6 pt-12 flex-grow w-full relative z-20">
+      <main className="relative z-20 mx-auto w-full max-w-[77rem] flex-grow space-y-5 px-4 py-8 sm:px-6 sm:py-12">
         {!result && !showReference && (
-          <div className="max-w-5xl mx-auto mt-8 transition-all duration-500 ease-in-out animate-fade-in-up">
+          <div>
             {!loading ? (
               <>
-                <div className="text-center mb-16 relative">
-                  <h2 className="text-6xl md:text-8xl font-display font-black text-white mb-6 tracking-tight leading-[0.9] drop-shadow-xl">
-                    FinOps <br />
-                    <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 via-teal-400 to-cyan-400 animate-gradient-x drop-shadow-none filter brightness-110">Assessment Engine</span>
-                  </h2>
-                  <p className="text-lg md:text-xl text-slate-300 font-light max-w-3xl mx-auto leading-relaxed">
-                    Your cloud spend is either a strategic asset or a hidden liability. This <strong>forensic assessment tool</strong> interrogates your FinOps documentation against <strong>30 maturity vectors and 30 anti-pattern indicators</strong> to determine your Crawl-Walk-Run classification.
-                  </p>
-                  <div className="mt-8 flex flex-col sm:flex-row justify-center items-center gap-3">
-                      <a
-                        href="https://evidence-driven-finops-assessment.vercel.app/"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-[0.2em] text-emerald-300 hover:text-white bg-emerald-950/30 hover:bg-emerald-700/40 border border-emerald-700/40 hover:border-emerald-400 transition-colors px-5 py-2.5 rounded-full"
-                      >
-                        <span>How the FinOps Assessment Engine thinks</span>
-                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M14 5l7 7m0 0l-7 7m7-7H3" />
-                        </svg>
-                      </a>
-                      <button
-                        type="button"
-                        onClick={handleEngineSimulation}
-                        disabled={loading}
-                        className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-[0.2em] text-cyan-300 hover:text-white bg-cyan-950/30 hover:bg-cyan-700/40 border border-cyan-700/40 hover:border-cyan-400 transition-colors px-5 py-2.5 rounded-full disabled:opacity-50 disabled:cursor-not-allowed"
-                        title="Run the real engine against a bundled synthetic FinOps demo pack"
-                      >
-                        <span>Engine - Simulation</span>
-                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
-                        </svg>
-                      </button>
+                <section aria-labelledby="intake-title" className="mb-8 grid items-end gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)] lg:gap-12">
+                  <div>
+                    <p className="finops-kicker">Evidence-led FinOps assessment</p>
+                    <h1 id="intake-title" className="mt-3 max-w-[12ch] text-4xl font-black leading-[1.02] tracking-[-0.05em] sm:text-6xl">FinOps Assessment Engine</h1>
+                    <p className="mt-4 max-w-2xl text-base leading-relaxed text-finops-muted">
+                      Assess FinOps documentation against <strong className="font-semibold text-finops-ink">30 maturity vectors and 30 anti-pattern indicators</strong> to determine your Crawl–Walk–Run classification.
+                    </p>
+                  </div>
+                  <aside className="flex items-start gap-3 rounded-xl border border-finops-note-line bg-finops-note p-4">
+                    <span aria-hidden="true" className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-finops-forest text-sm font-bold text-finops-lime">i</span>
+                    <div>
+                      <h2 className="text-sm font-bold">Privacy checks before provider processing</h2>
+                      <p className="mt-1 text-xs leading-relaxed text-amber-950">Uploaded files are parsed in this browser. <a href="#data-handling" className="font-semibold underline underline-offset-2">See how assessment data is handled.</a></p>
                     </div>
-                </div>
+                  </aside>
+                </section>
 
-                <div className={`glass-panel rounded-[3rem] shadow-[0_0_50px_rgba(0,0,0,0.3)] border relative overflow-hidden group transition-all duration-500 ${files.length >= MIN_FILES ? 'border-emerald-500/50 ring-2 ring-emerald-500/20 shadow-[0_0_50px_rgba(16,185,129,0.1)]' : 'border-white/10'}`}>
-                  <div className="p-12 min-h-[320px] flex flex-col relative bg-gradient-to-b from-slate-900/60 to-slate-900/40">
+                <section aria-labelledby="upload-title" className="finops-card p-5 sm:p-7">
+                  <div className="mb-5">
+                    <p className="finops-kicker">Evidence intake</p>
+                    <h2 id="upload-title" className="mt-1 text-xl font-bold tracking-tight">Upload FinOps evidence</h2>
+                  </div>
+                  <div>
                     {files.length > 0 ? (
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-20">
+                      <div className="grid gap-3 md:grid-cols-2">
                         {files.map((file) => (
-                          <div key={file.id} className={`bg-slate-800/60 backdrop-blur-md p-5 rounded-2xl border flex items-center justify-between group/file transition-all animate-fade-in ${file.scan?.status === 'Insufficient' ? 'border-rose-900/50 shadow-[0_0_20px_rgba(244,63,94,0.1)]' : 'border-white/5 hover:border-emerald-500/30 hover:shadow-[0_0_20px_rgba(16,185,129,0.1)]'}`}>
-                            <div className="flex items-center gap-4 overflow-hidden">
-                              <div className={`w-12 h-12 rounded-xl flex items-center justify-center shadow-inner text-xl border border-white/5 ${file.scan?.status === 'Insufficient' ? 'bg-rose-950/50' : 'bg-slate-900'}`}>
+                          <div key={file.id} className={`flex min-w-0 items-center justify-between gap-2 rounded-xl border p-3 ${file.scan?.status === 'Insufficient' ? 'border-rose-200 bg-rose-50' : 'border-finops-line bg-finops-soft'}`}>
+                            <div className="flex min-w-0 items-center gap-3">
+                              <div aria-hidden="true" className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${file.scan?.status === 'Insufficient' ? 'bg-rose-100' : 'bg-finops-sage'}`}>
                                 {file.scan?.status === 'Insufficient' ? '⚠️' : '📄'}
                               </div>
-                              <div className="truncate">
-                                <div className={`text-sm font-bold truncate max-w-[180px] ${file.scan?.status === 'Insufficient' ? 'text-rose-400' : 'text-slate-200'}`}>{file.name}</div>
-                                <div className="flex items-center gap-2 mt-0.5">
-                                  <span className={`w-1.5 h-1.5 rounded-full ${file.scan?.status === 'Insufficient' ? 'bg-rose-500' : file.scan?.status === 'Weak' || file.scan?.status === 'PassWithWarning' ? 'bg-amber-500' : 'bg-emerald-500'}`}></span>
-                                  <div className="text-[10px] text-slate-400 uppercase tracking-wide font-medium">
+                              <div className="min-w-0">
+                                <div title={file.name} className={`truncate text-sm font-bold ${file.scan?.status === 'Insufficient' ? 'text-rose-800' : 'text-finops-ink'}`}>{file.name}</div>
+                                <div className="mt-0.5 flex items-center gap-2">
+                                  <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${file.scan?.status === 'Insufficient' ? 'bg-rose-600' : file.scan?.status === 'Weak' || file.scan?.status === 'PassWithWarning' ? 'bg-amber-600' : 'bg-finops-forest'}`} />
+                                  <div className="text-xs font-medium text-finops-muted">
                                     {file.scan?.status === 'Insufficient' ? 'Unreadable / Empty' : file.scan?.status === 'PassWithWarning' ? 'Low Relevance Warning' : file.scan?.status === 'Weak' ? 'Weak Signal' : 'Ready'} &bull; {(file.size / 1024).toFixed(0)} KB
                                   </div>
                                 </div>
                                 {file.parseMetadata && (
-                                  <div className="text-[10px] text-slate-500 mt-1 truncate max-w-[240px]">
+                                  <div className="mt-1 truncate text-xs text-finops-muted">
                                     {file.kind === 'pdf' && `${file.parseMetadata.parsedTextPages}/${file.parseMetadata.totalPages} pages acquired · ${file.parseMetadata.parseQuality?.visualPagesIncluded || 0} locally OCR'd`}
                                     {(file.kind === 'csv' || file.kind === 'tsv') && `${file.parseMetadata.rowCount} table rows parsed`}
                                     {file.parseMetadata.warnings.length > 0 && ` · ${file.parseMetadata.warnings[0]}`}
@@ -1292,87 +1238,75 @@ const App: React.FC = () => {
                                 {file.parseMetadata?.parseQuality && (
                                   <div className={`text-[10px] mt-1 font-bold uppercase tracking-wide ${
                                     file.parseMetadata.parseQuality.quality === 'poor'
-                                      ? 'text-rose-300'
+                                      ? 'text-rose-800'
                                       : file.parseMetadata.parseQuality.quality === 'mixed'
-                                        ? 'text-amber-300'
-                                        : 'text-emerald-300'
+                                        ? 'text-amber-900'
+                                        : 'text-finops-forest'
                                   }`}>
                                     {parseQualityLabel(file.parseMetadata.parseQuality.quality)}
                                   </div>
                                 )}
                               </div>
                             </div>
-                            <button onClick={() => removeFile(file.id)} className="p-2 text-slate-500 hover:text-rose-400 transition-colors rounded-full hover:bg-rose-950/30">&times;</button>
+                            <button type="button" aria-label={`Remove ${file.name}`} onClick={() => removeFile(file.id)} className="finops-button shrink-0 px-3">&times;</button>
                           </div>
                         ))}
                         {parsing && (
-                          <div className="bg-slate-800/40 p-4 rounded-2xl border border-slate-700 border-dashed flex items-center justify-center animate-pulse">
-                            <span className="text-xs font-bold text-emerald-400">Extracting text...</span>
-                          </div>
+                          <p role="status" className="rounded-xl border border-dashed border-finops-outline bg-finops-soft p-4 text-sm font-semibold text-finops-forest">Extracting text...</p>
                         )}
                       </div>
                     ) : (
-                      <div onClick={() => fileInputRef.current?.click()} className="flex-1 flex flex-col items-center justify-center text-slate-500 border-2 border-dashed border-slate-700/50 rounded-[2rem] bg-slate-900/30 py-16 hover:bg-slate-900/50 hover:scale-[1.01] transition-all duration-300 hover:border-emerald-500/30 group/drop cursor-pointer relative overflow-hidden">
-                        <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/0 via-emerald-500/0 to-emerald-500/5 opacity-0 group-hover/drop:opacity-100 transition-opacity duration-500 pointer-events-none"></div>
-                        <div className="w-24 h-24 rounded-full bg-slate-800/80 border-4 border-slate-700 flex items-center justify-center mb-6 shadow-xl shadow-black/20 group-hover/drop:scale-110 group-hover/drop:shadow-emerald-500/20 group-hover/drop:border-emerald-500/30 transition-all duration-300 z-10 relative">
-                          <div className="absolute inset-0 rounded-full border border-emerald-400 opacity-0 group-hover/drop:opacity-100 group-hover/drop:animate-ping"></div>
-                          <svg className="w-10 h-10 text-slate-400 group-hover/drop:text-emerald-400 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" /></svg>
-                        </div>
-                        <h3 className="text-xl font-display font-bold text-slate-200 mb-2 z-10 group-hover/drop:text-white transition-colors">Drop FinOps Artifacts</h3>
-                        <p className="text-sm font-medium text-slate-400 z-10 group-hover/drop:text-emerald-200/70 transition-colors text-center max-w-md">
-                          Upload Cloud Cost Reports, FinOps Policies, Optimization Plans, Governance Docs, Architecture Reviews.
-                        </p>
-                        <div className="z-10 mt-4 flex flex-wrap justify-center gap-1.5 max-w-md">
+                      <div className="rounded-xl border border-dashed border-finops-outline bg-finops-soft p-4 text-finops-muted sm:p-5">
+                        <p className="text-sm leading-relaxed">Add cloud cost reports, FinOps policies, optimization plans, governance documents, or architecture reviews.</p>
+                        <ul aria-label="Example supported file formats" className="mt-3 flex flex-wrap gap-1.5">
                           {['PDF', 'HTML', 'CSV', 'TSV', 'XLSX', 'PNG/JPEG', 'JSON'].map(fmt => (
-                            <span key={fmt} className="text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded-md bg-slate-800/80 border border-slate-700/60 text-slate-300">
-                              {fmt}
-                            </span>
+                            <li key={fmt} className="rounded-md border border-finops-line bg-finops-surface px-2 py-1 text-[11px] font-semibold text-finops-forest">{fmt}</li>
                           ))}
-                        </div>
-                        <p className="z-10 text-xs text-slate-500 mt-3 text-center max-w-md">
+                        </ul>
+                        <p className="mt-3 text-xs leading-relaxed">
                           {MIN_FILES}–{MAX_FILES} artifacts · {MAX_TOTAL_UPLOAD_MB} MB total · {MAX_FILE_SIZE_MB} MB per file · PDFs parsed as extracted text up to 100 pages
                         </p>
+                        {parsing && <p role="status" className="mt-3 text-sm font-semibold text-finops-forest">Extracting text...</p>}
                       </div>
                     )}
                   </div>
 
-                  <div className="flex justify-between items-center px-10 py-6 bg-slate-900/60 backdrop-blur-xl relative z-10 border-t border-white/5">
-                    <div className="flex items-center gap-4">
-                      <button onClick={() => fileInputRef.current?.click()} disabled={parsing || files.length >= MAX_FILES} className="text-sm font-bold text-slate-400 hover:text-white transition-colors flex items-center gap-2 hover:bg-white/5 px-4 py-2 rounded-lg">
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 6v6m0 0v6m0-6h6m-6 0H6" /></svg>
-                        Add Files (PDF, HTML, CSV, TSV, XLSX, images, JSON)
+                  <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-finops-line pt-4">
+                    <div className="flex flex-wrap items-center gap-3 sm:gap-4">
+                      <button type="button" onClick={() => fileInputRef.current?.click()} disabled={parsing || files.length >= MAX_FILES} className="finops-button">
+                        <svg aria-hidden="true" className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 6v6m0 0v6m0-6h6m-6 0H6" /></svg>
+                        Add Files
                       </button>
                       <label
                         title="Uses the deeper synthesis route for roadmap reasoning. It can be slower and is also selected automatically for assessments that meet escalation rules."
-                        className="flex items-center gap-2 text-xs text-slate-400 hover:text-white cursor-pointer select-none px-3 py-2 rounded-lg hover:bg-white/5 transition-colors"
+                        className="flex cursor-pointer items-center gap-2 rounded-lg py-2 text-sm font-semibold text-finops-muted"
                       >
                         <input
                           type="checkbox"
                           checked={deepMode}
                           onChange={(e) => setDeepMode(e.target.checked)}
-                          className="accent-emerald-500 cursor-pointer"
+                          className="cursor-pointer accent-finops-forest"
                         />
-                        <span className="font-bold">Deep analysis</span>
+                        <span>Deep analysis</span>
                       </label>
                     </div>
                     <input type="file" ref={fileInputRef} onChange={handleFileSelect} disabled={parsing} className="hidden" accept=".pdf,.html,.csv,.tsv,.xlsx,.png,.jpg,.jpeg,.webp,.json,text/csv,text/tab-separated-values,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,image/png,image/jpeg,image/webp" multiple />
-                    <button onClick={handleAnalyze} disabled={!scanResult.canRun || files.length < MIN_FILES || files.length > MAX_FILES} className={`px-8 py-4 rounded-xl font-bold shadow-2xl transition-all transform active:scale-[0.98] flex items-center gap-3 border ${!scanResult.canRun || files.length < MIN_FILES || files.length > MAX_FILES ? 'bg-slate-800 text-slate-500 border-slate-700 cursor-not-allowed shadow-none' : 'text-slate-900 bg-white border-white hover:bg-emerald-400 hover:border-emerald-400 hover:shadow-[0_0_30px_rgba(16,185,129,0.4)]'}`}>
+                    <button type="button" onClick={handleAnalyze} disabled={!scanResult.canRun || files.length < MIN_FILES || files.length > MAX_FILES} className="finops-primary">
                       {!scanResult.canRun || files.length < MIN_FILES || files.length > MAX_FILES ? (
                         <span>{files.length < MIN_FILES ? `Add ${MIN_FILES - files.length} more files` : files.length > MAX_FILES ? "Limit Exceeded" : "Checks Failed"}</span>
                       ) : (
                         <>
                           <span>Run FinOps Assessment</span>
-                          <svg className="w-5 h-5 opacity-80" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M14 5l7 7m0 0l-7 7m7-7H3" /></svg>
+                          <svg aria-hidden="true" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" /></svg>
                         </>
                       )}
                     </button>
                   </div>
-                </div>
+                </section>
 
-                <PrivacyProtocolCard />
                 {error && (
-                  <div className="mt-6 p-6 rounded-2xl border flex items-start gap-4 shadow-sm animate-fade-in bg-rose-950/20 border-rose-900/50 text-rose-300">
-                    <h4 className="font-bold">Error</h4>
+                  <div role="alert" className="mt-4 rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-900">
+                    <p className="font-bold">Error</p>
                     <p>{error}</p>
                   </div>
                 )}
@@ -1383,16 +1317,18 @@ const App: React.FC = () => {
           </div>
         )}
 
+        {authenticated && <GoldenStandardStatus check={openingRetrievalCheck} deepMode={deepMode} />}
+
         {result && viewMode === 'dashboard' && (
           <div className="animate-fade-in space-y-12 mb-20">
             <div className="flex justify-center mb-8">
-              <div className="glass-panel p-1.5 rounded-2xl flex gap-1 bg-slate-900/60">
+              <div className="glass-panel flex flex-wrap justify-center gap-1 rounded-2xl bg-slate-900/60 p-1.5">
                 {[
                   { id: 'overview', label: 'Summary & Diagnosis' },
                   { id: 'audit', label: 'Forensic Audit' },
                   { id: 'strategy', label: 'Optimization Roadmap' }
                 ].map(tab => (
-                  <button key={tab.id} onClick={() => setActiveTab(tab.id as any)} className={`px-8 py-3 rounded-xl text-sm font-bold transition-all duration-300 ${activeTab === tab.id ? 'bg-white text-slate-900 shadow-lg' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}>{tab.label}</button>
+                  <button key={tab.id} onClick={() => setActiveTab(tab.id as any)} className={`px-4 py-3 sm:px-8 rounded-xl text-sm font-bold transition-all duration-300 ${activeTab === tab.id ? 'bg-white text-slate-900 shadow-lg' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}>{tab.label}</button>
                 ))}
               </div>
             </div>
@@ -1681,42 +1617,34 @@ const App: React.FC = () => {
           </div>
         )}
 
-        {showReference && (
-          <div className="mt-8 mb-20">
-            <ReferenceLibrary />
-          </div>
-        )}
+        {showReference && <ReferenceLibrary />}
+
+        {!result && !showReference && !loading && <PrivacyProtocolCard />}
       </main>
 
-      <footer className="border-t border-white/5 bg-slate-900/50 backdrop-blur-md mt-auto relative z-10">
-        <div className="max-w-7xl mx-auto px-6 py-12 grid grid-cols-1 md:grid-cols-3 gap-8 items-center text-center md:text-left">
-          <div className="space-y-4">
-            <div className="flex items-center justify-center md:justify-start gap-3 opacity-60 hover:opacity-100 transition-opacity">
-              <div className="w-8 h-8 rounded-lg bg-emerald-600 flex items-center justify-center font-bold text-white text-sm">F</div>
-              <span className="font-display font-bold text-slate-300">FinOps Assessment Engine</span>
-            </div>
-            <p className="text-xs text-slate-400 leading-relaxed max-w-xs mx-auto md:mx-0">
-              FinOps Engine v.2.0.0<br />Governed multi-stage architecture
+      <footer className="relative z-10 mt-auto border-t border-finops-line bg-finops-surface text-finops-ink">
+        <div className="mx-auto flex max-w-[77rem] flex-wrap items-center justify-between gap-5 px-4 py-6 sm:px-6">
+          <div className="flex items-center gap-3">
+            <span aria-hidden="true" className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-finops-forest text-xs font-black text-finops-lime">FO</span>
+            <p className="text-xs leading-relaxed text-finops-muted">
+              <strong className="text-finops-ink">{APP_VERSION_LABEL}</strong><br />Governed multi-stage architecture
             </p>
           </div>
 
           <div className="flex justify-center">
-            <a href="https://www.linkedin.com/in/jori-santeri-eskolin-571055312/" target="_blank" rel="noopener noreferrer" className="group flex items-center gap-3 p-4 rounded-2xl bg-slate-800/50 border border-white/5 hover:border-emerald-500/50 hover:shadow-[0_0_20px_rgba(16,185,129,0.1)] transition-all duration-300">
-              <div className="w-10 h-10 rounded-full bg-slate-900 flex items-center justify-center text-slate-500 group-hover:bg-[#0077b5] group-hover:text-white transition-colors border border-white/5">
-                <svg className="w-5 h-5 fill-current" viewBox="0 0 24 24"><path d="M19 0h-14c-2.761 0-5 2.239-5 5v14c0 2.761 2.239 5 5 5h14c2.762 0 5-2.239 5-5v-14c0-2.761-2.238-5-5-5zm-11 19h-3v-11h3v11zm-1.5-12.268c-.966 0-1.75-.79-1.75-1.764s.784-1.764 1.75-1.764 1.75.79 1.75 1.764-.783 1.764-1.75 1.764zm13.5 12.268h-3v-5.604c0-3.368-4-3.113-4 0v5.604h-3v-11h3v1.765c1.396-2.586 7-2.777 7 2.476v6.759z"/></svg>
+            <a href="https://www.linkedin.com/in/jori-santeri-eskolin-571055312/" target="_blank" rel="noopener noreferrer" className="finops-button">
+              <div aria-hidden="true" className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-finops-sage text-finops-forest">
+                <svg className="h-4 w-4 fill-current" viewBox="0 0 24 24"><path d="M19 0h-14c-2.761 0-5 2.239-5 5v14c0 2.761 2.239 5 5 5h14c2.762 0 5-2.239 5-5v-14c0-2.761-2.238-5-5-5zm-11 19h-3v-11h3v11zm-1.5-12.268c-.966 0-1.75-.79-1.75-1.764s.784-1.764 1.75-1.764 1.75.79 1.75 1.764-.783 1.764-1.75 1.764zm13.5 12.268h-3v-5.604c0-3.368-4-3.113-4 0v5.604h-3v-11h3v1.765c1.396-2.586 7-2.777 7 2.476v6.759z"/></svg>
               </div>
               <div className="text-left">
-                <span className="block text-[10px] font-bold uppercase tracking-widest text-slate-500 group-hover:text-emerald-400 transition-colors">Architect</span>
-                <span className="text-sm font-bold text-slate-300 group-hover:text-white">Strategic Architecture by Jori Santeri Eskolin</span>
+                <span className="finops-kicker block">Architect</span>
+                <span className="text-xs font-semibold">Strategic Architecture by Jori Santeri Eskolin</span>
               </div>
             </a>
           </div>
 
-          <div className="flex flex-col items-center md:items-end gap-3">
-            <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-950/40 border border-emerald-900/60 text-[10px] font-bold text-emerald-400 uppercase tracking-widest cursor-default">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_5px_rgba(16,185,129,0.8)]"></span>
-              Provider-Backed Processing
-            </div>
+          <div className="rounded-full border border-finops-line px-3 py-1.5 text-xs font-medium text-finops-muted">
+            Provider-Backed Processing
           </div>
         </div>
       </footer>
@@ -1726,7 +1654,6 @@ const App: React.FC = () => {
         onClose={() => {
           setShowLogin(false);
           pendingAnalyzeRef.current = false;
-          pendingSimulationRef.current = false;
         }}
         onSuccess={() => {
           setShowLogin(false);
@@ -1734,9 +1661,6 @@ const App: React.FC = () => {
           if (pendingAnalyzeRef.current) {
             pendingAnalyzeRef.current = false;
             runAnalyze();
-          } else if (pendingSimulationRef.current) {
-            pendingSimulationRef.current = false;
-            startEngineSimulation();
           }
         }}
       />

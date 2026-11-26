@@ -8,7 +8,6 @@ import {
 import { ClearBlockReview } from './ClearBlockGoldenStandard';
 
 const reportStorage = 'finops:golden-standard:latest-reports:v1';
-const control = 'rounded-lg border border-slate-600 bg-slate-900 px-2.5 py-1.5 text-sm text-slate-100 hover:bg-slate-800 disabled:opacity-50';
 
 function loadReports(): Record<string, SuiteReport> {
   try { return JSON.parse(sessionStorage.getItem(reportStorage) ?? '{}'); }
@@ -40,12 +39,12 @@ function ResultDetail({ attempt, suite, history, report, onReview, disabled }: {
   const result = attempt.comparison;
   const repeat = repeatability(history, suite, attempt);
   if (!result) return attempt.state === 'incomplete'
-    ? <p className="mt-2 text-slate-400">Assessment incomplete. Cleanup {attempt.cleanup_status === 'verified' ? 'verified' : 'pending or unavailable'}.</p>
+    ? <p className="mt-2 text-finops-muted">Assessment incomplete. Cleanup {attempt.cleanup_status === 'verified' ? 'verified' : 'pending or unavailable'}.</p>
     : null;
   const seconds = attempt.started_at && attempt.finished_at
     ? Math.max(0, (Date.parse(attempt.finished_at) - Date.parse(attempt.started_at)) / 1000).toFixed(1) : 'Unknown';
   return (
-    <div className="mt-2 space-y-2 px-2 pb-3 text-sm text-slate-300">
+    <div className="mt-2 space-y-2 px-2 pb-3 text-sm text-finops-muted">
       <p>Run {attempt.run_id} · {result.assessed}/60 criteria assessed · {seconds} s · {result.usage.calls} authorized model calls</p>
       <p>{result.usage.input_tokens ?? 'Unknown'} input / {result.usage.output_tokens ?? 'unknown'} output tokens</p>
       <p className="break-all">Reference {result.referenceVersion} · {result.referenceApproved ? 'Approved' : 'Review candidate'} · SHA-256 {result.referenceSha256}</p>
@@ -55,17 +54,17 @@ function ResultDetail({ attempt, suite, history, report, onReview, disabled }: {
         <ul className="ml-3">{result.usage.models.map(model => <li key={model}>{model}</li>)}</ul>
       </details>}
       <ul className="space-y-1">
-        {result.checks.map(check => <li key={check.label} className={check.matches === false ? 'text-rose-200' : 'text-slate-300'}>
+        {result.checks.map(check => <li key={check.label} className={check.matches === false ? 'text-rose-800' : 'text-finops-muted'}>
           {check.label} · Expected {check.expected === null ? 'unresolved' : String(check.expected)} · Observed {check.observed === null ? 'unavailable' : String(check.observed)}
         </li>)}
       </ul>
       {attempt.review && <p>Review recorded {new Date(attempt.review.reviewedAt).toLocaleString()} · {Object.values(attempt.review.dispositions).join(', ')}</p>}
       {report && attempt.run_id
         ? <>
-          <button type="button" className={control} onClick={() => download(report, attempt)}>Download Summary</button>
+          <button type="button" className="finops-button" onClick={() => download(report, attempt)}>Download Summary</button>
           <ClearBlockReview result={{ ...report, runId: attempt.run_id, cleanupVerified: true }} disabled={disabled} onSave={onReview} />
         </>
-        : <p className="text-slate-400">Summary and Master Data excerpts are available in the browser session that ran this package.</p>}
+        : <p className="text-finops-muted">Summary and Master Data excerpts are available in the browser session that ran this package.</p>}
     </div>
   );
 }
@@ -206,31 +205,31 @@ export function GoldenStandardSuite({ deepMode }: { deepMode: boolean }) {
   const failed = selected?.attempts.filter(attempt => attemptStatus(attempt) === 'Fail').length ?? 0;
 
   return (
-    <div className="min-w-0 rounded-2xl border border-white/10 bg-slate-900/80 px-4 py-3 text-sm text-slate-200">
-      <h2 className="text-sm font-semibold text-slate-100">Last full Golden Standard test</h2>
+    <div className="min-w-0 rounded-xl border border-finops-line bg-finops-soft p-4 text-sm">
+      <h3 className="text-sm font-bold">Last full Golden Standard test</h3>
       <div className="mt-3 flex flex-wrap items-end gap-2">
-        <label className="grid gap-1">Cases
-          <select className={control} value={selection} disabled={busy || !!active}
+        <label className="grid min-w-0 max-w-full gap-1">Cases
+          <select className="finops-field" value={selection} disabled={busy || !!active}
             onChange={event => setSelection(event.currentTarget.value as Selection)}>
             {caseIds.map(id => <option key={id} value={id}>{caseNames[id]}</option>)}
             <option value="all">All five cases</option>
           </select>
         </label>
-        <label className="grid gap-1">Repetitions
-          <select className={control} value={repetitions} disabled={busy || !!active}
+        <label className="grid min-w-0 max-w-full gap-1">Repetitions
+          <select className="finops-field" value={repetitions} disabled={busy || !!active}
             onChange={event => setRepetitions(Number(event.currentTarget.value) === 3 ? 3 : 1)}>
             <option value={1}>1 assessment per case</option>
             <option value={3}>3 assessments per case</option>
           </select>
         </label>
-        <button type="button" className={control} disabled={loading || !loaded || busy || !!active || cancelling || reviewing}
+        <button type="button" className="finops-primary" disabled={loading || !loaded || busy || !!active || cancelling || reviewing}
           onClick={() => void start()}>Start {planned} {planned === 1 ? 'assessment' : 'assessments'}</button>
-        {(busy || active) && <button type="button" className={control} disabled={cancelling}
+        {(busy || active) && <button type="button" className="finops-button" disabled={cancelling}
           onClick={() => void cancel()}>Cancel active test</button>}
-        <button type="button" className={control} disabled={loading || busy || cancelling || reviewing}
+        <button type="button" className="finops-button" disabled={loading || busy || cancelling || reviewing}
           onClick={() => void refresh()}>Refresh history</button>
       </div>
-      <div className="mt-2 space-y-1 text-slate-300" role="status">
+      <div className="mt-2 space-y-1 text-finops-muted" role="status">
         {message && <p>{message}</p>}
         <p>{loading ? 'Loading history…' : selected
           ? `${suiteStatus(selected)} · ${finished} of ${selected.attempts.length} complete · ${failed} failed`
@@ -238,7 +237,7 @@ export function GoldenStandardSuite({ deepMode }: { deepMode: boolean }) {
       </div>
       {selected && <>
         <label className="mt-3 grid max-w-md gap-1">Run history
-          <select className={control} value={selected.suite_id} onChange={event => setSelectedId(event.currentTarget.value)}>
+          <select className="finops-field" value={selected.suite_id} onChange={event => setSelectedId(event.currentTarget.value)}>
             {history.map(suite => {
               const first = suite.attempts[0];
               const single = first && new Set(suite.attempts.map(attempt => attempt.case_id)).size === 1;
@@ -248,20 +247,20 @@ export function GoldenStandardSuite({ deepMode }: { deepMode: boolean }) {
             })}
           </select>
         </label>
-        <details className="mt-2 text-slate-400">
+        <details className="mt-2 text-finops-muted">
           <summary className="cursor-pointer">Run configuration</summary>
           <p className="break-all">{selected.suite_id} · Build {selected.configuration.build ?? 'unidentified'}</p>
           <p className="break-all">{selected.configuration.packageVersion} · {selected.configuration.deepMode ? 'Deep' : 'Standard'} · {selected.configuration.routingLabel} · {selected.configuration.routingHash}</p>
           <ul>{Object.entries(selected.configuration.models).map(([role, models]) => <li key={role}>{role} · {models.join(' → ')}</li>)}</ul>
         </details>
-        <div className="mt-3 divide-y divide-slate-700 border-y border-slate-700">
+        <div className="mt-3 divide-y divide-finops-line border-y border-finops-line">
           {caseIds.map(id => {
             const attempts = selected.attempts.filter(attempt => attempt.case_id === id);
             return <div key={id} className="flex flex-wrap gap-x-3 gap-y-1 py-2">
-              <h3 className="min-w-48 font-medium">{caseNames[id]}</h3>
-              {attempts.length === 0 && <span className="text-slate-400">Unselected</span>}
+              <h4 className="min-w-48 font-medium">{caseNames[id]}</h4>
+              {attempts.length === 0 && <span className="text-finops-muted">Unselected</span>}
               {attempts.map(attempt => <details key={attempt.ordinal} className="min-w-0">
-                <summary className="cursor-pointer text-slate-300">
+                <summary className="cursor-pointer text-finops-muted">
                   {attempts.length > 1 && `Run ${attempt.repetition} · `}{selected.state === 'cancelled' && attempt.state === 'queued' ? 'Skipped' : attemptStatus(attempt)}
                 </summary>
                 <ResultDetail attempt={attempt} suite={selected} history={history} disabled={busy || reviewing}

@@ -148,7 +148,7 @@ npm run test:privacy
 
 The synthetic files under `test/` are engineering inputs for exercising parsing, routing, evidence, privacy, and Quality Gate boundaries. They are not expert-approved reference assessments and must not be used to claim model accuracy, reproducibility, or drift monitoring.
 
-`test/demo-simulation.txt` is the bundled Engine Simulation pack. The low-, borderline-, and strong-evidence scenario files remain pipeline-boundary samples. Retired single-document “Tier 1 fixture” packs are gone; a future Golden Standard org pack will replace simulation once labeled packs exist.
+`test/demo-simulation.txt` is the archived synthetic demo pack; it is no longer bundled in the UI. The low-, borderline-, and strong-evidence scenario files remain pipeline-boundary samples. For the separate Golden Standard runner, see [Manual Golden Standard assessments](#manual-golden-standard-assessments).
 
 ## Acquisition quality telemetry
 

@@ -176,58 +176,47 @@ export const NeuralLoadingGrid: React.FC<{
   const analysisActive = progress.analysis?.status === 'in_progress' || progress.evidence?.status === 'in_progress';
 
   return (
-    <div className="flex items-center justify-center min-h-[500px] font-sans">
-      <div className="relative w-full max-w-5xl bg-slate-900/40 backdrop-blur-2xl rounded-[3rem] p-8 md:p-12 border border-white/10 shadow-[0_20px_50px_-12px_rgba(0,0,0,0.5)] overflow-hidden">
-        <div className="flex justify-center mb-8">
-          <div className="inline-flex items-center gap-2 px-6 py-2 rounded-full bg-slate-800/50 border border-slate-700/50 shadow-sm backdrop-blur-sm">
-            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shadow-[0_0_15px_rgba(52,211,153,0.5)]"></span>
-            <span className="text-xs font-bold uppercase tracking-[0.2em] text-slate-300">
-              Governed pipeline status
-            </span>
-          </div>
+    <section aria-labelledby="pipeline-title" className="finops-card p-5 sm:p-7">
+        <div className="mb-6" role="status">
+          <p className="finops-kicker">Governed pipeline status</p>
+          <h1 id="pipeline-title" className="mt-2 text-3xl font-bold tracking-tight">{headline}</h1>
+          <p className="mt-2 text-sm text-finops-muted">Pipeline stages are reported from actual processing boundaries.</p>
         </div>
-        <div className="text-center mb-10">
-          <h2 className="text-3xl md:text-4xl font-display font-bold text-white mb-3 tracking-tight">
-            {headline}
-          </h2>
-          <p className="text-slate-300 font-medium">Pipeline stages are reported from actual processing boundaries.</p>
-        </div>
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-10">
+        <div className="mb-6 grid grid-cols-2 gap-3 md:grid-cols-5">
           {PIPELINE_STEPS.map((step, index) => {
             const status = progress[step.id]?.status || 'pending';
             const done = status === 'completed' || status === 'completed_with_warnings';
             return (
-              <div key={step.id} className={`rounded-2xl border p-3 min-h-[92px] transition-colors ${status === 'in_progress' ? 'border-emerald-400/70 bg-emerald-500/10' : status === 'completed_with_warnings' ? 'border-amber-400/50 bg-amber-500/5' : status === 'failed' ? 'border-rose-400/60 bg-rose-500/10' : done ? 'border-slate-700 bg-slate-800/70' : 'border-slate-800 bg-slate-950/30'}`}>
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-[10px] font-mono text-slate-500">{String(index + 1).padStart(2, '0')}</span>
-                  <span className={`w-2 h-2 rounded-full ${status === 'in_progress' ? 'bg-emerald-400 animate-pulse' : status === 'completed_with_warnings' ? 'bg-amber-400' : status === 'failed' ? 'bg-rose-400' : done ? 'bg-emerald-500' : 'bg-slate-700'}`}></span>
+              <div key={step.id} className={`min-h-[92px] rounded-xl border p-3 transition-colors ${status === 'in_progress' ? 'border-finops-forest bg-finops-sage' : status === 'completed_with_warnings' ? 'border-finops-note-line bg-finops-note' : status === 'failed' ? 'border-rose-200 bg-rose-50' : done ? 'border-finops-line bg-finops-sage' : 'border-finops-line bg-finops-soft'}`}>
+                <div className="mb-2 flex items-center justify-between">
+                  <span className="font-mono text-xs text-finops-muted">{String(index + 1).padStart(2, '0')}</span>
+                  <span aria-hidden="true" className={`h-2 w-2 rounded-full ${status === 'in_progress' ? 'bg-finops-forest motion-safe:animate-pulse' : status === 'completed_with_warnings' ? 'bg-amber-700' : status === 'failed' ? 'bg-rose-700' : done ? 'bg-finops-forest' : 'bg-finops-outline'}`} />
                 </div>
-                <div className={`text-xs font-bold ${status === 'pending' ? 'text-slate-500' : 'text-slate-200'}`}>{step.label}</div>
-                <div className={`text-[10px] mt-1 ${status === 'completed_with_warnings' ? 'text-amber-300' : status === 'failed' ? 'text-rose-300' : 'text-slate-500'}`}>{statusLabel(status)}</div>
+                <div className="text-xs font-bold">{step.label}</div>
+                <div className={`mt-1 text-xs ${status === 'completed_with_warnings' ? 'text-amber-900' : status === 'failed' ? 'text-rose-800' : 'text-finops-muted'}`}>{statusLabel(status)}</div>
               </div>
             );
           })}
         </div>
-        <div className="rounded-3xl border border-slate-800 bg-slate-950/30 p-5 md:p-6">
-          <div className="flex items-center justify-between gap-4 mb-5">
+        <div className="rounded-xl border border-finops-line bg-finops-soft p-4">
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
             <div>
-              <div className="text-xs font-bold uppercase tracking-widest text-slate-300">FinOps domain analysis</div>
-              <div className="text-[11px] text-slate-500 mt-1">Domains with eligible evidence are audited in parallel. Empty domains are marked Not assessed.</div>
+              <h2 className="text-sm font-bold">FinOps domain analysis</h2>
+              <p className="mt-1 text-xs text-finops-muted">Domains with eligible evidence are audited in parallel. Empty domains are marked Not assessed.</p>
             </div>
-            <span className={`text-[10px] uppercase tracking-widest font-bold ${analysisActive ? 'text-emerald-400' : 'text-slate-500'}`}>{analysisActive ? 'Parallel processing active' : `${completedDomains.length}/6 completed`}</span>
+            <span className="finops-kicker">{analysisActive ? 'Parallel processing active' : `${completedDomains.length}/6 completed`}</span>
           </div>
-          <div className="grid grid-cols-3 md:grid-cols-6 gap-3">
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-6">
             {domains.map(domain => {
               const done = completedDomains.includes(domain.id);
-              return <div key={domain.id} className={`rounded-2xl border p-3 text-center ${done ? 'border-emerald-500/40 bg-emerald-500/10' : analysisActive ? 'border-emerald-400/40 bg-slate-900' : 'border-slate-800 bg-slate-900/40'}`}>
-                <div className={`text-xl font-bold ${done || analysisActive ? 'text-emerald-400' : 'text-slate-600'}`}>{done ? '✓' : domain.id}</div>
-                <div className="text-[9px] font-bold tracking-wider text-slate-400 mt-2">{domain.label}</div>
+              return <div key={domain.id} className={`rounded-lg border p-3 text-center ${done ? 'border-finops-line bg-finops-sage' : analysisActive ? 'border-finops-outline bg-finops-surface' : 'border-finops-line bg-finops-surface'}`}>
+                <div className="text-xl font-bold text-finops-forest">{done ? '✓' : domain.id}</div>
+                <div className="mt-1 text-[10px] font-bold text-finops-muted">{domain.label}</div>
               </div>;
             })}
           </div>
         </div>
-      </div>
-    </div>
+    </section>
   );
 };
 
@@ -777,89 +766,66 @@ export const ReferenceLibrary: React.FC = () => {
   }, [activeStream]);
 
   return (
-    <div className="max-w-[90rem] mx-auto animate-fade-in pb-32">
-      <div className="text-center mb-12 relative z-10 px-4">
-        <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-slate-900/50 border border-slate-700 mb-6 shadow-sm">
-          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-          <span className="text-[11px] font-bold uppercase tracking-widest text-slate-400">Knowledge Base</span>
-        </div>
-        <h2 className="text-5xl md:text-7xl font-display font-black text-white mb-6 tracking-tight drop-shadow-lg">FinOps Forensic Lens</h2>
-        <p className="text-xl text-slate-300 max-w-3xl mx-auto leading-relaxed font-light">
-          The specific behavioral signals used by the AI to detect <strong className="text-emerald-400 font-bold">FinOps Maturity</strong> vs. <strong className="text-rose-400 font-bold">Anti-Patterns</strong>.
+    <div className="space-y-6">
+      <div>
+        <p className="finops-kicker">Knowledge Base</p>
+        <h1 className="mt-3 text-4xl font-black tracking-tight sm:text-5xl">FinOps Forensic Lens</h1>
+        <p className="mt-4 max-w-3xl leading-relaxed text-finops-muted">
+          The specific behavioral signals used by the AI to detect <strong className="text-finops-forest">FinOps Maturity</strong> vs. <strong className="text-rose-800">Anti-Patterns</strong>.
         </p>
       </div>
 
-      <div className="sticky top-4 z-40 px-4 flex flex-col items-center gap-6 mb-16">
-        <div className="glass-panel p-2 rounded-2xl inline-flex bg-slate-900/80 backdrop-blur-xl shadow-2xl border border-white/10 ring-1 ring-black/50">
-          <button onClick={() => setActiveStream('maturity')} className={`px-6 md:px-10 py-3 md:py-4 rounded-xl text-sm font-bold transition-all duration-300 flex items-center gap-3 ${activeStream === 'maturity' ? 'bg-emerald-500 text-white shadow-[0_0_20px_rgba(16,185,129,0.4)]' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'}`}>
-            <span className={`w-2 h-2 rounded-full ${activeStream === 'maturity' ? 'bg-white shadow-[0_0_10px_white]' : 'bg-emerald-500'}`}></span>
+      <div className="finops-card flex flex-wrap gap-4 p-4">
+        <div role="group" aria-label="Assessment stream" className="flex flex-wrap gap-2">
+          <button type="button" onClick={() => setActiveStream('maturity')} aria-pressed={activeStream === 'maturity'} className={activeStream === 'maturity' ? 'finops-primary' : 'finops-button'}>
             Stream A: Maturity
           </button>
-          <button onClick={() => setActiveStream('antipattern')} className={`px-6 md:px-10 py-3 md:py-4 rounded-xl text-sm font-bold transition-all duration-300 flex items-center gap-3 ${activeStream === 'antipattern' ? 'bg-rose-500 text-white shadow-[0_0_20px_rgba(244,63,94,0.4)]' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'}`}>
-            <span className={`w-2 h-2 rounded-full ${activeStream === 'antipattern' ? 'bg-white shadow-[0_0_10px_white]' : 'bg-rose-500'}`}></span>
+          <button type="button" onClick={() => setActiveStream('antipattern')} aria-pressed={activeStream === 'antipattern'} className={activeStream === 'antipattern' ? 'finops-primary' : 'finops-button'}>
             Stream B: Anti-Patterns
           </button>
         </div>
 
-        <div className="inline-flex bg-slate-800/80 backdrop-blur-sm p-1 rounded-xl shadow-inner border border-white/5">
-          <button onClick={() => setDataset('criteria')} className={`px-5 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-all ${dataset === 'criteria' ? 'bg-slate-700 text-white shadow-sm border border-white/10' : 'text-slate-500 hover:text-slate-300 hover:bg-slate-700/50'}`}>Active Audit Logic (A1-F5)</button>
-          <button onClick={() => setDataset('signals')} className={`px-5 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-all ${dataset === 'signals' ? 'bg-slate-700 text-white shadow-sm border border-white/10' : 'text-slate-500 hover:text-slate-300 hover:bg-slate-700/50'}`}>Signal Corpus ({ALL_CRITERIA_IDS.length * 2} Items)</button>
+        <div role="group" aria-label="Reference data" className="flex flex-wrap gap-2">
+          <button type="button" onClick={() => setDataset('criteria')} aria-pressed={dataset === 'criteria'} className={dataset === 'criteria' ? 'finops-primary' : 'finops-button'}>Active Audit Logic (A1-F5)</button>
+          <button type="button" onClick={() => setDataset('signals')} aria-pressed={dataset === 'signals'} className={dataset === 'signals' ? 'finops-primary' : 'finops-button'}>Signal Corpus ({ALL_CRITERIA_IDS.length * 2} Items)</button>
         </div>
       </div>
 
       {dataset === 'criteria' ? (
-        <div className="space-y-32 px-6 md:px-12 animate-fade-in-up">
+        <div className="space-y-8">
           {batches.map((batch) => (
-            <div key={batch.id} className="relative">
-              <div className="flex flex-col md:flex-row md:items-end justify-between mb-12 border-b border-slate-800 pb-8">
-                <div>
-                  <div className={`flex items-center gap-3 mb-2 font-mono text-sm font-bold ${activeStream === 'maturity' ? 'text-emerald-400' : 'text-rose-400'}`}>
-                    <span className={`w-8 h-8 rounded-lg flex items-center justify-center text-white shadow-lg ${activeStream === 'maturity' ? 'bg-emerald-500 shadow-emerald-500/20' : 'bg-rose-500 shadow-rose-500/20'}`}>{batch.id}</span>
-                    <span className="uppercase tracking-widest opacity-90">Domain {batch.id}</span>
-                  </div>
-                  <h3 className="text-4xl font-display font-bold text-white">{batch.title}</h3>
-                </div>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6">
+            <section key={batch.id} className="border-t border-finops-line pt-5">
+              <p className="finops-kicker">Domain {batch.id}</p>
+              <h2 className="mb-4 mt-1 text-2xl font-bold tracking-tight">{batch.title}</h2>
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
                 {batch.items.map((item, idx) => (
-                  <div key={idx} className={`flex flex-col h-full p-6 rounded-3xl border transition-all duration-500 hover:-translate-y-2 hover:shadow-2xl bg-slate-900/60 backdrop-blur-sm ${activeStream === 'maturity' ? 'border-emerald-900/30 hover:border-emerald-500/50 hover:shadow-emerald-900/20' : 'border-rose-900/30 hover:border-rose-500/50 hover:shadow-rose-900/20'}`}>
-                    <div className="mb-6">
-                      <div className="flex justify-between items-start mb-4">
-                        <span className={`text-[11px] font-mono font-bold px-3 py-1.5 rounded-lg uppercase tracking-wider border ${activeStream === 'maturity' ? 'bg-emerald-950/30 text-emerald-300 border-emerald-900/50' : 'bg-rose-950/30 text-rose-300 border-rose-900/50'}`}>{item.id}</span>
-                      </div>
-                      <h4 className="font-display font-bold text-slate-100 text-lg leading-tight mb-3">{item.title}</h4>
-                      <p className="text-sm text-slate-300 leading-relaxed">{item.description}</p>
-                    </div>
-                    <div className={`mt-auto pt-6 border-t border-dashed ${activeStream === 'maturity' ? 'border-emerald-900/30' : 'border-rose-900/30'}`}>
-                      <span className="text-[9px] font-bold uppercase tracking-widest text-slate-400 mb-3 block">Audit Criteria</span>
-                      <div className="space-y-3">
+                  <div key={idx} className="finops-card flex flex-col p-5">
+                    <span className={`self-start rounded-md px-2 py-1 font-mono text-xs font-bold ${activeStream === 'maturity' ? 'bg-finops-sage text-finops-forest' : 'bg-rose-50 text-rose-800'}`}>{item.id}</span>
+                    <h3 className="mb-2 mt-3 text-lg font-bold leading-tight">{item.title}</h3>
+                    <p className="mb-4 text-sm leading-relaxed text-finops-muted">{item.description}</p>
+                    <div className="mt-auto border-t border-dashed border-finops-line pt-3">
+                      <p className="finops-kicker mb-2">Audit Criteria</p>
+                      <ol className="list-decimal space-y-2 pl-5 text-sm leading-snug text-finops-muted">
                         {item.criteria.split('\n').filter(l => l.trim()).map((line, i) => (
-                          <div key={i} className="flex gap-3 items-start group/line">
-                            <span className={`flex-shrink-0 w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-bold mt-0.5 transition-colors ${activeStream === 'maturity' ? 'bg-emerald-950 text-emerald-500 group-hover/line:bg-emerald-500 group-hover/line:text-white' : 'bg-rose-950 text-rose-500 group-hover/line:bg-rose-500 group-hover/line:text-white'}`}>{i + 1}</span>
-                            <p className="text-[11px] text-slate-400 leading-snug group-hover/line:text-slate-200 transition-colors">{line.replace(/^\d+\.\s*/, '')}</p>
-                          </div>
+                          <li key={i}>{line.replace(/^\d+\.\s*/, '')}</li>
                         ))}
-                      </div>
+                      </ol>
                     </div>
                   </div>
                 ))}
               </div>
-            </div>
+            </section>
           ))}
         </div>
       ) : (
-        <div className="px-6 md:px-12 animate-fade-in-up">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-            {(activeStream === 'maturity' ? MASTER_BINGO_FINOPS.maturity : MASTER_BINGO_FINOPS.antipattern).map((item) => (
-              <div key={item.id} className={`p-6 rounded-2xl border transition-all duration-300 hover:shadow-lg group bg-slate-900/60 backdrop-blur-sm ${activeStream === 'maturity' ? 'border-emerald-900/30 hover:border-emerald-500/50 hover:bg-emerald-950/20' : 'border-rose-900/30 hover:border-rose-500/50 hover:bg-rose-950/20'}`}>
-                <div className="flex items-center justify-between mb-3">
-                  <span className={`text-[10px] font-black font-mono px-2 py-1 rounded border ${activeStream === 'maturity' ? 'bg-emerald-950/40 text-emerald-300 border-emerald-900' : 'bg-rose-950/40 text-rose-300 border-rose-900'}`}>{item.id}</span>
-                </div>
-                <h4 className="font-bold text-slate-200 mb-2 leading-snug">{item.title}</h4>
-                <p className="text-xs text-slate-400 leading-relaxed opacity-90 group-hover:opacity-100">{item.desc}</p>
-              </div>
-            ))}
-          </div>
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          {(activeStream === 'maturity' ? MASTER_BINGO_FINOPS.maturity : MASTER_BINGO_FINOPS.antipattern).map((item) => (
+            <div key={item.id} className="finops-card p-5">
+              <span className={`rounded-md px-2 py-1 font-mono text-xs font-bold ${activeStream === 'maturity' ? 'bg-finops-sage text-finops-forest' : 'bg-rose-50 text-rose-800'}`}>{item.id}</span>
+              <h2 className="mb-2 mt-3 font-bold leading-snug">{item.title}</h2>
+              <p className="text-sm leading-relaxed text-finops-muted">{item.desc}</p>
+            </div>
+          ))}
         </div>
       )}
     </div>

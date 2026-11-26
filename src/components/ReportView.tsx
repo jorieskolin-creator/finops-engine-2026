@@ -616,26 +616,26 @@ export const ReportView: React.FC<ReportViewProps> = ({ result, onBack, onDownlo
   const gauges = reportView.metrics;
 
   return (
-    <div className="min-h-screen bg-white text-slate-900 font-sans">
+    <div className="min-h-screen bg-finops-canvas font-sans text-finops-ink">
       <style>{SVG_CSS}</style>
-      <div className="sticky top-0 z-50 bg-white border-b border-slate-200 shadow-sm">
-        <div className="max-w-4xl mx-auto px-6 py-4 flex justify-between items-center">
-          <button onClick={onBack} className="text-sm font-bold text-slate-500 hover:text-slate-900 flex items-center gap-2">
+      <div className="sticky top-0 z-40 border-b border-finops-line bg-finops-surface">
+        <div className="mx-auto flex max-w-[77rem] flex-wrap items-center justify-between gap-3 px-4 py-3 sm:px-6">
+          <button onClick={onBack} className="finops-button">
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
             Back to Dashboard
           </button>
-          <div className="flex items-center gap-2">
-            <button onClick={onDownloadSummary} className="px-4 py-2 bg-emerald-600 text-white rounded-lg font-bold text-sm hover:bg-emerald-700 transition-colors">
+          <div className="flex flex-wrap items-center gap-2">
+            <button onClick={onDownloadSummary} className="finops-primary">
               Download Summary Report
             </button>
-            <button onClick={onDownloadMaster} className="px-4 py-2 bg-slate-900 text-white rounded-lg font-bold text-sm hover:bg-slate-700 transition-colors">
+            <button onClick={onDownloadMaster} className="finops-button">
               Download Master Data
             </button>
-            <button onClick={onDownloadJson} className="px-4 py-2 bg-slate-100 text-slate-900 rounded-lg font-bold text-sm hover:bg-slate-200 transition-colors">
+            <button onClick={onDownloadJson} className="finops-button">
               Download JSON
             </button>
             {result.meta.run_trace && (
-              <button onClick={onDownloadTrace} className="px-4 py-2 bg-slate-100 text-slate-900 rounded-lg font-bold text-sm hover:bg-slate-200 transition-colors">
+              <button onClick={onDownloadTrace} className="finops-button">
                 RunTrace JSON
               </button>
             )}
@@ -645,8 +645,8 @@ export const ReportView: React.FC<ReportViewProps> = ({ result, onBack, onDownlo
 
       <div className="max-w-4xl mx-auto px-6 py-12">
         <div className="mb-8">
-          <h1 className="text-4xl font-display font-bold text-slate-900 mb-2">FinOps Maturity Assessment</h1>
-          <p className="text-slate-500">Generated: {result.meta.timestamp} | FinOps Engine v.{result.meta.engine_version}</p>
+          <h1 className="mb-2 text-4xl font-bold tracking-tight text-finops-ink">FinOps Maturity Assessment</h1>
+          <p className="text-finops-muted">Generated: {result.meta.timestamp} · Assessment engine version: {result.meta.engine_version}</p>
           {(result.meta.source_parse_warnings?.length ?? 0) > 0 && (
             <p className="text-xs text-amber-700 mt-2">
               Source coverage note: {displaySourceCoverageWarning(result.meta.source_parse_warnings![0])}
