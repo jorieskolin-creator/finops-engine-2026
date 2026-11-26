@@ -354,7 +354,11 @@ export function GoldenStandardSuite({ deepMode }: { deepMode: boolean }) {
 
   useEffect(() => {
     let ignore = false;
-    loadSuiteHistory().then(suites => {
+    (async () => {
+      const { flushPendingGoldenStandardDeliveries } = await import('../monitoring/verifyGoldenStandardAttempt');
+      await flushPendingGoldenStandardDeliveries().catch(() => {});
+      return loadSuiteHistory();
+    })().then(suites => {
       if (!ignore) { setHistory(suites); setLoaded(true); }
     }).catch(() => {
       if (!ignore) setMessage('Golden Standard history is unavailable.');
@@ -369,7 +373,13 @@ export function GoldenStandardSuite({ deepMode }: { deepMode: boolean }) {
 
   async function refresh() {
     setLoading(true);
-    try { setHistory(await loadSuiteHistory()); setLoaded(true); setMessage(''); }
+    try {
+      const { flushPendingGoldenStandardDeliveries } = await import('../monitoring/verifyGoldenStandardAttempt');
+      await flushPendingGoldenStandardDeliveries().catch(() => {});
+      setHistory(await loadSuiteHistory());
+      setLoaded(true);
+      setMessage('');
+    }
     catch { setMessage('Golden Standard history is unavailable.'); }
     finally { setLoading(false); }
   }

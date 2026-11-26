@@ -275,7 +275,11 @@ assert.deepEqual(numericObservations(caseId, [
   { name: '06-optimization.html', text: 'posted workload costs of EUR 410 and EUR 328', sourceId: 'src-001' },
   { name: '08-terraform.html', text: 'revised plan at EUR 240', sourceId: 'src-002' },
   { name: '09-ai.html', text: 'EUR 61.76 billed inference. EUR 11.60 billed inference. Shared overhead of EUR 6.64. EUR 80.00 divided by 10,000 completed tasks.', sourceId: 'src-003' },
-], new Set(['src-001', 'src-002'])), [240, null, null, 82], 'unrouted sources must not satisfy packet-backed numeric checks');
+], new Set(['src-001', 'src-002', 'src-003']), {
+  B: new Set(['src-001']),
+  D: new Set(['src-002']),
+  A: new Set(['src-003']), // Admitted only to A, missing from expected Domain F!
+}), [240, null, null, 82], 'sources missing from their target domain packet must not satisfy domain-scoped numeric checks');
 
 const { attemptStatus, caseIds, repeatability, suiteStatus, summarizeMonitoringDashboard } = await loadTypescript('../src/monitoring/goldenStandardSuite.ts');
 const passed = {

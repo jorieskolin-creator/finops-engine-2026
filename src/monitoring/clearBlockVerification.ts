@@ -152,6 +152,14 @@ export function collectAdmittedSourceIds(result: DiagnosticResult): Set<string> 
   );
 }
 
+export function collectAdmittedSourcesByDomain(result: DiagnosticResult): Record<string, Set<string>> {
+  const byDomain: Record<string, Set<string>> = {};
+  for (const packet of result.meta.run_trace?.context_packets ?? []) {
+    byDomain[packet.domain_id] = new Set(packet.manifest.map(item => item.source_id));
+  }
+  return byDomain;
+}
+
 export function buildMonitoringObservation(
   result: DiagnosticResult,
   sources: readonly SourceRecord[],
