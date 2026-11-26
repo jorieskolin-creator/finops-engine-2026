@@ -1,19 +1,18 @@
 import { analyzeDocument } from '../services/analysisService';
 import { parseEvidenceFile, toEvidenceSourceRecords, type ParsedEvidenceFile } from '../services/evidenceIntakeService';
-import { generateSummaryReportHtml } from '../services/exportService';
+import { generateReportHtml, generateSummaryReportHtml } from '../services/exportService';
+import type { DiagnosticResult, SourceRecord } from '../types';
 import { buildReportViewModel } from '../services/reportViewModel';
 import { acknowledgeRun, getRun } from '../services/runLifecycleService';
+import { collectRenderedNarrative, type Comparison, type NarrativeReview, type RenderedNarrative } from './clearBlockNarrativeReview';
 
 const endpoint = '/api/golden-standard-clear-block';
 
 interface FrozenInput { name: string; bytes: number; sha256: string }
-interface Comparison {
-  status: 'Review';
-  referenceVersion: string;
-  checks: Array<{ label: string; expected: string | number | boolean; observed: string | number | boolean; matches: boolean }>;
-}
 export interface ClearBlockResult {
   comparison?: Comparison;
+  narrative?: RenderedNarrative;
+  review?: NarrativeReview;
   summary: string;
   runId: string;
   completedAt: string;
@@ -24,7 +23,7 @@ export interface ClearBlockSession {
   result?: ClearBlockResult;
 }
 
-function totalCents(file: ParsedEvidenceFile, column: string) {
+export function totalCents(file: ParsedEvidenceFile, column: string) {
   const table = file.structuredTable;
   const field = table?.headers.indexOf(column) ?? -1;
   const rows = table?.analysis_rows;
@@ -70,32 +69,12 @@ export async function verifyClearBlock(
   const result = await analyzeDocument(sources, () => {}, { deepMode, onRunStarted });
   const runId = result.meta.run_id;
   if (!runId) throw new Error('GOLDEN_STANDARD_RUN_INCOMPLETE');
-  const summary = generateSummaryReportHtml(result);
-  const report = buildReportViewModel(result);
-  const rendered = new DOMParser().parseFromString(summary, 'text/html');
-  const trace = result.meta.run_trace;
-  const excludedId = sources[2].source_id;
-  const excludedChunkIds = new Set(trace?.input_manifest.find(entry => entry.source_id === excludedId)?.chunk_ids);
-  const observation = {
-    evidenceSufficiency: report.sufficiency.decision,
-    qualityGate: report.actionability.gate,
-    planningDecision: report.actionability.planningDecision.replace(/_/g, ' '),
-    loadedInputsInTrace: sources.every(source => trace?.input_manifest.some(entry =>
-      entry.source_id === source.source_id && entry.source_hash === source.acquisition?.original_sha256)),
-    excludedDocument: !!trace?.input_manifest.some(entry => entry.source_id === excludedId)
-      && trace.context_packets.length === 6
-      && trace.context_packets.every(packet => packet.manifest.every(item => item.source_id !== excludedId))
-      && trace.evidence_paths.every(path => path.source_id !== excludedId
-        && (!path.chunk_id || !excludedChunkIds.has(path.chunk_id))),
-    directiveRoadmapWithheld: !!rendered.querySelector('.withheld-card, .findings-mode') && !rendered.querySelector('.summary-roadmap-phase'),
-    maturityClassificationWithheld: Array.from(rendered.querySelectorAll('.hero .pill'))
-      .some(pill => /^(?:Observed maturity band )?Insufficient evidence$/i.test(pill.textContent?.trim() ?? '')),
-    billingRows: billed.rows, billingCents: billed.cents,
-    backlogRows: backlog.rows, backlogCents: backlog.cents,
-  };
-  const comparison = await caseRequest('', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(observation) })
+  const { observation, narrative, summary } = prepareReport(result, sources, sources[2].source_id);
+  const observed = { ...observation, billingRows: billed.rows, billingCents: billed.cents,
+    backlogRows: backlog.rows, backlogCents: backlog.cents };
+  const comparison = await caseRequest('', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(observed) })
     .then(response => response.json() as Promise<Comparison>).catch(() => undefined);
-  const delivered = { comparison, summary, runId, completedAt: new Date().toISOString(), cleanupVerified: false };
+  const delivered = { comparison, narrative, summary, runId, completedAt: new Date().toISOString(), cleanupVerified: false };
   onDelivery(delivered);
   return { ...delivered, cleanupVerified: await verifyClearBlockCleanup(runId) };
 }
@@ -108,4 +87,31 @@ export async function verifyClearBlockCleanup(runId: string): Promise<boolean> {
     return acknowledged?.cleanup_status === 'verified';
   }
   return false;
+}
+
+export function prepareReport(result: DiagnosticResult, sources: SourceRecord[], excludedId: string | undefined) {
+  const summary = generateSummaryReportHtml(result);
+  const report = buildReportViewModel(result);
+  const parser = new DOMParser();
+  const rendered = parser.parseFromString(summary, 'text/html');
+  const trace = result.meta.run_trace;
+  const excludedChunkIds = new Set(trace?.input_manifest.find(entry => entry.source_id === excludedId)?.chunk_ids);
+  const observation = {
+    evidenceSufficiency: report.sufficiency.decision,
+    qualityGate: report.actionability.gate,
+    planningDecision: report.actionability.planningDecision.replace(/_/g, ' '),
+    loadedInputsInTrace: sources.every(source => trace?.input_manifest.some(entry =>
+      entry.source_id === source.source_id && entry.source_hash === source.acquisition?.original_sha256)),
+    excludedDocument: !!excludedId && !!trace?.input_manifest.some(entry => entry.source_id === excludedId)
+      && trace.context_packets.length === 6
+      && trace.context_packets.every(packet => packet.manifest.every(item => item.source_id !== excludedId))
+      && trace.evidence_paths.every(path => path.source_id !== excludedId
+        && (!path.chunk_id || !excludedChunkIds.has(path.chunk_id))),
+    directiveRoadmapWithheld: !!rendered.querySelector('.withheld-card, .findings-mode') && !rendered.querySelector('.summary-roadmap-phase'),
+    maturityClassificationWithheld: Array.from(rendered.querySelectorAll('.hero .pill'))
+      .some(pill => /^(?:Observed maturity band )?Insufficient evidence$/i.test(pill.textContent?.trim() ?? '')),
+  };
+  const masterData = parser.parseFromString(generateReportHtml(result), 'text/html');
+  const narrative = collectRenderedNarrative(rendered, masterData);
+  return { observation, summary, narrative };
 }
