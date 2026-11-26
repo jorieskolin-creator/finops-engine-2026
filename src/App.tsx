@@ -11,6 +11,8 @@ import { DiagnosticResult, ScanResult, PersonaId, PERSONA_IDS, PERSONA_LABELS, P
 import { METRIC_DESCRIPTIONS } from './constants';
 import { GaugeCard, AuditGrid, StrategicRoadmap, ComparisonChart, ReferenceLibrary, QualityGateBanner, BenchmarkingChart, TransferProtocol, MarkdownRenderer, NeuralLoadingGrid } from './components/DashboardComponents';
 import { ReportView } from './components/ReportView';
+import { GoldenStandardStatus } from './components/GoldenStandardStatus';
+import { useOpeningRetrievalCheck } from './monitoring/useOpeningRetrievalCheck';
 import { LoginModal } from './components/LoginModal';
 import { AppErrorBoundary } from './components/AppErrorBoundary';
 import { checkSession, logout } from './services/authService';
@@ -459,6 +461,7 @@ const App: React.FC = () => {
   const [viewMode, setViewMode] = useState<'dashboard' | 'report'>('dashboard');
   const [scanResult, setScanResult] = useState<ScanResult>({ score: 0, status: 'Insufficient', message: 'Waiting...', details: [], canRun: false });
   const [authenticated, setAuthenticated] = useState(false);
+  const openingRetrievalCheck = useOpeningRetrievalCheck(authenticated);
   const [showLogin, setShowLogin] = useState(false);
   const [activePersona, setActivePersona] = useState<PersonaId>('finops_lead');
   const [deepMode, setDeepMode] = useState(false);
@@ -1030,6 +1033,9 @@ const App: React.FC = () => {
               </div>
             )}
           </div>
+          {authenticated && (
+            <div className="mt-6"><GoldenStandardStatus check={openingRetrievalCheck} /></div>
+          )}
           <div className="mt-8 grid grid-cols-1 sm:grid-cols-2 gap-3">
             <button
               type="button"
@@ -1185,6 +1191,12 @@ const App: React.FC = () => {
           </div>
         </div>
       </header>
+
+      {authenticated && (
+        <div className="mx-auto mt-4 w-[calc(100%-2rem)] max-w-7xl">
+          <GoldenStandardStatus check={openingRetrievalCheck} />
+        </div>
+      )}
 
       {recoveryNotice && (
         <div className="relative z-30 mx-auto mt-4 w-[calc(100%-2rem)] max-w-7xl rounded-2xl border border-emerald-500/30 bg-emerald-950/80 px-5 py-3 text-sm text-emerald-100 shadow-lg shadow-emerald-950/20 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
