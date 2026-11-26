@@ -1,0 +1,1334 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>FinOps Engine v.3.0.0 — User Guide &amp; Practical Instructions</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&amp;family=JetBrains+Mono:wght@400;600;700&amp;display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #f2f3ed;
+      --surface: #fcfcf7;
+      --surface-alt: #f3f6f1;
+      --border: #d7ded4;
+      --outline: #8b9f94;
+      --text: #1e312a;
+      --text-muted: #52665e;
+      --primary: #203a30;
+      --primary-light: #e7f0e8;
+      --primary-dark: #162922;
+      --lime: #d9ed85;
+      --note-bg: #faf0cf;
+      --note-border: #dfc985;
+      --note-text: #59410d;
+      --go-bg: #e7f0e8;
+      --go-text: #1b4d35;
+      --go-border: #adc9b4;
+      --warn-bg: #faf0cf;
+      --warn-text: #7c5205;
+      --warn-border: #dfc985;
+      --block-bg: #fdecec;
+      --block-text: #991b1b;
+      --block-border: #f2b6b6;
+      --shadow: 0 12px 32px -16px rgba(32, 58, 48, 0.22);
+      --radius: 16px;
+      --radius-sm: 10px;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    html {
+      scroll-behavior: smooth;
+    }
+
+    body {
+      font-family: "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.65;
+      font-size: 16px;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* Sticky Brand Bar (matches FinOps Engine v.3.0.0 shell) */
+    .topbar {
+      position: sticky;
+      top: 0;
+      z-index: 40;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .topbar-inner {
+      max-width: 1180px;
+      margin: 0 auto;
+      padding: 12px 24px;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .brand {
+      display: inline-flex;
+      align-items: center;
+      gap: 12px;
+      text-decoration: none;
+      color: var(--text);
+    }
+
+    .brand-mark {
+      width: 40px;
+      height: 40px;
+      border-radius: 12px;
+      background: var(--primary);
+      color: var(--lime);
+      font-weight: 900;
+      font-size: 14px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .brand-kicker {
+      display: block;
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.15em;
+      color: var(--text-muted);
+      line-height: 1.2;
+    }
+
+    .brand-title {
+      display: block;
+      font-size: 14px;
+      font-weight: 700;
+      letter-spacing: -0.01em;
+      line-height: 1.3;
+    }
+
+    .topbar-actions {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 14px;
+      border-radius: 8px;
+      border: 1px solid var(--outline);
+      background: var(--surface);
+      color: var(--primary);
+      font-size: 13.5px;
+      font-weight: 600;
+      text-decoration: none;
+      cursor: pointer;
+      transition: background 0.15s, border-color 0.15s;
+    }
+
+    .btn:hover {
+      background: var(--primary-light);
+    }
+
+    .btn-primary {
+      background: var(--primary);
+      border-color: var(--primary);
+      color: var(--surface);
+    }
+
+    .btn-primary:hover {
+      background: var(--primary-dark);
+      border-color: var(--primary-dark);
+    }
+
+    /* Hero */
+    .hero {
+      max-width: 1180px;
+      margin: 0 auto;
+      padding: 40px 24px 12px;
+    }
+
+    .hero-card {
+      background: var(--primary);
+      color: var(--surface);
+      border-radius: var(--radius);
+      padding: 40px 38px;
+      box-shadow: var(--shadow);
+    }
+
+    .hero-badge {
+      display: inline-block;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      background: rgba(217, 237, 133, 0.16);
+      border: 1px solid rgba(217, 237, 133, 0.42);
+      color: var(--lime);
+      padding: 5px 12px;
+      border-radius: 999px;
+      margin-bottom: 16px;
+    }
+
+    .hero h1 {
+      font-size: clamp(28px, 4.2vw, 44px);
+      font-weight: 900;
+      line-height: 1.08;
+      margin-bottom: 14px;
+      letter-spacing: -0.035em;
+      max-width: 820px;
+    }
+
+    .hero p {
+      max-width: 800px;
+      font-size: 16.5px;
+      color: rgba(252, 252, 247, 0.88);
+      margin-bottom: 24px;
+    }
+
+    .hero-pillars {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 9px;
+    }
+
+    .hero-pill {
+      background: rgba(252, 252, 247, 0.1);
+      border: 1px solid rgba(252, 252, 247, 0.22);
+      color: var(--surface);
+      font-size: 13px;
+      padding: 6px 13px;
+      border-radius: 999px;
+      font-weight: 600;
+    }
+
+    /* Main Layout */
+    .layout {
+      max-width: 1180px;
+      margin: 0 auto;
+      padding: 24px 24px 72px;
+      display: grid;
+      grid-template-columns: 248px 1fr;
+      gap: 28px;
+      align-items: start;
+    }
+
+    /* Sidebar Navigation */
+    .toc {
+      position: sticky;
+      top: 84px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 18px 14px;
+      box-shadow: var(--shadow);
+    }
+
+    .toc-title {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.14em;
+      color: var(--text-muted);
+      margin-bottom: 10px;
+      padding-left: 10px;
+    }
+
+    .toc ul {
+      list-style: none;
+    }
+
+    .toc li {
+      margin-bottom: 3px;
+    }
+
+    .toc a {
+      display: block;
+      text-decoration: none;
+      color: var(--text-muted);
+      font-size: 13.5px;
+      font-weight: 600;
+      padding: 7px 10px;
+      border-radius: 8px;
+      transition: background 0.15s, color 0.15s;
+    }
+
+    .toc a:hover,
+    .toc a.active {
+      background: var(--primary-light);
+      color: var(--primary);
+    }
+
+    /* Content Sections */
+    .content {
+      min-width: 0;
+    }
+
+    section.card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 32px 34px;
+      margin-bottom: 22px;
+      box-shadow: var(--shadow);
+      scroll-margin-top: 84px;
+    }
+
+    .section-num {
+      display: inline-block;
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.14em;
+      color: var(--primary);
+      background: var(--primary-light);
+      padding: 4px 10px;
+      border-radius: 6px;
+      margin-bottom: 10px;
+    }
+
+    section.card h2 {
+      font-size: 24px;
+      font-weight: 800;
+      color: var(--text);
+      margin-bottom: 12px;
+      line-height: 1.22;
+      letter-spacing: -0.02em;
+    }
+
+    section.card h3 {
+      font-size: 17px;
+      font-weight: 700;
+      color: var(--text);
+      margin: 24px 0 10px;
+    }
+
+    section.card p {
+      margin-bottom: 14px;
+      color: var(--text);
+    }
+
+    .lead {
+      font-size: 16.5px;
+      color: var(--text-muted);
+      margin-bottom: 18px;
+    }
+
+    /* Callouts */
+    .callout {
+      border-radius: var(--radius-sm);
+      padding: 16px 20px;
+      margin: 18px 0;
+      border: 1px solid var(--go-border);
+      border-left: 4px solid var(--primary);
+      background: var(--primary-light);
+    }
+
+    .callout strong.callout-title {
+      display: block;
+      font-size: 14.5px;
+      color: var(--primary-dark);
+      margin-bottom: 4px;
+    }
+
+    .callout.warn {
+      background: var(--note-bg);
+      border-color: var(--note-border);
+      border-left: 4px solid #b47d12;
+      color: var(--note-text);
+    }
+
+    .callout.warn strong.callout-title {
+      color: #6b4704;
+    }
+
+    .callout.info {
+      background: var(--surface-alt);
+      border-color: var(--border);
+      border-left: 4px solid var(--primary);
+    }
+
+    .callout.info strong.callout-title {
+      color: var(--primary);
+    }
+
+    /* Grids */
+    .grid-2 {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 16px;
+      margin: 16px 0;
+    }
+
+    .grid-3 {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+      margin: 16px 0;
+    }
+
+    .grid-4 {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px;
+      margin: 16px 0;
+    }
+
+    .mini-card {
+      background: var(--surface-alt);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 16px;
+    }
+
+    .mini-card .label {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--primary);
+      margin-bottom: 4px;
+    }
+
+    .mini-card h4 {
+      font-size: 15.5px;
+      margin-bottom: 6px;
+      color: var(--text);
+    }
+
+    .mini-card p, .mini-card li {
+      font-size: 14px;
+      color: var(--text-muted);
+      margin-bottom: 6px;
+    }
+
+    .mini-card ul {
+      padding-left: 18px;
+      margin-top: 6px;
+    }
+
+    /* Domain Pills */
+    .domain-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 12px;
+      margin: 14px 0 10px;
+    }
+
+    .domain-item {
+      display: flex;
+      gap: 12px;
+      align-items: flex-start;
+      background: var(--surface-alt);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 12px 14px;
+    }
+
+    .domain-letter {
+      flex-shrink: 0;
+      width: 30px;
+      height: 30px;
+      border-radius: 8px;
+      background: var(--primary);
+      color: var(--lime);
+      font-weight: 800;
+      font-size: 13.5px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .domain-item strong {
+      display: block;
+      font-size: 14.5px;
+      color: var(--text);
+    }
+
+    .domain-item span {
+      font-size: 13.5px;
+      color: var(--text-muted);
+    }
+
+    /* Specs bar */
+    .specs-bar {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px;
+      background: var(--surface-alt);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 14px 16px;
+      margin: 16px 0;
+    }
+
+    .spec-item .spec-val {
+      font-size: 15px;
+      font-weight: 800;
+      color: var(--primary);
+    }
+
+    .spec-item .spec-lbl {
+      font-size: 12.8px;
+      color: var(--text-muted);
+      margin-top: 2px;
+    }
+
+    /* Tier Badges */
+    .tier-badge {
+      display: inline-block;
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      padding: 3px 8px;
+      border-radius: 5px;
+      margin-bottom: 8px;
+    }
+    .tier-1 { background: var(--primary); color: var(--lime); }
+    .tier-2 { background: var(--primary-light); color: var(--primary); border: 1px solid var(--go-border); }
+    .tier-3 { background: var(--note-bg); color: var(--warn-text); border: 1px solid var(--note-border); }
+
+    /* Do / Don't */
+    .do-box {
+      background: var(--go-bg);
+      border: 1px solid var(--go-border);
+      border-radius: var(--radius-sm);
+      padding: 16px 18px;
+    }
+    .dont-box {
+      background: var(--block-bg);
+      border: 1px solid var(--block-border);
+      border-radius: var(--radius-sm);
+      padding: 16px 18px;
+    }
+    .do-box h4 { color: var(--go-text); margin-bottom: 8px; font-size: 15.5px; }
+    .dont-box h4 { color: var(--block-text); margin-bottom: 8px; font-size: 15.5px; }
+    .do-box ul, .dont-box ul { padding-left: 18px; font-size: 14px; color: var(--text); }
+    .do-box li, .dont-box li { margin-bottom: 6px; }
+
+    /* Tables */
+    .table-wrap {
+      overflow-x: auto;
+      margin: 16px 0;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 14.3px;
+    }
+
+    th, td {
+      text-align: left;
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--border);
+      vertical-align: top;
+    }
+
+    tr:last-child td {
+      border-bottom: 0;
+    }
+
+    th {
+      background: var(--surface-alt);
+      color: var(--text);
+      font-weight: 700;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+
+    /* Quality Gate Cards */
+    .gate-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 14px;
+      margin: 16px 0;
+    }
+
+    .gate-card {
+      border-radius: var(--radius-sm);
+      padding: 16px;
+      border: 1px solid transparent;
+    }
+
+    .gate-go {
+      background: var(--go-bg);
+      border-color: var(--go-border);
+    }
+    .gate-warn {
+      background: var(--warn-bg);
+      border-color: var(--warn-border);
+    }
+    .gate-block {
+      background: var(--block-bg);
+      border-color: var(--block-border);
+    }
+
+    .gate-pill {
+      display: inline-block;
+      font-size: 11.5px;
+      font-weight: 800;
+      letter-spacing: 0.08em;
+      padding: 3px 10px;
+      border-radius: 999px;
+      margin-bottom: 8px;
+    }
+
+    .gate-go .gate-pill { background: var(--primary); color: var(--lime); }
+    .gate-warn .gate-pill { background: #946200; color: #fff; }
+    .gate-block .gate-pill { background: var(--block-text); color: #fff; }
+
+    .gate-card h4 {
+      font-size: 15px;
+      margin-bottom: 6px;
+    }
+    .gate-card p {
+      font-size: 13.8px;
+      margin-bottom: 0;
+      color: var(--text);
+    }
+
+    /* Pipeline Steps */
+    .pipeline {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 14px;
+      margin: 18px 0;
+    }
+
+    .step-card {
+      background: var(--surface-alt);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 16px;
+    }
+
+    .step-num {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 26px;
+      height: 26px;
+      border-radius: 8px;
+      background: var(--primary);
+      color: var(--lime);
+      font-size: 12.5px;
+      font-weight: 800;
+      margin-bottom: 8px;
+    }
+
+    .step-card h4 {
+      font-size: 15px;
+      margin-bottom: 6px;
+    }
+
+    .step-card p {
+      font-size: 13.8px;
+      color: var(--text-muted);
+      margin-bottom: 0;
+    }
+
+    /* Output Utilization Cards */
+    .output-list {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      margin: 16px 0;
+    }
+
+    .output-item {
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 18px 20px;
+      background: var(--surface-alt);
+      border-left: 4px solid var(--primary);
+    }
+
+    .output-item h4 {
+      font-size: 16px;
+      margin-bottom: 6px;
+      color: var(--text);
+    }
+
+    .output-meta {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+      margin-top: 8px;
+    }
+
+    .output-meta div {
+      font-size: 14px;
+      color: var(--text-muted);
+    }
+
+    .output-meta strong {
+      display: block;
+      font-size: 11.5px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--primary);
+      margin-bottom: 3px;
+    }
+
+    ul.clean-list {
+      padding-left: 20px;
+      margin: 10px 0 14px;
+    }
+    ul.clean-list li {
+      margin-bottom: 8px;
+    }
+
+    code {
+      font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 0.86em;
+      background: var(--surface-alt);
+      border: 1px solid var(--border);
+      padding: 1px 6px;
+      border-radius: 5px;
+      color: var(--primary);
+    }
+
+    footer {
+      max-width: 1180px;
+      margin: 0 auto;
+      padding: 0 24px 48px;
+      color: var(--text-muted);
+      font-size: 13px;
+      text-align: center;
+    }
+
+    @media (max-width: 920px) {
+      .layout {
+        grid-template-columns: 1fr;
+      }
+      .toc {
+        position: static;
+      }
+      .grid-3, .grid-4, .gate-grid, .pipeline, .specs-bar {
+        grid-template-columns: 1fr;
+      }
+      .grid-2, .domain-grid, .output-meta {
+        grid-template-columns: 1fr;
+      }
+      section.card, .hero-card {
+        padding: 24px 20px;
+      }
+    }
+
+    @media print {
+      body { background: #fff; }
+      .topbar, .toc { display: none; }
+      .hero { padding-top: 0; }
+      .layout { display: block; padding: 12px 0; }
+      section.card { box-shadow: none; break-inside: avoid; }
+      .hero-card { background: #203a30 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    }
+  </style>
+</head>
+<body>
+
+  <header class="topbar">
+    <div class="topbar-inner">
+      <a href="/" class="brand">
+        <span class="brand-mark" aria-hidden="true">FO</span>
+        <span>
+          <span class="brand-kicker">Governed assessment · User guide</span>
+          <span class="brand-title">FinOps Engine v.3.0.0</span>
+        </span>
+      </a>
+      <div class="topbar-actions">
+        <button type="button" class="btn" onclick="window.print()">Print / Save PDF</button>
+        <a href="/" class="btn btn-primary">Open FinOps Engine</a>
+      </div>
+    </div>
+  </header>
+
+  <div class="hero">
+    <div class="hero-card">
+      <div class="hero-badge">Evidence-Led FinOps Assessment · Practical Guide</div>
+      <h1>Using the FinOps Engine in a FinOps Assessment</h1>
+      <p>
+        A plain-language guide to what the FinOps Engine does, how to prepare and upload evidence,
+        how browser parsing and deterministic privacy gates work, why real evidence always beats invented paperwork,
+        how to read the gauges and Quality Gate, and how to turn generated reports into customer decisions.
+      </p>
+      <div class="hero-pillars">
+        <span class="hero-pill">Expert-Led Assessment</span>
+        <span class="hero-pill">Browser Parsing &amp; Privacy Gate</span>
+        <span class="hero-pill">Resolution-Based Maturity (ADR-002)</span>
+        <span class="hero-pill">Customer Retains Decision Authority</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="layout">
+    <nav class="toc" aria-label="Guide sections">
+      <div class="toc-title">On This Page</div>
+      <ul>
+        <li><a href="#idea">1. The Big Idea</a></li>
+        <li><a href="#documents">2. Adding Good Documents</a></li>
+        <li><a href="#no-inventing">3. Why Not to Invent Docs</a></li>
+        <li><a href="#gauges">4. Reading the Gauges</a></li>
+        <li><a href="#how-built">5. How Summaries Are Built</a></li>
+        <li><a href="#using-outputs">6. Using the Engine &amp; Reports</a></li>
+        <li><a href="#checklist">7. Quick-Start Checklist</a></li>
+      </ul>
+    </nav>
+
+    <main class="content">
+
+      <!-- SECTION 1 -->
+      <section class="card" id="idea">
+        <span class="section-num">Section 01</span>
+        <h2>The Idea: FinOps Engine Inside the FinOps Assessment</h2>
+        <p class="lead">
+          The Evidence-Driven FinOps Assessment helps an organization build an honest, evidence-backed view of how it manages
+          cloud costs today, spot the highest-leverage improvements, and agree on a practical path forward.
+        </p>
+        <p>
+          The <strong>FinOps Engine</strong> is the governed analysis layer supporting that assessment—not a standalone
+          self-service grading tool and not a general-purpose chatbot. Its job is to acquire, screen, verify, and structure
+          approved customer evidence so FinOps practitioners spend less time digging through files and more time validating
+          findings and guiding decisions with the customer.
+        </p>
+
+        <div class="callout">
+          <strong class="callout-title">The Core Principle</strong>
+          AI stages propose bounded candidate findings, while <strong>deterministic code owns admission, scoring, gates, and audit lineage</strong>.
+          The Engine never replaces FinOps expert judgment, and the customer always keeps final decision authority.
+        </div>
+
+        <h3>How the Engine Fits Into the 3-Day Assessment</h3>
+        <div class="grid-4">
+          <div class="mini-card">
+            <div class="label">Step 0</div>
+            <h4>Prepare &amp; Align</h4>
+            <p>Agree on scope and goals, walk through how data handling and privacy controls work, and gather existing documents.</p>
+          </div>
+          <div class="mini-card">
+            <div class="label">Day 1</div>
+            <h4>Understand &amp; Collect</h4>
+            <p>Run stakeholder workshops and interviews to understand real day-to-day practices and identify supporting evidence.</p>
+          </div>
+          <div class="mini-card">
+            <div class="label">Day 2</div>
+            <h4>Analyze &amp; Clarify</h4>
+            <p>Run the FinOps Engine on the collected material, close accidental evidence gaps, and calibrate findings with FinOps experts.</p>
+          </div>
+          <div class="mini-card">
+            <div class="label">Day 3</div>
+            <h4>Validate &amp; Commit</h4>
+            <p>Review the Summary and Master Data reports with the customer, prioritize actions, and agree on a FinOps Change Plan.</p>
+          </div>
+        </div>
+
+        <h3>Six Cloud-Neutral Domains (30 Capability &amp; Anti-Pattern Pairs)</h3>
+        <p>The Engine evaluates evidence across AWS, Azure, Google Cloud, SaaS, and multi-cloud environments using six domains (60 criteria total: 30 Maturity capabilities paired with 30 Anti-Pattern indicators):</p>
+        <div class="domain-grid">
+          <div class="domain-item">
+            <div class="domain-letter">A</div>
+            <div>
+              <strong>Cost Visibility &amp; Allocation</strong>
+              <span>Tagging, cost allocation, reporting, showback/chargeback, and unit economics (A1–A5 / AP-A1–AP-A5).</span>
+            </div>
+          </div>
+          <div class="domain-item">
+            <div class="domain-letter">B</div>
+            <div>
+              <strong>Rate &amp; Usage Optimization</strong>
+              <span>Commitments (RIs/Savings Plans), rightsizing, waste reduction, and storage efficiency (B1–B5 / AP-B1–AP-B5).</span>
+            </div>
+          </div>
+          <div class="domain-item">
+            <div class="domain-letter">C</div>
+            <div>
+              <strong>Governance &amp; Policy</strong>
+              <span>Budgeting, forecasting, policies, FinOps operating model, and procurement (C1–C5 / AP-C1–AP-C5).</span>
+            </div>
+          </div>
+          <div class="domain-item">
+            <div class="domain-letter">D</div>
+            <div>
+              <strong>Architecture &amp; Engineering</strong>
+              <span>Cost-aware design, automation, IaC guardrails, and scalable engineering practices (D1–D5 / AP-D1–AP-D5).</span>
+            </div>
+          </div>
+          <div class="domain-item">
+            <div class="domain-letter">E</div>
+            <div>
+              <strong>Culture &amp; Organization</strong>
+              <span>Roles, accountability, cross-team collaboration, executive sponsorship, and enablement (E1–E5 / AP-E1–AP-E5).</span>
+            </div>
+          </div>
+          <div class="domain-item">
+            <div class="domain-letter">F</div>
+            <div>
+              <strong>GenAI &amp; AI Cost Management</strong>
+              <span>Token/inference spend, model routing, AI budgets, guardrails, and unit value (F1–F5 / AP-F1–AP-F5).</span>
+            </div>
+          </div>
+        </div>
+        <p style="font-size: 14px; color: var(--text-muted); margin-top: 8px;">
+          <strong>Note on Domain F when AI is not in use:</strong> If an organization has no GenAI workloads or uploads no AI evidence, Domain F skips model dispatch locally and stays <code>Not assessed</code>—it is never averaged in as zero maturity, though its 10 criteria (5 pairs) remain part of the 60-criterion coverage and 30-pair Resolution denominators.
+        </p>
+
+        <div class="callout info">
+          <strong class="callout-title">How Customer Data, Identifiers &amp; Financial Records Are Handled</strong>
+          Original source files, full spreadsheets, and image pixels are parsed locally in your browser (raw images are never sent to AI models, and filenames are replaced with pseudonymous <code>Document NNN</code> IDs). Before any governed model packet is assembled, deterministic privacy and DLP controls <strong>block prohibited secrets</strong> (private keys, cloud keys, API tokens, credentials) and <strong>redact pattern-matched identifiers</strong> (emails, phone numbers, IP addresses, government/bank IDs, contextual person names, billing/invoice account IDs, and explicit contract-rate phrases such as negotiated discount rates, contract values, and EDP pricing).
+          <br /><br />
+          <strong>What enters governed AI packets:</strong> Only privacy-screened text, bounded model-eligible table rows (kept with row locators so findings and quotes can be independently verified), and approved deterministic table summaries are sent in SHA-256-bound text packets to the configured LLM providers. Canonical packet bodies in PostgreSQL and recovery checkpoints in Redis are deleted on acknowledged report delivery, explicit session reset, or expiry, while content-free run metadata and hashes remain for 90-day audit retention. Always screen inputs and use the built-in <strong>Privacy Review</strong> panel before sharing reports externally.
+        </div>
+      </section>
+
+      <!-- SECTION 2 -->
+      <section class="card" id="documents">
+        <span class="section-num">Section 02</span>
+        <h2>Adding Documents: What Makes Good Evidence?</h2>
+        <p class="lead">
+          The Engine can only assess what is supported in the uploaded material. A balanced mix of operating records gives a
+          far more reliable picture than a single executive slide deck.
+        </p>
+
+        <div class="specs-bar">
+          <div class="spec-item">
+            <div class="spec-val">2–30 Files</div>
+            <div class="spec-lbl">Accepted per assessment run</div>
+          </div>
+          <div class="spec-item">
+            <div class="spec-val">25 MB / 50 MB</div>
+            <div class="spec-lbl">Max per file / max total upload size</div>
+          </div>
+          <div class="spec-item">
+            <div class="spec-val">PDF &amp; OCR Limits</div>
+            <div class="spec-lbl">PDFs up to 100 pages (max 30 OCR pages)</div>
+          </div>
+          <div class="spec-item">
+            <div class="spec-val">Supported Formats</div>
+            <div class="spec-lbl">PDF, XLSX, CSV, TSV, HTML, JSON, PNG, JPEG, WebP</div>
+          </div>
+        </div>
+
+        <h3>Preferable Documents by Signal Strength</h3>
+        <div class="grid-3">
+          <div class="mini-card">
+            <span class="tier-badge tier-1">Tier 1 · High Signal</span>
+            <h4>Best Documents to Include</h4>
+            <ul>
+              <li>Cloud governance or FinOps policy</li>
+              <li>Tagging &amp; cost allocation standards</li>
+              <li>FinOps team charter or CoE operating model</li>
+              <li>Billing / tagging allocation exports (CSV, TSV, XLSX)</li>
+              <li>Reserved Instance / Savings Plan review records</li>
+              <li>Completed rightsizing or optimization action logs</li>
+              <li>AI cost / token-usage reconciliation &amp; model policies</li>
+            </ul>
+          </div>
+          <div class="mini-card">
+            <span class="tier-badge tier-2">Tier 2 · Strong Signal</span>
+            <h4>Very Helpful Context</h4>
+            <ul>
+              <li>Annual or quarterly cloud budgets &amp; forecasts</li>
+              <li>Sample monthly showback / chargeback reports</li>
+              <li>Cost dashboard exports (PDF or text-legible screenshots)</li>
+              <li>Architecture or Terraform cost-review records</li>
+              <li>Engineering guidelines for resource provisioning</li>
+            </ul>
+          </div>
+          <div class="mini-card">
+            <span class="tier-badge tier-3">Tier 3 · Supporting Signal</span>
+            <h4>Useful Extras</h4>
+            <ul>
+              <li>IT budgets referencing cloud spend</li>
+              <li>Cloud / SaaS procurement approval records</li>
+              <li>Incident post-mortems noting cost anomalies</li>
+              <li>Well-Architected review outputs</li>
+              <li>FinOps training or enablement records</li>
+            </ul>
+          </div>
+        </div>
+
+        <h3>How Different File Types Are Handled (Practical Tips)</h3>
+        <ul class="clean-list">
+          <li><strong>Show real practice, not just rules:</strong> A policy shows what is intended; a billing or tagging table shows current coverage; an exception review or completed action log proves the control operates in practice. Combining them produces corroborated findings.</li>
+          <li><strong>Spreadsheets &amp; Delimited Tables (XLSX, CSV, TSV):</strong> The Engine preserves sheet and physical row numbers, inspects structure locally, and runs <strong>authoritative deterministic analyzers where live criterion bindings exist</strong> (such as <code>A1 / AP-A1</code> row-weighted and cost-weighted tagging/allocation coverage and bound tabular checks) alongside privacy-screened row evidence. Workbook formulas use cached values, and hidden sheets, hidden rows/columns, or unfiltered non-evidence structures are privacy-scanned locally and withheld from model packets.</li>
+          <li><strong>Screenshots &amp; Scanned PDFs (Local OCR):</strong> Browser-local Tesseract OCR extracts <strong>English and Finnish</strong> text from PNG, JPEG, WebP, and sparse/scanned PDF pages (up to 30 OCR pages per PDF). Because raw images are never sent to AI models, <strong>chart lines, colors, and non-text visual shapes remain explicitly withheld</strong> as uninspected visual regions.</li>
+          <li><strong>Skip unrelated "noise" files:</strong> Avoid uploading unrelated purchasing logs, generic industry articles, or FinOps textbooks. The Engine enforces customer FinOps scope, so generic reference material adds clutter without earning credit.</li>
+          <li><strong>Use interview notes as evidence leads:</strong> Workshop notes help identify day-to-day friction and point you toward the real exports, tickets, or policies to upload as corroborating proof.</li>
+        </ul>
+      </section>
+
+      <!-- SECTION 3 -->
+      <section class="card" id="no-inventing">
+        <span class="section-num">Section 03</span>
+        <h2>Why You Should Never "Invent" Information or Documents</h2>
+        <p class="lead">
+          If a policy, report, or operating practice does not exist yet, <strong>do not write a quick placeholder document just to feed the Engine</strong>.
+        </p>
+
+        <div class="callout warn">
+          <strong class="callout-title">Golden Rule: "Silence is Data"</strong>
+          The FinOps Engine evaluates what an organization <strong>actually has and operates today</strong>—not what someone could draft on the morning of the assessment. Missing documentation is an informative diagnostic signal, not an error.
+        </div>
+
+        <div class="grid-2">
+          <div class="do-box">
+            <h4>What Happens When You Stay Honest</h4>
+            <ul>
+              <li>Unassessed criteria remain <strong>NA / Not assessed</strong>—never artificially penalized as zero and never assumed healthy.</li>
+              <li>Domains with no qualifying customer evidence skip model dispatch locally and are clearly listed for evidence collection.</li>
+              <li>Stakeholders can hold a productive Day 3 conversation: Is this practice informal, undocumented in another tool, or genuinely absent?</li>
+              <li>The resulting roadmap or validation plan targets real operational priorities.</li>
+            </ul>
+          </div>
+          <div class="dont-box">
+            <h4>Why Invented Docs Backfire</h4>
+            <ul>
+              <li><strong>Aspiration does not prove operation:</strong> Drafts, proposals, and unapproved plans cannot substantiate operational maturity criteria.</li>
+              <li><strong>Triggers pair contradictions:</strong> Newly written claims conflict with real billing tables and operational logs, surfacing explicit pair contradictions.</li>
+              <li><strong>Distorts the roadmap:</strong> Overstating current controls suppresses foundational tactics the team actually needs first.</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <!-- SECTION 4 -->
+      <section class="card" id="gauges">
+        <span class="section-num">Section 04</span>
+        <h2>How to Read &amp; Understand the Gauges</h2>
+        <p class="lead">
+          Under <strong>ADR-002</strong>, the Engine uses a <strong>resolution-based maturity model</strong> across 30 registered
+          capability/anti-pattern pairs. Rather than collapsing unknowns into zeroes or capping scores behind roadmap gates, it keeps
+          <strong>pair maturity</strong>, <strong>assessment resolution</strong>, <strong>anti-pattern friction</strong>, and
+          <strong>roadmap actionability</strong> distinct.
+        </p>
+
+        <h3>1. The Headline Gauges &amp; Supporting Views</h3>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Gauge / Metric</th>
+                <th>What It Computes</th>
+                <th>How to Read It</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>Corroborated Maturity</strong></td>
+                <td>Weighted maturity across <strong>only fully resolved pairs</strong>—pairs where <em>both</em> the capability criterion and its paired anti-pattern criterion have provenance-bound resolution (including governed tested absence).</td>
+                <td>Shows maturity where both capability execution and anti-pattern control are proven together. Returns <code>N/A</code> if no pair has both sides resolved yet.</td>
+              </tr>
+              <tr>
+                <td><strong>Observed Maturity<br>(with Resolution)</strong></td>
+                <td>Weighted maturity across <strong>fully or partially resolved pairs</strong> (<code>1.0</code> weight credit when both sides are resolved, <code>0.5</code> when one side is resolved), paired with <strong>Overall Assessment Resolution %</strong>.</td>
+                <td>Always read Observed Maturity alongside its <strong>Resolution %</strong>. A high score at low resolution means "strong in a narrow evidenced slice, unknown across the rest of the estate." Unknown criteria remain <code>NA</code>.</td>
+              </tr>
+              <tr>
+                <td><strong>Adjusted FinOps Maturity &amp; Stage</strong><br><em>(Crawl · Walk · Walk with significant friction · Run)</em></td>
+                <td><code>Observed Maturity × √(Resolution)</code>—discounts Observed Maturity by how much of the 30-pair framework is resolved, and drives stage classification <strong>only when Assessment Sufficiency passes</strong>.</td>
+                <td>
+                  Publishes <strong>Crawl</strong>, <strong>Walk</strong>, <strong>Walk with significant friction</strong>, or <strong>Run</strong> only when both <strong>Criterion Evidence Density</strong> (60 criteria) and <strong>Overall Assessment Resolution</strong> (30 pairs) strictly exceed <strong>24%</strong> with complete provenance and verification; otherwise shows <code>Insufficient evidence</code>.
+                </td>
+              </tr>
+              <tr>
+                <td><strong>Anti-Pattern Burden, Coverage &amp; Clearance</strong></td>
+                <td>Separates confirmed operational friction from missing evidence across the 30 anti-pattern indicators.</td>
+                <td>
+                  <strong>Confirmed / Partial Present:</strong> Friction evidenced in the customer records.<br />
+                  <strong>Tested Absent:</strong> Scope was inspected and proven clear of the anti-pattern.<br />
+                  <strong>Not Assessed:</strong> Uncovered in the files. <em>Low burden at low coverage means "untested," not "problem-free."</em>
+                </td>
+              </tr>
+              <tr>
+                <td><strong>Acquisition Quality Telemetry</strong><br><em>(Master Data HTML)</em></td>
+                <td>Observability snapshot of the input package itself, kept separate from customer maturity scores.</td>
+                <td>Reports <strong>Extraction completeness</strong>, <strong>Evidence coverage</strong> (<code>X/60</code>), <strong>Acquisition quality composite</strong> (verified strength + source diversity + category diversity), <strong>Provenance integrity</strong>, and <strong>KB readiness</strong>.</td>
+              </tr>
+              <tr>
+                <td><strong>Domain Balance (A–F) &amp; Evidence Categories</strong></td>
+                <td>Compares maturity vs. anti-pattern signals per domain and tracks the seven evidence categories (Policy, Process, Operational, Automation, Accountability, Financial-Integration, Cultural).</td>
+                <td>Quickly highlights imbalances—for example, heavy Policy documentation with little Operational or Automation evidence.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3>2. Two Separate Decisions: Assessment Sufficiency vs. Quality Gate</h3>
+        <p>
+          <strong>Assessment Sufficiency</strong> (<code>PASS | BLOCK</code>) decides whether evidence is broad enough to publish a
+          <code>Crawl / Walk / Run</code> classification. <strong>Quality Gate</strong> (<code>GO | WARN | BLOCK</code>) is a separate
+          decision governing <strong>roadmap actionability</strong>—it never caps or rewrites maturity scores.
+        </p>
+
+        <div class="gate-grid">
+          <div class="gate-card gate-go">
+            <span class="gate-pill">GO</span>
+            <h4>Actionable Roadmap</h4>
+            <p>
+              Strong verified coverage (36+ of 60 criteria assessed, i.e. 60%+ density) with verified fact-checking and all
+              required Playbook tactics resolved. Ready for expert calibration and customer planning.
+            </p>
+          </div>
+          <div class="gate-card gate-warn">
+            <span class="gate-pill">WARN</span>
+            <h4>Use With Caution</h4>
+            <p>
+              Moderate coverage (15–35 of 60 criteria assessed), partial anti-pattern coverage, packet coverage warnings, or
+              claim-sanitation notes. Produces a cautious roadmap with explicit assumptions to validate first.
+            </p>
+          </div>
+          <div class="gate-card gate-block">
+            <span class="gate-pill">BLOCK</span>
+            <h4>Findings Mode / Do Not Execute Yet</h4>
+            <p>
+              Triggered when evidence is below the 25% floor (0–14 of 60 criteria assessed—switching output to <strong>Findings Mode</strong>
+              with scoped observations and an evidence-collection plan instead of a directive roadmap) or when fact-check/required-tactic
+              blockers remain unresolved.
+            </p>
+          </div>
+        </div>
+
+        <div class="callout">
+          <strong class="callout-title">Why a BLOCK Result Is Still Constructive</strong>
+          A BLOCK result protects teams from acting on guesswork. It pinpoints exactly which records were omitted or which controls lack
+          operating evidence so the team knows what to verify next.
+        </div>
+      </section>
+
+      <!-- SECTION 5 -->
+      <section class="card" id="how-built">
+        <span class="section-num">Section 05</span>
+        <h2>How Key Summaries Are Created (Behind the Scenes)</h2>
+        <p class="lead">
+          Instead of feeding raw files into a single prompt, the FinOps Engine runs a multi-stage governed pipeline where
+          <strong>models author bounded semantic judgements and deterministic code enforces contracts, math, and gates</strong>.
+        </p>
+
+        <div class="pipeline">
+          <div class="step-card">
+            <div class="step-num">1</div>
+            <h4>Local Parsing, Table Inspection &amp; Privacy Gate</h4>
+            <p>Your browser fingerprints each file, extracts text, tables, and EN/FI local OCR, runs bound deterministic table analyzers, redacts pattern-matched identifiers, and blocks prohibited secrets before any model call.</p>
+          </div>
+          <div class="step-card">
+            <div class="step-num">2</div>
+            <h4>Bounded Retrieval &amp; Domain Audit (A–F)</h4>
+            <p>Up to two pre-audit retrieval rounds assemble A–F packets (using catalog-only gap queries when needed). Domains with eligible evidence audit 60 criteria (180 sub-questions); empty domains record <em>Not assessed</em> locally.</p>
+          </div>
+          <div class="step-card">
+            <div class="step-num">3</div>
+            <h4>Independent Evidence Check &amp; Re-Scan</h4>
+            <p>An independent verifier checks candidate findings and quotes against registered customer sources and approved derived calculations, triggering targeted re-scans or conservative downgrades when support is weak.</p>
+          </div>
+          <div class="step-card">
+            <div class="step-num">4</div>
+            <h4>Deterministic ADR-002 Scoring</h4>
+            <p>Code reconciles provenance and computes Corroborated Maturity, Observed Maturity with Resolution, Adjusted Maturity, Assessment Sufficiency, and anti-pattern metrics. Models cannot alter calculated scores.</p>
+          </div>
+          <div class="step-card">
+            <div class="step-num">5</div>
+            <h4>Summary, Personas &amp; Playbook Roadmap</h4>
+            <p>Role-routed models (Reasoner, Workhorse, Quality Checker) author the Evidence Summary, Diagnosis, Persona Lenses, and—when permitted—a roadmap grounded in the 23-tactic Playbook (or Findings Mode when blocked).</p>
+          </div>
+          <div class="step-card">
+            <div class="step-num">6</div>
+            <h4>Fact-Check, Required Tactics &amp; Quality Gate</h4>
+            <p>Final verification scrubs unsupported claims, enforces required Playbook tactic dispositions (with one bounded roadmap repair if needed), builds the RunTrace lineage record, and sets <code>GO / WARN / BLOCK</code>.</p>
+          </div>
+        </div>
+
+        <h3>Strict Separation of Truth</h3>
+        <div class="grid-3">
+          <div class="mini-card">
+            <div class="label">Layer 1</div>
+            <h4>Customer Evidence</h4>
+            <p>Privacy-screened customer records and approved substantive table calculations are the <strong>only</strong> source of truth capable of resolving customer scores or quotes.</p>
+          </div>
+          <div class="mini-card">
+            <div class="label">Layer 2</div>
+            <h4>FinOps Knowledge Base</h4>
+            <p>Defines evaluation rubrics and what good FinOps looks like. Reference KB material is strictly prohibited from being cited as customer proof.</p>
+          </div>
+          <div class="mini-card">
+            <div class="label">Layer 3</div>
+            <h4>Tactic Playbook (23 Tactics)</h4>
+            <p>Governed remediation actions (<code>TAC</code> IDs) activated <em>after</em> scoring is locked. Confirmed anti-patterns can require tactics (<code>ADR-003</code>); tactics never alter maturity scores.</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- SECTION 6 -->
+      <section class="card" id="using-outputs">
+        <span class="section-num">Section 06</span>
+        <h2>Using the Controls, Dashboard &amp; Exported Reports</h2>
+        <p class="lead">
+          Use the in-app workspace for review and redaction, then export clean HTML reports for Day 2 expert calibration and
+          Day 3 stakeholder workshops.
+        </p>
+
+        <h3>Key Workspace Controls in FinOps Engine v.3.0.0</h3>
+        <div class="grid-2">
+          <div class="mini-card">
+            <div class="label">Header &amp; Intake</div>
+            <h4>Unlock, Deep Analysis &amp; Criteria</h4>
+            <ul>
+              <li><strong>Locked / Unlocked:</strong> Click in the top bar (or when starting a run) to enter the access password required for governed provider calls.</li>
+              <li><strong>Deep analysis:</strong> Optional checkbox on the upload card that selects the deeper synthesis route for complex roadmaps (complex runs also escalate automatically).</li>
+              <li><strong>View Criteria:</strong> Inspect all 60 maturity and anti-pattern definitions before or after uploading.</li>
+            </ul>
+          </div>
+          <div class="mini-card">
+            <div class="label">Post-Run Workspace</div>
+            <h4>Privacy Review &amp; Exports</h4>
+            <ul>
+              <li><strong>3-Tab Dashboard:</strong> Navigate between <em>Summary &amp; Diagnosis</em>, <em>Forensic Audit</em>, and <em>Optimization Roadmap</em>.</li>
+              <li><strong>Privacy Review:</strong> Redact organization or person names and refine narrative text locally before downloading any file.</li>
+              <li><strong>Full Report View &amp; Downloads:</strong> Export <em>Summary Report HTML</em>, <em>Master Data HTML</em>, <em>Assessment JSON</em>, and <em>RunTrace JSON</em>.</li>
+            </ul>
+          </div>
+        </div>
+
+        <h3>How to Utilize the Five Report Views in Practice</h3>
+        <div class="output-list">
+          <div class="output-item">
+            <h4>1. Evidence Summary (Facts First)</h4>
+            <div class="output-meta">
+              <div>
+                <strong>What It Contains</strong>
+                Locked maturity and resolution gauges, Assessment Sufficiency status, key metrics, confirmed strengths, scoped observations, confirmed gaps, and unassessed/silent areas.
+              </div>
+              <div>
+                <strong>How to Use It</strong>
+                Open Day 3 here so stakeholders align on verified facts first, and check silent areas to spot any existing customer records that were simply omitted from the upload.
+              </div>
+            </div>
+          </div>
+
+          <div class="output-item">
+            <h4>2. FinOps Diagnosis (The "Why")</h4>
+            <div class="output-meta">
+              <div>
+                <strong>What It Contains</strong>
+                Cross-domain synthesis of the primary bottleneck, underlying root causes, domain-level explanations, and diagnostic confidence.
+              </div>
+              <div>
+                <strong>How to Use It</strong>
+                Move discussion beyond isolated symptoms (such as untagged resources) to structural causes (such as missing ownership handoffs between Finance and Engineering).
+              </div>
+            </div>
+          </div>
+
+          <div class="output-item">
+            <h4>3. Persona Lenses (FinOps Lead · CFO · Engineering Lead)</h4>
+            <div class="output-meta">
+              <div>
+                <strong>What It Contains</strong>
+                The same verified evidence framed for operational cadence (FinOps Lead), financial risk and governance without invented savings promises (CFO), and engineering trade-offs (Engineering Lead).
+              </div>
+              <div>
+                <strong>How to Use It</strong>
+                Share each lens with the matching stakeholder group so Finance, Engineering, and FinOps work from one consistent factual baseline.
+              </div>
+            </div>
+          </div>
+
+          <div class="output-item">
+            <h4>4. Optimization Roadmap — or Findings Mode (The "What Next")</h4>
+            <div class="output-meta">
+              <div>
+                <strong>What It Contains</strong>
+                When Quality Gate permits: phased steps structured into <strong>WHY</strong> (evidence link), <strong>WHAT</strong> (target outcome), and <strong>HOW</strong> (Playbook actions and assumptions).<br />
+                When blocked by thin evidence (<strong>Findings Mode</strong>): evidence-backed observations plus a concrete <strong>validation and evidence-collection plan</strong>.
+              </div>
+              <div>
+                <strong>How to Use It</strong>
+                Use as a structured starting point in Day 3—prioritize by business value, prerequisites, and team capacity, then assign owners and dates in the customer's <strong>FinOps Change Plan</strong>.
+              </div>
+            </div>
+          </div>
+
+          <div class="output-item">
+            <h4>5. Master Data Report, Acquisition Telemetry &amp; RunTrace</h4>
+            <div class="output-meta">
+              <div>
+                <strong>What It Contains</strong>
+                Criterion-by-criterion audit findings, source quotes with page/sheet/row locators, acquisition quality telemetry, tactic dispositions, and content-free stage/hash lineage.
+              </div>
+              <div>
+                <strong>How to Use It</strong>
+                Reference during Day 2 calibration or whenever a stakeholder asks <em>"Which file and row proved that score?"</em> or <em>"Why was this criterion marked NA?"</em>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="callout info">
+          <strong class="callout-title">Saving &amp; Reopening Assessments: Display-Only HTML vs. Restore JSON</strong>
+          Downloaded <strong>Summary HTML</strong> and <strong>Master Data HTML</strong> files are strictly <strong>display-only</strong>
+          (no embedded hidden JSON or scripts, making them clean to share). To reopen a saved assessment in the FinOps Engine later,
+          download the <strong>Assessment JSON</strong> file as well—selecting that <code>.json</code> file via <strong>Add Files</strong> on
+          the home screen restores the full interactive session.
+        </div>
+      </section>
+
+      <!-- SECTION 7 -->
+      <section class="card" id="checklist">
+        <span class="section-num">Section 07</span>
+        <h2>Quick-Start Checklist</h2>
+        <ul class="clean-list">
+          <li><strong>Gather real operating artifacts (2–30 files):</strong> Stay within 25 MB per file / 50 MB total, up to 100 PDF pages (max 30 scanned/OCR pages), mixing policies, budgets, optimization logs, architecture reviews, and allocation tables.</li>
+          <li><strong>Remove credentials before upload:</strong> Deterministic privacy blocks keys/tokens and redacts pattern-matched identifiers and negotiated-rate phrases, while routed text and table rows are sent in governed packets for quote verification—never upload live secrets.</li>
+          <li><strong>Never invent missing documents:</strong> Leave undocumented areas out so the Engine honestly records <code>NA / Not assessed</code> rather than distorting scores or roadmap priorities.</li>
+          <li><strong>Unlock &amp; choose routing:</strong> Unlock with the assessment password in the header and enable <strong>Deep analysis</strong> when you want deeper roadmap synthesis upfront.</li>
+          <li><strong>Read Observed Maturity, Resolution %, Sufficiency, and Quality Gate together:</strong> Check how much of the 30-pair framework resolved and whether the roadmap gate is <code>GO</code>, <code>WARN</code>, or <code>BLOCK</code>.</li>
+          <li><strong>Run Privacy Review &amp; download both HTML and JSON:</strong> Scrub organization/person names if needed, export display-only Summary &amp; Master Data HTML for stakeholders, and keep the JSON export to reopen the session later.</li>
+        </ul>
+      </section>
+
+    </main>
+  </div>
+
+  <footer>
+    FinOps Engine v.3.0.0 · Governed Multi-Stage Assessment Architecture — Evidence-grounded FinOps assessments from intake to action.
+  </footer>
+
+  <script>
+    const links = document.querySelectorAll('.toc a');
+    const sections = Array.from(links).map(link => document.querySelector(link.getAttribute('href')));
+
+    function updateActiveLink() {
+      let currentIndex = 0;
+      const scrollPos = window.scrollY + 140;
+      sections.forEach((sec, idx) => {
+        if (sec && sec.offsetTop <= scrollPos) {
+          currentIndex = idx;
+        }
+      });
+      links.forEach((link, idx) => {
+        link.classList.toggle('active', idx === currentIndex);
+      });
+    }
+
+    window.addEventListener('scroll', updateActiveLink, { passive: true });
+    updateActiveLink();
+  </script>
+</body>
+</html>

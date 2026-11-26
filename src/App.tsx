@@ -1142,6 +1142,15 @@ const App: React.FC = () => {
               <span>{authenticated ? 'Unlocked' : 'Locked'}</span>
             </button>
 
+            <a
+              href={result ? '/user-guide.html#gauges' : '/user-guide.html'}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="finops-button"
+            >
+              User Guide
+            </a>
+
             {!result && (
               <button type="button" onClick={() => setActiveTab(activeTab === 'reference' ? 'overview' : 'reference')} className="finops-button">
                 {activeTab === 'reference' ? 'Close Reference' : 'View Criteria'}
@@ -1200,8 +1209,17 @@ const App: React.FC = () => {
                   <aside className="flex items-start gap-3 rounded-xl border border-finops-note-line bg-finops-note p-4">
                     <span aria-hidden="true" className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-finops-forest text-sm font-bold text-finops-lime">i</span>
                     <div>
-                      <h2 className="text-sm font-bold">Privacy checks before provider processing</h2>
-                      <p className="mt-1 text-xs leading-relaxed text-amber-950">Uploaded files are parsed in this browser. <a href="#data-handling" className="font-semibold underline underline-offset-2">See how assessment data is handled.</a></p>
+                      <h2 className="text-sm font-bold">Before you start &amp; data handling</h2>
+                      <p className="mt-1 text-xs leading-relaxed text-amber-950">
+                        New to the assessment workflow?{' '}
+                        <a href="/user-guide.html" target="_blank" rel="noopener noreferrer" className="font-semibold underline underline-offset-2">
+                          Read the User Guide
+                        </a>
+                        {' · '}
+                        <a href="#data-handling" className="font-semibold underline underline-offset-2">
+                          See how assessment data is handled
+                        </a>.
+                      </p>
                     </div>
                   </aside>
                 </section>
