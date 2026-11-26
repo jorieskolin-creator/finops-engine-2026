@@ -625,6 +625,9 @@ export const ReportView: React.FC<ReportViewProps> = ({ result, onBack, onDownlo
             Back to Dashboard
           </button>
           <div className="flex flex-wrap items-center gap-2">
+            <a href="/user-guide.html#gauges" target="_blank" rel="noopener noreferrer" className="finops-button">
+              User Guide
+            </a>
             <button onClick={onDownloadSummary} className="finops-primary">
               Download Summary Report
             </button>

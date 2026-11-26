@@ -8,6 +8,7 @@ const orchestrator = await readFile(new URL('../src/orchestrator.ts', import.met
 const app = await readFile(new URL('../src/App.tsx', import.meta.url), 'utf8');
 const report = await readFile(new URL('../src/components/ReportView.tsx', import.meta.url), 'utf8');
 const exportedReport = await readFile(new URL('../src/services/exportService.ts', import.meta.url), 'utf8');
+const userGuide = await readFile(new URL('../public/user-guide.html', import.meta.url), 'utf8');
 const loadingComponent = component.slice(component.indexOf('const PIPELINE_STEPS'), component.indexOf('export const TransferProtocol'));
 
 const orderedStages = ['extraction','packetization','privacy','knowledge','analysis','evidence','calculation','synthesis','verification','finalization'];
@@ -27,6 +28,11 @@ assert.match(app, /<header\b[\s\S]*?\{APP_VERSION_LABEL\}[\s\S]*?<\/header>/, 'h
 assert.match(app, /<footer\b[\s\S]*?\{APP_VERSION_LABEL\}[\s\S]*?<\/footer>/, 'footer should use the current product version');
 assert.doesNotMatch(app, /FinOps Engine v\.2\.0\.0|How the FinOps Assessment Engine thinks|evidence-driven-finops-assessment\.vercel\.app/);
 assert.doesNotMatch(app, /Engine - Simulation|demo-simulation\.txt|pendingSimulationRef/, 'the upload UI should no longer offer or run the demo simulation');
+assert.match(app, /\/user-guide\.html/, 'header and intake callout should link to the bundled User Guide');
+assert.match(report, /\/user-guide\.html#gauges/, 'report view should link to the User Guide gauge section');
+assert.match(userGuide, /FinOps Engine v\.3\.0\.0/);
+assert.match(userGuide, /Walk with significant friction/, 'User Guide should include all published ADR-002 classifications');
+assert.doesNotMatch(userGuide, /Raw financial figures are never sent to GenAI|Raw monetary amounts stay local/i, 'User Guide must state the actual governed text/table packet boundary');
 assert.doesNotMatch(report, /Model routing mode:|Models:/);
 assert.doesNotMatch(exportedReport, /Model routing mode:|Models:|Model mode /);
 assert.match(orchestrator, /onProgress\(0, totalBatches\)/, 'parallel domain work must be announced before batches settle');
