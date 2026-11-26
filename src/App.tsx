@@ -1,18 +1,13 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { analyzeDocument } from './services/analysisService';
 import { scanInputText, sanitizeInput } from './services/preFlightService';
-import { extractPagesFromPdf } from './services/pdfService';
 import type { PdfParseQuality } from './services/pdfService';
-import { renderDelimitedTableForAnalysis } from './services/tableService';
-import { inspectEvidenceFile } from './services/evidenceFileService';
-import { extractXlsx } from './services/xlsxService';
-import { extractImageOcr } from './services/ocrService';
+import { parseEvidenceFile, toEvidenceSourceRecords, type ParsedEvidenceFile } from './services/evidenceIntakeService';
 import { downloadAssessmentJson, downloadMasterDataReport, downloadRunTraceJson, downloadSummaryReport } from './services/exportService';
-import { forensicSanitizeImport } from './services/securityService';
 import { extractDiagnosticResultFromHtmlReport, isDiagnosticResultPayload, parseDiagnosticResultJson, serializeDiagnosticResultForHtml } from './services/reportImportService';
 import { findGeneratedReportPrivacyFindings, scrubDiagnosticResultForPrivacy } from './services/privacyService';
 import { PerformanceMonitor } from './services/debugService';
-import { DiagnosticResult, EvidenceSourceAcquisition, ScanResult, PersonaId, PERSONA_IDS, PERSONA_LABELS, PipelineProgressStage, PipelineProgressUpdate, SourcePage, SourceRecord, StructuredTableData, VisualEvidenceUnit } from './types';
+import { DiagnosticResult, ScanResult, PersonaId, PERSONA_IDS, PERSONA_LABELS, PipelineProgressStage, PipelineProgressUpdate, SourceRecord } from './types';
 import { METRIC_DESCRIPTIONS } from './constants';
 import { GaugeCard, AuditGrid, StrategicRoadmap, ComparisonChart, ReferenceLibrary, QualityGateBanner, BenchmarkingChart, TransferProtocol, MarkdownRenderer, NeuralLoadingGrid } from './components/DashboardComponents';
 import { ReportView } from './components/ReportView';
@@ -128,40 +123,11 @@ const arrayToText = (items?: string[]): string => (items || []).join('\n');
 const textToArray = (text: string): string[] =>
   text.split('\n').map(line => line.trim()).filter(Boolean);
 
-interface UploadedFile {
+interface UploadedFile extends ParsedEvidenceFile {
   id: string;
-  name: string;
-  size: number;
-  text: string;
-  pages?: SourcePage[];
-  structuredTable?: StructuredTableData;
-  structuredTables?: StructuredTableData[];
-  acquisition?: EvidenceSourceAcquisition;
-  visualUnits?: VisualEvidenceUnit[];
-  kind?: 'pdf' | 'html' | 'csv' | 'tsv' | 'json' | 'xlsx' | 'image';
   status: 'parsed' | 'error';
   scan?: ScanResult;
-  parseMetadata?: {
-    totalPages?: number;
-    parsedTextPages?: number;
-    rowCount?: number;
-    renderedRowCount?: number;
-    analyzedRowCount?: number;
-    analysisComplete?: boolean;
-    clippedCellCount?: number;
-    cellCharacterCoverageRatio?: number;
-    parseQuality?: PdfParseQuality;
-    warnings: string[];
-  };
 }
-
-const extractTextFromHtml = (html: string): string => {
-  const cleanHtml = forensicSanitizeImport(html);
-  const parser = new DOMParser();
-  const doc = parser.parseFromString(cleanHtml, 'text/html');
-  doc.querySelectorAll('script, style').forEach(s => s.remove());
-  return doc.body.textContent || "";
-};
 
 const acquisitionErrorCode = (error: unknown): string => {
   const message = error instanceof Error ? error.message : '';
@@ -796,109 +762,12 @@ const App: React.FC = () => {
     const rejectedFiles: Array<{ name: string; code: string }> = [];
     for (const file of newFiles) {
       try {
-        let text = "";
-        let kind: UploadedFile['kind'] = undefined;
-        let parseMetadata: UploadedFile['parseMetadata'] | undefined;
-        let pages: SourcePage[] | undefined;
-        let structuredTable: StructuredTableData | undefined;
-        let structuredTables: StructuredTableData[] | undefined;
-        let visualUnits: VisualEvidenceUnit[] | undefined;
-        const lowerName = file.name.toLowerCase();
-        let acquisition = await inspectEvidenceFile(file);
-        if (acquisition.validation_status !== 'PASS') {
-          throw new Error(`File ${file.name} failed deterministic type validation (${acquisition.validation_codes.join(', ')}).`);
-        }
-
-        if (file.type === 'application/pdf' || lowerName.endsWith('.pdf')) {
-          const { text: pdfText, pages: extractedPages, visualUnits: extractedVisualUnits, metadata } = await extractPagesFromPdf(file, { sourceHash: acquisition.original_sha256 });
-          text = pdfText;
-          parseMetadata = {
-            totalPages: metadata.totalPages,
-            parsedTextPages: metadata.parsedTextPages,
-            parseQuality: metadata.parseQuality,
-            warnings: metadata.warnings
-          };
-          pages = extractedPages;
-          visualUnits = extractedVisualUnits;
-          kind = 'pdf';
-        } else if (file.type === 'text/html' || lowerName.endsWith('.html')) {
-          const rawHtml = await file.text();
-          text = extractTextFromHtml(rawHtml);
-          kind = 'html';
-        } else if (file.type === 'text/csv' || lowerName.endsWith('.csv')) {
-          const raw = await file.text();
-          const rendered = renderDelimitedTableForAnalysis(raw, { fileName: file.name, delimiter: 'auto', sourceHash: acquisition.original_sha256 });
-          text = rendered.text;
-          kind = 'csv';
-          parseMetadata = { rowCount: rendered.rowCount, renderedRowCount: rendered.renderedRowCount, analyzedRowCount: rendered.structuredTable.analysis_rows?.length || 0, analysisComplete: rendered.structuredTable.analysis_complete, clippedCellCount: rendered.clippedCellCount, cellCharacterCoverageRatio: rendered.cellCharacterCoverageRatio, warnings: rendered.warnings };
-          structuredTable = rendered.structuredTable;
-        } else if (file.type === 'text/tab-separated-values' || lowerName.endsWith('.tsv')) {
-          const raw = await file.text();
-          const rendered = renderDelimitedTableForAnalysis(raw, { fileName: file.name, delimiter: '\t', sourceHash: acquisition.original_sha256 });
-          text = rendered.text;
-          kind = 'tsv';
-          parseMetadata = { rowCount: rendered.rowCount, renderedRowCount: rendered.renderedRowCount, analyzedRowCount: rendered.structuredTable.analysis_rows?.length || 0, analysisComplete: rendered.structuredTable.analysis_complete, clippedCellCount: rendered.clippedCellCount, cellCharacterCoverageRatio: rendered.cellCharacterCoverageRatio, warnings: rendered.warnings };
-          structuredTable = rendered.structuredTable;
-        } else if (lowerName.endsWith('.xlsx')) {
-          const extracted = await extractXlsx(file, acquisition.original_sha256);
-          text = extracted.text;
-          kind = 'xlsx';
-          parseMetadata = {
-            rowCount: extracted.tables.reduce((sum, table) => sum + table.total_row_count, 0),
-            renderedRowCount: extracted.tables.filter(table => table.model_eligible).reduce((sum, table) => sum + table.rows.length, 0),
-            analyzedRowCount: extracted.tables.reduce((sum, table) => sum + (table.analysis_rows?.length || 0), 0),
-            analysisComplete: extracted.tables.every(table => table.analysis_complete),
-            clippedCellCount: 0,
-            cellCharacterCoverageRatio: extracted.tables.some(table => table.truncated) ? undefined : 1,
-            warnings: extracted.warnings
-          };
-          structuredTables = extracted.tables;
-        } else if (file.type.startsWith('image/') || /\.(png|jpe?g|webp)$/i.test(lowerName)) {
-          const visualUnit = await extractImageOcr(file, acquisition.original_sha256);
-          text = `Format: IMAGE_OCR\nOCR confidence: ${visualUnit.confidence}\nVisual interpretation: OCR text only; non-text visual semantics withheld.\n\n${visualUnit.text}`;
-          kind = 'image';
-          parseMetadata = {
-            warnings: [
-              'Local OCR extracted text only. Graph structure, spatial relationships, colors, shapes and other non-text visual semantics remain UNINSPECTED_VISUAL_REGION.',
-              ...(visualUnit.confidence < 70 ? [`OCR confidence ${visualUnit.confidence.toFixed(1)} is observationally low; extracted text requires cautious interpretation.`] : [])
-            ]
-          };
-          visualUnits = [visualUnit];
-        } else if (file.type === 'application/json' || lowerName.endsWith('.json')) {
-          const raw = await file.text();
-          text = `Format: JSON\n\n${raw}`;
-          kind = 'json';
-        } else {
-          throw new Error(`File ${file.name} is not a supported format (PDF, HTML, CSV, TSV, XLSX, PNG, JPEG, WEBP, JSON).`);
-        }
-
-        const extraction = kind === 'pdf'
-          ? { extraction_method: 'browser_pdfjs' as const, extraction_version: 'pdfjs-dist@4' }
-          : kind === 'html'
-            ? { extraction_method: 'browser_dom' as const, extraction_version: 'dompurify@3' }
-            : kind === 'csv' || kind === 'tsv'
-              ? { extraction_method: 'browser_delimited' as const, extraction_version: 'delimited_parser_v3' }
-              : kind === 'xlsx'
-                ? { extraction_method: 'browser_xlsx_worker' as const, extraction_version: 'sheetjs-ce@0.20.3+zipjs@2.8.49' }
-                : kind === 'image'
-                  ? { extraction_method: 'local_ocr' as const, extraction_version: 'tesseract.js@7.0.0' }
-                : { extraction_method: 'browser_json' as const, extraction_version: 'json_parse_v1' };
-        acquisition = { ...acquisition, ...extraction, extraction_status: 'PASS' };
-
+        const parsed = await parseEvidenceFile(file);
         processedFiles.push({
+          ...parsed,
           id: Math.random().toString(36).substr(2, 9),
-          name: file.name,
-          size: file.size,
-          text,
-          pages,
-          structuredTable,
-          structuredTables,
-          acquisition,
-          visualUnits,
-          kind,
           status: 'parsed',
-          scan: scanParseableFile(text, kind, false),
-          parseMetadata
+          scan: scanParseableFile(parsed.text, parsed.kind, false),
         });
       } catch (error) {
         rejectedFiles.push({ name: file.name, code: acquisitionErrorCode(error) });
@@ -945,40 +814,7 @@ const App: React.FC = () => {
     try {
       const sources: SourceRecord[] = opts?.sourcesOverride ?? (opts?.textOverride !== undefined
         ? [{ schema_version:'source_record_v1', source_id:'src-001', source_name:'Document 001', kind:'text', text:opts.textOverride }]
-        : files.map((file,index) => ({
-            schema_version:'source_record_v1' as const,
-            source_id:`src-${String(index+1).padStart(3,'0')}`,
-            source_name:`Document ${String(index+1).padStart(3,'0')}`,
-            kind:file.kind || 'text',
-            acquisition:file.acquisition,
-            visual_units:file.visualUnits?.map(unit => ({
-              ...unit,
-              source_id:`src-${String(index+1).padStart(3,'0')}`
-            })),
-            parse_warnings:file.parseMetadata?.warnings || file.parseMetadata?.parseQuality?.warnings,
-            extraction: file.kind === 'pdf' && file.parseMetadata
-              ? {
-                  unit: 'page' as const,
-                  total_units: file.parseMetadata.totalPages || file.pages?.length || 0,
-                  processed_units: file.parseMetadata.parsedTextPages || file.pages?.length || 0,
-                  text_coverage_ratio: file.parseMetadata.parseQuality?.textCoverageRatio,
-                  sparse_units: file.parseMetadata.parseQuality?.sparseTextPages,
-                  truncated: (file.parseMetadata.parsedTextPages || 0) < (file.parseMetadata.totalPages || 0),
-                  quality: file.parseMetadata.parseQuality?.quality
-                }
-              : (file.kind === 'csv' || file.kind === 'tsv' || file.kind === 'xlsx') && file.parseMetadata
-                ? {
-                    unit: 'row' as const,
-                    total_units: file.parseMetadata.rowCount || 0,
-                    processed_units: file.parseMetadata.analyzedRowCount || 0,
-                    text_coverage_ratio: file.parseMetadata.analysisComplete ? 1 : 0,
-                    truncated: !file.parseMetadata.analysisComplete
-                  }
-                : { unit: 'document' as const, total_units: 1, processed_units: 1, truncated: false },
-            structured_table:file.structuredTable,
-            structured_tables:file.structuredTables,
-            ...(file.kind === 'image' ? {} : file.pages?.length ? {pages:file.pages} : {text:file.text})
-          })));
+        : toEvidenceSourceRecords(files));
       const data = await analyzeDocument(sources, update => {
         setPipelineProgress(current => ({ ...current, [update.stage]: update }));
         if (update.stage === 'analysis' && update.domain_id) {

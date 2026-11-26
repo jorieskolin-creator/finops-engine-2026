@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { mkdtemp, readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -23,6 +24,8 @@ await build({
       export { StageExecutionError } from './src/services/modelRouter';
       export { applyBoundedRetrieval } from './src/services/boundedRetrievalService';
       export { planAcquisitionGapQueries, retrieveAcquisitionGaps } from './src/services/acquisitionGapRetrievalService';
+      export { compareRetrievalReference } from './src/monitoring/retrievalReference';
+      export { inspectEvidenceBytes } from './src/services/evidenceFileService';
       export { inferAntiPatternAbsenceStatus } from './src/services/antiPatternSemantics';`,
   },
   bundle: true, platform: 'node', format: 'esm', outfile: out,
@@ -144,6 +147,54 @@ assert.equal(recovered.bounded.domains.find(domain => domain.domain_id === 'C').
 assert.deepEqual(recovered.recovery.map(pass => [pass.domain_id, pass.round, pass.outcome]), [['C', 2, 'NEW_EVIDENCE_SELECTED']]);
 assert.deepEqual(recovered.stages.C.evidence.map(item => item.source_id), ['src-003']);
 assert.deepEqual(calls, [['C', 'evidence_gap_analysis'], ['C', 'forensic_audit'], ['C', 'evidence_check']]);
+
+{
+  const directory = new URL('../src/monitoring/fixtures/retrieval-v1/', import.meta.url);
+  const inputs = await Promise.all(['billing.csv', 'forecast.html', 'background.html'].map(async (name, index) => {
+    const bytes = await readFile(new URL(name, directory));
+    const tabular = name.endsWith('.csv');
+    const acquisition = await engine.inspectEvidenceBytes({ bytes, fileName: name, declaredMediaType: tabular ? 'text/csv' : 'text/html' });
+    assert.equal(acquisition.original_sha256, `sha256_${createHash('sha256').update(bytes).digest('hex')}`);
+    assert.equal(acquisition.validation_status, 'PASS');
+    const raw = bytes.toString('utf8');
+    const rendered = tabular ? engine.renderDelimitedTableForAnalysis(raw, { fileName: name, delimiter: 'auto', sourceHash: acquisition.original_sha256 }) : null;
+    // The fixture HTML files contain plain text in a single body. The browser intake uses DOMParser.
+    const text = rendered?.text ?? raw.match(/<body>([^<>]+)<\/body>/)?.[1];
+    assert.ok(text);
+    return {
+      schema_version: 'source_record_v1', source_id: `src-00${index + 1}`, source_name: `Document 00${index + 1}`,
+      kind: tabular ? 'csv' : 'html', text, structured_table: rendered?.structuredTable,
+      extraction: { unit: tabular ? 'row' : 'document', total_units: rendered?.rowCount ?? 1, processed_units: rendered?.rowCount ?? 1, truncated: false },
+      acquisition: { ...acquisition, extraction_status: 'PASS', extraction_method: tabular ? 'browser_delimited' : 'browser_dom',
+        extraction_version: tabular ? 'delimited_parser_v3' : 'dompurify@3' },
+    };
+  }));
+  const fixtureSources = engine.sanitizeEvidenceSources(inputs).sources;
+  const registry = engine.buildSourceRegistry(fixtureSources);
+  const derived = engine.deriveAllEvidenceSignals(fixtureSources, registry);
+  const baselinePackets = engine.buildDomainPackets(registry);
+  const plans = engine.planAcquisitionGapQueries(registry, baselinePackets, derived.evidence);
+  assert.deepEqual([...plans.keys()], ['C']);
+  assert.deepEqual(plans.get('C').gaps.map(gap => gap.criterion_id), ['maturity.C2']);
+  const bounded = engine.applyBoundedRetrieval(registry, baselinePackets, { reserve_semantic_round_for: new Set(plans.keys()) });
+  calls.length = 0;
+  const final = await engine.retrieveAcquisitionGaps(registry, bounded.packets, plans, { runId: 'golden-retrieval-test' });
+  assert.deepEqual(calls, [['C', 'evidence_gap_analysis']]);
+  assert.equal(engine.scanRegistryDlp(final.registry).blocked, false);
+  assert.ok(engine.validateEvidenceAcquisition(fixtureSources, final.registry, final.packets).packet_manifest_hash);
+  const comparison = { sources: fixtureSources, baselinePackets, finalPackets: final.packets, registry: final.registry };
+  assert.ok(Object.values(engine.compareRetrievalReference(comparison)).every(Boolean), JSON.stringify(engine.compareRetrievalReference(comparison)));
+
+  const wrong = structuredClone(comparison);
+  wrong.sources[0].structured_table.deterministic_inspection.duplicate_row_rate_percent = 0;
+  wrong.finalPackets.A.manifest = [];
+  wrong.finalPackets.C.manifest[0].source_id = 'src-003';
+  const checks = engine.compareRetrievalReference(wrong);
+  assert.equal(checks.calculation, false);
+  assert.equal(checks.directEvidence, false);
+  assert.equal(checks.recoveredEvidence, false);
+  assert.equal(checks.irrelevantEvidenceExcluded, false);
+}
 
 const distantText = 'Routine notes. '.repeat(24);
 const repeatedMatches = [
