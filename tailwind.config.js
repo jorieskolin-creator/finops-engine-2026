@@ -6,6 +6,25 @@ export default {
   ],
   theme: {
     extend: {
+      colors: {
+        finops: {
+          canvas: '#f2f3ed',
+          surface: '#fcfcf7',
+          soft: '#f3f6f1',
+          line: '#d7ded4',
+          outline: '#8b9f94',
+          ink: '#1e312a',
+          muted: '#52665e',
+          forest: '#203a30',
+          sage: '#e7f0e8',
+          lime: '#d9ed85',
+          'note': '#faf0cf',
+          'note-line': '#dfc985',
+        },
+      },
+      boxShadow: {
+        'finops-card': '0 12px 32px -16px rgb(32 58 48 / 22%)',
+      },
       fontFamily: {
         sans: ['Inter', 'system-ui', '-apple-system', 'sans-serif'],
         display: ['Inter', 'system-ui', '-apple-system', 'sans-serif'],

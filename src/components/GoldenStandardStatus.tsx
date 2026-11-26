@@ -13,11 +13,11 @@ const checkLabels: Record<keyof NonNullable<RetrievalVerificationResult['checks'
 };
 
 const statusColors = {
-  Running: 'bg-cyan-400/10 text-cyan-200',
-  Pass: 'bg-emerald-400/10 text-emerald-200',
-  Fail: 'bg-rose-400/10 text-rose-200',
-  Review: 'bg-amber-400/10 text-amber-200',
-  Incomplete: 'bg-amber-400/10 text-amber-200',
+  Running: 'bg-finops-soft text-finops-muted',
+  Pass: 'bg-finops-sage text-finops-forest',
+  Fail: 'bg-rose-50 text-rose-800',
+  Review: 'bg-finops-note text-amber-950',
+  Incomplete: 'bg-finops-note text-amber-950',
 };
 
 export function GoldenStandardStatus({ check, deepMode }: { check: OpeningRetrievalCheck | null; deepMode: boolean }) {
@@ -45,31 +45,35 @@ export function GoldenStandardStatus({ check, deepMode }: { check: OpeningRetrie
   const build = __FINOPS_BUILD_COMMIT__;
 
   return (
-    <section aria-label="Golden Standard monitoring" className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
-      <div className="min-w-0 rounded-2xl border border-white/10 bg-slate-900/80 px-4 py-3">
-        <div className="flex flex-wrap items-center gap-2" role="status">
-          <h2 className="text-sm font-semibold text-slate-100">Retrieval check on this opening</h2>
-          <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${statusColors[status]}`}>{status}</span>
-          <p className="basis-full text-sm text-slate-300">{message}</p>
+    <section aria-labelledby="golden-standard-title" className="finops-card p-5 sm:p-7">
+      <p className="finops-kicker">Engine monitoring</p>
+      <h2 id="golden-standard-title" className="mt-1 text-xl font-bold tracking-tight">Golden Standard</h2>
+      <div className="mt-4 grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
+        <div className="min-w-0 rounded-xl border border-finops-line bg-finops-soft p-4">
+          <div className="flex flex-wrap items-center gap-2" role="status">
+            <h3 className="text-sm font-bold">Retrieval check on this opening</h3>
+            <span className={`rounded-full border border-finops-line px-2 py-0.5 text-xs font-semibold ${statusColors[status]}`}>{status}</span>
+            <p className="basis-full text-sm text-finops-muted">{message}</p>
+          </div>
+          {check && (
+            <p className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs text-finops-muted">
+              <time dateTime={check.completedAt}>{new Date(check.completedAt).toLocaleString()}</time>
+              <span title={build || undefined}>Build {build ? build.slice(0, 12) : 'unidentified'}</span>
+              {result && result.durationMs > 0 && <span>{(result.durationMs / 1000).toFixed(1)} s</span>}
+              {result?.model && <span>{result.model}</span>}
+              {result?.runId && <span className="break-all">Run {result.runId}</span>}
+              {result?.usage && (
+                <span>
+                  {result.usage.input_tokens ?? 'unknown'} input / {result.usage.output_tokens ?? 'unknown'} output tokens
+                </span>
+              )}
+              {result?.usage && <span>{result.usage.authorized_attempts} of {result.usage.reserved_attempts} model attempts authorized</span>}
+            </p>
+          )}
         </div>
-        {check && (
-          <p className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs text-slate-400">
-            <time dateTime={check.completedAt}>{new Date(check.completedAt).toLocaleString()}</time>
-            <span title={build || undefined}>Build {build ? build.slice(0, 12) : 'unidentified'}</span>
-            {result && result.durationMs > 0 && <span>{(result.durationMs / 1000).toFixed(1)} s</span>}
-            {result?.model && <span>{result.model}</span>}
-            {result?.runId && <span className="break-all">Run {result.runId}</span>}
-            {result?.usage && (
-              <span>
-                {result.usage.input_tokens ?? 'unknown'} input / {result.usage.output_tokens ?? 'unknown'} output tokens
-              </span>
-            )}
-            {result?.usage && <span>{result.usage.authorized_attempts} of {result.usage.reserved_attempts} model attempts authorized</span>}
-          </p>
-        )}
+        <GoldenStandardSuite deepMode={deepMode} />
+        <ClearBlockGoldenStandard deepMode={deepMode} legacy />
       </div>
-      <GoldenStandardSuite deepMode={deepMode} />
-      <ClearBlockGoldenStandard deepMode={deepMode} legacy />
     </section>
   );
 }
