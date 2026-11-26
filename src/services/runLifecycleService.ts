@@ -1,6 +1,12 @@
 import type { AcquisitionQualityPersistence, ShadowTelemetryPersistence } from '../types';
 export type RunState = 'active'|'recovery_required'|'ready_for_delivery'|'completed'|'failed'|'deletion_requested'|'deleted'|'expired';
-export interface AuthoritativeRun { run_id:string; state:RunState; cleanup_status:null|'pending'|'in_progress'|'verified'|'retryable_failure'; absolute_deadline_at?:string; effective_expires_at?:string }
+export interface RetrievalUsage {
+  reserved_attempts: number;
+  authorized_attempts: number;
+  input_tokens: number | null;
+  output_tokens: number | null;
+}
+export interface AuthoritativeRun { run_id:string; state:RunState; cleanup_status:null|'pending'|'in_progress'|'verified'|'retryable_failure'; absolute_deadline_at?:string; effective_expires_at?:string; retrieval_usage?: RetrievalUsage }
 const states=new Set<RunState>(['active','recovery_required','ready_for_delivery','completed','failed','deletion_requested','deleted','expired']);
 const cleanups=new Set([null,'pending','in_progress','verified','retryable_failure']);
 const errorCodes=new Set(['INVALID_REQUEST','RUN_NOT_FOUND','RUN_INACTIVE','INVALID_RUN_TRANSITION','DEPENDENCY_UNAVAILABLE','VERCEL_GOVERNED_DISPATCH_UNSUPPORTED']);
@@ -9,6 +15,14 @@ const valid=(v:any):AuthoritativeRun=>{if(!v||typeof v.run_id!=='string'||!state
 const sleep=(ms:number)=>new Promise(resolve=>setTimeout(resolve,ms));
 async function request(init:RequestInit,url='/api/run'){const response=await fetch(url,init);let body:any;try{body=await response.json();}catch{throw new Error('RUN_DEPENDENCY_UNAVAILABLE');}if(!response.ok)throw new Error(errorCodes.has(body?.error)?body.error:'RUN_DEPENDENCY_UNAVAILABLE');return valid(body);}
 export const createRun=()=>request({method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'create'})});
+const retrievalCommand = (body: Record<string, string>) => request({
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify(body),
+  signal: AbortSignal.timeout(5_000),
+});
+export const createRetrievalRun = (openingId: string) => retrievalCommand({ action: 'create_retrieval', opening_id: openingId });
+export const finishRetrievalRun = (runId: string) => retrievalCommand({ action: 'finish_retrieval', run_id: runId });
 export const getRun=(id:string)=>request({method:'GET'},`/api/run?run_id=${encodeURIComponent(id)}`);
 const command=(id:string,action:'complete'|'ready'|'acknowledge'|'fail'|'suspend'|'resume',quality?:AcquisitionQualityPersistence,shadowTelemetry?:ShadowTelemetryPersistence,failureCode='PIPELINE_FAILED')=>request({method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action,run_id:id,...(['fail','suspend'].includes(action)?{failure_code:failureCode}:{}),...(quality?{quality,shadow_telemetry:shadowTelemetry}:{})})});
 export const readyRun=(id:string,quality:AcquisitionQualityPersistence,shadowTelemetry:ShadowTelemetryPersistence)=>command(id,'ready',quality,shadowTelemetry);

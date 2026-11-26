@@ -25,6 +25,7 @@ await build({
       export { applyBoundedRetrieval } from './src/services/boundedRetrievalService';
       export { planAcquisitionGapQueries, retrieveAcquisitionGaps } from './src/services/acquisitionGapRetrievalService';
       export { acquireEvidence } from './src/services/evidenceAcquisitionService';
+      export { runRetrievalVerification } from './src/monitoring/retrievalVerification';
       export { compareRetrievalReference } from './src/monitoring/retrievalReference';
       export { inspectEvidenceBytes } from './src/services/evidenceFileService';
       export { inferAntiPatternAbsenceStatus } from './src/services/antiPatternSemantics';`,
@@ -46,6 +47,14 @@ await build({
           }
         }
       ` }));
+    },
+  }, {
+    name: 'known-browser-fixture',
+    setup(context) {
+      context.onResolve({ filter: /^\.\/retrievalFixture$/ }, () => ({ path: 'fixture', namespace: 'mock-fixture' }));
+      context.onLoad({ filter: /.*/, namespace: 'mock-fixture' }, () => ({
+        contents: 'export const loadRetrievalFixture = () => globalThis.loadTestRetrievalFixture();',
+      }));
     },
   }],
 });
@@ -191,6 +200,44 @@ assert.deepEqual(calls, [['C', 'evidence_gap_analysis'], ['C', 'forensic_audit']
   assert.equal(checks.directEvidence, false);
   assert.equal(checks.recoveredEvidence, false);
   assert.equal(checks.irrelevantEvidenceExcluded, false);
+
+  const fetchBefore = globalThis.fetch;
+  globalThis.loadTestRetrievalFixture = async () => inputs;
+  const commands = [];
+  globalThis.fetch = async (_url, init) => {
+    const { action, opening_id } = JSON.parse(init.body);
+    commands.push(action);
+    const run = action === 'create_retrieval'
+      ? { run_id: opening_id, state: 'active', cleanup_status: null, absolute_deadline_at: new Date(Date.now() + 60_000).toISOString() }
+      : { run_id: 'retrieval-test', state: 'completed', cleanup_status: 'verified',
+          retrieval_usage: { reserved_attempts: 1, authorized_attempts: 1, input_tokens: 20, output_tokens: 12 } };
+    return { ok: true, json: async () => run };
+  };
+  try {
+    calls.length = 0;
+    const opening = '00000000-0000-4000-8000-000000000001';
+    const verification = engine.runRetrievalVerification(opening);
+    assert.equal(engine.runRetrievalVerification(opening), verification, 'concurrent calls share one run');
+    const passed = await verification;
+    assert.equal(passed.status, 'Pass');
+    assert.equal(passed.model, 'stub');
+    assert.equal(passed.usage.output_tokens, 12);
+    assert.deepEqual(calls, [['C', 'evidence_gap_analysis']]);
+    assert.deepEqual(commands, ['create_retrieval', 'finish_retrieval']);
+
+    calls.length = 0;
+    plannerUnavailable = true;
+    const incomplete = await engine.runRetrievalVerification('00000000-0000-4000-8000-000000000002');
+    assert.equal(incomplete.status, 'Incomplete');
+    assert.equal(incomplete.reason, 'AI Gap Analyzer unverified');
+    assert.equal(incomplete.checks.directEvidence, true);
+    assert.deepEqual(calls, [['C', 'evidence_gap_analysis']]);
+    assert.deepEqual(commands.slice(2), ['create_retrieval', 'finish_retrieval']);
+  } finally {
+    globalThis.fetch = fetchBefore;
+    delete globalThis.loadTestRetrievalFixture;
+    plannerUnavailable = false;
+  }
 }
 
 const distantText = 'Routine notes. '.repeat(24);
