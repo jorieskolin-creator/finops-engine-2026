@@ -24,6 +24,7 @@ await build({
       export { StageExecutionError } from './src/services/modelRouter';
       export { applyBoundedRetrieval } from './src/services/boundedRetrievalService';
       export { planAcquisitionGapQueries, retrieveAcquisitionGaps } from './src/services/acquisitionGapRetrievalService';
+      export { acquireEvidence } from './src/services/evidenceAcquisitionService';
       export { compareRetrievalReference } from './src/monitoring/retrievalReference';
       export { inspectEvidenceBytes } from './src/services/evidenceFileService';
       export { inferAntiPatternAbsenceStatus } from './src/services/antiPatternSemantics';`,
@@ -169,20 +170,16 @@ assert.deepEqual(calls, [['C', 'evidence_gap_analysis'], ['C', 'forensic_audit']
         extraction_version: tabular ? 'delimited_parser_v3' : 'dompurify@3' },
     };
   }));
-  const fixtureSources = engine.sanitizeEvidenceSources(inputs).sources;
-  const registry = engine.buildSourceRegistry(fixtureSources);
-  const derived = engine.deriveAllEvidenceSignals(fixtureSources, registry);
-  const baselinePackets = engine.buildDomainPackets(registry);
-  const plans = engine.planAcquisitionGapQueries(registry, baselinePackets, derived.evidence);
-  assert.deepEqual([...plans.keys()], ['C']);
-  assert.deepEqual(plans.get('C').gaps.map(gap => gap.criterion_id), ['maturity.C2']);
-  const bounded = engine.applyBoundedRetrieval(registry, baselinePackets, { reserve_semantic_round_for: new Set(plans.keys()) });
   calls.length = 0;
-  const final = await engine.retrieveAcquisitionGaps(registry, bounded.packets, plans, { runId: 'golden-retrieval-test' });
+  const acquisition = await engine.acquireEvidence(inputs, { runId: 'golden-retrieval-test' });
   assert.deepEqual(calls, [['C', 'evidence_gap_analysis']]);
-  assert.equal(engine.scanRegistryDlp(final.registry).blocked, false);
-  assert.ok(engine.validateEvidenceAcquisition(fixtureSources, final.registry, final.packets).packet_manifest_hash);
-  const comparison = { sources: fixtureSources, baselinePackets, finalPackets: final.packets, registry: final.registry };
+  assert.deepEqual(acquisition.acquisitionGap.passes.map(pass => pass.criterion_ids), [['maturity.C2']]);
+  assert.equal(acquisition.dlpScan.blocked, false);
+  assert.ok(acquisition.evidenceIntegrity.packet_manifest_hash);
+  const comparison = {
+    sources: acquisition.acquiredSources, baselinePackets: acquisition.baselineSourcePackets,
+    finalPackets: acquisition.sourcePackets, registry: acquisition.sourceRegistry,
+  };
   assert.ok(Object.values(engine.compareRetrievalReference(comparison)).every(Boolean), JSON.stringify(engine.compareRetrievalReference(comparison)));
 
   const wrong = structuredClone(comparison);
