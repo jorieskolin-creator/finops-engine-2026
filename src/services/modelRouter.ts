@@ -27,6 +27,7 @@ export interface NormalizedPrompt {
 export interface RunContext {
   runId: string;
   stageExecutionId?: string;
+  retrievalSignal?: AbortSignal;
 }
 
 const REQUEST_TIMEOUT_MS = 595_000;
@@ -77,15 +78,17 @@ const validRoutingConfig = (value: any): value is ModelRoutingConfig => Boolean(
     }))
 );
 
+async function fetchModelRoutingConfig(signal?: AbortSignal): Promise<ModelRoutingConfig> {
+  const response = await fetch('/api/model-routing', { method: 'GET', signal });
+  if (!response.ok) throw new Error(`MODEL_ROUTING_UNAVAILABLE HTTP ${response.status}`);
+  const config = await response.json();
+  if (!validRoutingConfig(config)) throw new Error('MODEL_ROUTING_CONFIGURATION_INVALID');
+  return config;
+}
+
 export function getModelRoutingConfig(): Promise<ModelRoutingConfig> {
   if (!routingConfigPromise) {
-    const request = fetch('/api/model-routing', { method: 'GET' }).then(async response => {
-      if (!response.ok) throw new Error(`MODEL_ROUTING_UNAVAILABLE HTTP ${response.status}`);
-      const config = await response.json();
-      if (!validRoutingConfig(config)) throw new Error('MODEL_ROUTING_CONFIGURATION_INVALID');
-      return config;
-    });
-    routingConfigPromise = request.catch(error => {
+    routingConfigPromise = fetchModelRoutingConfig().catch(error => {
       routingConfigPromise = undefined;
       throw error;
     });
@@ -110,7 +113,7 @@ async function governedCall(profile: ModelProfile, prompt: NormalizedPrompt, sta
   const settings: any = {};
   if (profile.maxTokens !== undefined) settings.max_tokens = profile.maxTokens;
   if (profile.reasoningEffort) settings.reasoning_effort = profile.reasoningEffort;
-  const approval = await fetch('/api/governed-packet', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ schema_version:REQUEST_SCHEMA, policy_version:POLICY, run_id:ctx.runId, stage, ...(ctx.stageExecutionId ? { stage_execution_id: ctx.stageExecutionId } : {}), provider:profile.provider, model:profile.id, destination:`${profile.provider}:external_model`, system_instruction:prompt.systemInstruction || '', parts:[{type:'text',text:prompt.userText}], settings, ...(prompt.outputContract ? { output_contract: prompt.outputContract } : {}) }) });
+  const approval = await fetch('/api/governed-packet', { method:'POST', signal:ctx.retrievalSignal, headers:{'Content-Type':'application/json'}, body:JSON.stringify({ schema_version:REQUEST_SCHEMA, policy_version:POLICY, run_id:ctx.runId, stage, ...(ctx.stageExecutionId ? { stage_execution_id: ctx.stageExecutionId } : {}), provider:profile.provider, model:profile.id, destination:`${profile.provider}:external_model`, system_instruction:prompt.systemInstruction || '', parts:[{type:'text',text:prompt.userText}], settings, ...(prompt.outputContract ? { output_contract: prompt.outputContract } : {}) }) });
   if (!approval.ok) {
     const failure = await approval.json().catch(() => null);
     throw new StageExecutionError(typeof failure?.error === 'string' ? failure.error : 'STAGE_PACKET_REJECTED');
@@ -118,7 +121,7 @@ async function governedCall(profile: ModelProfile, prompt: NormalizedPrompt, sta
   const packet = await approval.json();
   if (packet.classification_method !== 'deterministic_pattern_screen_v1' || packet.approval_basis !== 'policy_approved_after_pattern_screening' || packet.run_id !== ctx.runId || packet.stage !== stage || packet.provider !== profile.provider || packet.model !== profile.id || packet.output_contract !== prompt.outputContract) throw new StageExecutionError('INVALID_PACKET_APPROVAL');
   const body = { packet_id:packet.packet_id, packet_hash:packet.packet_hash, schema_version:APPROVED_SCHEMA, policy_version:POLICY, run_id:ctx.runId, stage, internal_pipeline_call:true, internal_call_id:newInternalCallId(), ...(ctx.stageExecutionId ? { stage_execution_id: ctx.stageExecutionId } : {}) };
-  return postWithTimeout(`/api/${profile.provider}-generate`, body, packet);
+  return postWithTimeout(`/api/${profile.provider}-generate`, body, packet, ctx.retrievalSignal);
 }
 
 const sha256Hex = async (text: string): Promise<string> => {
@@ -238,19 +241,19 @@ export async function pollInternalResult(body: any, approval: any, cause: unknow
   return null;
 }
 
-async function postWithTimeout(url: string, body: any, approval: any): Promise<{ text: string; usage?: any }> {
+async function postWithTimeout(url: string, body: any, approval: any, retrievalSignal?: AbortSignal): Promise<{ text: string; usage?: any }> {
   const dispatchStarted = Date.now();
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  const timer = retrievalSignal ? undefined : setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
   try {
     const res = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
-      signal: controller.signal,
+      signal: retrievalSignal ?? controller.signal,
     });
     if (!res.ok) {
-      await serverLog(body.run_id, 'warn', 'internal_result_error', {
+      if (!retrievalSignal) await serverLog(body.run_id, 'warn', 'internal_result_error', {
         stage: body.stage || 'unknown',
         model: approval.model || 'governed',
         internal_call_id: body.internal_call_id,
@@ -305,7 +308,7 @@ async function postWithTimeout(url: string, body: any, approval: any): Promise<{
     }
     return { text: finalText, usage: finalUsage };
   } catch (err) {
-    if (err instanceof StageExecutionError && err.fallbackAllowed) throw err;
+    if (retrievalSignal || (err instanceof StageExecutionError && err.fallbackAllowed)) throw err;
     const recovered = await pollInternalResult(body, approval, err, dispatchStarted);
     if (recovered) return recovered;
     if(err instanceof StageExecutionError)throw err;
@@ -338,9 +341,10 @@ const tokenUsageFromProvider = (usage: any) => ({
 
 export async function runStage(stage: StageId, prompt: NormalizedPrompt, ctx: RunContext): Promise<RunStageResult> {
   if (prompt.images?.length) throw new Error('IMAGE_PAYLOAD_DISABLED: external image processing is disabled until local OCR/redaction exists');
-  const routing = await getModelRoutingConfig();
+  if (ctx.retrievalSignal && stage !== 'evidence_gap_analysis') throw new StageExecutionError('RETRIEVAL_STAGE_NOT_ALLOWED');
+  const routing = ctx.retrievalSignal ? await fetchModelRoutingConfig(ctx.retrievalSignal) : await getModelRoutingConfig();
   const role = routing.stage_roles[stage];
-  const chain = routing.routes[stage];
+  const chain = ctx.retrievalSignal ? routing.routes[stage].slice(0, 1) : routing.routes[stage];
   const rolePrompt: NormalizedPrompt = {
     ...prompt,
     systemInstruction: stage === 'evidence_gap_analysis'
@@ -396,7 +400,7 @@ export async function runStage(stage: StageId, prompt: NormalizedPrompt, ctx: Ru
         started_at: startedAt,
         completed_at: new Date().toISOString()
       });
-      if (failures.length > 0) {
+      if (failures.length > 0 && !ctx.retrievalSignal) {
         await serverLog(ctx.runId, 'warn', 'stage_fallback_used', {
           stage,
           ai_role: role,
@@ -432,7 +436,7 @@ export async function runStage(stage: StageId, prompt: NormalizedPrompt, ctx: Ru
     started_at: startedAt,
     completed_at: new Date().toISOString()
   });
-  await serverLog(ctx.runId, 'error', 'stage_exhausted', { stage, attempt_count: failures.length, error_code: 'models_exhausted' });
+  if (!ctx.retrievalSignal) await serverLog(ctx.runId, 'error', 'stage_exhausted', { stage, attempt_count: failures.length, error_code: 'models_exhausted' });
   if (rolePrompt.outputContract && failures.some(f => f.error === 'invalid_output_contract')) {
     throw new StageExecutionError('SYNTHESIS_OUTPUT_INVALID');
   }

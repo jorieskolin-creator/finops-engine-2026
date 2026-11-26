@@ -10,7 +10,8 @@ import {
   STAGE_PACKET_REQUEST_VERSION,
   validateGovernedOutput,
 } from '../lib/governance.js';
-import { LIFETIMES_MS } from '../lib/controlPlanePolicy.js';
+import { ExecutionWorker } from '../lib/executionWorker.js';
+import { LIFETIMES_MS, RETRIEVAL_VERIFICATION } from '../lib/controlPlanePolicy.js';
 import { authorizedProfiles, settingsForProfile } from '../lib/modelRoutingPolicy.js';
 
 if (!process.env.DATABASE_URL || !process.env.REDIS_URL) {
@@ -43,9 +44,9 @@ const makePacket = run => approveRequest({
   settings: settingsForProfile(profile),
 });
 
-const persistPacket = async (run, packet) => {
+const commitPacket = async (run, packet) => {
   const canonicalBody = approvedPacketBytes(packet);
-  assert.ok(await repository.commitPacket({
+  return repository.commitPacket({
     packetId: packet.packet_id,
     runId: run.run_id,
     packetHash: packet.packet_hash,
@@ -58,7 +59,12 @@ const persistPacket = async (run, packet) => {
     partCount: packet.parts.length,
     charCount: packet.system_instruction.length + packet.parts[0].text.length,
     canonicalBody,
-  }));
+  });
+};
+
+const persistPacket = async (run, packet) => {
+  assert.ok(await commitPacket(run, packet));
+  const canonicalBody = approvedPacketBytes(packet);
   assert.deepEqual((await repository.getPacketBody(packet.packet_id)).canonical_body,canonicalBody);
   return canonicalBody;
 };
@@ -171,6 +177,81 @@ try {
   await repository.terminalRun(stoppedRun.run_id, 'failed', 'INTEGRATION_TEST');
   assert.equal(await repository.authorizeAttempt(stoppedAttempt.attempt_id, stoppedOwner, stoppedLease.lease_token), null);
   assert.equal((await lifecycle.transition(stoppedRun.run_id, 'failed', 'INTEGRATION_TEST')).cleanup_status, 'verified');
+
+  const openingId = crypto.randomUUID();
+  const openings = await Promise.all(Array.from({ length: 3 }, () => repository.createRetrievalRun(openingId)));
+  const retrieval = openings[0];
+  assert.ok(openings.every(run => run.run_id === retrieval.run_id
+    && +run.absolute_deadline_at === +retrieval.absolute_deadline_at));
+  assert.equal((await repository.getRun(retrieval.run_id)).retrieval_only, true);
+  assert.equal(await commitPacket(retrieval, makePacket(retrieval)), null, 'forensic audit must not be approved');
+  await assert.rejects(() => repository.readyRunWithQuality(retrieval.run_id), /INVALID_RUN_TRANSITION/);
+  await assert.rejects(() => repository.markRunRecoverable(retrieval.run_id), /INVALID_RUN_TRANSITION/);
+  assert.equal(await repository.commitCheckpoint({ runId: retrieval.run_id }), null);
+  await assert.rejects(() => lifecycle.completeRetrieval(run.run_id), /INVALID_RUN_TRANSITION/);
+  const makeGap = (provider, model) => approveRequest({
+    schema_version: STAGE_PACKET_REQUEST_VERSION,
+    policy_version: POLICY_VERSION,
+    run_id: retrieval.run_id,
+    stage: RETRIEVAL_VERIFICATION.stage,
+    provider, model, destination: `${provider}:external_model`,
+    system_instruction: '',
+    parts: [{ type: 'text', text: JSON.stringify({
+      schema_version: 'finops_evidence_gap_input_v1', domain_id: 'C', round: 2,
+      gaps: [{ criterion_id: 'maturity.C2', missing_concept_ids: ['forecast_exists'] }],
+    }) }],
+    settings: settingsForProfile(authorizedProfiles(RETRIEVAL_VERIFICATION.stage, provider, model)[0]),
+    output_contract: 'finops_evidence_gap_query_v1',
+  });
+  const gapPackets = [makeGap(PROVIDER, MODEL), makeGap('anthropic', 'claude-sonnet-5-5')];
+  await Promise.all(gapPackets.map(packet => persistPacket(retrieval, packet)));
+  const gapBindings = gapPackets.map(packet => ({
+    packetId: packet.packet_id, packetHash: packet.packet_hash, runId: retrieval.run_id,
+    provider: packet.provider, model: packet.model, stage: packet.stage,
+    internalCallId: crypto.randomUUID(), stageExecutionId: crypto.randomUUID(),
+  }));
+  const outcomes = await Promise.allSettled(gapBindings.map(binding => repository.claimPacketAndReserve(binding)));
+  const chosen = outcomes.findIndex(outcome => outcome.status === 'fulfilled');
+  assert.notEqual(chosen, -1);
+  const chosenAttempt = outcomes[chosen].value;
+  const denied = gapBindings[1 - chosen];
+  assert.equal(outcomes[1 - chosen].reason?.code, 'RETRIEVAL_ATTEMPT_LIMIT');
+  const replays = await Promise.all([1, 2].map(() => repository.claimPacketAndReserve(gapBindings[chosen])));
+  assert.ok(replays.every(replayed => replayed.attempt_id === chosenAttempt.attempt_id));
+
+  let invocations = 0;
+  const worker = new ExecutionWorker({
+    repository, redis, providerConfigured: () => true,
+    invoke: async (_packet, options) => {
+      invocations++;
+      assert.equal(options.maxOutputTokens, RETRIEVAL_VERIFICATION.maxOutputTokens);
+      assert.ok(options.timeoutMs > 0 && options.timeoutMs <= RETRIEVAL_VERIFICATION.deadlineMs);
+      throw Object.assign(new Error(), { code: 'UPSTREAM_HTTP_ERROR' });
+    },
+  });
+  await worker.process(chosenAttempt.attempt_id);
+  assert.equal(invocations, 1);
+  assert.equal((await repository.getAttempt(chosenAttempt.attempt_id)).state, 'fallback_allowed');
+  await assert.rejects(() => repository.claimPacketAndReserve(denied), /RETRIEVAL_ATTEMPT_LIMIT/);
+  await worker.process(chosenAttempt.attempt_id);
+  assert.equal(invocations, 1);
+
+  const finished = await lifecycle.completeRetrieval(retrieval.run_id);
+  assert.equal(finished.state, 'completed');
+  assert.equal(finished.cleanup_status, 'verified');
+  assert.deepEqual(finished.retrieval_usage, { reserved_attempts: 1, authorized_attempts: 1, input_tokens: null, output_tokens: null });
+  assert.equal((await lifecycle.completeRetrieval(retrieval.run_id)).cleanup_status, 'verified');
+  assert.equal((await repository.createRetrievalRun(openingId)).state, 'completed');
+  assert.ok((await Promise.all(gapPackets.map(packet => repository.getPacketBody(packet.packet_id)))).every(body => body === null));
+  const newOpening = await repository.createRetrievalRun(crypto.randomUUID());
+  assert.notEqual(newOpening.run_id, retrieval.run_id);
+  await repository.db.query(`UPDATE runs SET created_at=clock_timestamp()-interval '2 minutes',
+    absolute_deadline_at=clock_timestamp()-interval '1 minute',
+    effective_expires_at=clock_timestamp()-interval '2 minutes' WHERE run_id=$1`, [newOpening.run_id]);
+  const elapsed = await lifecycle.completeRetrieval(newOpening.run_id);
+  assert.equal(elapsed.state, 'expired');
+  assert.equal(elapsed.cleanup_status, 'verified');
+  assert.equal(elapsed.retrieval_usage.reserved_attempts, 0);
 
   console.log('infrastructure integration tests passed');
 } finally {
