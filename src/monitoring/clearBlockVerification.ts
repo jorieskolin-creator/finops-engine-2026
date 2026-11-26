@@ -1,19 +1,17 @@
 import { analyzeDocument } from '../services/analysisService';
 import { parseEvidenceFile, toEvidenceSourceRecords, type ParsedEvidenceFile } from '../services/evidenceIntakeService';
-import { generateSummaryReportHtml } from '../services/exportService';
+import { generateReportHtml, generateSummaryReportHtml } from '../services/exportService';
 import { buildReportViewModel } from '../services/reportViewModel';
 import { acknowledgeRun, getRun } from '../services/runLifecycleService';
+import { collectRenderedNarrative, type Comparison, type NarrativeReview, type RenderedNarrative } from './clearBlockNarrativeReview';
 
 const endpoint = '/api/golden-standard-clear-block';
 
 interface FrozenInput { name: string; bytes: number; sha256: string }
-interface Comparison {
-  status: 'Review';
-  referenceVersion: string;
-  checks: Array<{ label: string; expected: string | number | boolean; observed: string | number | boolean; matches: boolean }>;
-}
 export interface ClearBlockResult {
   comparison?: Comparison;
+  narrative?: RenderedNarrative;
+  review?: NarrativeReview;
   summary: string;
   runId: string;
   completedAt: string;
@@ -72,7 +70,8 @@ export async function verifyClearBlock(
   if (!runId) throw new Error('GOLDEN_STANDARD_RUN_INCOMPLETE');
   const summary = generateSummaryReportHtml(result);
   const report = buildReportViewModel(result);
-  const rendered = new DOMParser().parseFromString(summary, 'text/html');
+  const parser = new DOMParser();
+  const rendered = parser.parseFromString(summary, 'text/html');
   const trace = result.meta.run_trace;
   const excludedId = sources[2].source_id;
   const excludedChunkIds = new Set(trace?.input_manifest.find(entry => entry.source_id === excludedId)?.chunk_ids);
@@ -95,7 +94,9 @@ export async function verifyClearBlock(
   };
   const comparison = await caseRequest('', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(observation) })
     .then(response => response.json() as Promise<Comparison>).catch(() => undefined);
-  const delivered = { comparison, summary, runId, completedAt: new Date().toISOString(), cleanupVerified: false };
+  const masterData = parser.parseFromString(generateReportHtml(result), 'text/html');
+  const narrative = collectRenderedNarrative(rendered, masterData);
+  const delivered = { comparison, narrative, summary, runId, completedAt: new Date().toISOString(), cleanupVerified: false };
   onDelivery(delivered);
   return { ...delivered, cleanupVerified: await verifyClearBlockCleanup(runId) };
 }
