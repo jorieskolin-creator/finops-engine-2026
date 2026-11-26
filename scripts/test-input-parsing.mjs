@@ -130,7 +130,9 @@ assert.match(appSource, /const MAX_TOTAL_UPLOAD_MB = 50;/, 'upload set should ha
 assert.match(appSource, /const MAX_FILE_SIZE_MB = 25;/, 'each uploaded file should have a 25 MB cap');
 assert.match(appSource, /newFiles\.find\(file => file\.size > MAX_FILE_SIZE_BYTES\)/, 'oversized individual files should be rejected before reading');
 assert.match(appSource, /\.tsv/, 'TSV files should be accepted');
-assert.match(appSource, /delimiter: 'auto'/, 'CSV delimiter should be detected deterministically');
+const intakeSource = await readFile(new URL('../src/services/evidenceIntakeService.ts', import.meta.url), 'utf8');
+assert.match(appSource, /await parseEvidenceFile\(file\)/, 'browser upload should use shared intake');
+assert.match(intakeSource, /delimiter: 'auto'/, 'CSV delimiter should be detected deterministically');
 assert.match(appSource, /rejectedFiles\.push/, 'each selected file should fail independently');
 assert.doesNotMatch(appSource, /Irrelevant File Detected/, 'low-relevance files should warn, not hard-block');
 
@@ -221,7 +223,7 @@ const budgetParse = assessPdfParseQuality({
 assert.match(budgetParse.warnings.join(' '), /image budget/);
 
 const appParseSource = appSource;
-assert.match(appParseSource, /parse_warnings:file\.parseMetadata/, 'PDF parse quality should be carried structurally on source records');
+assert.match(intakeSource, /parse_warnings: file\.parseMetadata/, 'PDF parse quality should be carried structurally on source records');
 assert.match(appParseSource, /Complete text\/OCR acquisition/, 'upload card should label complete PDF acquisition');
 assert.match(appParseSource, /Acquired with declared sparse\/visual limitations/, 'upload card should declare sparse PDF limitations');
 assert.match(appParseSource, /Blocked: required page acquisition incomplete/, 'upload card should identify blocking PDF acquisition');
