@@ -5,6 +5,7 @@ import {
   buildDurableSummary,
   buildMonitoringObservation,
   collectAdmittedSourceIds,
+  collectAdmittedSourcesByDomain,
   findTableWithColumn,
   isDistractorFileName,
   prepareReport,
@@ -67,6 +68,29 @@ function clearPendingDelivery(runId: string) {
     sessionStorage.setItem(pendingFinishStorageKey, JSON.stringify(current));
   } catch {
     // Ignore storage cleanup errors.
+  }
+}
+
+export async function flushPendingGoldenStandardDeliveries(): Promise<void> {
+  let pending: Record<string, { suiteId: string; finishBody: Record<string, unknown> }>;
+  try {
+    pending = JSON.parse(sessionStorage.getItem(pendingFinishStorageKey) ?? '{}');
+  } catch {
+    return;
+  }
+  for (const [runId, entry] of Object.entries(pending)) {
+    if (!entry?.suiteId || !entry?.finishBody) {
+      clearPendingDelivery(runId);
+      continue;
+    }
+    try {
+      await suiteCommand<SuiteDelivery>('finish', entry.suiteId, entry.finishBody);
+      clearPendingDelivery(runId);
+    } catch (error) {
+      if (error instanceof GoldenStandardClientError && error.httpStatus && [400, 404, 409].includes(error.httpStatus)) {
+        clearPendingDelivery(runId);
+      }
+    }
   }
 }
 
@@ -150,6 +174,7 @@ export async function verifyGoldenStandardAttempt(suite: Suite, attempt: SuiteAt
   const monitoring = buildMonitoringObservation(result, sources, excludedId);
   const durableSummary = buildDurableSummary(result, narrative);
   const admittedSourceIds = collectAdmittedSourceIds(result);
+  const admittedByDomain = collectAdmittedSourcesByDomain(result);
   const filesWithSourceIds = parsed.map((file, index) => ({
     name: file.name,
     text: file.text,
@@ -166,7 +191,7 @@ export async function verifyGoldenStandardAttempt(suite: Suite, attempt: SuiteAt
       billingCents: billed.cents,
       backlogRows: backlog.rows,
       backlogCents: backlog.cents,
-      numbers: numericObservations(caseId, filesWithSourceIds, admittedSourceIds),
+      numbers: numericObservations(caseId, filesWithSourceIds, admittedSourceIds, admittedByDomain),
       kbHash,
       assessed: (metrics.maturity_assessed_count ?? 0) + (metrics.antipattern_assessed_count ?? 0),
       monitoring,
