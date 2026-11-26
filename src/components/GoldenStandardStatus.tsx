@@ -1,3 +1,4 @@
+import { GoldenStandardSuite } from './GoldenStandardSuite';
 import { ClearBlockGoldenStandard } from './ClearBlockGoldenStandard';
 import type { OpeningRetrievalCheck } from '../monitoring/useOpeningRetrievalCheck';
 import type { RetrievalVerificationResult } from '../monitoring/retrievalVerification';
@@ -40,7 +41,7 @@ export function GoldenStandardStatus({ check, deepMode }: { check: OpeningRetrie
   const build = __FINOPS_BUILD_COMMIT__;
 
   return (
-    <section aria-label="Golden Standard monitoring" className="grid gap-3 md:grid-cols-[2fr_1fr]">
+    <section aria-label="Golden Standard monitoring" className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
       <div className="min-w-0 rounded-2xl border border-white/10 bg-slate-900/80 px-4 py-3">
         <div className="flex flex-wrap items-center gap-2" role="status">
           <h2 className="text-sm font-semibold text-slate-100">Retrieval check on this opening</h2>
@@ -61,7 +62,8 @@ export function GoldenStandardStatus({ check, deepMode }: { check: OpeningRetrie
           </p>
         )}
       </div>
-      <ClearBlockGoldenStandard deepMode={deepMode} />
+      <GoldenStandardSuite deepMode={deepMode} />
+      <ClearBlockGoldenStandard deepMode={deepMode} legacy />
     </section>
   );
 }

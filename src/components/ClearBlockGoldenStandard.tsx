@@ -26,7 +26,7 @@ function ReportExcerpts({ title, lines }: { title: string; lines: string[] }) {
   );
 }
 
-function ClearBlockReview({ result, disabled, onSave }: {
+export function ClearBlockReview({ result, disabled, onSave }: {
   result: ClearBlockResult;
   disabled: boolean;
   onSave: (review: NarrativeReview) => void;
@@ -38,7 +38,7 @@ function ClearBlockReview({ result, disabled, onSave }: {
   const [note, setNote] = useState(saved?.note ?? '');
   const identity = referenceIdentity(comparison);
   const checks = comparison?.narrativeChecks;
-  if (!checks?.length || !narrative || !identity) return <p className="mt-3 text-slate-400">Run Clear BLOCK to capture the diagnosis and roadmap for review.</p>;
+  if (!checks?.length || !narrative || !identity) return <p className="mt-3 text-slate-400">Run the case to capture the diagnosis and roadmap for review.</p>;
 
   function submit(event: FormEvent) {
     event.preventDefault();
@@ -88,12 +88,12 @@ function ClearBlockReview({ result, disabled, onSave }: {
         <textarea className={field} value={note} onChange={event => setNote(event.currentTarget.value)} disabled={disabled} maxLength={2000} rows={2} />
       </label>
       <button type="submit" className={button} disabled={disabled || !reviewer.trim()}>Save review</button>
-      {saved && <p className="text-xs text-slate-400">Saved for {saved.reviewer} · {new Date(saved.reviewedAt).toLocaleString()} · this browser session</p>}
+      {saved && <p className="text-xs text-slate-400">Saved for {saved.reviewer} · {new Date(saved.reviewedAt).toLocaleString()}</p>}
     </form>
   );
 }
 
-export function ClearBlockGoldenStandard({ deepMode }: { deepMode: boolean }) {
+export function ClearBlockGoldenStandard({ deepMode, legacy = false }: { deepMode: boolean; legacy?: boolean }) {
   const [session, setSession] = useState(readSession);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
@@ -185,9 +185,10 @@ export function ClearBlockGoldenStandard({ deepMode }: { deepMode: boolean }) {
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
 
+  if (legacy && !session) return null;
   return (
-    <div className="min-w-0 rounded-2xl border border-white/10 bg-slate-900/80 px-4 py-3">
-      <h2 className="text-sm font-semibold text-slate-100">Last full Golden Standard test</h2>
+    <div className={`min-w-0 rounded-2xl border border-white/10 bg-slate-900/80 px-4 py-3 ${legacy ? 'lg:col-span-2' : ''}`}>
+      <h2 className="text-sm font-semibold text-slate-100">{legacy ? 'Previous Clear BLOCK session' : 'Last full Golden Standard test'}</h2>
       <p className="mt-2 text-sm text-slate-300" role="status">
         {busy ? 'Working on Clear BLOCK…' : notice
           ?? (result?.comparison ? `Clear BLOCK · ${status}${differences ? ` · ${differences} deterministic differences` : ''}` : result ? 'Clear BLOCK · Incomplete · comparison unavailable'
@@ -196,7 +197,7 @@ export function ClearBlockGoldenStandard({ deepMode }: { deepMode: boolean }) {
       <div className="mt-3 flex flex-wrap gap-2">
         {requiresCleanup && !busy
           ? <button type="button" className={button} onClick={() => void closePrevious()}>Close previous check</button>
-          : <button type="button" className={button} disabled={busy} onClick={() => void start()}>Run Clear BLOCK</button>}
+          : !legacy && <button type="button" className={button} disabled={busy} onClick={() => void start()}>Run Clear BLOCK</button>}
         {result && <button type="button" className={button} onClick={downloadSummary}>Download Summary</button>}
       </div>
       {result && (

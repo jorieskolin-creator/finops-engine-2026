@@ -10,7 +10,7 @@ export interface Comparison {
   packageVersion?: string;
   referenceSha256?: string;
   referenceApproved?: boolean;
-  checks: Array<{ label: string; expected: string | number | boolean; observed: string | number | boolean; matches: boolean }>;
+  checks: Array<{ label: string; expected: string | number | boolean | null; observed: string | number | boolean | null; matches: boolean | null }>;
   narrativeChecks?: NarrativeCheck[];
 }
 
@@ -48,8 +48,8 @@ export function narrativeStatus(comparison?: Comparison, review?: NarrativeRevie
 export function monitoringStatus(comparison?: Comparison, review?: NarrativeReview): Status | 'Incomplete' {
   if (!comparison) return 'Incomplete';
   const narrative = narrativeStatus(comparison, review);
-  if (comparison.checks.some(check => !check.matches) || narrative === 'Fail') return 'Fail';
-  return comparison.referenceApproved && narrative === 'Pass' ? 'Pass' : 'Review';
+  if (comparison.checks.some(check => check.matches === false) || narrative === 'Fail') return 'Fail';
+  return comparison.referenceApproved && comparison.checks.every(check => check.matches === true) && narrative === 'Pass' ? 'Pass' : 'Review';
 }
 
 export interface RenderedNarrative {
