@@ -308,8 +308,22 @@ async function postWithTimeout(url: string, body: any, approval: any, retrievalS
     }
     return { text: finalText, usage: finalUsage };
   } catch (err) {
-    if (retrievalSignal || (err instanceof StageExecutionError && err.fallbackAllowed)) throw err;
-    const recovered = await pollInternalResult(body, approval, err, dispatchStarted);
+    if (retrievalSignal?.aborted || (err instanceof StageExecutionError && err.fallbackAllowed)) throw err;
+    if (retrievalSignal && err instanceof StageExecutionError) throw err;
+    const recovered = await pollInternalResult(
+      body,
+      approval,
+      err,
+      dispatchStarted,
+      retrievalSignal
+        ? {
+            fetchFn: (input, init) => fetch(input, { ...init, signal: retrievalSignal }),
+            logFn: async () => {},
+            gatewayDeadlineMs: 0,
+            recoveryPropagationMs: 15_000,
+          }
+        : undefined,
+    );
     if (recovered) return recovered;
     if(err instanceof StageExecutionError)throw err;
     throw new StageExecutionError('DEPENDENCY_UNCERTAINTY');

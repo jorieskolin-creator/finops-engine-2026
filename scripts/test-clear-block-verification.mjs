@@ -4,7 +4,7 @@ import { readFile } from 'node:fs/promises';
 import { transform } from 'esbuild';
 import { issueCookie } from '../lib/auth.js';
 import { clearBlockHandler } from '../api/golden-standard-clear-block.js';
-import { clearBlockCase } from '../lib/goldenStandardClearBlock.js';
+import { clearBlockCase, goldenStandardCase, resolveGoldenStandardBlobConfig } from '../lib/goldenStandardClearBlock.js';
 
 process.env.SECRET_KEY = 'disposable-clear-block-test';
 const headers = { cookie: issueCookie().split(';')[0] };
@@ -107,4 +107,56 @@ assert.equal(monitoringStatus(comparison.body, { ...review, judgments: { ...revi
 assert.equal(monitoringStatus({ ...comparison.body, referenceApproved: true }, {
   ...review, judgments: { ...review.judgments, diagnosis: 'Needs judgment' },
 }), 'Review');
+
+// Token fallback to BLOB_READ_WRITE_TOKEN and Vercel Blob store inventory discovery.
+const fallbackConfig = resolveGoldenStandardBlobConfig({
+  BLOB_READ_WRITE_TOKEN: ' "vercel_blob_rw_3qui09wjonlnjoes_secret" \n',
+});
+assert.equal(fallbackConfig.storeId, '3qui09wjonlnjoes');
+assert.equal(fallbackConfig.source, 'BLOB_READ_WRITE_TOKEN');
+
+const suffixedPayload = Buffer.from(JSON.stringify({
+  case_id: 'clear-block',
+  input_files: [
+    { path: 'inputs/clear-block/01-billing.csv', bytes: 8, sha256: 'a'.repeat(64) },
+    { path: 'inputs/clear-block/02-backlog.csv', bytes: 8, sha256: 'b'.repeat(64) },
+    { path: 'inputs/clear-block/Systems-Thinking-and-the-Cynefin-Framework-Final.3.pdf', bytes: 8, sha256: 'c'.repeat(64) },
+  ],
+}));
+const suffixedSha = createHash('sha256').update(suffixedPayload).digest('hex');
+const discoveryCase = goldenStandardCase(
+  'clear-block',
+  { BLOB_READ_WRITE_TOKEN: 'vercel_blob_rw_3qui09wjonlnjoes_secret' },
+  async (url) => {
+    const parsed = new URL(url);
+    if (parsed.hostname === '3qui09wjonlnjoes.private.blob.vercel-storage.com' && parsed.pathname.startsWith('/golden-standard/')) {
+      return new Response('Not found', { status: 404 });
+    }
+    if (parsed.hostname === 'vercel.com' && parsed.pathname === '/api/blob') {
+      return Response.json({
+        hasMore: false,
+        blobs: [{
+          pathname: 'Golden Standard/manifests/clear-block/inputs-v1-R4nd0m.json',
+          downloadUrl: 'https://3qui09wjonlnjoes.private.blob.vercel-storage.com/Golden%20Standard/manifests/clear-block/inputs-v1-R4nd0m.json?download=1',
+          size: suffixedPayload.length,
+          uploadedAt: '2026-11-26T12:00:00.000Z',
+        }],
+      });
+    }
+    if (parsed.hostname === '3qui09wjonlnjoes.private.blob.vercel-storage.com') {
+      return new Response(suffixedPayload, { status: 200 });
+    }
+    throw new Error(`Unexpected URL ${url}`);
+  },
+);
+const discoveredBytes = await discoveryCase.read({
+  path: 'manifests/clear-block/inputs-v1.json',
+  sha256: suffixedSha,
+  maxBytes: 16384,
+});
+assert.deepEqual(discoveredBytes, suffixedPayload);
+await assert.rejects(
+  () => discoveryCase.read({ path: 'manifests/clear-block/inputs-v1.json', sha256: 'f'.repeat(64), maxBytes: 16384 }),
+  /GOLDEN_STANDARD_INTEGRITY/,
+);
 console.log('Clear BLOCK authenticated fixture, digest, comparison, and narrative review tests passed.');

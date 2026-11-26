@@ -12,7 +12,7 @@ const migrationFiles=(await readdir(new URL('../migrations/',import.meta.url))).
 const latestMigrationVersion=Math.max(...migrationFiles.map(name=>Number(name.split('_',1)[0])));
 assert.equal(CONTROL_PLANE_SCHEMA_VERSION,latestMigrationVersion,'application compatibility version must match the latest migration');
 assert.equal(migrationVersion('006_authoritative_table_analysis.sql'),6);
-assert.deepEqual(pendingMigrations(migrationFiles.sort(),new Set([1,4,5,6,7,8,9])),['002_quality_snapshots.sql','003_shadow_telemetry.sql','010_retrieval_verification.sql','011_golden_standard_suite.sql'],'only unrecorded migrations may be replayed');
+assert.deepEqual(pendingMigrations(migrationFiles.sort(),new Set([1,4,5,6,7,8,9])),['002_quality_snapshots.sql','003_shadow_telemetry.sql','010_retrieval_verification.sql','011_golden_standard_suite.sql','012_golden_standard_monitoring.sql'],'only unrecorded migrations may be replayed');
 assert.deepEqual(pendingMigrations(migrationFiles.sort(),new Set(migrationFiles.map(migrationVersion))),[],'fully migrated databases must not replay historical constraints');
 assert.equal(LIFETIMES_MS.packet,1_800_000);assert.equal(LIFETIMES_MS.resultRecovery,1_800_000);assert.equal(LIFETIMES_MS.inactivity,7_200_000);assert.equal(LIFETIMES_MS.absoluteRun,86_400_000);
 assert.equal(effectiveExpiry('2026-01-01T00:00:00Z','2026-01-02T00:00:00Z').toISOString(),'2026-01-01T02:00:00.000Z');

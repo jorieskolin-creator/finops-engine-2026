@@ -1,5 +1,10 @@
 import { requireSession } from '../lib/auth.js';
 import { clearBlockCase, compareClearBlock, validClearBlockObservation } from '../lib/goldenStandardClearBlock.js';
+import { workerOperationalLog } from '../lib/workerOperationalLog.js';
+
+const safeReason = error => typeof error?.code === 'string' && /^GOLDEN_STANDARD_[A-Z0-9_]{1,48}$/.test(error.code)
+  ? error.code
+  : error?.message === 'GOLDEN_STANDARD_INTEGRITY' ? 'GOLDEN_STANDARD_INTEGRITY' : 'GOLDEN_STANDARD_UNAVAILABLE';
 
 export function clearBlockHandler(caseStore = clearBlockCase()) {
   return async (req, res) => {
@@ -14,7 +19,7 @@ export function clearBlockHandler(caseStore = clearBlockCase()) {
       }
       if (req.method === 'GET' && keys.length === 1 && typeof slot === 'string' && /^[0-2]$/.test(slot)) {
         const entry = (await caseStore.loadInputs())[Number(slot)];
-        if (!entry) return res.status(404).json({ error: 'GOLDEN_STANDARD_UNAVAILABLE' });
+        if (!entry) return res.status(404).json({ error: 'GOLDEN_STANDARD_UNAVAILABLE', reason: 'GOLDEN_STANDARD_BLOB_NOT_FOUND' });
         const data = await caseStore.read(entry);
         res.setHeader('Content-Type', 'application/octet-stream');
         res.setHeader('Content-Disposition', 'attachment');
@@ -26,8 +31,16 @@ export function clearBlockHandler(caseStore = clearBlockCase()) {
       }
       return res.status(400).json({ error: 'INVALID_REQUEST' });
     } catch (error) {
-      const code = error?.message === 'GOLDEN_STANDARD_INTEGRITY' ? error.message : 'GOLDEN_STANDARD_UNAVAILABLE';
-      return res.status(503).json({ error: code });
+      const reason = safeReason(error);
+      const code = reason === 'GOLDEN_STANDARD_INTEGRITY' ? 'GOLDEN_STANDARD_INTEGRITY' : 'GOLDEN_STANDARD_UNAVAILABLE';
+      workerOperationalLog('warn', 'golden_standard_event', {
+        action: req.method === 'POST' ? 'clear_block_compare' : 'clear_block_input',
+        case_id: 'clear-block',
+        error_code: reason,
+        http_status: error?.httpStatus,
+        blob_source: error?.blobSource,
+      });
+      return res.status(503).json({ error: code, reason });
     }
   };
 }

@@ -275,13 +275,24 @@ try {
   assert.equal((await suites.read(suiteId)).attempts[0].comparison.usage.calls, 0);
   const second = await suites.next(suiteId, config.routingHash, config.build);
   assert.equal(second.ordinal, 1);
-  assert.deepEqual(await suites.cancel(suiteId), [second.run_id]);
-  assert.equal((await repository.getRun(second.run_id)).state, 'deletion_requested');
+  const failedAttempt = await suites.fail(suiteId, second.ordinal, second.run_id, {
+    stage: 'input_download',
+    code: 'GOLDEN_STANDARD_BLOB_NOT_FOUND',
+    timedOut: false,
+  });
+  assert.equal(failedAttempt.recorded, true);
+  assert.deepEqual(failedAttempt.cleanupRunIds, [second.run_id]);
+  const third = await suites.next(suiteId, config.routingHash, config.build);
+  assert.equal(third.ordinal, 2);
+  assert.deepEqual(await suites.cancel(suiteId), [second.run_id, third.run_id]);
+  assert.equal((await repository.getRun(third.run_id)).state, 'deletion_requested');
   await lifecycle.transition(second.run_id, 'deletion_requested');
+  await lifecycle.transition(third.run_id, 'deletion_requested');
   assert.equal(await suites.next(suiteId, config.routingHash, config.build), null);
   const closed = (await suites.history()).find(suite => suite.suite_id === suiteId);
   assert.equal(closed.state, 'cancelled');
-  assert.deepEqual(closed.attempts.map(a => a.state), ['delivered', 'incomplete', 'queued', 'queued', 'queued', 'queued']);
+  assert.deepEqual(closed.attempts.map(a => a.state), ['delivered', 'incomplete', 'incomplete', 'queued', 'queued', 'queued']);
+  assert.equal(closed.attempts[1].failure.code, 'GOLDEN_STANDARD_BLOB_NOT_FOUND');
   assert.equal(closed.attempts[0].review.dispositions.diagnosis, 'Supported');
   assert.deepEqual(await suites.cancel(suiteId), []);
   await repository.db.query('DELETE FROM golden_standard_suites WHERE suite_id=$1', [suiteId]);

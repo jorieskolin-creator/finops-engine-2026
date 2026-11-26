@@ -39,6 +39,23 @@ const extractTextFromHtml = (html: string): string => {
   return doc.body.textContent || "";
 };
 
+export const mimeTypeForEvidenceFileName = (fileName: string): string => {
+  const ext = fileName.toLowerCase().split('.').pop() || '';
+  switch (ext) {
+    case 'pdf': return 'application/pdf';
+    case 'html': return 'text/html';
+    case 'csv': return 'text/csv';
+    case 'tsv': return 'text/tab-separated-values';
+    case 'xlsx': return 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+    case 'json': return 'application/json';
+    case 'png': return 'image/png';
+    case 'jpg':
+    case 'jpeg': return 'image/jpeg';
+    case 'webp': return 'image/webp';
+    default: return '';
+  }
+};
+
 export const parseEvidenceFile = async (file: File): Promise<ParsedEvidenceFile> => {
   let text = "";
   let kind: ParsedEvidenceFile['kind'] = undefined;
@@ -53,7 +70,7 @@ export const parseEvidenceFile = async (file: File): Promise<ParsedEvidenceFile>
     throw new Error(`File ${file.name} failed deterministic type validation (${acquisition.validation_codes.join(', ')}).`);
   }
 
-  if (file.type === 'application/pdf' || lowerName.endsWith('.pdf')) {
+  if (acquisition.format === 'pdf') {
     const { text: pdfText, pages: extractedPages, visualUnits: extractedVisualUnits, metadata } = await extractPagesFromPdf(file, { sourceHash: acquisition.original_sha256 });
     text = pdfText;
     parseMetadata = {
@@ -65,25 +82,25 @@ export const parseEvidenceFile = async (file: File): Promise<ParsedEvidenceFile>
     pages = extractedPages;
     visualUnits = extractedVisualUnits;
     kind = 'pdf';
-  } else if (file.type === 'text/html' || lowerName.endsWith('.html')) {
+  } else if (acquisition.format === 'html') {
     const rawHtml = await file.text();
     text = extractTextFromHtml(rawHtml);
     kind = 'html';
-  } else if (file.type === 'text/csv' || lowerName.endsWith('.csv')) {
+  } else if (acquisition.format === 'csv') {
     const raw = await file.text();
     const rendered = renderDelimitedTableForAnalysis(raw, { fileName: file.name, delimiter: 'auto', sourceHash: acquisition.original_sha256 });
     text = rendered.text;
     kind = 'csv';
     parseMetadata = { rowCount: rendered.rowCount, renderedRowCount: rendered.renderedRowCount, analyzedRowCount: rendered.structuredTable.analysis_rows?.length || 0, analysisComplete: rendered.structuredTable.analysis_complete, clippedCellCount: rendered.clippedCellCount, cellCharacterCoverageRatio: rendered.cellCharacterCoverageRatio, warnings: rendered.warnings };
     structuredTable = rendered.structuredTable;
-  } else if (file.type === 'text/tab-separated-values' || lowerName.endsWith('.tsv')) {
+  } else if (acquisition.format === 'tsv') {
     const raw = await file.text();
     const rendered = renderDelimitedTableForAnalysis(raw, { fileName: file.name, delimiter: '\t', sourceHash: acquisition.original_sha256 });
     text = rendered.text;
     kind = 'tsv';
     parseMetadata = { rowCount: rendered.rowCount, renderedRowCount: rendered.renderedRowCount, analyzedRowCount: rendered.structuredTable.analysis_rows?.length || 0, analysisComplete: rendered.structuredTable.analysis_complete, clippedCellCount: rendered.clippedCellCount, cellCharacterCoverageRatio: rendered.cellCharacterCoverageRatio, warnings: rendered.warnings };
     structuredTable = rendered.structuredTable;
-  } else if (lowerName.endsWith('.xlsx')) {
+  } else if (acquisition.format === 'xlsx') {
     const extracted = await extractXlsx(file, acquisition.original_sha256);
     text = extracted.text;
     kind = 'xlsx';
@@ -97,7 +114,7 @@ export const parseEvidenceFile = async (file: File): Promise<ParsedEvidenceFile>
       warnings: extracted.warnings
     };
     structuredTables = extracted.tables;
-  } else if (file.type.startsWith('image/') || /\.(png|jpe?g|webp)$/i.test(lowerName)) {
+  } else if (acquisition.format === 'png' || acquisition.format === 'jpeg' || acquisition.format === 'webp') {
     const visualUnit = await extractImageOcr(file, acquisition.original_sha256);
     text = `Format: IMAGE_OCR\nOCR confidence: ${visualUnit.confidence}\nVisual interpretation: OCR text only; non-text visual semantics withheld.\n\n${visualUnit.text}`;
     kind = 'image';
@@ -108,7 +125,7 @@ export const parseEvidenceFile = async (file: File): Promise<ParsedEvidenceFile>
       ]
     };
     visualUnits = [visualUnit];
-  } else if (file.type === 'application/json' || lowerName.endsWith('.json')) {
+  } else if (acquisition.format === 'json') {
     const raw = await file.text();
     text = `Format: JSON\n\n${raw}`;
     kind = 'json';
