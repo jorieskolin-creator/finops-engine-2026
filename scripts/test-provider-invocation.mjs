@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import http from 'node:http';
+import { RETRIEVAL_VERIFICATION } from '../lib/controlPlanePolicy.js';
 import { defaultNodeFetch, invokeProvider } from '../lib/providerInvocation.js';
 import { OUTPUT_CONTRACT_IDS } from '../lib/outputContracts.js';
 
@@ -39,6 +40,23 @@ assert.deepEqual(request.body.response_format, { type: 'json_object' });
 assert.match(request.body.messages.map(message => message.content).join('\n'), /JSON/i);
 assert.equal(result.text, '{"ok":true}');
 assert.deepEqual(result.usage, { input_tokens: 12, output_tokens: 4, reasoning_tokens: 0 });
+
+for (const [provider, model, outputField] of [
+  ['openai', 'gpt-5.6-sol', 'max_output_tokens'],
+  ['anthropic', 'claude-sonnet-5-5', 'max_tokens'],
+  ['xai', 'grok-4.6', 'max_completion_tokens'],
+]) {
+  let outgoing;
+  await assert.rejects(invokeProvider({ ...packet, provider, model, settings: { max_tokens: 16384 } }, {
+    env: { OPENAI_API_KEY: 'stub', ANTHROPIC_API_KEY: 'stub', XAI_API_KEY: 'stub' },
+    maxOutputTokens: RETRIEVAL_VERIFICATION.maxOutputTokens,
+    fetchFn: async (_url, options) => {
+      outgoing = JSON.parse(options.body);
+      return { ok: false, status: 429 };
+    },
+  }), /UPSTREAM_HTTP_ERROR/);
+  assert.equal(outgoing[outputField], RETRIEVAL_VERIFICATION.maxOutputTokens);
+}
 
 await assert.rejects(
   invokeProvider(packet, { env: {}, fetchFn: async () => { throw new Error('must not dispatch'); } }),

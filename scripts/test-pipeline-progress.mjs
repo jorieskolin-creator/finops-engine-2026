@@ -3,6 +3,7 @@ import { readFile } from 'node:fs/promises';
 
 const component = await readFile(new URL('../src/components/DashboardComponents.tsx', import.meta.url), 'utf8');
 const analysis = await readFile(new URL('../src/services/analysisService.ts', import.meta.url), 'utf8');
+const acquisition = await readFile(new URL('../src/services/evidenceAcquisitionService.ts', import.meta.url), 'utf8');
 const orchestrator = await readFile(new URL('../src/orchestrator.ts', import.meta.url), 'utf8');
 const app = await readFile(new URL('../src/App.tsx', import.meta.url), 'utf8');
 const report = await readFile(new URL('../src/components/ReportView.tsx', import.meta.url), 'utf8');
@@ -29,8 +30,9 @@ assert.match(orchestrator, /onProgress\(0, totalBatches\)/, 'parallel domain wor
 assert.match(orchestrator, /onProgress\(completedCount, totalBatches, batchId\)/, 'domain completion must use actual settled batches');
 assert.match(orchestrator, /unavailableEvidenceCheck\(batchId, errorCode\)/, 'failed domains must produce explicit unavailable evidence decisions');
 assert.match(orchestrator, /catch \(error\) \{[\s\S]*?'targeted_rescan_unavailable'[\s\S]*?fallback: 'verified_downgrades'/, 'an unavailable targeted rescan must retain conservative verifier downgrades instead of failing the domain');
+assert.match(acquisition, /sourcePackets = acquisitionGap\.packets[\s\S]*?changed \? verifyAcquisition\(\) : baseline/);
 const integrityGatePosition = analysis.indexOf('validatePreSynthesisIntegrity(');
-const effectivePacketPosition = analysis.indexOf('sourcePackets = acquisitionGap.packets');
+const effectivePacketPosition = analysis.indexOf('await acquireEvidence(sources, { runId }, emitProgress)');
 const provenancePosition = analysis.indexOf('reconcileEvidenceProvenance(');
 const calculationPosition = analysis.indexOf('const validationData = calculateMetrics');
 const synthesisPosition = analysis.indexOf("emitProgress({ stage: 'synthesis', status: 'in_progress' })");
@@ -42,7 +44,7 @@ assert.match(analysis, /checkpoint\('phase1', 'accepted'[\s\S]*?effective_source
 assert.match(orchestrator, /semantic_gap_retrieval\.passes\.sort\(/, 'parallel semantic-gap traces must be ordered deterministically before delivery');
 assert.match(analysis, /throw new PipelineIntegrityError\('ANALYSIS_OUTPUT_INCOMPLETE', 'pre_synthesis'\)/, 'invalid Phase 1 output must terminate before synthesis');
 assert.match(analysis, /safeItem\.antipattern_absence_status = item\.antipattern_absence_status/, 'sanitization must preserve validated evidence semantics');
-for (const stage of orderedStages) assert.match(analysis, new RegExp(`stage: '${stage}'`));
+for (const stage of orderedStages) assert.match(analysis + acquisition, new RegExp(`stage: '${stage}'`));
 assert.match(analysis, /checkpoint\('final_report'[\s\S]*readyRun\([\s\S]*emitProgress\(\{ stage: 'finalization', status: 'completed' \}\)/, 'finalization must complete only after the recoverable report is stored and marked ready for delivery');
 assert.ok(
   analysis.indexOf('await readyRun(') < analysis.indexOf("serverLog(runId, 'info', 'pipeline_complete'"),

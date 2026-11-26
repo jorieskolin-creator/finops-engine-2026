@@ -14,8 +14,17 @@ export function createRunHandler(repository,redis){const lifecycle=redis?new Run
     const body=req.body||{}; const action=req.method==='GET'?'status':req.method==='DELETE'?'delete':body.action;
     let result;
     if(action==='create'&&req.method==='POST')result=await repository.createRun();
+    else if (action === 'create_retrieval' && req.method === 'POST') {
+      if (typeof body.opening_id !== 'string' || !UUID.test(body.opening_id) || Object.keys(body).length !== 2) return res.status(400).json({error:'INVALID_REQUEST'});
+      result = await repository.createRetrievalRun(body.opening_id);
+    }
     else { const id=body.run_id||req.query?.run_id; if(typeof id!=='string'||!UUID.test(id))return res.status(400).json({error:'INVALID_REQUEST'});
       if(action==='status')result=await repository.getRun(id);
+      else if (action === 'finish_retrieval' && req.method === 'POST') {
+        if (body.run_id !== id || Object.keys(body).length !== 2) return res.status(400).json({error:'INVALID_REQUEST'});
+        if (!lifecycle) return res.status(503).json({error:'DEPENDENCY_UNAVAILABLE'});
+        result = await lifecycle.completeRetrieval(id);
+      }
       else if(action==='suspend'){const failureCode=typeof body.failure_code==='string'&&/^[A-Z0-9_]{1,64}$/.test(body.failure_code)?body.failure_code:'PIPELINE_FAILED';result=await repository.markRunRecoverable(id,failureCode);}
       else if(action==='resume')result=await repository.resumeRun(id);
       else if(action==='ready'){if(!validQualitySnapshot(body.quality)||!validShadowTelemetry(body.shadow_telemetry))return res.status(400).json({error:'INVALID_REQUEST'});result=await (lifecycle?lifecycle.readyWithQuality(id,body.quality,body.shadow_telemetry):repository.readyRunWithQuality(id,body.quality,body.shadow_telemetry));}
@@ -26,7 +35,7 @@ export function createRunHandler(repository,redis){const lifecycle=redis?new Run
       else return res.status(400).json({error:'INVALID_REQUEST'});
     }
     if(!result)return res.status(404).json({error:'RUN_NOT_FOUND'});
-    return res.status(action==='create'?201:200).json(result);
+    return res.status(['create','create_retrieval'].includes(action)?201:200).json(result);
   } catch(error){const code=safeErrorCode(error);return res.status(safeErrorStatus(code)).json({error:code});}
 };}
 export default async function handler(req,res){try{const {repository,redis}=getInfrastructure();return await createRunHandler(repository,redis)(req,res);}catch{return res.status(503).json({error:'VERCEL_GOVERNED_DISPATCH_UNSUPPORTED'});}}

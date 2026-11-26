@@ -1,12 +1,17 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 
+const buildCommit = [
+  process.env.RAILWAY_GIT_COMMIT_SHA,
+  process.env.GIT_COMMIT_SHA,
+  process.env.VERCEL_GIT_COMMIT_SHA,
+].find(sha => sha && /^[a-f0-9]{40}$/i.test(sha));
+
 export default defineConfig({
   plugins: [react()],
-  // Provider keys are intentionally NOT defined here: they must stay in the
-  // server-side API handlers. Only public, VITE_-prefixed variables are exposed
-  // to the browser through Vite.
+  // Expose only the public build revision and tactics URL. Provider keys stay server-side.
   define: {
+    __FINOPS_BUILD_COMMIT__: JSON.stringify(buildCommit ?? null),
     'process.env.VITE_FINOPS_TACTICS_URL': JSON.stringify(process.env.VITE_FINOPS_TACTICS_URL),
   },
   build: {

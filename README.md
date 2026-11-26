@@ -175,3 +175,9 @@ Required roadmap tactics use an explicit final disposition contract: `accepted`,
 The scenario and boundary suite uses synthetic engineering inputs to exercise deterministic BLOCK/WARN/GO thresholds, all seven evidence categories, anti-pattern absence semantics, DLP block/caution behavior, malformed delimited tables, and source-schema faults. These scenarios are regression controls only; they are not expert-approved reference assessments and do not measure accuracy or drift.
 
 Milestone 6 scale readiness is explicit rather than inferred. Knowledge Packet contracts are checked across all A–F domains, stages, and 60 stream-qualified objects. The Data Signal Registry marks AUTHORITATIVE only for criteria with a frozen live theme binding (plus A1/AP-A1 tagging allocation) and leaves unbound objects `NO_AUTHORITATIVE_ANALYZER_SEMANTICS`; no placeholder analyzers or thresholds are invented.
+
+### Manual Golden Standard · Clear BLOCK
+
+Use the Step 5 `2026-11-26-v1` package. In a **private** Vercel Blob store, upload the three files in `inputs/clear-block/`, `manifests/clear-block/inputs-v1.json` and `references/clear-block/reference-v1.json`. Preserve the paths under `golden-standard/2026-11-26-v1/`, without randomized suffixes. Configure the store's token on Railway as `GOLDEN_STANDARD_BLOB_READ_WRITE_TOKEN`. The app verifies the pinned manifest, card and input bytes before use.
+
+On the authenticated dashboard, select **Run Clear BLOCK**. The button uses the normal assessment path and its current Deep Mode setting. The Summary and compact comparison for the latest completed check in that browser tab are stored separately from normal assessments. The reference card remains in Review. Repository tests use injected responses and produce no provider calls.
