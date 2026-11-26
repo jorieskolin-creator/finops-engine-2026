@@ -70,7 +70,8 @@
     "test:pipeline-integrity": "node scripts/test-pipeline-integrity.mjs",
     "preview": "vite preview",
     "start": "node server.js",
-    "test:clear-block-verification": "node scripts/test-clear-block-verification.mjs"
+    "test:clear-block-verification": "node scripts/test-clear-block-verification.mjs",
+    "test:golden-standard-suite": "node scripts/test-golden-standard-suite.mjs"
   },
   "engines": {
     "node": ">=18"

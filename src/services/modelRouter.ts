@@ -86,8 +86,8 @@ async function fetchModelRoutingConfig(signal?: AbortSignal): Promise<ModelRouti
   return config;
 }
 
-export function getModelRoutingConfig(): Promise<ModelRoutingConfig> {
-  if (!routingConfigPromise) {
+export function getModelRoutingConfig(refresh = false): Promise<ModelRoutingConfig> {
+  if (refresh || !routingConfigPromise) {
     routingConfigPromise = fetchModelRoutingConfig().catch(error => {
       routingConfigPromise = undefined;
       throw error;

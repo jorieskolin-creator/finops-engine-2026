@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
 import { initializeInfrastructure } from '../lib/infrastructure.js';
+import { GoldenStandardSuiteRepository } from '../lib/goldenStandardSuiteRepository.js';
 import { RunLifecycleService } from '../lib/runLifecycleService.js';
 import {
   approveRequest,
@@ -252,6 +253,38 @@ try {
   assert.equal(elapsed.state, 'expired');
   assert.equal(elapsed.cleanup_status, 'verified');
   assert.equal(elapsed.retrieval_usage.reserved_attempts, 0);
+
+  const suites = new GoldenStandardSuiteRepository(repository);
+  const suiteId = crypto.randomUUID();
+  const config = { build: 'test-build', routingHash: 'test-routing' };
+  assert.equal(await suites.start(suiteId, config, ['clear-block', 'clear-warn'], 3), true);
+  assert.equal(await suites.start(crypto.randomUUID(), config, ['clear-block'], 1), false, 'Only one suite may run at a time');
+  assert.deepEqual((await suites.read(suiteId)).attempts.map(a => [a.ordinal, a.case_id, a.repetition]),
+    [[0, 'clear-block', 1], [1, 'clear-warn', 1], [2, 'clear-block', 2], [3, 'clear-warn', 2], [4, 'clear-block', 3], [5, 'clear-warn', 3]]);
+  assert.equal(await suites.next(suiteId, 'changed-routing', config.build), null);
+  const claims = await Promise.all([suites.next(suiteId, config.routingHash, config.build), suites.next(suiteId, config.routingHash, config.build)]);
+  assert.equal(claims.filter(Boolean).length, 1, 'Concurrent Next requests cannot start two paid attempts');
+  const first = claims.find(Boolean);
+  const compare = { referenceSha256: 'a'.repeat(64), checks: [] };
+  assert.equal(await suites.finish(suiteId, first.ordinal, first.run_id, compare), false, 'Cleanup is required before delivery');
+  // This test isolates suite transition rules. Other cases above exercise the cleanup worker and lifecycle.
+  await repository.db.query("UPDATE runs SET state='completed',cleanup_status='verified' WHERE run_id=$1", [first.run_id]);
+  assert.equal(await suites.finish(suiteId, first.ordinal, first.run_id, compare), true);
+  assert.equal(await suites.review(suiteId, first.ordinal, first.run_id, 'wrong', { diagnosis: 'Supported' }), false);
+  assert.equal(await suites.review(suiteId, first.ordinal, first.run_id, compare.referenceSha256, { diagnosis: 'Supported' }), true);
+  assert.equal((await suites.read(suiteId)).attempts[0].comparison.usage.calls, 0);
+  const second = await suites.next(suiteId, config.routingHash, config.build);
+  assert.equal(second.ordinal, 1);
+  assert.deepEqual(await suites.cancel(suiteId), [second.run_id]);
+  assert.equal((await repository.getRun(second.run_id)).state, 'deletion_requested');
+  await lifecycle.transition(second.run_id, 'deletion_requested');
+  assert.equal(await suites.next(suiteId, config.routingHash, config.build), null);
+  const closed = (await suites.history()).find(suite => suite.suite_id === suiteId);
+  assert.equal(closed.state, 'cancelled');
+  assert.deepEqual(closed.attempts.map(a => a.state), ['delivered', 'incomplete', 'queued', 'queued', 'queued', 'queued']);
+  assert.equal(closed.attempts[0].review.dispositions.diagnosis, 'Supported');
+  assert.deepEqual(await suites.cancel(suiteId), []);
+  await repository.db.query('DELETE FROM golden_standard_suites WHERE suite_id=$1', [suiteId]);
 
   console.log('infrastructure integration tests passed');
 } finally {

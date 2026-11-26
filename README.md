@@ -176,8 +176,10 @@ The scenario and boundary suite uses synthetic engineering inputs to exercise de
 
 Milestone 6 scale readiness is explicit rather than inferred. Knowledge Packet contracts are checked across all A–F domains, stages, and 60 stream-qualified objects. The Data Signal Registry marks AUTHORITATIVE only for criteria with a frozen live theme binding (plus A1/AP-A1 tagging allocation) and leaves unbound objects `NO_AUTHORITATIVE_ANALYZER_SEMANTICS`; no placeholder analyzers or thresholds are invented.
 
-### Manual Golden Standard · Clear BLOCK
+### Manual Golden Standard assessments
 
-Use the Step 5 `2026-11-26-v1` package. In a **private** Vercel Blob store, upload the three files in `inputs/clear-block/`, `manifests/clear-block/inputs-v1.json` and `references/clear-block/reference-v1.json`. Preserve the paths under `golden-standard/2026-11-26-v1/`, without randomized suffixes. Configure the store's token on Railway as `GOLDEN_STANDARD_BLOB_READ_WRITE_TOKEN`. The app verifies the pinned manifest, card and input bytes before use.
+Use the frozen Step 5 package in the private Vercel Blob store. The case manifests, reference cards and raw inputs must keep their exact paths under `golden-standard/2026-11-26-v1/`. Configure `GOLDEN_STANDARD_BLOB_READ_WRITE_TOKEN` on Railway and apply migration 011 through the existing migration command. The runner checks the pinned manifest, reference card and input hashes. Only the case's manifest-listed inputs go through assessment intake.
 
-On the authenticated dashboard, select **Run Clear BLOCK**. The button uses the normal assessment path and its current Deep Mode setting. The Summary and compact comparison for the latest completed check in that browser tab are stored separately from normal assessments. The reference card remains in Review. Repository tests use injected responses and produce no provider calls.
+On the authenticated dashboard, choose one case or all five, then select one or three repetitions and start the assessments. The runner uses the normal assessment pipeline and the displayed Deep Mode setting. Cancellation stops the queue and requests transient cleanup for the active run. Already authorized model calls may finish. A reload shows the suite and its progress in history. Starting a new test requires an explicit Start after closing any interrupted suite.
+
+PostgreSQL retains compact configuration, attempt and comparison records, including review dispositions. The latest suite's rendered Summary and review excerpts stay in the browser session. Review cards in this package are candidates. An overall suite Pass requires approved references and supported results for all five cases on the displayed configuration. The Clear GO candidate has unresolved expected decisions.

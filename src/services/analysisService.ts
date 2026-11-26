@@ -255,6 +255,10 @@ export interface AnalyzeOptions {
   // auto-rules wouldn't fire. Use for high-stakes / board-level assessments.
   deepMode?: boolean;
   onRunStarted?: (runId: string) => void;
+  goldenStandard?: {
+    runId: string;
+    onKnowledgeLoaded: (indexHash: string, tacticPlaybook: string) => void;
+  };
 }
 
 export const analyzeDocument = async (
@@ -267,8 +271,7 @@ export const analyzeDocument = async (
   const modelRoutingMode = modelRouting.label;
   // This is deliberately the first content-processing action: PostgreSQL owns
   // the UUID and deadlines before source text is inspected or packetized.
-  const authoritativeRun = await createRun();
-  const runId = authoritativeRun.run_id;
+  const runId = options.goldenStandard?.runId ?? (await createRun()).run_id;
   options.onRunStarted?.(runId);
   let completionIntent = false;
   let deliveredResult: DiagnosticResult | undefined;
@@ -569,6 +572,7 @@ export const analyzeDocument = async (
 
     emitProgress({ stage: 'synthesis', status: 'in_progress' });
     const tacticsContext = await tacticsPromise;
+    options.goldenStandard?.onKnowledgeLoaded(knowledgeIntegrity.index_hash, tacticsContext);
     const activatedTacticSelectionPlan = buildTacticSelectionPlan(auditLogs, silentDomainIds);
     const tacticSelectionPlan = confidenceBracket === 'LOW'
       ? { ...activatedTacticSelectionPlan, required: [], optional: [] }
