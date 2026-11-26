@@ -32,9 +32,13 @@ export function GoldenStandardStatus({ check, deepMode }: { check: OpeningRetrie
     const first = (['directEvidence', 'calculation', 'irrelevantEvidenceExcluded'] as const).find(key => !checks[key]);
     message = first ? checkLabels[first] : 'Packet integrity or privacy checks failed';
   } else if (reason === 'AI recovery failed') {
-    message = checkLabels.recoveredEvidence;
-  } else if (reason === 'AI Gap Analyzer unverified' && checks?.recoveredEvidence) {
-    message = 'Local recovery passed. AI Gap Analyzer unverified.';
+    message = 'The AI Gap Analyzer returned a valid query, but it did not recover the expected forecast evidence.';
+  } else if (reason === 'Retrieval deadline exceeded') {
+    message = 'The retrieval deadline expired before the AI check could be verified.';
+  } else if (reason === 'AI Gap Analyzer unverified') {
+    message = checks?.recoveredEvidence
+      ? 'Local recovery passed. The AI Gap Analyzer produced no verified response.'
+      : 'The AI Gap Analyzer produced no verified response.';
   } else if (reason === 'Verified') {
     message = 'Evidence, calculation and packet checks passed.';
   }
@@ -54,11 +58,13 @@ export function GoldenStandardStatus({ check, deepMode }: { check: OpeningRetrie
             <span title={build || undefined}>Build {build ? build.slice(0, 12) : 'unidentified'}</span>
             {result && result.durationMs > 0 && <span>{(result.durationMs / 1000).toFixed(1)} s</span>}
             {result?.model && <span>{result.model}</span>}
+            {result?.runId && <span className="break-all">Run {result.runId}</span>}
             {result?.usage && (
               <span>
                 {result.usage.input_tokens ?? 'unknown'} input / {result.usage.output_tokens ?? 'unknown'} output tokens
               </span>
             )}
+            {result?.usage && <span>{result.usage.authorized_attempts} of {result.usage.reserved_attempts} model attempts authorized</span>}
           </p>
         )}
       </div>

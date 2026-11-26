@@ -63,6 +63,7 @@ const { StageExecutionError: MockStageExecutionError } = await import(pathToFile
 engine.knowledgeBaseService.fetchReferenceKnowledgeBaseContext = async () => '';
 const calls = [];
 let plannerUnavailable = false;
+let plannerTerm = 'spending outlook';
 globalThis.dispatchTestModel = async (stage, prompt) => {
   if (stage === 'evidence_gap_analysis') {
     const request = JSON.parse(prompt.userText);
@@ -71,7 +72,7 @@ globalThis.dispatchTestModel = async (stage, prompt) => {
     assert.equal(request.round, 2);
     if (plannerUnavailable) throw new Error('Planner unavailable');
     const text = JSON.stringify({ schema_version: 'finops_evidence_gap_query_v1', domain_id: request.domain_id,
-      queries: request.gaps.map(gap => ({ criterion_id: gap.criterion_id, themes: ['spending outlook'], terms: ['spending outlook'] })) });
+      queries: request.gaps.map(gap => ({ criterion_id: gap.criterion_id, themes: [plannerTerm], terms: [plannerTerm] })) });
     prompt.validateOutput(text);
     return { text, modelUsed: { id: 'stub' } };
   }
@@ -202,13 +203,17 @@ assert.deepEqual(calls, [['C', 'evidence_gap_analysis'], ['C', 'forensic_audit']
   assert.equal(checks.irrelevantEvidenceExcluded, false);
 
   const fetchBefore = globalThis.fetch;
-  globalThis.loadTestRetrievalFixture = async () => inputs;
   const commands = [];
+  globalThis.loadTestRetrievalFixture = async () => {
+    commands.push('fixture_ready');
+    return inputs;
+  };
+  let deadlineOffset = 60_000;
   globalThis.fetch = async (_url, init) => {
     const { action, opening_id } = JSON.parse(init.body);
     commands.push(action);
     const run = action === 'create_retrieval'
-      ? { run_id: opening_id, state: 'active', cleanup_status: null, absolute_deadline_at: new Date(Date.now() + 60_000).toISOString() }
+      ? { run_id: opening_id, state: 'active', cleanup_status: null, absolute_deadline_at: new Date(Date.now() + deadlineOffset).toISOString() }
       : { run_id: 'retrieval-test', state: 'completed', cleanup_status: 'verified',
           retrieval_usage: { reserved_attempts: 1, authorized_attempts: 1, input_tokens: 20, output_tokens: 12 } };
     return { ok: true, json: async () => run };
@@ -221,22 +226,47 @@ assert.deepEqual(calls, [['C', 'evidence_gap_analysis'], ['C', 'forensic_audit']
     const passed = await verification;
     assert.equal(passed.status, 'Pass');
     assert.equal(passed.model, 'stub');
+    assert.equal(passed.runId, opening);
     assert.equal(passed.usage.output_tokens, 12);
     assert.deepEqual(calls, [['C', 'evidence_gap_analysis']]);
-    assert.deepEqual(commands, ['create_retrieval', 'finish_retrieval']);
+    assert.deepEqual(commands, ['fixture_ready', 'create_retrieval', 'finish_retrieval']);
 
     calls.length = 0;
+    commands.length = 0;
     plannerUnavailable = true;
     const incomplete = await engine.runRetrievalVerification('00000000-0000-4000-8000-000000000002');
     assert.equal(incomplete.status, 'Incomplete');
     assert.equal(incomplete.reason, 'AI Gap Analyzer unverified');
     assert.equal(incomplete.checks.directEvidence, true);
     assert.deepEqual(calls, [['C', 'evidence_gap_analysis']]);
-    assert.deepEqual(commands.slice(2), ['create_retrieval', 'finish_retrieval']);
+    assert.deepEqual(commands, ['fixture_ready', 'create_retrieval', 'finish_retrieval']);
+
+    plannerUnavailable = false;
+    plannerTerm = 'anticipated expenditure';
+    const missed = await engine.runRetrievalVerification('00000000-0000-4000-8000-000000000003');
+    assert.equal(missed.status, 'Fail');
+    assert.equal(missed.reason, 'AI recovery failed');
+    assert.equal(missed.model, 'stub');
+
+    calls.length = 0;
+    commands.length = 0;
+    deadlineOffset = -1;
+    const expired = await engine.runRetrievalVerification('00000000-0000-4000-8000-000000000004');
+    assert.equal(expired.status, 'Incomplete');
+    assert.equal(expired.reason, 'Retrieval deadline exceeded');
+    assert.deepEqual(calls, []);
+    assert.deepEqual(commands, ['fixture_ready', 'create_retrieval', 'finish_retrieval']);
+
+    commands.length = 0;
+    globalThis.loadTestRetrievalFixture = async () => { throw new Error('GOLDEN_STANDARD_FIXTURE_MISMATCH'); };
+    const badFixture = await engine.runRetrievalVerification('00000000-0000-4000-8000-000000000005');
+    assert.equal(badFixture.reason, 'Fixture needs review');
+    assert.deepEqual(commands, []);
   } finally {
     globalThis.fetch = fetchBefore;
     delete globalThis.loadTestRetrievalFixture;
     plannerUnavailable = false;
+    plannerTerm = 'spending outlook';
   }
 }
 

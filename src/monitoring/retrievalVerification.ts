@@ -9,8 +9,9 @@ type Checks = ReturnType<typeof compareRetrievalReference>;
 export interface RetrievalVerificationResult {
   status: 'Pass' | 'Fail' | 'Review' | 'Incomplete';
   reason: 'Verified' | 'Fixture needs review' | 'Deterministic check failed' | 'AI Gap Analyzer unverified'
-    | 'AI recovery failed' | 'Acquisition did not complete' | 'Cleanup unverified';
+    | 'AI recovery failed' | 'Retrieval deadline exceeded' | 'Acquisition did not complete' | 'Cleanup unverified';
   durationMs: number;
+  runId?: string;
   checks?: Checks;
   model?: string;
   usage?: RetrievalUsage;
@@ -46,30 +47,45 @@ function evaluate(acquisition: Awaited<ReturnType<typeof acquireEvidence>>): Eva
 
 async function verify(openingId: string): Promise<RetrievalVerificationResult> {
   const started = performance.now();
+  let runId: string | undefined;
   const result = (evaluation: Evaluation, usage?: RetrievalUsage): RetrievalVerificationResult =>
-    ({ ...evaluation, durationMs: Math.round(performance.now() - started), usage });
+    ({ ...evaluation, durationMs: Math.round(performance.now() - started), usage, runId });
+  let sources: Awaited<ReturnType<typeof loadRetrievalFixture>>;
+  try {
+    // This frozen, local fixture can be parsed before reserving the timed run.
+    sources = await loadRetrievalFixture();
+  } catch (error) {
+    return result(error instanceof Error && error.message === 'GOLDEN_STANDARD_FIXTURE_MISMATCH'
+      ? { status: 'Review', reason: 'Fixture needs review' }
+      : { status: 'Incomplete', reason: 'Acquisition did not complete' });
+  }
   let run;
   try {
     run = await createRetrievalRun(openingId).catch(() => createRetrievalRun(openingId));
   } catch {
     return result({ status: 'Incomplete', reason: 'Acquisition did not complete' });
   }
+  runId = run.run_id;
   if (run.state !== 'active' || !run.absolute_deadline_at) {
     return result({ status: 'Incomplete', reason: 'Acquisition did not complete' });
   }
 
   let evaluation: Evaluation;
+  const remainingMs = Date.parse(run.absolute_deadline_at) - Date.now();
+  const signal = remainingMs > 0
+    ? AbortSignal.timeout(remainingMs)
+    : AbortSignal.abort(new DOMException('Retrieval deadline expired', 'TimeoutError'));
   try {
-    const signal = AbortSignal.timeout(Math.max(0, Date.parse(run.absolute_deadline_at) - Date.now()));
-    const sources = await loadRetrievalFixture();
+    signal.throwIfAborted();
     evaluation = evaluate(await acquireEvidence(sources, { runId: run.run_id, retrievalSignal: signal }));
   } catch (error) {
     if (error instanceof PipelineIntegrityError) evaluation = { status: 'Fail', reason: 'Deterministic check failed' };
-    else if (error instanceof Error && error.message === 'GOLDEN_STANDARD_FIXTURE_MISMATCH') {
-      evaluation = { status: 'Review', reason: 'Fixture needs review' };
-    } else evaluation = { status: 'Incomplete', reason: 'Acquisition did not complete' };
+    else evaluation = { status: 'Incomplete', reason: 'Acquisition did not complete' };
   } finally {
     clearStageTraces(run.run_id);
+  }
+  if (signal.aborted && evaluation.status === 'Incomplete') {
+    evaluation = { ...evaluation, reason: 'Retrieval deadline exceeded' };
   }
 
   let finished = await finishRetrievalRun(run.run_id).catch(() => null);
