@@ -35,10 +35,15 @@ assert.match(app, /bg-finops-intake/, 'the upload area should use the light-gree
 assert.doesNotMatch(app, /linkedin\.com/i, 'footer should not render the LinkedIn button');
 const uploadSectionIndex = app.indexOf('id="upload-title"');
 const privacyCardUsageIndex = app.indexOf('<PrivacyProtocolCard />');
-const goldenStandardUsageIndex = app.indexOf('{authenticated && <GoldenStandardStatus');
+const goldenStandardUsageIndex = app.indexOf('{!result && !showReference && !loading && authenticated && (');
+const dashboardUsageIndex = app.indexOf("{result && viewMode === 'dashboard' && (");
+assert.equal((app.match(/<GoldenStandardStatus\b/g) || []).length, 1, 'GoldenStandardStatus must only be mounted on the intake screen');
 assert.ok(
-  uploadSectionIndex > 0 && privacyCardUsageIndex > uploadSectionIndex && goldenStandardUsageIndex > privacyCardUsageIndex,
-  'Privacy and retention must appear directly below Evidence intake and above Golden Standard monitoring',
+  uploadSectionIndex > 0
+    && privacyCardUsageIndex > uploadSectionIndex
+    && goldenStandardUsageIndex > privacyCardUsageIndex
+    && dashboardUsageIndex > goldenStandardUsageIndex,
+  'Golden Standard monitoring must appear below Privacy and retention on intake only, and never on the Summary dashboard',
 );
 assert.match(report, /\/user-guide\.html#gauges/, 'report view should link to the User Guide gauge section');
 assert.match(userGuide, /FinOps Engine v\.3\.0\.0/);
