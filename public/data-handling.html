@@ -1,0 +1,919 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>FinOps Engine v.3.0.0 — Data Handling, Privacy &amp; Evidence Pipeline</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&amp;family=JetBrains+Mono:wght@400;600;700&amp;display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #f2f3ed;
+      --surface: #fcfcf7;
+      --surface-alt: #f3f6f1;
+      --border: #d7ded4;
+      --outline: #8b9f94;
+      --text: #1e312a;
+      --text-muted: #52665e;
+      --primary: #203a30;
+      --primary-light: #e7f0e8;
+      --primary-dark: #162922;
+      --lime: #d9ed85;
+      --note-bg: #faf0cf;
+      --note-border: #dfc985;
+      --note-text: #59410d;
+      --go-bg: #e7f0e8;
+      --go-text: #1b4d35;
+      --go-border: #adc9b4;
+      --warn-bg: #faf0cf;
+      --warn-text: #7c5205;
+      --warn-border: #dfc985;
+      --block-bg: #fdecec;
+      --block-text: #991b1b;
+      --block-border: #f2b6b6;
+      --shadow: 0 12px 32px -16px rgba(32, 58, 48, 0.22);
+      --radius: 16px;
+      --radius-sm: 10px;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    html {
+      scroll-behavior: smooth;
+    }
+
+    body {
+      font-family: "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.65;
+      font-size: 16px;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .topbar {
+      position: sticky;
+      top: 0;
+      z-index: 40;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .topbar-inner {
+      max-width: 1180px;
+      margin: 0 auto;
+      padding: 12px 24px;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .brand {
+      display: inline-flex;
+      align-items: center;
+      gap: 12px;
+      text-decoration: none;
+      color: var(--text);
+    }
+
+    .brand-mark {
+      width: 40px;
+      height: 40px;
+      border-radius: 12px;
+      background: var(--primary);
+      color: var(--lime);
+      font-weight: 900;
+      font-size: 14px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .brand-kicker {
+      display: block;
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.15em;
+      color: var(--text-muted);
+      line-height: 1.2;
+    }
+
+    .brand-title {
+      display: block;
+      font-size: 14px;
+      font-weight: 700;
+      letter-spacing: -0.01em;
+      line-height: 1.3;
+    }
+
+    .topbar-actions {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 14px;
+      border-radius: 8px;
+      border: 1px solid var(--outline);
+      background: var(--surface);
+      color: var(--primary);
+      font-size: 13.5px;
+      font-weight: 600;
+      text-decoration: none;
+      cursor: pointer;
+      transition: background 0.15s, border-color 0.15s;
+    }
+
+    .btn:hover {
+      background: var(--primary-light);
+    }
+
+    .btn-primary {
+      background: var(--primary);
+      border-color: var(--primary);
+      color: var(--surface);
+    }
+
+    .btn-primary:hover {
+      background: var(--primary-dark);
+      border-color: var(--primary-dark);
+    }
+
+    .hero {
+      max-width: 1180px;
+      margin: 0 auto;
+      padding: 40px 24px 12px;
+    }
+
+    .hero-card {
+      background: var(--primary);
+      color: var(--surface);
+      border-radius: var(--radius);
+      padding: 40px 38px;
+      box-shadow: var(--shadow);
+    }
+
+    .hero-badge {
+      display: inline-block;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      background: rgba(217, 237, 133, 0.16);
+      border: 1px solid rgba(217, 237, 133, 0.42);
+      color: var(--lime);
+      padding: 5px 12px;
+      border-radius: 999px;
+      margin-bottom: 16px;
+    }
+
+    .hero h1 {
+      font-size: clamp(28px, 4.2vw, 44px);
+      font-weight: 900;
+      line-height: 1.08;
+      margin-bottom: 14px;
+      letter-spacing: -0.035em;
+      max-width: 840px;
+    }
+
+    .hero p {
+      max-width: 820px;
+      font-size: 16.5px;
+      color: rgba(252, 252, 247, 0.88);
+      margin-bottom: 24px;
+    }
+
+    .hero-pillars {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 9px;
+    }
+
+    .hero-pill {
+      background: rgba(252, 252, 247, 0.1);
+      border: 1px solid rgba(252, 252, 247, 0.22);
+      color: var(--surface);
+      font-size: 13px;
+      padding: 6px 13px;
+      border-radius: 999px;
+      font-weight: 600;
+    }
+
+    .layout {
+      max-width: 1180px;
+      margin: 0 auto;
+      padding: 24px 24px 72px;
+      display: grid;
+      grid-template-columns: 248px 1fr;
+      gap: 28px;
+      align-items: start;
+    }
+
+    .toc {
+      position: sticky;
+      top: 84px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 18px 14px;
+      box-shadow: var(--shadow);
+    }
+
+    .toc-title {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.14em;
+      color: var(--text-muted);
+      margin-bottom: 10px;
+      padding-left: 10px;
+    }
+
+    .toc ul {
+      list-style: none;
+    }
+
+    .toc li {
+      margin-bottom: 3px;
+    }
+
+    .toc a {
+      display: block;
+      text-decoration: none;
+      color: var(--text-muted);
+      font-size: 13.5px;
+      font-weight: 600;
+      padding: 7px 10px;
+      border-radius: 8px;
+      transition: background 0.15s, color 0.15s;
+    }
+
+    .toc a:hover,
+    .toc a.active {
+      background: var(--primary-light);
+      color: var(--primary);
+    }
+
+    .content {
+      min-width: 0;
+    }
+
+    section.card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 32px 34px;
+      margin-bottom: 22px;
+      box-shadow: var(--shadow);
+      scroll-margin-top: 84px;
+    }
+
+    .section-num {
+      display: inline-block;
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.14em;
+      color: var(--primary);
+      background: var(--primary-light);
+      padding: 4px 10px;
+      border-radius: 6px;
+      margin-bottom: 10px;
+    }
+
+    section.card h2 {
+      font-size: 24px;
+      font-weight: 800;
+      color: var(--text);
+      margin-bottom: 12px;
+      line-height: 1.22;
+      letter-spacing: -0.02em;
+    }
+
+    section.card h3 {
+      font-size: 17px;
+      font-weight: 700;
+      color: var(--text);
+      margin: 24px 0 10px;
+    }
+
+    section.card p {
+      margin-bottom: 14px;
+      color: var(--text);
+    }
+
+    .lead {
+      font-size: 16.5px;
+      color: var(--text-muted);
+      margin-bottom: 18px;
+    }
+
+    .callout {
+      border-radius: var(--radius-sm);
+      padding: 16px 20px;
+      margin: 18px 0;
+      border: 1px solid var(--go-border);
+      border-left: 4px solid var(--primary);
+      background: var(--primary-light);
+    }
+
+    .callout strong.callout-title {
+      display: block;
+      font-size: 14.5px;
+      color: var(--primary-dark);
+      margin-bottom: 4px;
+    }
+
+    .callout.warn {
+      background: var(--note-bg);
+      border-color: var(--note-border);
+      border-left: 4px solid #b47d12;
+      color: var(--note-text);
+    }
+
+    .callout.warn strong.callout-title {
+      color: #6b4704;
+    }
+
+    .callout.info {
+      background: var(--surface-alt);
+      border-color: var(--border);
+      border-left: 4px solid var(--primary);
+    }
+
+    .callout.info strong.callout-title {
+      color: var(--primary);
+    }
+
+    .grid-2 {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 16px;
+      margin: 16px 0;
+    }
+
+    .grid-3 {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+      margin: 16px 0;
+    }
+
+    .grid-4 {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px;
+      margin: 16px 0;
+    }
+
+    .mini-card {
+      background: var(--surface-alt);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 16px;
+    }
+
+    .mini-card .label {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--primary);
+      margin-bottom: 4px;
+    }
+
+    .mini-card h4 {
+      font-size: 15.5px;
+      margin-bottom: 6px;
+      color: var(--text);
+    }
+
+    .mini-card p, .mini-card li {
+      font-size: 14px;
+      color: var(--text-muted);
+      margin-bottom: 6px;
+    }
+
+    .mini-card ul {
+      padding-left: 18px;
+      margin-top: 6px;
+    }
+
+    .do-box {
+      background: var(--go-bg);
+      border: 1px solid var(--go-border);
+      border-radius: var(--radius-sm);
+      padding: 16px 18px;
+    }
+
+    .dont-box {
+      background: var(--block-bg);
+      border: 1px solid var(--block-border);
+      border-radius: var(--radius-sm);
+      padding: 16px 18px;
+    }
+
+    .do-box h4 { color: var(--go-text); margin-bottom: 8px; font-size: 15.5px; }
+    .dont-box h4 { color: var(--block-text); margin-bottom: 8px; font-size: 15.5px; }
+    .do-box ul, .dont-box ul { padding-left: 18px; font-size: 14px; color: var(--text); }
+    .do-box li, .dont-box li { margin-bottom: 6px; }
+
+    .table-wrap {
+      overflow-x: auto;
+      margin: 16px 0;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 14.3px;
+    }
+
+    th, td {
+      text-align: left;
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--border);
+      vertical-align: top;
+    }
+
+    tr:last-child td {
+      border-bottom: 0;
+    }
+
+    th {
+      background: var(--surface-alt);
+      color: var(--text);
+      font-weight: 700;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+
+    .step-list {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 14px;
+      margin: 16px 0;
+    }
+
+    .step-card {
+      background: var(--surface-alt);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 16px 18px;
+    }
+
+    .step-num {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 26px;
+      height: 26px;
+      border-radius: 8px;
+      background: var(--primary);
+      color: var(--lime);
+      font-size: 12.5px;
+      font-weight: 800;
+      margin-bottom: 8px;
+    }
+
+    .step-card h4 {
+      font-size: 15px;
+      margin-bottom: 6px;
+    }
+
+    .step-card p {
+      font-size: 13.8px;
+      color: var(--text-muted);
+      margin-bottom: 0;
+    }
+
+    ul.clean-list {
+      padding-left: 20px;
+      margin: 10px 0 14px;
+    }
+    ul.clean-list li {
+      margin-bottom: 8px;
+    }
+
+    code {
+      font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 0.86em;
+      background: var(--surface-alt);
+      border: 1px solid var(--border);
+      padding: 1px 6px;
+      border-radius: 5px;
+      color: var(--primary);
+    }
+
+    footer {
+      max-width: 1180px;
+      margin: 0 auto;
+      padding: 0 24px 48px;
+      color: var(--text-muted);
+      font-size: 13px;
+      text-align: center;
+    }
+
+    @media (max-width: 920px) {
+      .layout {
+        grid-template-columns: 1fr;
+      }
+      .toc {
+        position: static;
+      }
+      .grid-2, .grid-3, .grid-4, .step-list {
+        grid-template-columns: 1fr;
+      }
+      section.card, .hero-card {
+        padding: 24px 20px;
+      }
+    }
+
+    @media print {
+      body { background: #fff; }
+      .topbar, .toc { display: none; }
+      .hero { padding-top: 0; }
+      .layout { display: block; padding: 12px 0; }
+      section.card { box-shadow: none; break-inside: avoid; }
+      .hero-card { background: #203a30 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    }
+  </style>
+</head>
+<body>
+
+  <header class="topbar">
+    <div class="topbar-inner">
+      <a href="/" class="brand">
+        <span class="brand-mark" aria-hidden="true">FO</span>
+        <span>
+          <span class="brand-kicker">Governed assessment · Data handling &amp; privacy</span>
+          <span class="brand-title">FinOps Engine v.3.0.0</span>
+        </span>
+      </a>
+      <div class="topbar-actions">
+        <a href="/user-guide.html" class="btn">User Guide</a>
+        <button type="button" class="btn" onclick="window.print()">Print / Save PDF</button>
+        <a href="/" class="btn btn-primary">Open FinOps Engine</a>
+      </div>
+    </div>
+  </header>
+
+  <div class="hero">
+    <div class="hero-card">
+      <div class="hero-badge">Privacy, Security &amp; Evidence Acquisition</div>
+      <h1>How Assessment Data Is Handled</h1>
+      <p>
+        A plain-language look at what happens to uploaded files from the moment you select them in your browser to the
+        moment you download your report—what stays on your device, what gets redacted or blocked before AI, how evidence
+        packets are governed, and when temporary server data is deleted.
+      </p>
+      <div class="hero-pillars">
+        <span class="hero-pill">Files &amp; Images Parsed in Browser</span>
+        <span class="hero-pill">Secrets Blocked · Identifiers Redacted</span>
+        <span class="hero-pill">SHA-256 Governed Text Packets</span>
+        <span class="hero-pill">Time-Bounded Server Cleanup</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="layout">
+    <nav class="toc" aria-label="Data handling sections">
+      <div class="toc-title">On This Page</div>
+      <ul>
+        <li><a href="#at-a-glance">1. At a Glance</a></li>
+        <li><a href="#browser-parsing">2. Local Browser Parsing</a></li>
+        <li><a href="#privacy-gate">3. Privacy &amp; Secret Gate</a></li>
+        <li><a href="#evidence-selection">4. Routing &amp; Re-Reads</a></li>
+        <li><a href="#governed-ai">5. Governed AI Dispatch</a></li>
+        <li><a href="#retention">6. Retention &amp; Cleanup</a></li>
+        <li><a href="#example">7. End-to-End Example</a></li>
+      </ul>
+    </nav>
+
+    <main class="content">
+
+      <!-- SECTION 1 -->
+      <section class="card" id="at-a-glance">
+        <span class="section-num">Section 01</span>
+        <h2>At a Glance: Where Your Data Goes (and Where It Never Goes)</h2>
+        <p class="lead">
+          The FinOps Engine is built around a simple rule: <strong>keep raw files on the user's device, screen everything
+          deterministically before AI, and send only the minimum text needed to verify findings</strong>.
+        </p>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Data Category</th>
+                <th>Where It Is Processed</th>
+                <th>Does It Go to AI Providers?</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>Original binary files &amp; filenames</strong><br /><em>(PDFs, XLSX workbooks, PNG/JPEG/WebP images)</em></td>
+                <td>Read directly inside your browser tab; filenames are replaced with neutral labels (<code>Document 001</code>, <code>Document 002</code>…).</td>
+                <td><strong>Never.</strong> Raw file binaries, hidden spreadsheet sheets/rows/columns, and original filenames never enter model prompts.</td>
+              </tr>
+              <tr>
+                <td><strong>Images, charts &amp; scanned pages</strong></td>
+                <td>Read locally in your browser using English and Finnish optical character recognition (OCR).</td>
+                <td><strong>Pixels never leave the browser.</strong> Only privacy-screened OCR text can qualify; chart lines, colors, and shapes remain withheld.</td>
+              </tr>
+              <tr>
+                <td><strong>Secrets &amp; credentials</strong><br /><em>(private keys, cloud keys, API/bearer tokens, passwords)</em></td>
+                <td>Detected locally in your browser (and re-checked on the server gateway).</td>
+                <td><strong>Blocked.</strong> The assessment stops before the first AI call until secret material is removed.</td>
+              </tr>
+              <tr>
+                <td><strong>Personal &amp; contract identifiers</strong><br /><em>(emails, phones, IPs, contextual person names, billing/invoice IDs, negotiated rates)</em></td>
+                <td>Masked with redaction placeholders (such as <code>[EMAIL_REDACTED]</code> or <code>Respondent</code>) before packet assembly.</td>
+                <td><strong>Redacted before AI</strong> whenever matched by deterministic rules.</td>
+              </tr>
+              <tr>
+                <td><strong>Screened FinOps text, eligible table rows &amp; table summaries</strong></td>
+                <td>Packaged per domain (A–F) with page/sheet/row locators and SHA-256 hashes, then approved by the server gateway.</td>
+                <td><strong>Yes—text only.</strong> Sent over server-held credentials to configured providers (OpenAI, Anthropic, xAI) so findings and quotes can be verified.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="callout warn">
+          <strong class="callout-title">Honest Security Boundary</strong>
+          Deterministic pattern screening and redaction substantially reduce exposure, but no pattern scanner can guarantee 100% removal of unusual free-form personal or commercial details. Always avoid uploading live credentials, and use the built-in <strong>Privacy Review</strong> panel before sharing exported reports externally.
+        </div>
+      </section>
+
+      <!-- SECTION 2 -->
+      <section class="card" id="browser-parsing">
+        <span class="section-num">Section 02</span>
+        <h2>Step 1: Reading Files Locally on Your Device</h2>
+        <p class="lead">
+          When you select 2–30 files (up to 25 MB each and 50 MB in total), your browser validates each file's true format,
+          records a <code>SHA-256</code> fingerprint of the original bytes, and extracts structured text and locations locally.
+        </p>
+
+        <div class="grid-3">
+          <div class="mini-card">
+            <div class="label">Documents</div>
+            <h4>PDF, HTML &amp; JSON</h4>
+            <ul>
+              <li><strong>PDFs:</strong> Extracted page by page up to 100 pages while keeping exact page numbers for citation traceability.</li>
+              <li><strong>HTML:</strong> Sanitized locally with DOMPurify (stripping scripts, styles, forms, and active tags) before reading text.</li>
+              <li><strong>JSON:</strong> Validated structurally before text admission; saved Engine JSON exports are recognized and offered for session restore.</li>
+            </ul>
+          </div>
+          <div class="mini-card">
+            <div class="label">Spreadsheets</div>
+            <h4>XLSX, CSV &amp; TSV</h4>
+            <ul>
+              <li><strong>Locations kept:</strong> Preserves worksheet names and physical row numbers (handling comma, semicolon, and tab delimiters).</li>
+              <li><strong>Formulas:</strong> Uses cached workbook values rather than executing macros or formulas.</li>
+              <li><strong>Hidden content withheld:</strong> Hidden sheets, hidden rows, and hidden columns are scanned for secrets locally and excluded from AI routing.</li>
+            </ul>
+          </div>
+          <div class="mini-card">
+            <div class="label">Images &amp; Scans</div>
+            <h4>PNG, JPEG, WebP &amp; Sparse PDFs</h4>
+            <ul>
+              <li><strong>Browser OCR:</strong> Same-origin Tesseract OCR reads English and Finnish text locally (up to 30 OCR pages per PDF) and records confidence.</li>
+              <li><strong>No vision uploads:</strong> Image pixels and base64 images are prohibited on the server gateway.</li>
+              <li><strong>No visual guessing:</strong> Graph trends, shapes, and colors without text labels are explicitly marked as uninspected visual regions.</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <!-- SECTION 3 -->
+      <section class="card" id="privacy-gate">
+        <span class="section-num">Section 03</span>
+        <h2>Step 2: Deterministic Privacy &amp; Secret Screening</h2>
+        <p class="lead">
+          No generative model call can run until every extracted paragraph, spreadsheet cell, chart label, and OCR word has
+          passed the deterministic privacy gate.
+        </p>
+
+        <div class="grid-2">
+          <div class="dont-box">
+            <h4>Hard Blocks (Stops the Run Immediately)</h4>
+            <ul>
+              <li><strong>Private keys:</strong> PEM / SSH / certificate private key blocks.</li>
+              <li><strong>Cloud access keys:</strong> AWS access key prefixes (<code>AKIA…</code>, <code>ASIA…</code>) and cloud secret patterns.</li>
+              <li><strong>API &amp; developer tokens:</strong> Secret prefixes (<code>sk-…</code>, <code>ghp_…</code>, and similar API tokens).</li>
+              <li><strong>Credential assignments &amp; bearer headers:</strong> Explicit <code>password=…</code>, <code>api_key=…</code>, <code>secret: …</code>, and <code>Bearer …</code> tokens.</li>
+            </ul>
+          </div>
+          <div class="do-box">
+            <h4>Automatic Redactions (Masked Before Packet Assembly)</h4>
+            <ul>
+              <li><strong>Contact &amp; network data:</strong> Email addresses, phone numbers, IPv4 addresses, and home/residential addresses.</li>
+              <li><strong>Personal &amp; respondent names:</strong> Names after labels like <em>Prepared by</em>, <em>Owner</em>, <em>Reviewer</em>, or Finnish equivalents (<em>Laatija</em>, <em>Omistaja</em>), plus respondent column headers in workshop tables.</li>
+              <li><strong>Government &amp; personal bank IDs:</strong> Passport, routing, credit-card, and bank account number patterns.</li>
+              <li><strong>Billing IDs &amp; contract pricing phrases:</strong> Explicit billing/invoice IDs and figures tied to <em>negotiated discount rate</em>, <em>discount rate</em>, <em>contract value</em>, or <em>EDP pricing</em>.</li>
+            </ul>
+          </div>
+        </div>
+
+        <p style="margin-top: 12px; font-size: 14.5px; color: var(--text-muted);">
+          <strong>Note on operational cost figures:</strong> Ordinary cloud spend rows, budgets, and optimization figures in eligible records are kept with their row/page locators so the audit and independent verifier can check calculations and cite real customer evidence rather than guessing.
+        </p>
+      </section>
+
+      <!-- SECTION 4 -->
+      <section class="card" id="evidence-selection">
+        <span class="section-num">Section 04</span>
+        <h2>Step 3: Domain Routing, Local Table Analysis &amp; Bounded Re-Reads</h2>
+        <p class="lead">
+          Rather than sending every file to every prompt, the Engine builds focused, verifiable packages for each of the six
+          FinOps domains (A–F)—and keeps customer evidence strictly separate from FinOps reference guidance.
+        </p>
+
+        <div class="step-list">
+          <div class="step-card">
+            <div class="step-num">1</div>
+            <h4>Route by Customer FinOps Context</h4>
+            <p>Passages qualify for a domain only when they carry both customer-specific FinOps context and a matching domain theme, filtering out unrelated administrative noise.</p>
+          </div>
+          <div class="step-card">
+            <div class="step-num">2</div>
+            <h4>Run Bound Local Table Calculators</h4>
+            <p>Where authoritative analyzers are bound (such as tagging and cost-allocation coverage), deterministic browser code inspects the full eligible table and records scope, method, and limitations.</p>
+          </div>
+          <div class="step-card">
+            <div class="step-num">3</div>
+            <h4>Search Locally for Missed Passages (Max 2 Rounds)</h4>
+            <p>If key concepts are missing, up to two bounded retrieval rounds check omitted chunks locally. Optional AI search-phrase suggestions receive <strong>catalog IDs only—never customer text</strong>—and every newly added chunk triggers a fresh privacy re-check.</p>
+          </div>
+          <div class="step-card">
+            <div class="step-num">4</div>
+            <h4>Skip Empty Domains Locally</h4>
+            <p>If a domain has zero qualifying customer excerpts and zero approved derived calculations, the Engine skips model calls for that domain completely and marks its criteria <em>Not assessed</em>.</p>
+          </div>
+        </div>
+
+        <div class="callout info">
+          <strong class="callout-title">Customer Evidence vs. Reference Knowledge Base</strong>
+          Reference FinOps guidance PDFs and the 23-tactic Playbook are supplied under separate, read-only labels to define <em>what to check</em>.
+          They are prohibited from ever being quoted as customer evidence or used to fill missing customer facts.
+        </div>
+      </section>
+
+      <!-- SECTION 5 -->
+      <section class="card" id="governed-ai">
+        <span class="section-num">Section 05</span>
+        <h2>Step 4: Governed Server Dispatch, Verification &amp; Report Scrubbing</h2>
+        <p class="lead">
+          When a domain or synthesis stage needs a model call, the browser cannot send uninspected prompts directly to an AI provider.
+          Every call passes through the server's governed execution plane.
+        </p>
+
+        <ul class="clean-list">
+          <li><strong>Server-held credentials &amp; authenticated sessions:</strong> Provider API keys stay strictly on the server behind an HMAC-signed <code>HttpOnly</code> session cookie.</li>
+          <li><strong>Canonical packet screening &amp; SHA-256 binding:</strong> Each request is re-screened on the server for secrets, residual identifiers, and text-only schema compliance, hashed over its exact canonical bytes, and bound to a single run, stage, provider, and model.</li>
+          <li><strong>At-most-once provider send fence:</strong> A worker verifies the packet hash and records a <code>SEND_AUTHORIZED</code> fence before calling the configured provider (OpenAI, Anthropic, or xAI). Uncertain post-send network drops are never blindly retried across fallback providers.</li>
+          <li><strong>Output inspection &amp; independent verification:</strong> Every model response is pattern-screened and contact-redacted before acceptance. Candidate findings are checked against source quotes by an independent Evidence Check stage, and generated summaries pass Fact-Check sanitation.</li>
+          <li><strong>Interactive Privacy Review before export:</strong> On the dashboard, you can open <strong>Privacy Review</strong> to redact organization names, apply additional person-name redaction, or edit any narrative sentence locally before downloading HTML or JSON files.</li>
+        </ul>
+      </section>
+
+      <!-- SECTION 6 -->
+      <section class="card" id="retention">
+        <span class="section-num">Section 06</span>
+        <h2>Retention, Cleanup &amp; Export Safety</h2>
+        <p class="lead">
+          The Engine minimizes server persistence: transient processing data is cleared automatically after report delivery or expiry,
+          while long-term audit records remain content-free.
+        </p>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Location</th>
+                <th>What Is Stored</th>
+                <th>When It Is Cleared</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>Browser <code>sessionStorage</code></strong></td>
+                <td>Completed report in your active browser tab so an accidental refresh does not lose your work.</td>
+                <td>Cleared when you click <strong>Reset Session</strong>, click <strong>Clear saved assessment</strong>, or close the browser tab.</td>
+              </tr>
+              <tr>
+                <td><strong>PostgreSQL Packet Bodies</strong></td>
+                <td>Temporary canonical bytes of approved text packets while a run is executing (30-minute packet cap).</td>
+                <td><strong>Deleted</strong> as soon as your browser acknowledges final report delivery, when you reset/delete the run, or on expiry.</td>
+              </tr>
+              <tr>
+                <td><strong>Redis Coordination &amp; Checkpoints</strong></td>
+                <td>Execution leases, send fences, recoverable model outputs (up to 30 minutes), and interruption-recovery checkpoints (up to 24 hours while unacknowledged).</td>
+                <td><strong>Tombstoned and deleted</strong> upon acknowledged report delivery, explicit session reset, or run deadline expiry.</td>
+              </tr>
+              <tr>
+                <td><strong>PostgreSQL Audit Metadata</strong></td>
+                <td><strong>Content-free</strong> run UUIDs, timestamps, token counts, quality percentages, and SHA-256 hashes (zero raw source text, filenames, or prompts).</td>
+                <td>Pruned automatically after <strong>90 days</strong>.</td>
+              </tr>
+              <tr>
+                <td><strong>Configured LLM Providers</strong><br /><em>(OpenAI · Anthropic · xAI)</em></td>
+                <td>Approved text-only stage packets processed over your configured API accounts.</td>
+                <td>Governed by the API data-retention terms configured on your organization's provider accounts.</td>
+              </tr>
+              <tr>
+                <td><strong>Downloaded Report Files</strong></td>
+                <td><strong>Summary HTML</strong> &amp; <strong>Master Data HTML</strong> (strictly display-only—no hidden JSON or scripts), plus optional <strong>Assessment JSON</strong> &amp; <strong>RunTrace JSON</strong>.</td>
+                <td>Saved locally on your computer under your control.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- SECTION 7 -->
+      <section class="card" id="example">
+        <span class="section-num">Section 07</span>
+        <h2>End-to-End Example: Following a Billing Workbook &amp; Tagging Policy</h2>
+        <p class="lead">
+          Suppose an assessor selects a <strong>billing workbook</strong> and a <strong>tagging policy PDF</strong> to check
+          whether cloud charges have owners and whether tagging rules are enforced. Here is how those two files travel through the Engine:
+        </p>
+
+        <div class="grid-4">
+          <div class="mini-card">
+            <div class="label">01 · Acquire Locally</div>
+            <h4>Fingerprint &amp; Extract</h4>
+            <p>Both files stay in the browser. Each receives a <code>SHA-256</code> fingerprint; PDF pages keep page numbers, visible billing rows keep sheet/row numbers, and hidden sheets stay withheld.</p>
+          </div>
+          <div class="mini-card">
+            <div class="label">02 · Screen &amp; Route</div>
+            <h4>Redact &amp; Measure</h4>
+            <p>Privacy rules mask contact names, emails, and billing IDs. Domain A receives the policy excerpts, bounded billing rows, and a local calculation of cost-centre coverage across eligible rows.</p>
+          </div>
+          <div class="mini-card">
+            <div class="label">03 · Re-Read Gaps</div>
+            <h4>Check Enforcement</h4>
+            <p>The rubric asks about mapping <em>and</em> enforcement. Seeing no enforcement proof on pass 1, the browser checks remaining screened chunks for missed exception or enforcement records, then re-validates privacy.</p>
+          </div>
+          <div class="mini-card">
+            <div class="label">04 · Verify &amp; Report</div>
+            <h4>Scope the Finding</h4>
+            <p>Evidence Check verifies both facts: sampled rows show cost centres and policy requires them, while practical enforcement remains unproven—carrying that exact scope boundary into the score and report.</p>
+          </div>
+        </div>
+
+        <div class="callout">
+          <strong class="callout-title">Traceable Back to Source</strong>
+          Every accepted finding in the Summary and Master Data reports links back through <strong>RunTrace</strong> to its
+          <code>Document NNN</code> ID, page or row number, and verified snippet—without storing raw customer files on the server.
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <footer>
+    FinOps Engine v.3.0.0 · Data Handling, Privacy &amp; Evidence Lineage — Least data in motion, deterministic screening, and verifiable findings.
+  </footer>
+
+  <script>
+    const links = document.querySelectorAll('.toc a');
+    const sections = Array.from(links).map(link => document.querySelector(link.getAttribute('href')));
+
+    function updateActiveLink() {
+      let currentIndex = 0;
+      const scrollPos = window.scrollY + 140;
+      sections.forEach((sec, idx) => {
+        if (sec && sec.offsetTop <= scrollPos) {
+          currentIndex = idx;
+        }
+      });
+      links.forEach((link, idx) => {
+        link.classList.toggle('active', idx === currentIndex);
+      });
+    }
+
+    window.addEventListener('scroll', updateActiveLink, { passive: true });
+    updateActiveLink();
+  </script>
+</body>
+</html>
