@@ -1019,9 +1019,6 @@ const App: React.FC = () => {
               </div>
             )}
           </div>
-          {authenticated && (
-            <div className="mt-6"><GoldenStandardStatus check={openingRetrievalCheck} deepMode={deepMode} /></div>
-          )}
           <div className="mt-8 grid grid-cols-1 sm:grid-cols-2 gap-3">
             <button
               type="button"
@@ -1352,7 +1349,9 @@ const App: React.FC = () => {
           </div>
         )}
 
-        {authenticated && <GoldenStandardStatus check={openingRetrievalCheck} deepMode={deepMode} />}
+        {!result && !showReference && !loading && authenticated && (
+          <GoldenStandardStatus check={openingRetrievalCheck} deepMode={deepMode} />
+        )}
 
         {result && viewMode === 'dashboard' && (
           <div className="animate-fade-in space-y-12 mb-20">
