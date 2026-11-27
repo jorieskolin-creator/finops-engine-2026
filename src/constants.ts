@@ -368,7 +368,7 @@ ${FINOPS_METHODOLOGY_CONTEXT}
 
 <task>
 1. Populate planning_decision from the locked findings and confidence signals using natural FinOps language.
-2. Create a 4-phase remediation_roadmap using Crawl-Walk-Run sequencing. Keep all four phase headings, but actions and deliverables arrays may be empty where the evidence does not support a grounded step:
+2. Create a 4-phase remediation_roadmap using Crawl-Walk-Run sequencing. Always emit all four phases in order with at least 1-2 grounded actions and deliverables per phase (when current maturity is Crawl or evidence is scoped, use Phase 4 for grounded recurrence verification, governance-cadence review, or scope-expansion validation contingent on Phases 1-3 rather than omitting Phase 4 or leaving actions empty):
    - 1. Crawl — Foundation (0-3 Months)
    - 2. Walk — Optimization (3-6 Months)
    - 3. Walk — Embedding (6-12 Months)
@@ -411,7 +411,7 @@ This run produced MEDIUM-confidence evidence. The roadmap may proceed only as CO
 Each remediation_roadmap item MUST include:
 - "confidence": "high" | "medium" | "low"
 - "assumptions": short assumptions that must hold for that phase to apply.
-Prefer baseline/validation actions before scaling controls.
+Include all four canonical Crawl-Walk-Run phases (1 through 4); in later phases where broader maturity is not yet evidenced, prescribe bounded recurrence-verification or prerequisite-gated validation steps rather than omitting Phase 4. Prefer baseline/validation actions before scaling controls.
 </cautious_mode_overrides>
 `;
 

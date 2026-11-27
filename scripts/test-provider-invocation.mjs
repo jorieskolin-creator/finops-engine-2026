@@ -34,6 +34,7 @@ const result = await invokeProvider(packet, {
 assert.equal(request.url, 'https://api.x.ai/v1/chat/completions');
 assert.equal(request.options.headers.Authorization, 'Bearer test-key-not-a-real-secret');
 assert.equal(request.body.model, 'grok-4.6');
+assert.equal(request.body.temperature, 0, 'xAI calls should use deterministic temperature 0');
 assert.equal(request.body.max_completion_tokens, 16384);
 assert.equal(request.body.reasoning_effort, 'medium');
 assert.deepEqual(request.body.response_format, { type: 'json_object' });
@@ -178,12 +179,15 @@ for (const [provider, model, settings] of [
   if (provider === 'openai') {
     assert.equal(structuredRequest.max_output_tokens, settings.max_tokens);
     assert.deepEqual(structuredRequest.reasoning, { effort: settings.reasoning_effort });
+    assert.equal(structuredRequest.temperature, undefined, 'OpenAI reasoning requests must omit temperature');
   } else if (provider === 'xai') {
     assert.equal(structuredRequest.max_completion_tokens, settings.max_tokens);
     assert.equal(structuredRequest.reasoning_effort, settings.reasoning_effort);
+    assert.equal(structuredRequest.temperature, 0, 'xAI requests should set temperature 0');
   } else {
     assert.equal(structuredRequest.max_tokens, settings.max_tokens);
     assert.equal(structuredRequest.thinking, undefined, 'Sonnet 5.5 uses the Claude API adaptive thinking default');
+    assert.equal(structuredRequest.temperature, undefined, 'Anthropic adaptive-thinking requests must omit temperature');
   }
   const format = provider === 'openai'
     ? structuredRequest.text.format

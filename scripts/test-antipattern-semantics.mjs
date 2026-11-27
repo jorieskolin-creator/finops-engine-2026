@@ -165,6 +165,19 @@ assert.equal(
   'negated partial signal must not trigger hasAntiPatternPresenceSignal even without original_count'
 );
 
+assert.equal(
+  inferAntiPatternAbsenceStatus({
+    count: 0,
+    original_count: 0,
+    antipattern_absence_status: 'tested_absent',
+    evidence_check_status: 'supported',
+    coverage_reason: 'Within the assessed cloud scope, shared reporting would reveal conflicting totals; SaaS scopes outside this boundary are not assessed.',
+    reasoning: 'Final anti-pattern assessment: Tested absent. Verifier status: supported.',
+  }),
+  'tested_absent',
+  'a boundary caveat mentioning out-of-scope areas are not assessed must not override an explicit tested_absent verdict'
+);
+
 const metrics = calculateMetrics({
   maturity: {},
   antipattern: {

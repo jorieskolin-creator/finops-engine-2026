@@ -116,6 +116,18 @@ const logs = (capabilityFactory, antipatternFactory) => ({
 }
 
 {
+  const weakZeroFixture = logs(
+    (id) => id === 'C5'
+      ? { ...capability(0, directQuote), evidence_check_status: 'weak' }
+      : capability(0, null),
+    () => antipattern(0, 'unknown_absent', null),
+  );
+  const weakZeroResult = calculateResolutionBasedMaturity(weakZeroFixture);
+  const c5 = weakZeroResult.criterion_resolutions.find(r => r.stream === 'maturity' && r.criterion_id === 'C5');
+  assert.equal(c5.state, 'UNKNOWN', 'a 0/3 capability flagged weak by Evidence Check must remain NA rather than resolving as 0');
+}
+
+{
   const fixture = logs(
     (id) => id === 'A1' ? capability(2, derivedQuote) : capability(0, null),
     () => antipattern(0, 'unknown_absent', null),
