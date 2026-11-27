@@ -136,9 +136,21 @@ const acquisitionErrorCode = (error: unknown): string => {
 };
 
 const PrivacyProtocolCard = () => (
-  <section id="data-handling" aria-labelledby="data-handling-title" className="finops-card scroll-mt-32 p-5 sm:p-7">
-    <p className="finops-kicker">Privacy and retention</p>
-    <h2 id="data-handling-title" className="mt-1 text-xl font-bold tracking-tight">Data Handling Overview</h2>
+  <section id="data-handling" aria-labelledby="data-handling-title" className="finops-card mt-5 scroll-mt-32 p-5 sm:p-7">
+    <div className="flex flex-wrap items-start justify-between gap-3">
+      <div>
+        <p className="finops-kicker">Privacy and retention</p>
+        <h2 id="data-handling-title" className="mt-1 text-xl font-bold tracking-tight">Data Handling Overview</h2>
+      </div>
+      <a
+        href="/data-handling.html"
+        target="_blank"
+        rel="noopener noreferrer"
+        className="finops-button"
+      >
+        Data Handling &amp; Privacy Guide
+      </a>
+    </div>
     <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
       {[
         { icon: 'M13 10V3L4 14h7v7l9-11h-7z', title: "Browser Parsing", desc: "Files parsed on this device" },
@@ -1216,7 +1228,7 @@ const App: React.FC = () => {
                           Read the User Guide
                         </a>
                         {' · '}
-                        <a href="#data-handling" className="font-semibold underline underline-offset-2">
+                        <a href="/data-handling.html" target="_blank" rel="noopener noreferrer" className="font-semibold underline underline-offset-2">
                           See how assessment data is handled
                         </a>.
                       </p>
@@ -1274,14 +1286,17 @@ const App: React.FC = () => {
                         )}
                       </div>
                     ) : (
-                      <div className="rounded-xl border border-dashed border-finops-outline bg-finops-soft p-4 text-finops-muted sm:p-5">
-                        <p className="text-sm leading-relaxed">Add cloud cost reports, FinOps policies, optimization plans, governance documents, or architecture reviews.</p>
+                      <div
+                        onClick={() => !parsing && fileInputRef.current?.click()}
+                        className="cursor-pointer rounded-xl border-2 border-dashed border-finops-intake-line bg-finops-intake p-4 text-finops-ink transition-colors hover:bg-finops-intake-hover sm:p-5"
+                      >
+                        <p className="text-sm font-medium leading-relaxed text-finops-ink">Add cloud cost reports, FinOps policies, optimization plans, governance documents, or architecture reviews.</p>
                         <ul aria-label="Example supported file formats" className="mt-3 flex flex-wrap gap-1.5">
                           {['PDF', 'HTML', 'CSV', 'TSV', 'XLSX', 'PNG/JPEG', 'JSON'].map(fmt => (
-                            <li key={fmt} className="rounded-md border border-finops-line bg-finops-surface px-2 py-1 text-[11px] font-semibold text-finops-forest">{fmt}</li>
+                            <li key={fmt} className="rounded-md border border-finops-intake-line/50 bg-finops-surface px-2 py-1 text-[11px] font-semibold text-finops-forest">{fmt}</li>
                           ))}
                         </ul>
-                        <p className="mt-3 text-xs leading-relaxed">
+                        <p className="mt-3 text-xs leading-relaxed text-finops-forest/90">
                           {MIN_FILES}–{MAX_FILES} artifacts · {MAX_TOTAL_UPLOAD_MB} MB total · {MAX_FILE_SIZE_MB} MB per file · PDFs parsed as extracted text up to 100 pages
                         </p>
                         {parsing && <p role="status" className="mt-3 text-sm font-semibold text-finops-forest">Extracting text...</p>}
@@ -1328,6 +1343,8 @@ const App: React.FC = () => {
                     <p>{error}</p>
                   </div>
                 )}
+
+                <PrivacyProtocolCard />
               </>
             ) : (
               <NeuralLoadingGrid progress={pipelineProgress} completedDomains={completedDomains} />
@@ -1636,8 +1653,6 @@ const App: React.FC = () => {
         )}
 
         {showReference && <ReferenceLibrary />}
-
-        {!result && !showReference && !loading && <PrivacyProtocolCard />}
       </main>
 
       <footer className="relative z-10 mt-auto border-t border-finops-line bg-finops-surface text-finops-ink">
@@ -1647,18 +1662,6 @@ const App: React.FC = () => {
             <p className="text-xs leading-relaxed text-finops-muted">
               <strong className="text-finops-ink">{APP_VERSION_LABEL}</strong><br />Governed multi-stage architecture
             </p>
-          </div>
-
-          <div className="flex justify-center">
-            <a href="https://www.linkedin.com/in/jori-santeri-eskolin-571055312/" target="_blank" rel="noopener noreferrer" className="finops-button">
-              <div aria-hidden="true" className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-finops-sage text-finops-forest">
-                <svg className="h-4 w-4 fill-current" viewBox="0 0 24 24"><path d="M19 0h-14c-2.761 0-5 2.239-5 5v14c0 2.761 2.239 5 5 5h14c2.762 0 5-2.239 5-5v-14c0-2.761-2.238-5-5-5zm-11 19h-3v-11h3v11zm-1.5-12.268c-.966 0-1.75-.79-1.75-1.764s.784-1.764 1.75-1.764 1.75.79 1.75 1.764-.783 1.764-1.75 1.764zm13.5 12.268h-3v-5.604c0-3.368-4-3.113-4 0v5.604h-3v-11h3v1.765c1.396-2.586 7-2.777 7 2.476v6.759z"/></svg>
-              </div>
-              <div className="text-left">
-                <span className="finops-kicker block">Architect</span>
-                <span className="text-xs font-semibold">Strategic Architecture by Jori Santeri Eskolin</span>
-              </div>
-            </a>
           </div>
 
           <div className="rounded-full border border-finops-line px-3 py-1.5 text-xs font-medium text-finops-muted">
