@@ -25,14 +25,17 @@ export function GoldenStandardStatus({ check, deepMode }: { check: OpeningRetrie
   const status = result?.status ?? 'Running';
   const reason = result?.reason;
   const checks = result?.checks;
+  const diagnostics = result?.diagnostics;
   let message: string = reason ?? 'Checking the synthetic evidence and AI Gap Analyzer.';
   if (reason === 'Fixture needs review' && checks) {
     message = !checks.fixtureHashes ? checkLabels.fixtureHashes : checkLabels.gapPresentOnFirstPass;
   } else if (reason === 'Deterministic check failed' && checks) {
     const first = (['directEvidence', 'calculation', 'irrelevantEvidenceExcluded'] as const).find(key => !checks[key]);
     message = first ? checkLabels[first] : 'Packet integrity or privacy checks failed';
+  } else if (reason === 'Local fallback recovered') {
+    message = 'The AI query missed the expected forecast evidence. The local fallback recovered it; the AI check did not pass.';
   } else if (reason === 'AI recovery failed') {
-    message = 'The AI Gap Analyzer returned a valid query, but it did not recover the expected forecast evidence.';
+    message = 'The AI Gap Analyzer returned a valid query, but neither it nor the local fallback recovered the expected forecast evidence.';
   } else if (reason === 'Retrieval deadline exceeded') {
     message = 'The retrieval deadline expired before the AI check could be verified.';
   } else if (reason === 'AI Gap Analyzer unverified') {
@@ -40,7 +43,7 @@ export function GoldenStandardStatus({ check, deepMode }: { check: OpeningRetrie
       ? 'Local recovery passed. The AI Gap Analyzer produced no verified response.'
       : 'The AI Gap Analyzer produced no verified response.';
   } else if (reason === 'Verified') {
-    message = 'Evidence, calculation and packet checks passed.';
+    message = 'The AI query recovered the expected forecast evidence. Calculation and packet checks passed.';
   }
   const build = __FINOPS_BUILD_COMMIT__;
 
@@ -55,6 +58,12 @@ export function GoldenStandardStatus({ check, deepMode }: { check: OpeningRetrie
             <span className={`rounded-full border border-finops-line px-2 py-0.5 text-xs font-semibold ${statusColors[status]}`}>{status}</span>
             <p className="basis-full text-sm text-finops-muted">{message}</p>
           </div>
+          {diagnostics && (
+            <p className="mt-2 text-xs text-finops-muted">
+              {diagnostics.localLeads} local leads · AI matches: {diagnostics.modelMatches ?? 'unverified'}
+              {' · '}Local fallback matches: {diagnostics.localMatches ?? 'not run'} · {diagnostics.admitted} admitted
+            </p>
+          )}
           {check && (
             <p className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs text-finops-muted">
               <time dateTime={check.completedAt}>{new Date(check.completedAt).toLocaleString()}</time>

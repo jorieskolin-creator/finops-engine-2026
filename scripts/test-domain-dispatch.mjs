@@ -158,6 +158,9 @@ assert.equal(recovered.bounded.domains.find(domain => domain.domain_id === 'C').
 assert.deepEqual(recovered.recovery.map(pass => [pass.domain_id, pass.round, pass.outcome]), [['C', 2, 'NEW_EVIDENCE_SELECTED']]);
 assert.deepEqual(recovered.stages.C.evidence.map(item => item.source_id), ['src-003']);
 assert.deepEqual(calls, [['C', 'evidence_gap_analysis'], ['C', 'forensic_audit'], ['C', 'evidence_check']]);
+assert.equal(recovered.recovery[0].recovery_source, 'model');
+assert.equal(recovered.recovery[0].model_match_count, 1);
+assert.equal(recovered.recovery[0].local_match_count, undefined, 'AI success must not run the fallback');
 
 {
   const directory = new URL('../src/monitoring/fixtures/retrieval-v1/', import.meta.url);
@@ -228,6 +231,7 @@ assert.deepEqual(calls, [['C', 'evidence_gap_analysis'], ['C', 'forensic_audit']
     assert.equal(passed.model, 'stub');
     assert.equal(passed.runId, opening);
     assert.equal(passed.usage.output_tokens, 12);
+    assert.deepEqual(passed.diagnostics, { localLeads: 1, modelMatches: 1, localMatches: undefined, admitted: 1 });
     assert.deepEqual(calls, [['C', 'evidence_gap_analysis']]);
     assert.deepEqual(commands, ['fixture_ready', 'create_retrieval', 'finish_retrieval']);
 
@@ -238,15 +242,24 @@ assert.deepEqual(calls, [['C', 'evidence_gap_analysis'], ['C', 'forensic_audit']
     assert.equal(incomplete.status, 'Incomplete');
     assert.equal(incomplete.reason, 'AI Gap Analyzer unverified');
     assert.equal(incomplete.checks.directEvidence, true);
+    assert.equal(incomplete.checks.recoveredEvidence, true, 'local recovery cannot verify an unavailable AI response');
+    assert.deepEqual(incomplete.diagnostics, { localLeads: 1, modelMatches: undefined, localMatches: 1, admitted: 1 });
     assert.deepEqual(calls, [['C', 'evidence_gap_analysis']]);
     assert.deepEqual(commands, ['fixture_ready', 'create_retrieval', 'finish_retrieval']);
 
+    calls.length = 0;
+    commands.length = 0;
     plannerUnavailable = false;
     plannerTerm = 'anticipated expenditure';
-    const missed = await engine.runRetrievalVerification('00000000-0000-4000-8000-000000000003');
-    assert.equal(missed.status, 'Fail');
-    assert.equal(missed.reason, 'AI recovery failed');
-    assert.equal(missed.model, 'stub');
+    const localRecovery = await engine.runRetrievalVerification('00000000-0000-4000-8000-000000000003');
+    assert.equal(localRecovery.status, 'Review', 'recovering locally cannot pass the AI check');
+    assert.equal(localRecovery.reason, 'Local fallback recovered');
+    assert.equal(localRecovery.model, 'stub');
+    assert.equal(localRecovery.checks.recoveredEvidence, true);
+    assert.equal(localRecovery.checks.irrelevantEvidenceExcluded, true);
+    assert.deepEqual(localRecovery.diagnostics, { localLeads: 1, modelMatches: 0, localMatches: 1, admitted: 1 });
+    assert.deepEqual(calls, [['C', 'evidence_gap_analysis']], 'a query miss must not make a second provider call');
+    assert.deepEqual(commands, ['fixture_ready', 'create_retrieval', 'finish_retrieval']);
 
     calls.length = 0;
     commands.length = 0;
@@ -268,6 +281,34 @@ assert.deepEqual(calls, [['C', 'evidence_gap_analysis'], ['C', 'forensic_audit']
     plannerUnavailable = false;
     plannerTerm = 'spending outlook';
   }
+}
+
+{
+  calls.length = 0;
+  plannerTerm = 'anticipated expenditure';
+  const noRecovery = await dispatch(recoveryInputs);
+  const pass = noRecovery.recovery[0];
+  assert.equal(pass.outcome, 'NO_ELIGIBLE_GAIN', 'a valid query still reports a miss when neither search corroborates a lead');
+  assert.equal(pass.recovery_source, undefined);
+  assert.equal(pass.model_match_count, 0);
+  assert.equal(pass.local_match_count, 0);
+  assert.deepEqual(pass.selected_chunk_ids, []);
+  assert.deepEqual(calls, [['C', 'evidence_gap_analysis']]);
+
+  calls.length = 0;
+  const localInputs = [
+    { ...nearMiss, text: 'Our Azure team reviewed the forecast. The spending projection was recorded for next month.' },
+    { ...samePhraseUnscoped, text: 'A forecast and spending projection are theoretical examples for general study.' },
+    { ...samePhraseReference, text: 'Training material: our Azure forecast uses a spending projection as an example.' },
+    { ...nearMiss, source_id: 'src-006', text: 'Our Azure team recorded the forecast but did not review the next month yet.' },
+  ];
+  const localAssessment = await dispatch([...sources, ...localInputs]);
+  assert.equal(localAssessment.recovery[0].recovery_source, 'local_fallback');
+  assert.equal(localAssessment.recovery[0].candidate_count, 2, 'reference and unscoped text must not become leads');
+  assert.equal(localAssessment.recovery[0].local_match_count, 1);
+  assert.deepEqual(localAssessment.stages.C.evidence.map(item => item.source_id), ['src-003']);
+  assert.deepEqual(calls, [['C', 'evidence_gap_analysis'], ['C', 'forensic_audit'], ['C', 'evidence_check']]);
+  plannerTerm = 'spending outlook';
 }
 
 const distantText = 'Routine notes. '.repeat(24);

@@ -21,6 +21,10 @@ const MAX_LEADS_PER_CRITERION = 32;
 const MAX_ADDITIONS_PER_DOMAIN = 8;
 const MAX_CUE_DISTANCE = 256;
 const catalogById = new Map(catalog.criteria.map(criterion => [criterion.criterion_id, criterion]));
+// Round-two alternatives only: these do not alter baseline routing, coverage scoring, or model inputs.
+const localAlternatives: Readonly<Record<string, readonly string[]>> = {
+  'maturity.C2.forecast_exists': ['projected spend', 'spending projection', 'expenditure outlook'],
+};
 
 const wholeMatchPositions = (text: string, term: string): number[] => {
   const phrase = ` ${term} `;
@@ -68,7 +72,9 @@ export const planAcquisitionGapQueries = (
     const criterionId = `${criterion.stream}.${criterion.criterion_id}`;
     plan.gaps.push({ criterion_id: criterionId, missing_concept_ids: missing.map(item => item.id) });
     plan.leads.set(criterionId, leads);
-    plan.fallbackTerms.set(criterionId, missing.flatMap(item => item.aliases));
+    plan.fallbackTerms.set(criterionId, missing.flatMap(item => [
+      ...item.aliases, ...(localAlternatives[`${criterionId}.${item.id}`] ?? []),
+    ]));
     plans.set(domain, plan);
   }
   return plans;
@@ -88,6 +94,17 @@ const hasLocalCorroboration = (lead: SearchLead, terms: readonly string[]): bool
   });
 });
 
+const findCorroboratedMatches = (plan: DomainGapPlan, termsFor: (criterionId: string) => readonly string[]) => {
+  const matches = new Map<string, string>();
+  for (const [criterionId, leads] of plan.leads) {
+    const terms = termsFor(criterionId);
+    for (const lead of leads) {
+      if (!matches.has(lead.chunkId) && hasLocalCorroboration(lead, terms)) matches.set(lead.chunkId, criterionId);
+    }
+  }
+  return matches;
+};
+
 export const retrieveAcquisitionGaps = async (
   registry: SourceRegistry,
   packets: Record<string, RoutedSourcePacket>,
@@ -100,39 +117,43 @@ export const retrieveAcquisitionGaps = async (
   for (const [domain, plan] of plans) {
     const request: EvidenceGapRequest = { schema_version: 'finops_evidence_gap_input_v1', domain_id: domain, round: 2, gaps: plan.gaps };
     const result = await analyzeEvidenceGaps(request, ctx);
-    const matches = new Map<string, string>();
-    const candidateIds = new Set<string>();
-    for (const [criterionId, leads] of plan.leads) {
-      const terms = result.failed ? plan.fallbackTerms.get(criterionId) ?? [] : result.termsByCriterion[criterionId] ?? [];
-      for (const lead of leads) {
-        candidateIds.add(lead.chunkId);
-        if (hasLocalCorroboration(lead, terms) && !matches.has(lead.chunkId) && matches.size < MAX_ADDITIONS_PER_DOMAIN) {
-          matches.set(lead.chunkId, criterionId);
-        }
-      }
-    }
-    const withNewRoutes = (ids: ReadonlySet<string>): SourceRegistry => ({
-      ...updatedRegistry,
-      chunks: updatedRegistry.chunks.map(chunk => ids.has(chunk.chunk_id) ? {
-        ...chunk,
-        routing: [...chunk.routing.filter(hint => hint.domain !== domain), {
-          domain, score: 3, tier: 'medium', reasons: [`catalog_gap:${matches.get(chunk.chunk_id)}`],
-        }],
-      } : chunk),
-    });
-    const selected = matches.size > 0
-      ? expandDomainPacket(withNewRoutes(new Set(matches.keys())), updatedPackets[domain], [...matches.keys()]).selected_chunk_ids
-      : [];
-    if (selected.length > 0) {
-      updatedRegistry = withNewRoutes(new Set(selected));
+    const candidateIds = new Set([...plan.leads.values()].flatMap(leads => leads.map(lead => lead.chunkId)));
+    const tryAdmission = (matches: ReadonlyMap<string, string>) => {
+      const withNewRoutes = (ids: ReadonlySet<string>): SourceRegistry => ({
+        ...updatedRegistry,
+        chunks: updatedRegistry.chunks.map(chunk => ids.has(chunk.chunk_id) ? {
+          ...chunk,
+          routing: [...chunk.routing.filter(hint => hint.domain !== domain), {
+            domain, score: 3, tier: 'medium', reasons: [`catalog_gap:${matches.get(chunk.chunk_id)}`],
+          }],
+        } : chunk),
+      });
+      const requested = [...matches.keys()].slice(0, MAX_ADDITIONS_PER_DOMAIN);
+      if (!requested.length) return [];
       const previous = updatedPackets[domain];
-      updatedPackets[domain] = expandDomainPacket(updatedRegistry, {
-        ...previous, total_candidate_chunks: previous.total_candidate_chunks + selected.length,
-      }, selected).packet;
-    }
+      const selected = expandDomainPacket(withNewRoutes(new Set(requested)), previous, requested).selected_chunk_ids;
+      if (selected.length > 0) {
+        updatedRegistry = withNewRoutes(new Set(selected));
+        updatedPackets[domain] = expandDomainPacket(updatedRegistry, {
+          ...previous, total_candidate_chunks: previous.total_candidate_chunks + selected.length,
+        }, selected).packet;
+      }
+      return selected;
+    };
+
+    const modelMatches = result.failed ? undefined
+      : findCorroboratedMatches(plan, id => result.termsByCriterion[id] ?? []);
+    const modelSelected = modelMatches ? tryAdmission(modelMatches) : [];
+    // A valid model query can still admit nothing. Try the same bounded local checks, not another model call.
+    const localMatches = modelSelected.length === 0
+      ? findCorroboratedMatches(plan, id => plan.fallbackTerms.get(id) ?? []) : undefined;
+    const localSelected = localMatches ? tryAdmission(localMatches) : [];
+    const selected = modelSelected.length ? modelSelected : localSelected;
     passes.push({
       domain_id: domain, round: 2, criterion_ids: plan.gaps.map(gap => gap.criterion_id),
       candidate_count: candidateIds.size, selected_chunk_ids: selected, model_used: result.model_used,
+      model_match_count: modelMatches?.size, local_match_count: localMatches?.size,
+      recovery_source: modelSelected.length ? 'model' : localSelected.length ? 'local_fallback' : undefined,
       outcome: selected.length > 0 ? 'NEW_EVIDENCE_SELECTED' : result.failed ? 'PLANNER_UNAVAILABLE' : 'NO_ELIGIBLE_GAIN',
     });
   }

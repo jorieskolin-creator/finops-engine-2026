@@ -9,10 +9,12 @@ type Checks = ReturnType<typeof compareRetrievalReference>;
 export interface RetrievalVerificationResult {
   status: 'Pass' | 'Fail' | 'Review' | 'Incomplete';
   reason: 'Verified' | 'Fixture needs review' | 'Deterministic check failed' | 'AI Gap Analyzer unverified'
-    | 'AI recovery failed' | 'Retrieval deadline exceeded' | 'Acquisition did not complete' | 'Cleanup unverified';
+    | 'AI recovery failed' | 'Local fallback recovered' | 'Retrieval deadline exceeded'
+    | 'Acquisition did not complete' | 'Cleanup unverified';
   durationMs: number;
   runId?: string;
   checks?: Checks;
+  diagnostics?: { localLeads: number; modelMatches?: number; localMatches?: number; admitted: number };
   model?: string;
   usage?: RetrievalUsage;
 }
@@ -35,14 +37,21 @@ function evaluate(acquisition: Awaited<ReturnType<typeof acquireEvidence>>): Eva
     || acquisition.sourceRegistryStatus.acquisition_readiness.status === 'BLOCKED') {
     return { status: 'Fail', reason: 'Deterministic check failed', checks };
   }
-  if (!gap?.model_used) return { status: 'Incomplete', reason: 'AI Gap Analyzer unverified', checks };
+  const diagnostics = gap && {
+    localLeads: gap.candidate_count, modelMatches: gap.model_match_count,
+    localMatches: gap.local_match_count, admitted: gap.selected_chunk_ids.length,
+  };
+  const details = { checks, diagnostics, model: gap?.model_used };
+  if (!gap?.model_used) return { ...details, status: 'Incomplete', reason: 'AI Gap Analyzer unverified' };
 
-  const recoveredByModel = gap.selected_chunk_ids.some(id =>
+  const expectedAdmitted = checks.recoveredEvidence && gap.selected_chunk_ids.some(id =>
     acquisition.sourceRegistry.chunks.some(chunk => chunk.chunk_id === id && chunk.source_id === expected.sourceId),
   );
-  return checks.recoveredEvidence && recoveredByModel
-    ? { status: 'Pass', reason: 'Verified', checks, model: gap.model_used }
-    : { status: 'Fail', reason: 'AI recovery failed', checks, model: gap.model_used };
+  if (expectedAdmitted && gap.recovery_source === 'model') return { ...details, status: 'Pass', reason: 'Verified' };
+  if (expectedAdmitted && gap.recovery_source === 'local_fallback') {
+    return { ...details, status: 'Review', reason: 'Local fallback recovered' };
+  }
+  return { ...details, status: 'Fail', reason: 'AI recovery failed' };
 }
 
 async function verify(openingId: string): Promise<RetrievalVerificationResult> {

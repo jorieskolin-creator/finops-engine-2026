@@ -176,6 +176,10 @@ The scenario and boundary suite uses synthetic engineering inputs to exercise de
 
 Milestone 6 scale readiness is explicit rather than inferred. Knowledge Packet contracts are checked across all A–F domains, stages, and 60 stream-qualified objects. The Data Signal Registry marks AUTHORITATIVE only for criteria with a frozen live theme binding (plus A1/AP-A1 tagging allocation) and leaves unbound objects `NO_AUTHORITATIVE_ANALYZER_SEMANTICS`; no placeholder analyzers or thresholds are invented.
 
+### Golden Standard opening retrieval check
+
+The authenticated opening check uses a frozen synthetic fixture and the shared evidence acquisition path. If the AI query admits no evidence, acquisition tries bounded local search alternatives without another model call. **Pass** means the AI query recovered the expected evidence; **Review** means a verified query missed but the local fallback recovered it; **Fail** means a verified query did not lead to recovery or a deterministic check failed. An unavailable AI response is **Incomplete**, even if local recovery worked. The card and Master Data's acquisition trace show counts without logging search phrases or source text.
+
 ### Manual Golden Standard assessments
 
 Use the frozen Step 5 package in the private Vercel Blob store (`golden-standard/2026-11-26-v1/` by default, or override with `GOLDEN_STANDARD_BLOB_PREFIX`). Configure `GOLDEN_STANDARD_BLOB_READ_WRITE_TOKEN` on Railway (or reuse `BLOB_READ_WRITE_TOKEN` when the Golden Standard folder lives in the same Vercel Blob store) and apply migrations through `npm run migrate` (including migration 012). On suite start and input download, the server resolves each manifest, reference card, and input object—supporting both direct private paths and Vercel Blob store inventory lookup—and enforces the pinned byte-for-byte SHA-256 hashes. Only the case's manifest-listed inputs enter normal browser intake (`parseEvidenceFile` -> `analyzeDocument`).
