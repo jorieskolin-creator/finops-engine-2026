@@ -1046,6 +1046,10 @@ export interface AcquisitionGapPassTrace {
   selected_chunk_ids: string[];
   outcome: 'NEW_EVIDENCE_SELECTED' | 'NO_ELIGIBLE_GAIN' | 'PLANNER_UNAVAILABLE';
   model_used?: string;
+  // Optional for RunTrace exports created before retrieval diagnostics were recorded.
+  model_match_count?: number;
+  local_match_count?: number;
+  recovery_source?: 'model' | 'local_fallback';
 }
 
 export interface BoundedRetrievalTrace {
