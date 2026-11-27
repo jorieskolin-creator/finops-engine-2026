@@ -3,6 +3,7 @@ import { mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import ts from '../node_modules/typescript/lib/typescript.js';
+import { validShadowTelemetry } from '../api/run.js';
 
 const source = await readFile(new URL('../src/services/acquisitionQualityService.ts', import.meta.url), 'utf8');
 const compiled = ts.transpileModule(source, {
@@ -210,6 +211,29 @@ assert.equal(mixedShadow.analyzer_version, 'tagging_allocation_v1@1.3.0');
 assert.equal(mixedShadow.scale_analyzer_available_count, 2);
 assert.equal(mixedShadow.scale_analyzer_available_count + mixedShadow.scale_unsupported_count, mixedShadow.scale_total_object_count);
 assert.deepEqual(Object.keys(mixedShadow).sort(), Object.keys(shadow).sort());
+assert.equal(validShadowTelemetry(mixedShadow), true);
+
+const semanticReservedShadow = shadowTelemetryPersistence({
+  policy_version: 'bounded_retrieval_policy_v1',
+  domains: [
+    { baseline_coverage: 25, final_coverage: 25, stop_reason: 'SEMANTIC_PASS_RESERVED', passes: [{ pass: 1, selected_chunk_ids: [] }] },
+    { baseline_coverage: 0, final_coverage: 0, stop_reason: 'NO_NEW_CANDIDATES', passes: [{ pass: 1, selected_chunk_ids: [] }, { pass: 2, selected_chunk_ids: [] }] },
+    { baseline_coverage: 80, final_coverage: 80, stop_reason: 'SUFFICIENT_BASELINE', passes: [] },
+    { baseline_coverage: 40, final_coverage: 42, stop_reason: 'MINIMUM_GAIN_NOT_MET', passes: [{ pass: 1, selected_chunk_ids: ['c1'] }] },
+    { baseline_coverage: 30, final_coverage: 55, stop_reason: 'MAX_PASSES_REACHED', passes: [{ pass: 1, selected_chunk_ids: ['c2'] }, { pass: 2, selected_chunk_ids: ['c3'] }] },
+    { baseline_coverage: 10, final_coverage: 10, stop_reason: 'SEMANTIC_PASS_RESERVED', passes: [{ pass: 1, selected_chunk_ids: [] }] }
+  ]
+}, [], { registry_version: 'data_signal_registry_v2', total_object_count: 60, analyzer_available_count: 2, unsupported_count: 58 });
+assert.equal(semanticReservedShadow.retrieval_domain_count, 6);
+assert.equal(
+  semanticReservedShadow.stop_sufficient_baseline_count
+    + semanticReservedShadow.stop_minimum_gain_not_met_count
+    + semanticReservedShadow.stop_no_new_candidates_count
+    + semanticReservedShadow.stop_max_passes_reached_count,
+  6,
+  'SEMANTIC_PASS_RESERVED domains must be included in the persisted stop-reason total so /api/run ready succeeds',
+);
+assert.equal(validShadowTelemetry(semanticReservedShadow), true, 'validShadowTelemetry must accept runs with SEMANTIC_PASS_RESERVED domains');
 
 const forgedLogs = {
   maturity: { A1: item('supported', [quote('FORGED_SOURCE_CANARY', 'invented-source', 'Policy')]) },

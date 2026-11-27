@@ -8,8 +8,10 @@ const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]
 const IDENT=/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
 const HASH=/^[0-9a-f]{64}$/;
 const KINDS=new Set(['acquisition','phase1','phase2','synthesis','fact_check','quality_gate','final_report']);
-const PAYLOAD_KEYS={acquisition:['source_registry_status','privacy_decision','integrity','source_parse_warnings'],phase1:['phase_1_audit_logs','evidence_check','validation'],phase2:['phase_2_validation'],synthesis:['phase_3_strategy'],fact_check:['fact_check'],quality_gate:['quality_gate','phase_3_strategy'],final_report:['result']};
+const REQUIRED_PAYLOAD_KEYS={acquisition:['source_registry_status','privacy_decision','integrity','source_parse_warnings'],phase1:['phase_1_audit_logs','evidence_check','validation'],phase2:['phase_2_validation'],synthesis:['phase_3_strategy'],fact_check:['fact_check'],quality_gate:['quality_gate','phase_3_strategy'],final_report:['result']};
+const OPTIONAL_PAYLOAD_KEYS={acquisition:['acquisition_gap_passes'],phase1:['effective_source_registry_status','effective_evidence_integrity','skipped_domains','semantic_gap_retrieval']};
 const exact=(value,keys)=>value&&typeof value==='object'&&!Array.isArray(value)&&Object.keys(value).sort().join('|')===[...keys].sort().join('|');
+const validPayload=(kind,payload)=>{if(!payload||typeof payload!=='object'||Array.isArray(payload))return false;const required=REQUIRED_PAYLOAD_KEYS[kind]||[];const allowed=new Set([...required,...(OPTIONAL_PAYLOAD_KEYS[kind]||[])]);const keys=Object.keys(payload);return required.every(k=>Object.hasOwn(payload,k)&&payload[k]!==undefined)&&keys.every(k=>allowed.has(k)&&payload[k]!==undefined);};
 const unavailable=res=>res.status(503).json({error:'RESULT_UNAVAILABLE'});
 export function checkpointHandler(repository,redis){return async(req,res)=>{
   if(!['POST','GET'].includes(req.method))return res.status(405).json({error:'METHOD_NOT_ALLOWED'});
@@ -18,7 +20,7 @@ export function checkpointHandler(repository,redis){return async(req,res)=>{
     if(req.method==='POST'){
       const body=req.body;const keys=body?.parent_hash===undefined?['run_id','kind','scope','payload']:['run_id','kind','scope','payload','parent_hash'];
       if(!exact(body,keys)||typeof body.run_id!=='string'||!UUID.test(body.run_id)||typeof body.kind!=='string'||!KINDS.has(body.kind)||typeof body.scope!=='string'||!IDENT.test(body.scope)||!body.payload||typeof body.payload!=='object'||Array.isArray(body.payload)||(body.parent_hash!==undefined&&(typeof body.parent_hash!=='string'||!HASH.test(body.parent_hash))))return res.status(400).json({error:'INVALID_REQUEST'});
-      if(!exact(body.payload,PAYLOAD_KEYS[body.kind])||Object.values(body.payload).some(value=>value===undefined))return res.status(400).json({error:'INVALID_REQUEST'});
+      if(!validPayload(body.kind,body.payload))return res.status(400).json({error:'INVALID_REQUEST'});
       const raw=JSON.stringify(body.payload);if(!raw||raw.length>1572864)return res.status(400).json({error:'INVALID_REQUEST'});
       const inspected=inspectOutput(raw,{packet_id:'checkpoint',packet_hash:'checkpoint',run_id:body.run_id,stage:body.kind,provider:'internal',model:'checkpoint'}).text;
       if(inspected.length>1572864)return res.status(400).json({error:'INVALID_REQUEST'});

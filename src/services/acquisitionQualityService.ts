@@ -260,11 +260,11 @@ export const acquisitionQualityPersistence = (
 ): AcquisitionQualityPersistence => ({
   schema_version: snapshot.schema_version,
   formula_version: snapshot.formula_version,
-  extraction_completeness: snapshot.extraction.overall_completeness,
-  evidence_coverage: snapshot.evidence.coverage.overall,
-  evidence_density: snapshot.evidence.density.overall,
-  provenance_integrity: snapshot.evidence.provenance.integrity,
-  kb_completeness: snapshot.knowledge.completeness,
+  extraction_completeness: clampPercent(snapshot.extraction.overall_completeness),
+  evidence_coverage: clampPercent(snapshot.evidence.coverage.overall),
+  evidence_density: clampPercent(snapshot.evidence.density.overall),
+  provenance_integrity: clampPercent(snapshot.evidence.provenance.integrity),
+  kb_completeness: clampPercent(snapshot.knowledge.completeness),
   evidence_packet_status: snapshot.readiness.evidence_packet,
   knowledge_packet_status: snapshot.readiness.knowledge_packet,
   acquisition_status: snapshot.readiness.acquisition,
@@ -281,7 +281,7 @@ export const shadowTelemetryPersistence = (
   coverage: DataSignalCoverageReport
 ): ShadowTelemetryPersistence => {
   const passes = retrieval.domains.flatMap(domain => domain.passes);
-  const gains = retrieval.domains.map(domain => domain.final_coverage - domain.baseline_coverage);
+  const gains = retrieval.domains.map(domain => Math.max(0, domain.final_coverage - domain.baseline_coverage));
   const stopCount = (reason: RetrievalStopReason): number => retrieval.domains.filter(domain => domain.stop_reason === reason).length;
   return {
     schema_version: 'shadow_telemetry_v1',
@@ -294,12 +294,13 @@ export const shadowTelemetryPersistence = (
     retrieval_pass_1_count: passes.filter(pass => pass.pass === 1).length,
     retrieval_pass_2_count: passes.filter(pass => pass.pass === 2).length,
     retrieval_selected_candidate_count: passes.reduce((sum, pass) => sum + pass.selected_chunk_ids.length, 0),
-    retrieval_average_gain_points: gains.length ? Math.round(gains.reduce((sum, gain) => sum + gain, 0) / gains.length) : 0,
-    retrieval_max_gain_points: gains.length ? Math.max(...gains) : 0,
+    retrieval_average_gain_points: gains.length ? clampPercent(gains.reduce((sum, gain) => sum + gain, 0) / gains.length) : 0,
+    retrieval_max_gain_points: gains.length ? clampPercent(Math.max(...gains)) : 0,
     stop_sufficient_baseline_count: stopCount('SUFFICIENT_BASELINE'),
     stop_minimum_gain_not_met_count: stopCount('MINIMUM_GAIN_NOT_MET'),
     stop_no_new_candidates_count: stopCount('NO_NEW_CANDIDATES'),
-    stop_max_passes_reached_count: stopCount('MAX_PASSES_REACHED'),
+    // Domains with SEMANTIC_PASS_RESERVED completed bounded pass 1 and delegated round 2 to semantic gap retrieval.
+    stop_max_passes_reached_count: stopCount('MAX_PASSES_REACHED') + stopCount('SEMANTIC_PASS_RESERVED'),
     derived_evidence_count: evidence.length,
     derived_observed_count: evidence.filter(item => item.result.status === 'OBSERVED').length,
     derived_insufficient_signal_count: evidence.filter(item => item.result.status !== 'OBSERVED').length,
