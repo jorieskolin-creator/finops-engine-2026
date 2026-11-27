@@ -10,6 +10,7 @@ import {
   RoutedSourcePacket,
   SourceRegistry,
   DerivedAnalyticalEvidence,
+  CriterionAssessmentStatus,
   CriterionQuestionResult,
 } from '../types';
 import { runStage, RunContext, serverLog } from './modelRouter';
@@ -172,8 +173,9 @@ ${summarizeBatch(batch)}
 - "weak": the source has some related evidence, but the score is too strong or the quote is vague.
 - "unsupported": the finding/score is not supported by the source.
 - "missing": the scanner scored >0 but did not provide usable traceable evidence, or the evidence cannot be located.
-- assessment_status must be "assessed" only when criterion-relevant customer evidence is present. Use "not_assessed" for silence or irrelevant material, regardless of packet size.
-- An assessed 0/3 is valid when relevant evidence was evaluated but supports none of the three questions. It is not missing evidence and its source-bound quotes must be retained.
+- assessment_status must be "assessed" only when criterion-relevant customer evidence on the criterion's exact subject is present. Use "not_assessed" for silence, off-topic/tangential material, or unassessed scope regardless of packet size.
+- An assessed 0/3 is valid when direct, on-topic customer evidence for this criterion's subject was evaluated and supports none of the three questions. If a scanner 0/3 cites only tangential material from a different topic (e.g., general deployment checks cited for regulatory residency controls, or model routing cited for AI budgets/quotas), set assessment_status="not_assessed" and status="unsupported".
+- Because verified_count cannot exceed original_count, if original_count is 0 on a maturity criterion whose quoted customer evidence IS genuine and directly on-topic for that criterion (even if you believe 1 or more sub-questions could have been scored), return status="supported", assessment_status="assessed", verified_count=0, and quote_supported=true rather than "unsupported" so the criterion remains assessed. Use status="unsupported" on a 0/3 item ONLY when the cited evidence is fabricated or off-topic for the criterion.
 - For text evidence, quoted text must be a real substring or clearly faithful excerpt from the source.
 - For deterministic derived evidence, require evidence_source="derived", a known derived_evidence_id, the correct source_id and an exact summary line targeted to this criterion. Never require a chunk_id for derived evidence, never recalculate its values, never infer exact percentages or currency from bands, and never treat association_direction as causality or NOT_FOUND coverage as tested absence.
 - When the source contains <CHUNK ...> markers, verify against the exact chunk text. Use chunk IDs/source IDs/page markers in your rationale when they clarify support or absence coverage.
@@ -186,9 +188,9 @@ ${summarizeBatch(batch)}
 - For anti-pattern items, also return antipattern_absence_status:
   - "confirmed_present": verified_count > 0 and the harmful pattern is evidenced.
   - "partially_present": verified_count is 1-2 or the harmful pattern signal is weak/partial.
-  - "tested_absent": verified_count is 0, original_count is 0, no weak/partial harmful signal exists, AND the source has relevant coverage that would reasonably reveal the anti-pattern if present.
-  - "unknown_absent": verified_count is 0 BUT the source is silent, irrelevant, or too weak to prove absence.
-- Never label an anti-pattern "tested_absent" when status is "weak", original_count is above 0, or the rationale/coverage_reason says there is partial harmful-pattern evidence. Use "partially_present" for weak but real harmful signals, or "unknown_absent" when the signal is too weak to count.
+  - "tested_absent": verified_count is 0, original_count is 0, no weak/partial harmful signal exists, packet coverage is NOT weak, a real source-bound quote in scanner_output anchors the governed scope, AND the customer evidence covers the organization-wide or governed scope where all 3 sub-criteria of the anti-pattern would reasonably appear if present.
+  - "unknown_absent": verified_count is 0 AND the source is silent, irrelevant, weak-coverage, OR limited to a pilot, single workload, single migration/release, or sampled period that cannot establish organization-wide absence (in that case also set assessment_status="not_assessed" and record the sample scope in coverage_reason).
+- Never label an anti-pattern "tested_absent" when status is "weak", original_count is above 0, packet coverage is weak, only a pilot/sampled subset is evidenced, or the rationale/coverage_reason says there is partial harmful-pattern evidence. Use "partially_present" for weak but real harmful signals, or "unknown_absent" when coverage is sample-only or too weak to prove estate-wide absence.
 - For anti-pattern "tested_absent" or "unknown_absent", include coverage_reason explaining why absence is meaningful or why it is not assessable.
 </rules>
 
@@ -647,8 +649,13 @@ export const applyEvidenceCheckToBatch = (
       || downgraded
       || item.status !== 'supported'
       || rescannedKeys.has(key);
+    const effectiveAssessmentStatus: CriterionAssessmentStatus = item.stream === 'antipattern'
+      ? (antipatternAbsenceStatus === 'unknown_absent' ? 'not_assessed' : 'assessed')
+      : (finalCount === 0 && item.original_count === 0 && (item.status === 'weak' || item.status === 'unsupported' || item.status === 'missing'))
+        ? 'not_assessed'
+        : (item.assessment_status || existing.assessment_status || 'not_assessed');
     let remainingSupported = finalCount;
-    const finalQuestionResults = item.assessment_status === 'assessed'
+    const finalQuestionResults = effectiveAssessmentStatus === 'assessed'
       ? (existing.question_results || []).map((result: CriterionQuestionResult) => {
           if (result !== 'supported') return result;
           if (remainingSupported > 0) {
@@ -663,17 +670,17 @@ export const applyEvidenceCheckToBatch = (
       ...existing,
       count: finalCount,
       status: statusForScore(item.stream, finalCount),
-      assessment_status: item.assessment_status || existing.assessment_status || 'not_assessed',
+      assessment_status: effectiveAssessmentStatus,
       question_results: finalQuestionResults,
       evidence: downgraded && finalCount === 0
         ? `Evidence-check downgraded this finding: ${reason}`
         : existing.evidence,
-      evidence_quotes: item.assessment_status === 'assessed' || antipatternAbsenceStatus === 'tested_absent'
+      evidence_quotes: effectiveAssessmentStatus === 'assessed' || antipatternAbsenceStatus === 'tested_absent'
         ? (existing.evidence_quotes || [])
         : [],
       is_silent: item.stream === 'antipattern'
         ? antipatternAbsenceStatus === 'unknown_absent'
-        : item.assessment_status !== 'assessed',
+        : effectiveAssessmentStatus !== 'assessed',
       evidence_check_status: item.status,
       original_count: item.original_count,
       verified_count: finalCount,
@@ -786,7 +793,37 @@ export const reconcileEvidenceProvenance = <T extends ProvenancePhase1Result>(
           return isEvidenceQuoteBoundToChunk(quote || {}, located, located ? chunks.get(located.chunk_id) : undefined);
         });
         const count = Number.isInteger(existing.count) ? Math.max(0, Math.min(3, existing.count)) : 0;
-        if (validQuotes.length === existing.evidence_quotes.length && (count === 0 || validQuotes.length > 0)) continue;
+        const weakPacketTestedAbsence = stream === 'antipattern'
+          && existing.antipattern_absence_status === 'tested_absent'
+          && packets[domain]?.weak_coverage === true;
+        const assessedWithoutQuote = validQuotes.length === 0
+          && (existing.assessment_status === 'assessed' || existing.antipattern_absence_status === 'tested_absent');
+        if (weakPacketTestedAbsence && !existing.verification_unresolved) {
+          removedQuoteCount += existing.evidence_quotes.length - validQuotes.length;
+          adjustedCriteria.add(id);
+          const weakReason = 'Domain packet routing coverage is weak, so organization-wide anti-pattern absence cannot be established.';
+          logs[stream][id] = {
+            ...existing,
+            evidence_quotes: [],
+            assessment_status: 'not_assessed',
+            question_results: ['unknown', 'unknown', 'unknown'],
+            is_silent: true,
+            antipattern_absence_status: 'unknown_absent',
+            coverage_reason: weakReason,
+          };
+          const verdict = evidenceItemsByKey.get(`${stream}.${id}`);
+          if (verdict) {
+            Object.assign(verdict, {
+              assessment_status: 'not_assessed',
+              antipattern_absence_status: 'unknown_absent',
+              coverage_reason: weakReason,
+              quote_supported: false,
+              rescan_recommended: false,
+            });
+          }
+          continue;
+        }
+        if (validQuotes.length === existing.evidence_quotes.length && !assessedWithoutQuote && (count === 0 || validQuotes.length > 0)) continue;
 
         removedQuoteCount += existing.evidence_quotes.length - validQuotes.length;
         adjustedCriteria.add(id);

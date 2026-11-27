@@ -20,11 +20,11 @@ You must evaluate **ALL 3 criteria** for every item to determine the final score
 
 **IMPORTANT LOGIC:**
 *   **Silence is UNKNOWN:** If the customer evidence does not cover the item, it is NOT ASSESSED. Never convert silence or irrelevant packet content into 0/3.
-*   **Relevant Negative Evidence Can Support 0/3:** Direct evidence of missing, incomplete, local-only, planned-only, or non-operational practice can make the item assessable while supporting none of its questions.
+*   **Relevant Negative Evidence Can Support 0/3:** Direct evidence of missing, incomplete, local-only, planned-only, or non-operational practice on the criterion's exact subject can make a Maturity item assessable at 0/3. Never mark an item "assessed" at 0/3 using tangential material from an adjacent topic (for example, citing general deployment logs for regulatory residency controls, or citing model routing for AI budgets/quotas).
 *   **Plans ≠ Practice:** A plan supports a question only when that exact question asks about a plan. Otherwise it is relevant evidence of non-attainment, not a point.
 *   **Tool ≠ Usage:** Tool availability does not support an operating-practice question without evidence of the required usage.
 *   **Maturity Stream:** High score (3) means the capability is mature and embedded. Low score (0) means it is missing.
-*   **Anti-Pattern Stream:** High score (3) means the harmful pattern is deeply present (BAD). Low score (0) means no harmful-pattern evidence was found. Treat that as GOOD only when the source material has relevant coverage that would reveal the anti-pattern if present; otherwise it is UNKNOWN/NOT ASSESSED.
+*   **Anti-Pattern Stream:** High score (3) means the harmful pattern is deeply present (BAD). Low score (0) means no harmful-pattern evidence was found. Treat Count = 0 as "assessed" ONLY when customer records cover the governed organization-wide scope where all 3 harmful sub-criteria would appear if present and include a direct source quote; if evidence is silent, weak-coverage, or limited to a pilot, single workload, single migration, or sampled week, return assessment_status="not_assessed" with evidence_quotes=[].
 *   **Financial Sensitivity:** Do NOT extract or repeat specific dollar amounts, account numbers, or pricing terms from the document.
 
 ### EVIDENCE QUOTES (CRITICAL)

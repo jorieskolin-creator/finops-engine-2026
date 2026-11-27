@@ -112,7 +112,7 @@ export const inferAntiPatternAbsenceStatus = (item: Partial<AuditItem> | undefin
 
   const explicit = normalizeAntiPatternAbsenceStatus(item?.antipattern_absence_status);
   const text = `${item?.coverage_reason || ''} ${item?.reasoning || ''}`.toLowerCase();
-  const notAssessedText = text.includes('not assessed') || text.includes('insufficient to verify absence');
+  const notAssessedText = /\bfinal anti-pattern assessment:\s*not assessed\b|\binsufficient to (?:verify|prove|establish) absence\b|\bcannot (?:be )?(?:confirm|verify|prove|establish)(?:ed)? (?:from silence|absence)\b/.test(text);
 
   // Preserve the Evidence Check invariant: when the scanner found 0/3 and
   // verified count is 0/3, verifier wording cannot manufacture a partial finding.

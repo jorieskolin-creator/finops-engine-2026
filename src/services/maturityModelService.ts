@@ -92,11 +92,12 @@ const resolvedRecord = (
 const resolveCapability = (id: CapabilityId, item: AuditItem | undefined): MaturityCriterionResolutionRecord => {
   if (item?.verification_unresolved) return unresolvedRecord('maturity', id, 'VERIFICATION_UNRESOLVED');
   const basis = evidenceBasis(item);
+  const count = item ? Math.min(Math.max(Math.round(item.count), 0), 3) : 0;
   if (!item || item.assessment_status !== 'assessed' || basis === 'NONE'
-    || item.evidence_check_status === 'unsupported' || item.evidence_check_status === 'missing') {
+    || item.evidence_check_status === 'unsupported' || item.evidence_check_status === 'missing'
+    || (count === 0 && item.evidence_check_status === 'weak')) {
     return unresolvedRecord('maturity', id, 'NO_GOVERNED_EVIDENCE', basis);
   }
-  const count = Math.min(Math.max(Math.round(item.count), 0), 3);
   return resolvedRecord('maturity', id, count, count / 3, basis, 'PROVENANCE_BOUND_EVIDENCE');
 };
 

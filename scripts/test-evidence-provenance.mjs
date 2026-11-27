@@ -136,4 +136,45 @@ const retainedAgainstEffective = reconcileEvidenceProvenance(semanticGapPhase1, 
 assert.equal(retainedAgainstEffective.result.phase_1_audit_logs.maturity.C1.count, 1, 'a semantic-gap citation must survive reconciliation against the effective revised manifest');
 assert.deepEqual(retainedAgainstEffective.result.phase_1_audit_logs.maturity.C1.evidence_quotes, [semanticGapQuote]);
 
+// Stabilization checks: empty-quote tested_absent and weak-packet tested_absent must become unknown_absent.
+{
+  const aChunk = { chunk_id: 'src-002-c001', source_id: 'src-002', text: 'Routine requests route to the standard model tier.', type: 'text', routing: [] };
+  const aManifest = { chunk_id: aChunk.chunk_id, source_id: aChunk.source_id, type: 'text', relevance: 'high', routed_domains: ['F'] };
+  const weakPackets = {
+    ...packets,
+    F: {
+      domain_id: 'F', title: 'F', text: '', images: [], manifest: [aManifest],
+      included_chunk_count: 1, total_candidate_chunks: 1, weak_coverage: true, coverage_notes: [], char_count: 100,
+    },
+  };
+  const apLogs = emptyLogs();
+  apLogs.C2 = {
+    count: 0, status: 'OK', assessment_status: 'assessed',
+    question_results: ['not_supported', 'not_supported', 'not_supported'],
+    evidence_quotes: [], antipattern_absence_status: 'tested_absent', coverage_reason: 'Claimed without quote.',
+  };
+  apLogs.F3 = {
+    count: 0, status: 'OK', assessment_status: 'assessed',
+    question_results: ['not_supported', 'not_supported', 'not_supported'],
+    evidence_quotes: [{ quote: 'route to the standard model tier', chunk_id: aChunk.chunk_id, source_id: aChunk.source_id }],
+    antipattern_absence_status: 'tested_absent', coverage_reason: 'Single-chunk weak packet.',
+  };
+  const checkItems = evidenceItems.map(item => ({
+    ...item,
+    ...(item.stream === 'antipattern' && (item.id === 'C2' || item.id === 'F3')
+      ? { assessment_status: 'assessed', antipattern_absence_status: 'tested_absent', coverage_reason: 'Tested.' }
+      : {}),
+  }));
+  const checked = reconcileEvidenceProvenance({
+    ...phase1,
+    phase_1_audit_logs: { maturity: emptyLogs(), antipattern: apLogs },
+    evidence_check: { ...phase1.evidence_check, items: checkItems, adjustments: [] },
+  }, { chunks: [chunk, aChunk] }, weakPackets, []);
+  assert.equal(checked.result.phase_1_audit_logs.antipattern.C2.antipattern_absence_status, 'unknown_absent', 'tested_absent with empty quotes must downgrade to unknown_absent');
+  assert.equal(checked.result.phase_1_audit_logs.antipattern.C2.assessment_status, 'not_assessed');
+  assert.equal(checked.result.phase_1_audit_logs.antipattern.F3.antipattern_absence_status, 'unknown_absent', 'tested_absent on a weak_coverage packet must downgrade to unknown_absent');
+  assert.equal(checked.result.phase_1_audit_logs.antipattern.F3.assessment_status, 'not_assessed');
+  assert.equal(checked.result.evidence_check.items.find(item => item.stream === 'antipattern' && item.id === 'F3').status, 'supported', 'weak-packet absence cap must not invent an unsupported error');
+}
+
 console.log('evidence provenance reconciliation tests passed');
